@@ -1,25 +1,26 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import aiofiles
 import asyncio
-import bbcode
-import httpx
 import importlib
 import json
 import os
 import platform
 import re
 import uuid
-
-from bs4 import BeautifulSoup
-from cogs.redaction import redact_private_info
 from pathlib import Path
+from typing import Any, Callable, Optional, cast
+from urllib.parse import urlparse
+
+import aiofiles
+import httpx
+from bs4 import BeautifulSoup
+
+import bbcode
+from cogs.redaction import Redaction
 from src.console import console
 from src.cookie_auth import CookieValidator
 from src.get_desc import DescriptionBuilder
-from src.languages import process_desc_language
+from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
-from typing import Any, Callable, Optional, cast
-from urllib.parse import urlparse
 
 
 class AZTrackerBase:
@@ -43,7 +44,7 @@ class AZTrackerBase:
         self.media_code = ''
         self.upload_url_step2 = ''
 
-    async def rules(self, meta: dict[str, Any]) -> str:
+    async def rules(self, _meta: dict[str, Any]) -> str:
         return ''
 
     def get_resolution(self, meta: dict[str, Any]) -> str:
@@ -128,10 +129,7 @@ class AZTrackerBase:
 
                 match = None
                 for item in data.get('data', []):
-                    if imdb_id and item.get('imdb') == imdb_id:
-                        match = item
-                        break
-                    elif item.get('tmdb') == tmdb_id:
+                    if imdb_id and item.get('imdb') == imdb_id or item.get('tmdb') == tmdb_id:
                         match = item
                         break
 
@@ -193,8 +191,8 @@ class AZTrackerBase:
                 console.print(f'{self.tracker}: Error adding media to the database. Status: {response.status_code}')
                 failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]Failed_DB_attempt.html"
                 os.makedirs(os.path.dirname(failure_path), exist_ok=True)
-                with open(failure_path, 'w', encoding='utf-8') as f:
-                    f.write(response.text)
+                async with aiofiles.open(failure_path, 'w', encoding='utf-8') as f:
+                    await f.write(response.text)
                 console.print(f'The server response was saved to {failure_path} for analysis.')
                 return False
 
@@ -231,24 +229,23 @@ class AZTrackerBase:
                     meta['skipping'] = f'{self.tracker}'
                     return duplicates
 
-        if meta['type'] not in ['WEBDL'] and self.tracker == "PHD":
-            if meta.get('tag', "") in ['FGT', 'EVO']:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    console.print(f'[bold red]Group {meta["tag"]} is only allowed for web-dl[/bold red]')
-                    choice = await self.common.async_input('Do you want to upload anyway? [y/N]: ')
-                    if choice != 'y':
-                        meta['skipping'] = f'{self.tracker}'
-                        return duplicates
-                else:
+        if meta['type'] not in ['WEBDL'] and self.tracker == "PHD" and meta.get('tag', "") in ['FGT', 'EVO']:
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print(f'[bold red]Group {meta["tag"]} is only allowed for web-dl[/bold red]')
+                choice = await self.common.async_input('Do you want to upload anyway? [y/N]: ')
+                if choice != 'y':
                     meta['skipping'] = f'{self.tracker}'
                     return duplicates
+            else:
+                meta['skipping'] = f'{self.tracker}'
+                return duplicates
 
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar:
             self.session.cookies = cookie_jar
 
         if not await self.get_media_code(meta):
-            console.print((f"{self.tracker}: This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}"))
+            console.print(f"{self.tracker}: This media is not registered, please add it to the database by following this link: {self.base_url}/add/{meta['category'].lower()}")
             meta['skipping'] = f'{self.tracker}'
             return duplicates
 
@@ -340,17 +337,14 @@ class AZTrackerBase:
         info_file_path = ''
         file_info = ''
         if meta.get('is_disc') == 'BDMV':
-            if self.tracker == 'CZ':
-                summary_file = 'BD_SUMMARY_EXT_00'
-            else:
-                summary_file = 'BD_SUMMARY_00'
+            summary_file = 'BD_SUMMARY_EXT_00' if self.tracker == 'CZ' else 'BD_SUMMARY_00'
             info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/{summary_file}.txt"
         else:
             info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MEDIAINFO_CLEANPATH.txt"
 
         if os.path.exists(info_file_path):
-            with open(info_file_path, 'r', encoding='utf-8') as f:
-                file_info = f.read()
+            async with aiofiles.open(info_file_path, encoding='utf-8') as f:
+                file_info = await f.read()
 
         return file_info
 
@@ -361,7 +355,7 @@ class AZTrackerBase:
 
         if meta.get('is_disc', False):
             if not meta.get('language_checked', False):
-                await process_desc_language(meta, tracker=self.tracker)
+                await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
             found_subs_strings = meta.get('subtitle_languages', [])
             for lang_str in found_subs_strings:
@@ -377,8 +371,8 @@ class AZTrackerBase:
         else:
             try:
                 media_info_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json"
-                with open(media_info_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
+                async with aiofiles.open(media_info_path, encoding='utf-8') as f:
+                    data = json.loads(await f.read())
 
                 tracks = data.get('media', {}).get('track', [])
 
@@ -424,15 +418,15 @@ class AZTrackerBase:
             except (json.JSONDecodeError, KeyError, TypeError) as e:
                 print(f'Error processing MediaInfo.json for uuid {meta.get("uuid")}: {e}')
 
-        final_subtitle_ids = sorted(list(subtitle_ids))
-        final_audio_ids = sorted(list(audio_ids))
+        final_subtitle_ids = sorted(subtitle_ids)
+        final_audio_ids = sorted(audio_ids)
 
         return {
             'subtitles[]': final_subtitle_ids,
             'languages[]': final_audio_ids
         }
 
-    async def img_host(self, meta: dict[str, Any], referer: str, image_bytes: bytes, filename: str) -> Optional[str]:
+    async def img_host(self, _meta: dict[str, Any], referer: str, image_bytes: bytes, filename: str) -> Optional[str]:
         upload_url = f'{self.base_url}/ajax/image/upload'
 
         headers = {
@@ -485,8 +479,8 @@ class AZTrackerBase:
         ][:12]  # minimum number of screenshots is 3, so we can allow up to 12 menu images
 
         async def upload_local_file(path: Path):
-            with open(path, 'rb') as f:
-                image_bytes = f.read()
+            async with aiofiles.open(path, 'rb') as f:
+                image_bytes = await f.read()
             return await self.img_host(meta, self.tracker, image_bytes, path.name)
 
         async def upload_remote_file(url: str):
@@ -542,10 +536,7 @@ class AZTrackerBase:
                     return results
                 self.session.cookies = cookie_jar
                 category = meta.get('category', '').lower()
-                if category == 'tv':
-                    query = meta['title'] + f" {meta.get('season', '')}{meta.get('episode', '')}"
-                else:
-                    query = meta['title']
+                query = meta['title'] + f" {meta.get('season', '')}{meta.get('episode', '')}" if category == 'tv' else meta['title']
 
                 search_url = f'{self.requests_url}?type={category}&search={query}&condition=new'
 
@@ -698,10 +689,7 @@ class AZTrackerBase:
             console.print(f'{self.tracker}: Deleted from description: {amount} BBCode tag(s).')
 
         render_html = getattr(bbcode, 'render_html', None)
-        if callable(render_html):
-            final_html_desc = cast(Callable[[str], str], render_html)(processed_desc)
-        else:
-            final_html_desc = cast(Any, bbcode).Parser().format(processed_desc)
+        final_html_desc = cast(Callable[[str], str], render_html)(processed_desc) if callable(render_html) else cast(Any, bbcode).Parser().format(processed_desc)
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
             await description_file.write(final_html_desc)
@@ -731,35 +719,36 @@ class AZTrackerBase:
                 upload_url_step1 = f"{self.base_url}/upload/{meta['category'].lower()}"
                 torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
-                with open(torrent_path, 'rb') as torrent_file:
-                    files = {'torrent_file': (os.path.basename(torrent_path), torrent_file, 'application/x-bittorrent')}
-                    task_response = await self.session.post(upload_url_step1, data=data, files=files)
+                async with aiofiles.open(torrent_path, 'rb') as torrent_file:
+                    torrent_bytes = await torrent_file.read()
+                files = {'torrent_file': (os.path.basename(torrent_path), torrent_bytes, 'application/x-bittorrent')}
+                task_response = await self.session.post(upload_url_step1, data=data, files=files)
 
-                    if task_response.status_code == 302 and 'Location' in task_response.headers:
-                        redirect_url = task_response.headers['Location']
+                if task_response.status_code == 302 and 'Location' in task_response.headers:
+                    redirect_url = task_response.headers['Location']
 
-                        match = re.search(r'/(\d+)$', redirect_url)
-                        if not match:
-                            console.print(f"{self.tracker}: Could not extract 'task_id' from redirect URL: {redirect_url}")
-                            console.print(f'{self.tracker}: The cookie appears to be expired or invalid.')
-                            meta['skipping'] = f'{self.tracker}'
-                            return {}
+                    match = re.search(r'/(\d+)$', redirect_url)
+                    if not match:
+                        console.print(f"{self.tracker}: Could not extract 'task_id' from redirect URL: {redirect_url}")
+                        console.print(f'{self.tracker}: The cookie appears to be expired or invalid.')
+                        meta['skipping'] = f'{self.tracker}'
+                        return {}
 
-                        task_id = match.group(1)
+                    task_id = match.group(1)
 
-                        task: dict[str, Any] = {
-                            'task_id': task_id,
-                            'info_hash': await self.common.get_torrent_hash(meta, self.tracker),
-                            'redirect_url': redirect_url,
-                        }
+                    task: dict[str, Any] = {
+                        'task_id': task_id,
+                        'info_hash': await self.common.get_torrent_hash(meta, self.tracker),
+                        'redirect_url': redirect_url,
+                    }
 
-                        return task
+                    return task
 
-                    else:
-                        failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step1.html"
-                        with open(failure_path, 'w', encoding='utf-8') as f:
-                            f.write(task_response.text)
-                        status_message = f'''[red]Step 1 of upload failed to {self.tracker}. Status: {task_response.status_code}, URL: {task_response.url}[/red].
+                else:
+                    failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step1.html"
+                    async with aiofiles.open(failure_path, 'w', encoding='utf-8') as f:
+                        await f.write(task_response.text)
+                    status_message = f'''[red]Step 1 of upload failed to {self.tracker}. Status: {task_response.status_code}, URL: {task_response.url}[/red].
                                             [yellow]The HTML response was saved to '{failure_path}' for analysis.[/yellow]'''
 
             except Exception as e:
@@ -838,16 +827,14 @@ class AZTrackerBase:
                     ''
                 )
 
-            if self.tracker == 'AZ':
-                if meta.get('tv_pack', False):
-                    upload_name = upload_name.replace(
-                        f"{meta['title']} {year_to_use} {meta.get('season')}",
-                        f"{meta['title']} {meta.get('season')} {year_to_use}"
-                    )
+            if self.tracker == 'AZ' and meta.get('tv_pack', False):
+                upload_name = upload_name.replace(
+                    f"{meta['title']} {year_to_use} {meta.get('season')}",
+                    f"{meta['title']} {meta.get('season')} {year_to_use}"
+                )
 
-        if meta.get('type', '') == 'DVDRIP':
-            if meta.get('source', ''):
-                upload_name = upload_name.replace(meta['source'], '')
+        if meta.get('type', '') == 'DVDRIP' and meta.get('source', ''):
+            upload_name = upload_name.replace(meta['source'], '')
 
         return re.sub(r'\s{2,}', ' ', upload_name)
 
@@ -1029,8 +1016,8 @@ class AZTrackerBase:
 
                 else:
                     failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload_Step2.html"
-                    with open(failure_path, 'w', encoding='utf-8') as f:
-                        f.write(response.text)
+                    async with aiofiles.open(failure_path, 'w', encoding='utf-8') as f:
+                        await f.write(response.text)
 
                     status_message = (
                         f"data error - It may have uploaded, go check\n"
@@ -1044,7 +1031,7 @@ class AZTrackerBase:
 
             else:
                 console.print(f"[cyan]{self.tracker} Request Data:")
-                console.print(redact_private_info(data))
+                console.print(Redaction.redact_private_info(data))
                 meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading.'
                 await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True

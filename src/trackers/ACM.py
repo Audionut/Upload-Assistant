@@ -1,17 +1,17 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
-import aiofiles
 import asyncio
-import httpx
 import os
 import platform
 import re
+from typing import Any
+
+import aiofiles
+import httpx
 
 from src.bbcode import BBCODE
 from src.console import console
 from src.trackers.COMMON import COMMON
-from typing import Any
 
 
 class ACM:
@@ -36,10 +36,7 @@ class ACM:
                 if bdinfo['size'] < each:
                     bd_size = each
                     break
-            if meta['uhd'] == "UHD" and bd_size != 25:
-                type_string = f"UHD {bd_size}"
-            else:
-                type_string = f"BD {bd_size}"
+            type_string = f"UHD {bd_size}" if meta['uhd'] == "UHD" and bd_size != 25 else f"BD {bd_size}"
             # if type_id not in ['UHD 100', 'UHD 66', 'UHD 50', 'BD 50', 'BD 25']:
             #     type_id = "Other"
         elif meta['is_disc'] == "DVD":
@@ -50,13 +47,7 @@ class ACM:
             else:
                 type_string = "Other"
         else:
-            if meta['type'] == "REMUX":
-                if meta['uhd'] == "UHD":
-                    type_string = "UHD REMUX"
-                else:
-                    type_string = "REMUX"
-            else:
-                type_string = meta['type']
+            type_string = ("UHD REMUX" if meta['uhd'] == "UHD" else "REMUX") if meta['type'] == "REMUX" else meta['type']
             # else:
             #     acceptable_res = ["2160p", "1080p", "1080i", "720p", "576p", "576i", "540p", "480p", "Other"]
             #     if meta['resolution'] in acceptable_res:
@@ -199,10 +190,7 @@ class ACM:
         region_id = await self.common.unit3d_region_ids(meta.get('region', ''))
         distributor_id = await self.common.unit3d_distributor_ids(meta.get('distributor', ''))
         acm_name = await self.get_name(meta)
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
-        else:
-            anon = 1
+        anon = 0 if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False) else 1
 
         if meta['bdinfo'] is not None:
             # bd_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
@@ -211,7 +199,7 @@ class ACM:
             for each in meta['discs']:
                 bd_dump = bd_dump + each['summary'].strip() + "\n\n"
         else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as f:
                 mi_dump = await f.read()
             bd_dump = None
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -242,9 +230,12 @@ class ACM:
             'doubleup': 0,
             'sticky': 0,
         }
-        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            if meta['tag'] != "" and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                data['internal'] = 1
+        if (
+            self.config['TRACKERS'][self.tracker].get('internal', False) is True
+            and meta['tag'] != ""
+            and meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])
+        ):
+            data['internal'] = 1
         if region_id:
             data['region_id'] = region_id
         if distributor_id:
@@ -356,7 +347,7 @@ class ACM:
         return name
 
     async def get_description(self, meta: dict[str, Any]) -> str:
-        async with aiofiles.open(f'{meta["base_dir"]}/tmp/{meta["uuid"]}/DESCRIPTION.txt', 'r', encoding='utf-8') as f:
+        async with aiofiles.open(f'{meta["base_dir"]}/tmp/{meta["uuid"]}/DESCRIPTION.txt', encoding='utf-8') as f:
             base = await f.read()
 
         output_path = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/[{self.tracker}]DESCRIPTION.txt'
@@ -411,7 +402,7 @@ class ACM:
 
             await descfile.write(f"\n[right][url=https://github.com/Audionut/Upload-Assistant][size=4]{meta['ua_signature']}[/size][/url][/right]")
 
-        async with aiofiles.open(output_path, 'r', encoding='utf-8') as f:
+        async with aiofiles.open(output_path, encoding='utf-8') as f:
             final_desc: str = await f.read()
 
         return final_desc

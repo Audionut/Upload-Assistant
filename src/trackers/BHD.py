@@ -1,20 +1,21 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
 import asyncio
 import os
 import platform
-import httpx
 import re
-import cli_ui
+from typing import Any, Optional, Union, cast
+
 import aiofiles
-from typing import Union
-from src.trackers.COMMON import COMMON
+import cli_ui
+import httpx
+
 from src.console import console
-from src.rehostimages import check_hosts
+from src.rehostimages import RehostImagesManager
+from src.trackers.COMMON import COMMON
 
 
-class BHD():
+class BHD:
     """
     Edit for Tracker:
         Edit BASE.torrent with announce and source
@@ -23,18 +24,22 @@ class BHD():
         Upload
     """
 
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
+        self.rehost_images_manager = RehostImagesManager(config)
         self.tracker = 'BHD'
         self.source_flag = 'BHD'
         self.upload_url = 'https://beyond-hd.me/api/upload/'
         self.torrent_url = 'https://beyond-hd.me/details/'
-        self.requests_url = f"https://beyond-hd.me/api/requests/{self.config['TRACKERS']['BHD']['api_key'].strip()}"
+        trackers_cfg = cast(dict[str, Any], self.config.get('TRACKERS', {}))
+        self.tracker_config = cast(dict[str, Any], trackers_cfg.get('BHD', {}))
+        api_key = str(self.tracker_config.get('api_key', '')).strip()
+        self.requests_url = f"https://beyond-hd.me/api/requests/{api_key}"
         self.banned_groups = ['Sicario', 'TOMMY', 'x0r', 'nikt0', 'FGT', 'd3g', 'MeGusta', 'YIFY', 'tigole', 'TEKNO3D', 'C4K', 'RARBG', '4K4U', 'EASports', 'ReaLHD', 'Telly', 'AOC', 'WKS', 'SasukeducK', 'CRUCiBLE', 'iFT']
         self.approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'pixhost', 'bhd', 'bam']
         pass
 
-    async def check_image_hosts(self, meta):
+    async def check_image_hosts(self, meta: dict[str, Any]) -> None:
         url_host_mapping = {
             "ibb.co": "imgbb",
             "ptpimg.me": "ptpimg",
@@ -44,34 +49,37 @@ class BHD():
             "imagebam.com": "bam",
         }
 
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
-        return
+        await self.rehost_images_manager.check_hosts(
+            meta,
+            self.tracker,
+            url_host_mapping=url_host_mapping,
+            img_host_index=1,
+            approved_image_hosts=self.approved_image_hosts,
+        )
+        return None
 
-    async def upload(self, meta, disctype):
+    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
-        cat_id = await self.get_cat_id(meta['category'])
-        source_id = await self.get_source(meta['source'])
+        cat_id = await self.get_cat_id(str(meta['category']))
+        source_id = await self.get_source(str(meta['source']))
         type_id = await self.get_type(meta)
         draft = await self.get_live(meta)
         await self.edit_desc(meta)
         tags = await self.get_tags(meta)
         custom, edition = await self.get_edition(meta, tags)
         bhd_name = await self.edit_name(meta)
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
-        else:
-            anon = 1
+        anon = 0 if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False) else 1
 
         mi_dump = None
         if meta['is_disc'] == "BDMV":
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8') as f:
                 mi_dump = await f.read()
         else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as f:
                 mi_dump = await f.read()
 
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8') as f:
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", encoding='utf-8') as f:
             desc = await f.read()
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         async with aiofiles.open(torrent_file_path, 'rb') as f:
@@ -82,7 +90,7 @@ class BHD():
             'file': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent'),
         }
 
-        data = {
+        data: dict[str, Any] = {
             'name': bhd_name,
             'category_id': cat_id,
             'type': type_id,
@@ -100,13 +108,16 @@ class BHD():
             # 'sticky' : 0,
         }
         # Internal
-        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            if meta['tag'] != "" and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                data['internal'] = 1
+        if (
+            self.config['TRACKERS'][self.tracker].get('internal', False) is True
+            and meta['tag'] != ""
+            and meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])
+        ):
+            data['internal'] = 1
 
         if meta.get('tv_pack', 0) == 1:
             data['pack'] = 1
-        if meta.get('season', None) == "S00":
+        if meta.get('season') == "S00":
             data['special'] = 1
         allowed_regions = ['AUS', 'CAN', 'CEE', 'CHN', 'ESP', 'EUR', 'FRA', 'GBR', 'GER', 'HKG', 'ITA', 'JPN', 'KOR', 'NOR', 'NLD', 'RUS', 'TWN', 'USA']
         if meta.get('region', "") in allowed_regions:
@@ -121,20 +132,20 @@ class BHD():
             'User-Agent': f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
         }
 
-        url = self.upload_url + self.config['TRACKERS'][self.tracker]['api_key'].strip()
+        url = self.upload_url + str(self.tracker_config.get('api_key', '')).strip()
         details_link: Union[str, None] = None
         if meta['debug'] is False:
             try:
                 async with httpx.AsyncClient(timeout=60) as client:
                     response = await client.post(url=url, files=files, data=data, headers=headers)
-                    response_json = response.json()
+                    response_json = cast(dict[str, Any], response.json())
                     if int(response_json['status_code']) == 0:
                         console.print(f"[red]{response_json['status_message']}")
                         if response_json['status_message'].startswith('Invalid imdb_id'):
                             console.print('[yellow]RETRYING UPLOAD')
                             data['imdb_id'] = 1
                             response = await client.post(url=url, files=files, data=data, headers=headers)
-                            response_json = response.json()
+                            response_json = cast(dict[str, Any], response.json())
                         elif response_json['status_message'].startswith('Invalid name value'):
                             console.print(f"[bold yellow]Submitted Name: {bhd_name}")
 
@@ -144,7 +155,7 @@ class BHD():
                             torrent_id = match.group(1)
                             meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
                             details_link = f"https://beyond-hd.me/details/{torrent_id}"
-                            meta['tracker_status'][self.tracker]['status_message'] = response.json()
+                            meta['tracker_status'][self.tracker]['status_message'] = response_json
                         else:
                             meta['tracker_status'][self.tracker]['status_message'] = "data error: No valid details link found in status_message."
                             return False
@@ -172,14 +183,14 @@ class BHD():
         else:
             return False
 
-    async def get_cat_id(self, category_name):
+    async def get_cat_id(self, category_name: str) -> str:
         category_id = {
             'MOVIE': '1',
             'TV': '2',
         }.get(category_name, '1')
         return category_id
 
-    async def get_source(self, source):
+    async def get_source(self, source: str) -> Optional[str]:
         sources = {
             "Blu-ray": "Blu-ray",
             "BluRay": "Blu-ray",
@@ -196,18 +207,16 @@ class BHD():
         source_id = sources.get(source)
         return source_id
 
-    async def get_type(self, meta):
+    async def get_type(self, meta: dict[str, Any]) -> str:
         if meta['is_disc'] == "BDMV":
             bdinfo = meta['bdinfo']
             bd_sizes = [25, 50, 66, 100]
+            bd_size = 100
             for each in bd_sizes:
                 if bdinfo['size'] < each:
                     bd_size = each
                     break
-            if meta['uhd'] == "UHD" and bd_size != 25:
-                type_id = f"UHD {bd_size}"
-            else:
-                type_id = f"BD {bd_size}"
+            type_id = f"UHD {bd_size}" if meta['uhd'] == "UHD" and bd_size != 25 else f"BD {bd_size}"
             if type_id not in ['UHD 100', 'UHD 66', 'UHD 50', 'BD 50', 'BD 25']:
                 type_id = "Other"
         elif meta['is_disc'] == "DVD":
@@ -215,7 +224,10 @@ class BHD():
                 type_id = "DVD 5"
             elif "DVD9" in meta['dvd_size']:
                 type_id = "DVD 9"
+            else:
+                type_id = "Other"
         else:
+            type_id = "Other"
             if meta['type'] == "REMUX":
                 if meta['source'] == "BluRay":
                     type_id = "BD Remux"
@@ -227,20 +239,17 @@ class BHD():
                     type_id = "Other"
             else:
                 acceptable_res = ["2160p", "1080p", "1080i", "720p", "576p", "576i", "540p", "480p", "Other"]
-                if meta['resolution'] in acceptable_res:
-                    type_id = meta['resolution']
-                else:
-                    type_id = "Other"
+                type_id = meta['resolution'] if meta['resolution'] in acceptable_res else "Other"
         return type_id
 
-    async def edit_desc(self, meta):
+    async def edit_desc(self, meta: dict[str, Any]) -> None:
         desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
         base_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        async with aiofiles.open(base_path, 'r', encoding='utf-8') as f:
+        async with aiofiles.open(base_path, encoding='utf-8') as f:
             base = await f.read()
         async with aiofiles.open(desc_path, 'w', encoding='utf-8') as desc:
-            if meta.get('discs', []) != []:
-                discs = meta['discs']
+            discs = cast(list[dict[str, Any]], meta.get('discs') or [])
+            if discs:
                 if discs[0]['type'] == "DVD":
                     await desc.write(f"[spoiler=VOB MediaInfo][code]{discs[0]['vob_mi']}[/code][/spoiler]")
                     await desc.write("\n")
@@ -260,27 +269,29 @@ class BHD():
             await desc.write(base.replace("[img]", "[img width=300]"))
             if meta.get('comparison') and meta.get('comparison_groups'):
                 await desc.write("[center]")
-                comparison_groups = meta.get('comparison_groups', {})
-                sorted_group_indices = sorted(comparison_groups.keys(), key=lambda x: int(x))
+                comparison_groups = cast(dict[str, Any], meta.get('comparison_groups') or {})
+                sorted_group_indices = sorted(comparison_groups.keys(), key=lambda x: int(str(x)))
 
-                comp_sources = []
+                comp_sources: list[str] = []
                 for group_idx in sorted_group_indices:
-                    group_data = comparison_groups[group_idx]
-                    group_name = group_data.get('name', f'Group {group_idx}')
+                    group_data = cast(dict[str, Any], comparison_groups.get(group_idx, {}))
+                    group_name = str(group_data.get('name', f'Group {group_idx}'))
                     comp_sources.append(group_name)
 
                 sources_string = ", ".join(comp_sources)
                 await desc.write(f"[comparison={sources_string}]\n")
 
-                images_per_group = min([
-                    len(comparison_groups[idx].get('urls', []))
-                    for idx in sorted_group_indices
-                ])
+                images_per_group = min(
+                    [
+                        len(cast(dict[str, Any], comparison_groups[idx]).get('urls', []))
+                        for idx in sorted_group_indices
+                    ]
+                )
 
                 for img_idx in range(images_per_group):
                     for group_idx in sorted_group_indices:
-                        group_data = comparison_groups[group_idx]
-                        urls = group_data.get('urls', [])
+                        group_data = cast(dict[str, Any], comparison_groups.get(group_idx, {}))
+                        urls = cast(list[dict[str, Any]], group_data.get('urls', []))
                         if img_idx < len(urls):
                             img_url = urls[img_idx].get('raw_url', '')
                             if img_url:
@@ -294,10 +305,7 @@ class BHD():
                     await desc.write("\n\n")
             except Exception as e:
                 console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
-            if f'{self.tracker}_images_key' in meta:
-                images = meta[f'{self.tracker}_images_key']
-            else:
-                images = meta['image_list']
+            images = cast(list[dict[str, Any]], meta.get(f'{self.tracker}_images_key') or meta.get('image_list') or [])
             if len(images) > 0:
                 await desc.write("[align=center]")
                 for each in range(len(images[:int(meta['screens'])])):
@@ -313,9 +321,9 @@ class BHD():
                 await desc.write("[/align]")
             await desc.write(f"\n[align=right][url=https://github.com/Audionut/Upload-Assistant][size=10]{meta['ua_signature']}[/size][/url][/align]")
             await desc.close()
-        return
+            return None
 
-    async def search_existing(self, meta, disctype):
+    async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[dict[str, Any]]:
         bhd_name = await self.edit_name(meta)
         if any(phrase in bhd_name.lower() for phrase in (
             "-framestor", "-bhdstudio", "-bmf", "-decibel", "-d-zone", "-hifi",
@@ -338,18 +346,17 @@ class BHD():
             meta['skipping'] = "BHD"
             return []
 
-        if meta['type'] not in ['WEBDL']:
-            if meta.get('tag', "") and any(x in meta['tag'] for x in ['EVO']):
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at BHD[/bold red]')
-                    if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                        pass
-                    else:
-                        meta['skipping'] = "BHD"
-                        return []
+        if meta['type'] not in ['WEBDL'] and meta.get('tag', "") and any(x in meta['tag'] for x in ['EVO']):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at BHD[/bold red]')
+                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                    pass
                 else:
                     meta['skipping'] = "BHD"
                     return []
+            else:
+                meta['skipping'] = "BHD"
+                return []
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
         adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
@@ -365,7 +372,7 @@ class BHD():
                 meta['skipping'] = "BHD"
                 return []
 
-        dupes = []
+        dupes: list[dict[str, Any]] = []
         category = meta['category']
         tmdbID = "movie" if category == 'MOVIE' else "tv"
         if category == 'MOVIE':
@@ -373,13 +380,13 @@ class BHD():
         elif category == "TV":
             category = "TV"
         if meta['is_disc'] == "DVD":
-            type = None
+            type_id: Optional[str] = None
         else:
-            type = await self.get_type(meta)
-        data = {
+            type_id = await self.get_type(meta)
+        data: dict[str, Any] = {
             'action': 'search',
             'tmdb_id': f"{tmdbID}/{meta['tmdb']}",
-            'types': type,
+            'types': type_id,
             'categories': category
         }
         if meta['sd'] == 1:
@@ -387,20 +394,21 @@ class BHD():
             data['types'] = None
         if meta['category'] == 'TV':
             data['search'] = f"{meta.get('season', '')}"
-        rss_key = self.config['TRACKERS']['BHD'].get('bhd_rss_key', "") != ""
+        rss_key = self.tracker_config.get('bhd_rss_key', "") != ""
         if rss_key:
-            data['rsskey'] = self.config['TRACKERS']['BHD']['bhd_rss_key'].strip()
+            data['rsskey'] = str(self.tracker_config.get('bhd_rss_key', '')).strip()
 
-        url = f"https://beyond-hd.me/api/torrents/{self.config['TRACKERS']['BHD']['api_key'].strip()}"
+        url = f"https://beyond-hd.me/api/torrents/{str(self.tracker_config.get('api_key', '')).strip()}"
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.post(url, params=data)
                 if response.status_code == 200:
-                    data = response.json()
-                    if data.get('status_code') == 1:
-                        for each in data['results']:
+                    response_data = cast(dict[str, Any], response.json())
+                    if response_data.get('status_code') == 1:
+                        results = cast(list[dict[str, Any]], response_data.get('results', []))
+                        for each in results:
                             # Extract HDR flags from BHD data
-                            flags = []
+                            flags: list[str] = []
                             if each.get('dv') == 1:
                                 flags.append('DV')
                             if each.get('hdr10') == 1 or each.get('hdr10+') == 1:
@@ -416,7 +424,7 @@ class BHD():
                                 result['download'] = each.get('download_url', None)
                             dupes.append(result)
                     else:
-                        console.print(f"[bold red]BHD failed to search torrents. API Error: {data.get('message', 'Unknown Error')}")
+                        console.print(f"[bold red]BHD failed to search torrents. API Error: {response_data.get('message', 'Unknown Error')}")
                 else:
                     console.print(f"[bold red]BHD HTTP request failed. Status: {response.status_code}")
         except httpx.TimeoutException:
@@ -429,31 +437,28 @@ class BHD():
 
         return dupes
 
-    def _is_true(self, value):
+    def _is_true(self, value: Any) -> bool:
         """
         Converts a value to a boolean. Returns True for "true", "1", "yes" (case-insensitive), and False otherwise.
         """
         return str(value).strip().lower() in {"true", "1", "yes"}
 
-    async def get_live(self, meta):
+    async def get_live(self, meta: dict[str, Any]) -> int:
         draft_value = self.config['TRACKERS'][self.tracker].get('draft_default', False)
-        if isinstance(draft_value, bool):
-            draft_bool = draft_value
-        else:
-            draft_bool = self._is_true(str(draft_value).strip())
+        draft_bool = draft_value if isinstance(draft_value, bool) else self._is_true(str(draft_value).strip())
 
         draft_int = 0 if draft_bool or meta.get('draft') else 1
 
         return draft_int
 
-    async def get_edition(self, meta, tags):
+    async def get_edition(self, meta: dict[str, Any], tags: list[str]) -> tuple[bool, str]:
         custom = False
-        edition = meta.get('edition', "")
+        edition = str(meta.get('edition', ""))
         if "Hybrid" in tags:
             edition = edition.replace('Hybrid', '').strip()
         editions = ['collector', 'cirector', 'extended', 'limited', 'special', 'theatrical', 'uncut', 'unrated']
         for each in editions:
-            if each in meta.get('edition'):
+            if each in str(meta.get('edition')):
                 edition = each
             elif edition == "":
                 edition = ""
@@ -461,8 +466,8 @@ class BHD():
                 custom = True
         return custom, edition
 
-    async def get_tags(self, meta):
-        tags = []
+    async def get_tags(self, meta: dict[str, Any]) -> list[str]:
+        tags: list[str] = []
         if meta['type'] == "WEBRIP":
             tags.append("WEBRip")
         if meta['type'] == "WEBDL":
@@ -494,10 +499,10 @@ class BHD():
             tags.append('HLG')
         return tags
 
-    async def edit_name(self, meta):
-        name = meta.get('name')
+    async def edit_name(self, meta: dict[str, Any]) -> str:
+        name = str(meta.get('name') or '')
         if meta.get('source', '') in ('PAL DVD', 'NTSC DVD', 'DVD', 'NTSC', 'PAL'):
-            audio = meta.get('audio', '')
+            audio = str(meta.get('audio', ''))
             audio = ' '.join(audio.split())
             name = name.replace(audio, f"{meta.get('video_codec')} {audio}")
         name = name.replace("DD+", "DDP")

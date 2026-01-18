@@ -1,31 +1,35 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiofiles
-import httpx
+import asyncio
 import json
 import os
 import platform
 import re
-import asyncio
-from rich.prompt import Prompt
 import urllib.parse
-from src.exceptions import *  # noqa F403
+from typing import Any, Optional, cast
+
+import aiofiles
+import httpx
 from bs4 import BeautifulSoup
-from src.console import console
-from src.cookie_auth import CookieValidator, CookieAuthUploader
-from src.trackers.COMMON import COMMON
 from pymediainfo import MediaInfo
+from rich.prompt import Prompt
+
+from src.console import console
+from src.cookie_auth import CookieAuthUploader, CookieValidator
+from src.exceptions import *  # noqa F403
+from src.trackers.COMMON import COMMON
 
 
-class AR():
-    def __init__(self, config):
+class AR:
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.cookie_validator = CookieValidator(config)
         self.cookie_uploader = CookieAuthUploader(config)
         self.tracker = 'AR'
         self.source_flag = 'AlphaRatio'
-        self.username = config['TRACKERS']['AR'].get('username', '').strip()
-        self.password = config['TRACKERS']['AR'].get('password', '').strip()
+        trackers_cfg = cast(dict[str, Any], self.config.get('TRACKERS', {}))
+        ar_cfg = cast(dict[str, Any], trackers_cfg.get('AR', {}))
+        self.username = str(ar_cfg.get('username', '')).strip()
+        self.password = str(ar_cfg.get('password', '')).strip()
         self.base_url = 'https://alpharatio.cc'
         self.login_url = f'{self.base_url}/login.php'
         self.upload_url = f'{self.base_url}/upload.php'
@@ -35,7 +39,7 @@ class AR():
         self.user_agent = f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
         self.banned_groups = []
 
-    async def get_type(self, meta):
+    async def get_type(self, meta: dict[str, Any]) -> str:
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
         adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
         if (meta['type'] == 'DISC' or meta['type'] == 'REMUX') and meta['source'] == 'Blu-ray':
@@ -98,7 +102,9 @@ class AR():
                     '720p': '8',
                 }.get(meta['resolution'], '7')
 
-    async def validate_credentials(self, meta):
+        return '7'
+
+    async def validate_credentials(self, meta: dict[str, Any]) -> bool:
         return await self.cookie_validator.cookie_validation(
             meta=meta,
             tracker=self.tracker,
@@ -106,7 +112,7 @@ class AR():
             error_text="login.php?act=recover",
         )
 
-    def get_links(self, movie, subheading, heading_end):
+    def get_links(self, movie: dict[str, Any], subheading: str, heading_end: str) -> str:
         description = ""
         description += "\n" + subheading + "Links" + heading_end + "\n"
         if 'IMAGES' in self.config:
@@ -133,63 +139,64 @@ class AR():
                 description += f"\nhttps://myanimelist.net/anime/{str(movie['mal_id'])}"
         return description
 
-    async def edit_desc(self, meta):
+    async def edit_desc(self, meta: dict[str, Any]) -> None:
         heading = "[color=green][size=6]"
         subheading = "[color=red][size=4]"
         heading_end = "[/size][/color]"
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf8') as f:
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf8') as f:
             base = await f.read()
         base = re.sub(r'\[center\]\[spoiler=Scene NFO:\].*?\[/center\]', '', base, flags=re.DOTALL)
         base = re.sub(r'\[center\]\[spoiler=FraMeSToR NFO:\].*?\[/center\]', '', base, flags=re.DOTALL)
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf8') as descfile:
-            description = ""
-            if meta['is_disc'] == "BDMV":
-                description += heading + str(meta['name']) + heading_end + "\n" + self.get_links(meta, subheading, heading_end) + "\n\n" + subheading + "BDINFO" + heading_end + "\n"
+        description = ""
+        if meta['is_disc'] == "BDMV":
+            description += heading + str(meta['name']) + heading_end + "\n" + self.get_links(meta, subheading, heading_end) + "\n\n" + subheading + "BDINFO" + heading_end + "\n"
+        else:
+            description += heading + str(meta['name']) + heading_end + "\n" + self.get_links(meta, subheading, heading_end) + "\n\n" + subheading + "MEDIAINFO" + heading_end + "\n"
+        discs = cast(list[dict[str, Any]], meta.get('discs') or [])
+        if discs:
+            if len(discs) >= 2:
+                for each in discs[1:]:
+                    if each['type'] == "BDMV":
+                        description += f"[hide={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/hide]\n\n"
+                    if each['type'] == "DVD":
+                        description += f"{each['name']}:\n"
+                        description += f"[hide={os.path.basename(each['vob'])}][code][{each['vob_mi']}[/code][/hide] [hide={os.path.basename(each['ifo'])}][code][{each['ifo_mi']}[/code][/hide]\n\n"
+        # description += common.get_links(movie, "[COLOR=red][size=4]", "[/size][/color]")
+            elif discs[0]['type'] == "DVD":
+                description += f"[hide][code]{discs[0]['vob_mi']}[/code][/hide]\n\n"
+            elif meta['is_disc'] == "BDMV":
+                description += f"[hide][code]{discs[0]['summary']}[/code][/hide]\n\n"
+        else:
+            # Beautify MediaInfo for AR using custom template
+            filelist = cast(list[str], meta.get('filelist') or [])
+            video = filelist[0] if filelist else str(meta.get('path') or "")
+            # using custom mediainfo template.
+            # can not use full media info as sometimes its more than max chars per post.
+            mi_template = os.path.abspath(f"{meta['base_dir']}/data/templates/summary-mediainfo.csv")
+            if os.path.exists(mi_template):
+                media_info = await self.parse_mediainfo_async(video, mi_template)
+                description += (f"""[code]\n{media_info}\n[/code]\n""")
+                # adding full mediainfo as spoiler
+                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8') as mi_file:
+                    full_mediainfo = await mi_file.read()
+                description += f"[hide=FULL MEDIAINFO][code]{full_mediainfo}[/code][/hide]\n"
             else:
-                description += heading + str(meta['name']) + heading_end + "\n" + self.get_links(meta, subheading, heading_end) + "\n\n" + subheading + "MEDIAINFO" + heading_end + "\n"
-            if meta.get('discs', []) != []:
-                discs = meta['discs']
-                if len(discs) >= 2:
-                    for each in discs[1:]:
-                        if each['type'] == "BDMV":
-                            description += f"[hide={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/hide]\n\n"
-                        if each['type'] == "DVD":
-                            description += f"{each['name']}:\n"
-                            description += f"[hide={os.path.basename(each['vob'])}][code][{each['vob_mi']}[/code][/hide] [hide={os.path.basename(each['ifo'])}][code][{each['ifo_mi']}[/code][/hide]\n\n"
-            # description += common.get_links(movie, "[COLOR=red][size=4]", "[/size][/color]")
-                elif discs[0]['type'] == "DVD":
-                    description += f"[hide][code]{discs[0]['vob_mi']}[/code][/hide]\n\n"
-                elif meta['is_disc'] == "BDMV":
-                    description += f"[hide][code]{discs[0]['summary']}[/code][/hide]\n\n"
-            else:
-                # Beautify MediaInfo for AR using custom template
-                video = meta['filelist'][0]
-                # using custom mediainfo template.
-                # can not use full media info as sometimes its more than max chars per post.
-                mi_template = os.path.abspath(f"{meta['base_dir']}/data/templates/summary-mediainfo.csv")
-                if os.path.exists(mi_template):
-                    media_info = await self.parse_mediainfo_async(video, mi_template)
-                    description += (f"""[code]\n{media_info}\n[/code]\n""")
-                    # adding full mediainfo as spoiler
-                    async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as MI:
-                        full_mediainfo = await MI.read()
-                    description += f"[hide=FULL MEDIAINFO][code]{full_mediainfo}[/code][/hide]\n"
-                else:
-                    console.print("[bold red]Couldn't find the MediaInfo template")
-                    console.print("[green]Using normal MediaInfo for the description.")
+                console.print("[bold red]Couldn't find the MediaInfo template")
+                console.print("[green]Using normal MediaInfo for the description.")
 
-                    async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as MI:
-                        cleaned_mediainfo = await MI.read()
-                        description += (f"""[code]\n{cleaned_mediainfo}\n[/code]\n\n""")
+                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8') as mi_file:
+                    cleaned_mediainfo = await mi_file.read()
+                    description += (f"""[code]\n{cleaned_mediainfo}\n[/code]\n\n""")
 
             description += "\n\n" + subheading + "PLOT" + heading_end + "\n" + str(meta['overview'])
             if meta['genres']:
                 description += "\n\n" + subheading + "Genres" + heading_end + "\n" + str(meta['genres'])
 
-            if meta['image_list'] is not None and len(meta['image_list']) > 0:
+            image_list = cast(list[dict[str, Any]], meta.get('image_list') or [])
+            if image_list:
                 description += "\n\n" + subheading + "Screenshots" + heading_end + "\n"
                 description += "[align=center]"
-                for image in meta['image_list']:
+                for image in image_list:
                     if image['raw_url'] is not None:
                         description += "[url=" + image['raw_url'] + "][img]" + image['img_url'] + "[/img][/url]"
                 description += "[/align]"
@@ -202,15 +209,15 @@ class AR():
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf8') as descfile:
             await descfile.write(description)
-        return
+        return None
 
-    async def get_language_tag(self, meta):
+    async def get_language_tag(self, meta: dict[str, Any]) -> str:
         lang_tag = ""
         has_eng_audio = False
         audio_lang = ""
         if meta['is_disc'] != "BDMV":
             try:
-                async with aiofiles.open(f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json", 'r', encoding='utf-8') as f:
+                async with aiofiles.open(f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json", encoding='utf-8') as f:
                     mi_content = await f.read()
                     mi = json.loads(mi_content)
                 for track in mi['media']['track']:
@@ -231,11 +238,12 @@ class AR():
             lang_tag = audio_lang
         return lang_tag
 
-    async def get_basename(self, meta):
-        path = next(iter(meta['filelist']), meta['path'])
+    async def get_basename(self, meta: dict[str, Any]) -> str:
+        filelist = cast(list[str], meta.get('filelist') or [])
+        path = filelist[0] if filelist else str(meta.get('path') or "")
         return os.path.basename(path)
 
-    async def search_existing(self, meta, disctype):
+    async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[dict[str, str]]:
         dupes: list[dict[str, str]] = []
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if not cookie_jar:
@@ -295,7 +303,7 @@ class AR():
             console.print(f"[red]Error occurred: {e}")
             return dupes
 
-    async def get_auth_key(self, meta):
+    async def get_auth_key(self, meta: dict[str, Any]) -> Optional[str]:
         """Retrieve the saved auth key from cookie_auth.py."""
         auth_key = await self.cookie_validator.get_ar_auth_key(meta, self.tracker)
         if auth_key:
@@ -321,10 +329,7 @@ class AR():
 
                 if logout_link:
                     href_value = logout_link.get('href')
-                    if isinstance(href_value, str):
-                        match = re.search(r'auth=([^&]+)', href_value)
-                    else:
-                        match = None
+                    match = re.search(r'auth=([^&]+)', href_value) if isinstance(href_value, str) else None
                     if match:
                         auth_key = match.group(1)
                         # Save it for next time
@@ -342,7 +347,7 @@ class AR():
 
         return None
 
-    async def upload(self, meta, disctype):
+    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
         """Upload torrent to AR using centralized cookie_upload."""
         # Prepare the data for the upload
         common = COMMON(config=self.config)
@@ -353,14 +358,15 @@ class AR():
         # Read the description
         desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
         try:
-            async with aiofiles.open(desc_path, 'r', encoding='utf-8') as desc_file:
+            async with aiofiles.open(desc_path, encoding='utf-8') as desc_file:
                 desc = await desc_file.read()
         except FileNotFoundError:
             meta['tracker_status'][self.tracker]['status_message'] = f"data error: Description file not found at {desc_path}"
-            return
+            return False
 
         # Handle cover image input
-        cover = meta.get('poster', None) or meta["imdb_info"].get("cover", None)
+        imdb_info = cast(dict[str, Any], meta.get('imdb_info') or {})
+        cover = meta.get('poster') or imdb_info.get("cover", None)
         while cover is None and not meta.get("unattended", False):
             cover = Prompt.ask("No Poster was found. Please input a link to a poster:", default="")
             if not re.match(r'https?://.*\.(jpg|png|gif)$', cover):
@@ -391,21 +397,21 @@ class AR():
         auth_key = await self.get_auth_key(meta)
         if not auth_key:
             meta['tracker_status'][self.tracker]['status_message'] = "data error: Failed to extract auth key"
-            return
+            return False
 
         # must use scene name if scene release
         KNOWN_EXTENSIONS = {".mkv", ".mp4", ".avi", ".ts"}
         if meta['scene']:
-            ar_name = meta.get('scene_name')
+            ar_name = str(meta.get('scene_name') or '')
         else:
-            ar_name = meta['uuid']
+            ar_name = str(meta['uuid'])
             base, ext = os.path.splitext(ar_name)
             if ext.lower() in KNOWN_EXTENSIONS:
                 ar_name = base
             ar_name = ar_name.replace(' ', ".").replace("'", '').replace(':', '').replace("(", '.').replace(")", '.').replace("[", '.').replace("]", '.').replace("{", '.').replace("}", '.')
             ar_name = re.sub(r'\.{2,}', '.', ar_name)
 
-        tag_lower = meta.get('tag', '').lower()
+        tag_lower = str(meta.get('tag', '')).lower()
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
         if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
             for invalid_tag in invalid_tags:
@@ -413,7 +419,7 @@ class AR():
             ar_name = f"{ar_name}-NoGRP"
 
         # Prepare upload data
-        data = {
+        data: dict[str, Any] = {
             "submit": "true",
             "auth": auth_key,
             "type": type_id,
@@ -442,12 +448,9 @@ class AR():
             id_pattern=r'torrents\.php\?id=(\d+)',
             success_status_code="200",
         )
-        if not is_uploaded:
-            return False
+        return is_uploaded
 
-        return True
-
-    async def parse_mediainfo_async(self, video_path, template_path):
+    async def parse_mediainfo_async(self, video_path: str, template_path: str) -> str:
         """Parse MediaInfo asynchronously using thread executor"""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(

@@ -1,16 +1,41 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import json
-import langcodes
 import os
-import traceback
 import re
+import traceback
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import Any, Optional, Union, cast
 
-from data.config import config
+import langcodes
+
 from src.console import console
 from src.trackers.COMMON import COMMON
 
+Meta = dict[str, Any]
+TrackDict = dict[str, Any]
 
-def determine_channel_count(channels, channel_layout, additional, format):
+
+class AudioManager:
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+
+    async def get_audio_v2(
+        self,
+        mi: Mapping[str, Any],
+        meta: Meta,
+        bdinfo: Optional[Mapping[str, Any]],
+    ) -> tuple[str, str, bool]:
+        return await _get_audio_v2(self.config, mi, meta, bdinfo)
+
+
+def determine_channel_count(
+    channels: Any,
+    channel_layout: Optional[str],
+    additional: Any,
+    format: Any,
+) -> str:
     # Coerce channels to string and extract first integer (handles values like "6 channels", "8 / 6", etc.)
     s = str(channels).strip() if channels is not None else ""
     m = re.search(r"\d+", s)
@@ -21,9 +46,8 @@ def determine_channel_count(channels, channel_layout, additional, format):
     channel_layout = channel_layout.strip() if channel_layout else ""
 
     # Handle specific Atmos/immersive audio cases first
-    if is_atmos_or_immersive_audio(additional, format, channel_layout):
-        if channel_layout:
-            return handle_atmos_channel_count(channels, channel_layout)
+    if is_atmos_or_immersive_audio(additional, format, channel_layout) and channel_layout:
+        return handle_atmos_channel_count(channels, channel_layout)
 
     # Handle standard channel layouts with proper LFE detection
     if channel_layout:
@@ -33,7 +57,7 @@ def determine_channel_count(channels, channel_layout, additional, format):
     return fallback_channel_count(channels)
 
 
-def is_atmos_or_immersive_audio(additional, format, channel_layout):
+def is_atmos_or_immersive_audio(additional: Any, format: Any, channel_layout: Optional[str]) -> bool:
     """Check if this is Dolby Atmos, DTS:X, or other immersive audio format."""
     atmos_indicators = [
         'JOC', 'Atmos', '16-ch', 'Atmos Audio',
@@ -43,9 +67,8 @@ def is_atmos_or_immersive_audio(additional, format, channel_layout):
     dtsx_indicators = ['DTS:X', 'XLL X']
 
     # Check in additional features
-    if additional:
-        if any(indicator in str(additional) for indicator in atmos_indicators + dtsx_indicators):
-            return True
+    if additional and any(indicator in str(additional) for indicator in atmos_indicators + dtsx_indicators):
+        return True
 
     # Check in format
     if format and any(indicator in str(format) for indicator in atmos_indicators + dtsx_indicators):
@@ -66,7 +89,7 @@ def is_atmos_or_immersive_audio(additional, format, channel_layout):
     return False
 
 
-def handle_atmos_channel_count(channels, channel_layout):
+def handle_atmos_channel_count(channels: int, channel_layout: str) -> str:
     """Handle Dolby Atmos and immersive audio channel counting."""
 
     # Parse the layout to count bed and height channels
@@ -82,7 +105,7 @@ def handle_atmos_channel_count(channels, channel_layout):
         return parse_channel_layout(channels, channel_layout)
 
 
-def parse_atmos_layout(channel_layout):
+def parse_atmos_layout(channel_layout: Optional[str]) -> tuple[int, int, int]:
     """Parse channel layout to separate bed channels, LFE, and height channels."""
     if not channel_layout:
         return 0, 0, 0
@@ -121,7 +144,7 @@ def parse_atmos_layout(channel_layout):
     return bed_count, lfe_count, height_count
 
 
-def parse_channel_layout(channels, channel_layout):
+def parse_channel_layout(channels: int, channel_layout: str) -> str:
     """Parse standard channel layout to determine proper channel count notation."""
     layout = channel_layout.upper()
 
@@ -152,7 +175,7 @@ def parse_channel_layout(channels, channel_layout):
                 return f"{channels}.0"
 
 
-def fallback_channel_count(channels):
+def fallback_channel_count(channels: int) -> str:
     """Fallback channel counting when no layout information is available."""
     if channels <= 2:
         return f"{channels}.0"
@@ -172,16 +195,33 @@ def fallback_channel_count(channels):
         return f"{channels - 1}.1"
 
 
-async def get_audio_v2(mi, meta, bdinfo):
-    extra = dual = ""
+async def _get_audio_v2(
+    config: dict[str, Any],
+    mi: Mapping[str, Any],
+    meta: Meta,
+    bdinfo: Optional[Mapping[str, Any]],
+) -> tuple[str, str, bool]:
+    extra = ""
+    dual = ""
     has_commentary = False
     meta['bloated'] = False
+    is_auro3d = False
     bd_mi = None
+    additional: Any = ""
+    format: Any = ""
+    commercial: Any = ""
+    chan: str = ""
+    format_settings: str = ""
+    format_profile: str = ""
+    channel_layout: str = ""
+    codec: str = ""
 
     # Get formats
     if bdinfo is not None:  # Disks
-        additional = bdinfo.get('audio', [{}])[0].get('atmos_why_you_be_like_this', '')
-        if 'atmos' in additional.lower():
+        audio_entries = cast(list[dict[str, Any]], bdinfo.get('audio', [{}]))
+        first_audio: dict[str, Any] = audio_entries[0] if audio_entries else {}
+        additional = first_audio.get('atmos_why_you_be_like_this', '')
+        if isinstance(additional, str) and 'atmos' in additional.lower():
             common = COMMON(config)
             bd_mi = await common.get_bdmv_mediainfo(meta)
             try:
@@ -190,8 +230,8 @@ async def get_audio_v2(mi, meta, bdinfo):
                 if base_dir and folder_id:
                     mi_path = os.path.join(base_dir, 'tmp', folder_id, 'MediaInfo.json')
                     if os.path.exists(mi_path):
-                        with open(mi_path, 'r', encoding='utf-8') as f:
-                            mi = json.load(f)
+                        mi_text = await asyncio.to_thread(Path(mi_path).read_text, encoding='utf-8')
+                        mi = json.loads(mi_text)
                         if meta.get('debug'):
                             console.print(f"[yellow]Loaded MediaInfo from file:[/yellow] {mi_path}")
             except Exception:
@@ -201,12 +241,13 @@ async def get_audio_v2(mi, meta, bdinfo):
                 bd_mi = None
         else:
             format_settings = ""
-            format = bdinfo.get('audio', [{}])[0].get('codec', '')
+            format = first_audio.get('codec', '')
             commercial = format
-            chan = bdinfo.get('audio', [{}])[0].get('channels', '')
+            chan = str(first_audio.get('channels', '') or '')
 
     if bdinfo is None or bd_mi is not None:  # Rips or BD with mediainfo
-        tracks = mi.get('media', {}).get('track', [])
+        mi_map = mi
+        tracks = cast(list[TrackDict], cast(Mapping[str, Any], mi_map.get('media', {})).get('track', []))
         audio_tracks = [t for t in tracks if t.get('@type') == "Audio"]
         first_audio_track = None
         if audio_tracks:
@@ -221,7 +262,7 @@ async def get_audio_v2(mi, meta, bdinfo):
                 if tracks_with_id:
                     try:
                         # Extract numeric part from ID (e.g., "128 (0x80)" -> 128)
-                        def get_id_num(x):
+                        def get_id_num(x: Mapping[str, Any]) -> int:
                             id_match = re.search(r'\d+', str(x.get('ID', '999')))
                             return int(id_match.group()) if id_match else 999
                         first_audio_track = min(tracks_with_id, key=get_id_num)
@@ -230,7 +271,7 @@ async def get_audio_v2(mi, meta, bdinfo):
                 else:
                     first_audio_track = audio_tracks[0]
 
-        track = first_audio_track if first_audio_track else {}
+        track: TrackDict = first_audio_track or {}
         format = track.get('Format', '')
         commercial = track.get('Format_Commercial', '') or track.get('Format_Commercial_IfAny', '')
         if track.get('Language', '') == "zxx":
@@ -238,9 +279,7 @@ async def get_audio_v2(mi, meta, bdinfo):
 
         additional = track.get('Format_AdditionalFeatures', '')
 
-        format_settings = track.get('Format_Settings', '')
-        if not isinstance(format_settings, str):
-            format_settings = ""
+        format_settings = str(track.get('Format_Settings') or "")
         if format_settings in ['Explicit']:
             format_settings = ""
         format_profile = track.get('Format_Profile', '')
@@ -249,7 +288,11 @@ async def get_audio_v2(mi, meta, bdinfo):
         if not str(channels).isnumeric():
             channels = track.get('Channels')
         try:
-            channel_layout = track.get('ChannelLayout', '') or track.get('ChannelLayout_Original', '') or track.get('ChannelPositions', '')
+            channel_layout = (
+                track.get('ChannelLayout', '')
+                or track.get('ChannelLayout_Original', '')
+                or track.get('ChannelPositions', '')
+            )
         except Exception:
             channel_layout = ''
 
@@ -266,11 +309,18 @@ async def get_audio_v2(mi, meta, bdinfo):
                 if meta['debug']:
                     console.print(f"DEBUG: Original Language: {orig_lang}")
                 try:
-                    tracks = mi.get('media', {}).get('track', [])
+                    tracks = cast(list[TrackDict], cast(Mapping[str, Any], mi_map.get('media', {})).get('track', []))
+                    # no proper auro3d marker in mediainfo, which leaves us vulnerable to misdetection
+                    # only scope the first track to reduce false positives
+                    first_audio_track = next((t for t in tracks if t.get('@type') == "Audio"), None)
+                    first_audio_title = None
+                    if first_audio_track:
+                        first_audio_title = first_audio_track.get('title') or first_audio_track.get('Title')
+                    is_auro3d = bool(first_audio_title and 'auro3d' in str(first_audio_title).lower())
                     has_commentary = False
                     has_compatibility = False
-                    has_coms = [t for t in tracks if "commentary" in (t.get('Title') or '').lower()]
-                    has_compat = [t for t in tracks if "compatibility" in (t.get('Title') or '').lower()]
+                    has_coms = [t for t in tracks if "commentary" in str(t.get('Title') or '').lower()]
+                    has_compat = [t for t in tracks if "compatibility" in str(t.get('Title') or '').lower()]
                     if has_coms:
                         has_commentary = True
                     if has_compat:
@@ -279,41 +329,42 @@ async def get_audio_v2(mi, meta, bdinfo):
                         console.print(f"DEBUG: Found {len(has_coms)} commentary tracks, has_commentary = {has_commentary}")
                         console.print(f"DEBUG: Found {len(has_compat)} compatibility tracks, has_compatibility = {has_compatibility}")
                     audio_tracks = [
-                        t for t in tracks
-                        if t.get('@type') == "Audio" and "commentary" not in (t.get('Title') or '').lower() and "compatibility" not in (t.get('Title') or '').lower()
+                        t
+                        for t in tracks
+                        if t.get('@type') == "Audio"
+                        and "commentary" not in str(t.get('Title') or '').lower()
+                        and "compatibility" not in str(t.get('Title') or '').lower()
                     ]
                     audio_language = None
                     if meta['debug']:
                         console.print(f"DEBUG: Audio Tracks (not commentary)= {len(audio_tracks)}")
 
                     # First pass: collect all audio languages and set flags
-                    non_eng_non_orig_languages = []
+                    non_eng_non_orig_languages: list[str] = []
                     for t in audio_tracks:
-                        audio_language = t.get('Language', '')
+                        audio_language = str(t.get('Language') or '')
                         if meta['debug']:
                             console.print(f"DEBUG: Audio Language = {audio_language}")
+                        audio_language = audio_language.lower().strip()
+                        if audio_language.startswith("en"):
+                            if meta['debug']:
+                                console.print(f"DEBUG: Found English audio track: {audio_language}")
+                            eng = True
 
-                        if isinstance(audio_language, str):
-                            audio_language = audio_language.lower().strip()
-                            if audio_language.startswith("en"):
-                                if meta['debug']:
-                                    console.print(f"DEBUG: Found English audio track: {audio_language}")
-                                eng = True
+                        if audio_language and "en" not in audio_language and audio_language.startswith(orig_lang):
+                            if meta['debug']:
+                                console.print(f"DEBUG: Found original language audio track: {audio_language}")
+                            orig = True
 
-                            if audio_language and "en" not in audio_language and audio_language.startswith(orig_lang):
-                                if meta['debug']:
-                                    console.print(f"DEBUG: Found original language audio track: {audio_language}")
-                                orig = True
+                        variants = ['zh', 'cn', 'cmn', 'no', 'nb']
+                        if any(audio_language.startswith(var) for var in variants) and any(orig_lang.startswith(var) for var in variants):
+                            if meta['debug']:
+                                console.print(f"DEBUG: Found original language audio track with variant: {audio_language}")
+                            orig = True
 
-                            variants = ['zh', 'cn', 'cmn', 'no', 'nb']
-                            if any(audio_language.startswith(var) for var in variants) and any(orig_lang.startswith(var) for var in variants):
-                                if meta['debug']:
-                                    console.print(f"DEBUG: Found original language audio track with variant: {audio_language}")
-                                orig = True
-
-                            if audio_language and not audio_language.startswith(orig_lang) and not audio_language.startswith("en") and not audio_language.startswith("zx"):
-                                non_en_non_commentary = True
-                                non_eng_non_orig_languages.append(audio_language)
+                        if audio_language and not audio_language.startswith(orig_lang) and not audio_language.startswith("en") and not audio_language.startswith("zx"):
+                            non_en_non_commentary = True
+                            non_eng_non_orig_languages.append(audio_language)
 
                     # Second pass: now that we have complete information about all tracks, check for bloat
                     if non_eng_non_orig_languages:
@@ -385,32 +436,32 @@ async def get_audio_v2(mi, meta, bdinfo):
     if isinstance(additional, dict):
         additional = ""  # Set empty string if additional is a dictionary
 
-    if commercial:
+    additional_str = str(additional or "")
+    format_str = str(format or "")
+    commercial_str = str(commercial or "")
+
+    if commercial_str:
         for key, value in commercial_names.items():
-            if key in commercial:
+            if key in commercial_str:
                 codec = value
                 search_format = False
-            if "Atmos" in commercial or format_extra.get(additional, "") == " Atmos":
+            if "Atmos" in commercial_str or format_extra.get(additional_str, "") == " Atmos":
                 extra = " Atmos"
 
     if search_format:
-        codec = audio_codec_map.get(format, "") + audio_extra.get(additional, "")
-        extra = format_extra.get(additional, "")
+        codec = audio_codec_map.get(format_str, "") + audio_extra.get(additional_str, "")
+        extra = format_extra.get(additional_str, "")
 
     format_settings = format_settings_extra.get(format_settings, "")
-    if format_settings == "EX" and chan == "5.1":
-        format_settings = "EX"
-    else:
-        format_settings = ""
+    format_settings = "EX" if format_settings == "EX" and chan == "5.1" else ""
 
     if codec == "":
-        codec = format
+        codec = format_str
 
-    if format.startswith("DTS"):
-        if additional and additional.endswith("X"):
-            codec = "DTS:X"
+    if format_str.startswith("DTS") and additional_str and additional_str.endswith("X"):
+        codec = "DTS:X"
 
-    if format == "MPEG Audio":
+    if format_str == "MPEG Audio":
         if format_profile == "Layer 2":
             codec = "MP2"
         elif format_profile == "Layer 3":
@@ -420,12 +471,15 @@ async def get_audio_v2(mi, meta, bdinfo):
         console.print("[warning] Detected codec is DD but channel count is 7.1, correcting to DD+")
         codec = "DD+"
 
+    if not extra and is_auro3d:
+        extra = " Auro3D"
+
     audio = f"{dual} {codec or ''} {format_settings or ''} {chan or ''}{extra or ''}"
     audio = ' '.join(audio.split())
     return audio, chan, has_commentary
 
 
-def bloated_check(meta, audio_languages, is_eng_original_with_non_eng=False):
+def bloated_check(meta: Meta, audio_languages: Union[Sequence[str], str], is_eng_original_with_non_eng: bool = False) -> None:
     # Normalize to list
     if isinstance(audio_languages, str):
         audio_languages = [audio_languages]
@@ -448,12 +502,11 @@ def bloated_check(meta, audio_languages, is_eng_original_with_non_eng=False):
 
     # Loop through each audio language
     for audio_language in audio_languages:
-        trackers_to_warn = []
+        trackers_to_warn: list[str] = []
 
-        for tracker in meta.get("trackers", []):
-            if tracker in tracker_allowed_bloat_language:
-                if audio_language.lower().startswith(tracker_allowed_bloat_language[tracker].lower()):
-                    continue
+        for tracker in cast(list[str], meta.get("trackers", [])):
+            if tracker in tracker_allowed_bloat_language and audio_language.lower().startswith(tracker_allowed_bloat_language[tracker].lower()):
+                continue
             if tracker not in bloat_is_allowed:
                 trackers_to_warn.append(tracker)
 
@@ -469,7 +522,7 @@ def bloated_check(meta, audio_languages, is_eng_original_with_non_eng=False):
             if clean_lang:
                 lang = langcodes.Language.get(clean_lang)
                 language_display = lang.display_name()
-        except (langcodes.LanguageTagError, LookupError, AttributeError, ValueError) as e:
+        except (LookupError, AttributeError, ValueError) as e:
             # Silently fall back to the original language code
             if meta.get('debug'):
                 console.print(f"[yellow]Debug: Unable to convert language code '{audio_language}' to full name: {e}[/yellow]")

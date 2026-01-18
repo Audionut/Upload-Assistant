@@ -87,11 +87,63 @@ jobs:
 
           const workflowRun = context.payload.workflow_run;
           const prs = workflowRun.pull_requests || [];
-          if (prs.length === 0) {
+
+          async function resolvePrNumber() {
+            if (prs.length > 0) {
+              return { number: prs[0].number, source: 'workflow_run.pull_requests[0]' };
+            }
+
+            const headRepo = workflowRun.head_repository && workflowRun.head_repository.owner
+              ? workflowRun.head_repository.owner.login
+              : null;
+            const headBranch = workflowRun.head_branch || null;
+            const headSha = workflowRun.head_sha || null;
+
+            if (headRepo && headBranch) {
+              const headRef = `${headRepo}:${headBranch}`;
+              const candidates = await github.paginate(github.rest.pulls.list, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                head: headRef,
+                per_page: 100
+              });
+              if (candidates.length === 1) {
+                return { number: candidates[0].number, source: `head=${headRef}` };
+              }
+              if (candidates.length > 1) {
+                console.log(`Multiple PRs matched head ref ${headRef}; refusing to guess.`);
+                return null;
+              }
+            }
+
+            if (headSha) {
+              const candidates = await github.paginate(github.rest.pulls.list, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                per_page: 100
+              });
+              const matches = candidates.filter(pr => pr.head && pr.head.sha === headSha);
+              if (matches.length === 1) {
+                return { number: matches[0].number, source: `head_sha=${headSha}` };
+              }
+              if (matches.length > 1) {
+                console.log(`Multiple PRs matched head SHA ${headSha}; refusing to guess.`);
+                return null;
+              }
+            }
+
+            return null;
+          }
+
+          const prInfo = await resolvePrNumber();
+          if (!prInfo) {
             console.log('No pull request associated with this workflow run.');
             return;
           }
-          const prNumber = prs[0].number;
+          const prNumber = prInfo.number;
+          console.log(`Resolved PR #${prNumber} (${prInfo.source}).`);
 
           const artifactsDir = path.resolve('artifacts');
           if (!fs.existsSync(artifactsDir)) {

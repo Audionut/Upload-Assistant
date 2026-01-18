@@ -3,6 +3,8 @@
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](https://www.python.org/downloads/)
 [![Security: Bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 [![Security: Safety](https://img.shields.io/badge/security-safety-green.svg)](https://github.com/pyupio/safety)
+[![Lint: Ruff](https://img.shields.io/badge/lint-ruff-4B8BBE.svg?logo=ruff&logoColor=white)](https://github.com/astral-sh/ruff)
+[![Type Checker: Pyright](https://img.shields.io/badge/type%20checker-pyright-2D7FF9.svg?logo=python&logoColor=white)](https://github.com/microsoft/pyright)
 
 Discord support https://discord.gg/QHHAZu7e2A
 

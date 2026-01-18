@@ -48,6 +48,12 @@ jobs:
         # Install code analysis tools
         pip install pyright bandit vulture pycodestyle autopep8 ruff==0.14.13
 
+    - name: Create CI config.py
+      run: |
+        if [ ! -f "data/config.py" ] && [ -f "data/example-config.py" ]; then
+          cp "data/example-config.py" "data/config.py"
+        fi
+
     - name: Deprecation Warnings Scan
       continue-on-error: true
       run: |
@@ -90,7 +96,7 @@ jobs:
                 if spec and spec.loader:
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
-          except BaseException:
+            except BaseException:
                 # Ignore import/runtime errors during deprecation scanning
                 continue
 

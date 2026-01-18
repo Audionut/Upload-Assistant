@@ -1,14 +1,18 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-from datetime import datetime
-from src.trackers.COMMON import COMMON
+from datetime import datetime, timezone
+from typing import Any, cast
+
 from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
+from src.trackers.COMMON import COMMON
+
+Meta = dict[str, Any]
+Config = dict[str, Any]
 
 
 class PHD(AZTrackerBase):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='PHD')
-        self.config = config
+        self.config: Config = config
         self.common = COMMON(config)
         self.tracker = 'PHD'
         self.source_flag = 'PrivateHD'
@@ -22,26 +26,26 @@ class PHD(AZTrackerBase):
         self.torrent_url = f'{self.base_url}/torrent/'
         self.requests_url = f'{self.base_url}/requests'
 
-    async def rules(self, meta):
-        warnings = []
+    async def rules(self, meta: Meta) -> str:
+        warnings: list[str] = []
 
         is_bd_disc = False
         if meta.get('is_disc', '') == 'BDMV':
             is_bd_disc = True
 
-        video_codec = meta.get('video_codec', '')
+        video_codec = str(meta.get('video_codec', ''))
         if video_codec:
             video_codec = video_codec.strip().lower()
 
-        video_encode = meta.get('video_encode', '')
+        video_encode = str(meta.get('video_encode', ''))
         if video_encode:
             video_encode = video_encode.strip().lower()
 
-        type = meta.get('type', '')
+        type = str(meta.get('type', ''))
         if type:
             type = type.strip().lower()
 
-        source = meta.get('source', '')
+        source = str(meta.get('source', ''))
         if source:
             source = source.strip().lower()
 
@@ -55,11 +59,13 @@ class PHD(AZTrackerBase):
         if meta.get('anime', False):
             warnings.append("Upload Anime content to our sister site AnimeTorrents.me instead. If it's on AniDB, it's an anime.")
 
-        year = meta.get('year')
-        current_year = datetime.now().year
-        is_older_than_50_years = (current_year - year) >= 50
-        if is_older_than_50_years:
-            warnings.append('Upload movies/series 50+ years old to our sister site CinemaZ.to instead.')
+        year_value = meta.get('year')
+        current_year = datetime.now(timezone.utc).year
+        year = int(year_value) if year_value and str(year_value).isdigit() else None
+        if year is not None:
+            is_older_than_50_years = (current_year - year) >= 50
+            if is_older_than_50_years:
+                warnings.append('Upload movies/series 50+ years old to our sister site CinemaZ.to instead.')
 
         # https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
 
@@ -104,7 +110,8 @@ class PHD(AZTrackerBase):
         all_countries = africa + america + europe + oceania
         cinemaz_countries = list(set(all_countries) - set(phd_allowed_countries))
 
-        origin_countries_codes = meta.get('origin_country', [])
+        origin_countries_codes_value = meta.get('origin_country', [])
+        origin_countries_codes = cast(list[str], origin_countries_codes_value) if isinstance(origin_countries_codes_value, list) else []
 
         if any(code in phd_allowed_countries for code in origin_countries_codes):
             pass
@@ -129,7 +136,7 @@ class PHD(AZTrackerBase):
             )
 
         # Tags
-        tag = meta.get('tag', '')
+        tag = str(meta.get('tag', ''))
         if tag:
             tag = tag.strip().lower()
             if tag in ('rarbg', 'fgt', 'grym', 'tbs'):
@@ -141,46 +148,43 @@ class PHD(AZTrackerBase):
         if meta.get('sd', '') == 1:
             warnings.append('SD (Standard Definition) content is forbidden.')
 
-        if not is_bd_disc:
-            if meta.get('container') not in ['mkv', 'mp4']:
-                warnings.append('Allowed containers: MKV, MP4.')
+        if not is_bd_disc and meta.get('container') not in ['mkv', 'mp4']:
+            warnings.append('Allowed containers: MKV, MP4.')
 
         # Video codec
         # 1
-        if type == 'remux':
-            if video_codec not in ('mpeg-2', 'vc-1', 'h.264', 'h.265', 'avc'):
-                warnings.append('Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265')
+        if type == 'remux' and video_codec not in ('mpeg-2', 'vc-1', 'h.264', 'h.265', 'avc'):
+            warnings.append('Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265')
 
         # 2
-        if type == 'encode' and source == 'bluray':
-            if video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
-                warnings.append('Allowed Video Codecs for BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)')
+        if type == 'encode' and source == 'bluray' and video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
+            warnings.append('Allowed Video Codecs for BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)')
 
         # 3
-        if type in ('webdl', 'web-dl') and source == 'web':
-            if video_encode not in ('h.264', 'h.265', 'vp9'):
-                warnings.append('Allowed Video Codecs for WEB (Untouched): H.264, H.265, VP9')
+        if type in ('webdl', 'web-dl') and source == 'web' and video_encode not in ('h.264', 'h.265', 'vp9'):
+            warnings.append('Allowed Video Codecs for WEB (Untouched): H.264, H.265, VP9')
 
         # 4
-        if type == 'encode' and source == 'web':
-            if video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
-                warnings.append('Allowed Video Codecs for WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)')
+        if type == 'encode' and source == 'web' and video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
+            warnings.append('Allowed Video Codecs for WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)')
 
         # 5
-        if type == 'encode':
-            if video_encode == 'x265':
-                if meta.get('bit_depth', '') != '10':
-                    warnings.append('Allowed Video Codecs for x265 encodes must be 10-bit')
+        if type == 'encode' and video_encode == 'x265' and meta.get('bit_depth', '') != '10':
+            warnings.append('Allowed Video Codecs for x265 encodes must be 10-bit')
 
         # 6
-        resolution = int(meta.get('resolution').lower().replace('p', '').replace('i', ''))
-        if resolution > 1080:
-            if video_encode in ('h.264', 'x264'):
-                warnings.append('H.264/x264 only allowed for 1080p and below.')
+        resolution_text = str(meta.get('resolution', '')).lower().replace('p', '').replace('i', '')
+        resolution = int(resolution_text) if resolution_text.isdigit() else 0
+        if resolution > 1080 and video_encode in ('h.264', 'x264'):
+            warnings.append('H.264/x264 only allowed for 1080p and below.')
 
         # 7
         if video_codec not in ('avc', 'mpeg-2', 'vc-1', 'avc', 'h.264', 'vp9', 'h.265', 'x264', 'x265', 'hevc'):
             warnings.append(f'Video codec not allowed in your upload: {video_codec}.')
+
+        mediainfo = cast(dict[str, Any], meta.get('mediainfo', {}))
+        media = cast(dict[str, Any], mediainfo.get('media', {}))
+        media_tracks = cast(list[dict[str, Any]], media.get('track', []))
 
         # Audio codec
         if is_bd_disc:
@@ -192,20 +196,19 @@ class PHD(AZTrackerBase):
             # 2
             forbidden_keywords = ['LPCM', 'PCM', 'Linear PCM']
 
-            audio_tracks = []
-            media_tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
+            audio_tracks: list[dict[str, str]] = []
             for track in media_tracks:
                 if track.get('@type') == 'Audio':
                     codec_info = track.get('Format_Commercial_IfAny')
                     codec = codec_info if isinstance(codec_info, str) else ''
                     audio_tracks.append({
                         'codec': codec,
-                        'language': track.get('Language', '')
+                        'language': str(track.get('Language', ''))
                     })
 
             # 3
-            original_language = meta.get('original_language', '')
-            language_track = track.get('language', '')
+            original_language = str(meta.get('original_language', ''))
+            language_track = audio_tracks[0].get('language', '') if audio_tracks else ''
             if original_language and language_track:
                 # Filter to only have audio tracks that are in the original language
                 original_language_tracks = [
@@ -233,7 +236,7 @@ class PHD(AZTrackerBase):
                         )
 
             # 4
-            invalid_codecs = []
+            invalid_codecs: list[str] = []
             for track in audio_tracks:
                 codec = track['codec']
                 if not codec:
@@ -249,7 +252,7 @@ class PHD(AZTrackerBase):
                     invalid_codecs.append(codec)
 
             if invalid_codecs:
-                unique_invalid_codecs = sorted(list(set(invalid_codecs)))
+                unique_invalid_codecs = sorted(set(invalid_codecs))
                 warnings.append(
                     f"Unallowed audio codec(s) detected: {', '.join(unique_invalid_codecs)}\n"
                     f'Allowed codecs: AC3 (Dolby Digital), Dolby TrueHD, DTS, DTS-HD (MA), FLAC, AAC, all other Dolby codecs.\n'
@@ -275,7 +278,9 @@ class PHD(AZTrackerBase):
             bitrate = 0
             for track in media_tracks:
                 if track.get('@type') == 'Video':
-                    bitrate = int(track.get('BitRate'))
+                    bitrate_value = track.get('BitRate')
+                    if bitrate_value and str(bitrate_value).isdigit():
+                        bitrate = int(bitrate_value)
                     break
 
             source_type = None
@@ -306,14 +311,13 @@ class PHD(AZTrackerBase):
             warnings.append(rule)
 
         # Hybrid
-        if type in ('remux', 'encode'):
-            if 'hybrid' in meta.get('name', '').lower():
-                warnings.append(
-                    'Hybrid Remuxes and Encodes are subject to the following condition:\n\n'
-                    'Hybrid user releases are permitted, but are treated similarly to regular '
-                    'user releases and must be approved by staff before you upload them '
-                    '(please see the torrent approvals forum for details).'
-                )
+        if type in ('remux', 'encode') and 'hybrid' in str(meta.get('name', '')).lower():
+            warnings.append(
+                'Hybrid Remuxes and Encodes are subject to the following condition:\n\n'
+                'Hybrid user releases are permitted, but are treated similarly to regular '
+                'user releases and must be approved by staff before you upload them '
+                '(please see the torrent approvals forum for details).'
+            )
 
         # Log
         if type == 'remux':
@@ -333,9 +337,9 @@ class PHD(AZTrackerBase):
             all_warnings = '\n\n'.join(filter(None, warnings))
             return all_warnings
 
-        return
+        return ''
 
-    def get_rip_type(self, meta, display_name=False):
+    def get_rip_type(self, meta: Meta, display_name: bool = False) -> str:
         # Translation from meta keywords to site display labels
         translation = {
             "bdrip": "BDRip",
@@ -364,9 +368,9 @@ class PHD(AZTrackerBase):
         html_label = translation.get(source_type)
 
         if display_name:
-            return html_label
+            return html_label or ''
 
         if html_label is None:
-            return None
+            return ''
 
-        return available_rip_types.get(html_label)
+        return available_rip_types.get(html_label, '')

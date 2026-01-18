@@ -41,15 +41,11 @@ RUN python3 bin/get_dvd_mediainfo_docker.py
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# Copy the download script
-COPY bin/download_mkbrr_for_docker.py bin/
-RUN chmod +x bin/download_mkbrr_for_docker.py
-
-# Download only the required mkbrr binary
-RUN python3 bin/download_mkbrr_for_docker.py
-
 # Copy the rest of the application (including web_ui)
 COPY . .
+
+# Download only the required mkbrr binary (requires full repo for src imports)
+RUN python3 -c "from bin.get_mkbrr import MkbrrBinaryManager; MkbrrBinaryManager.download_mkbrr_for_docker()"
 
 # Ensure mkbrr is executable
 RUN find bin/mkbrr -type f -name "mkbrr" -exec chmod +x {} \;

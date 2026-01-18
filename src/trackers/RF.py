@@ -1,15 +1,19 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 import re
-from src.trackers.COMMON import COMMON
+from typing import Any, Optional
+
 from src.console import console
+from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
+
+Meta = dict[str, Any]
+Config = dict[str, Any]
 
 
 class RF(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='RF')
-        self.config = config
+        self.config: Config = config
         self.common = COMMON(config)
         self.tracker = 'RF'
         self.base_url = 'https://reelflix.cc'
@@ -21,7 +25,7 @@ class RF(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
@@ -37,19 +41,26 @@ class RF(UNIT3D):
 
         return should_continue
 
-    async def get_name(self, meta):
-        rf_name = meta['name']
-        tag_lower = meta['tag'].lower()
+    async def get_name(self, meta: Meta) -> dict[str, str]:
+        rf_name = str(meta.get('name', ''))
+        tag_value = str(meta.get('tag', ''))
+        tag_lower = tag_value.lower()
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
 
-        if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+        if tag_value == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
             for invalid_tag in invalid_tags:
                 rf_name = re.sub(f"-{invalid_tag}", "", rf_name, flags=re.IGNORECASE)
             rf_name = f"{rf_name}-NoGroup"
 
         return {'name': rf_name}
 
-    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
+    async def get_type_id(
+        self,
+        meta: Meta,
+        type: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
         type_id = {
             'DISC': '43',
             'REMUX': '40',
@@ -63,14 +74,16 @@ class RF(UNIT3D):
             return type_id
         elif reverse:
             return {v: k for k, v in type_id.items()}
-        elif type is not None:
-            return {'type_id': type_id.get(type, '0')}
-        else:
-            meta_type = meta.get('type', '')
-            resolved_id = type_id.get(meta_type, '0')
-            return {'type_id': resolved_id}
+        type_value = str(type) if type is not None else str(meta.get('type', ''))
+        return {'type_id': type_id.get(type_value, '0')}
 
-    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
+    async def get_resolution_id(
+        self,
+        meta: Meta,
+        resolution: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
         resolution_id = {
             # '8640p':'10',
             '4320p': '1',
@@ -88,9 +101,5 @@ class RF(UNIT3D):
             return resolution_id
         elif reverse:
             return {v: k for k, v in resolution_id.items()}
-        elif resolution is not None:
-            return {'resolution_id': resolution_id.get(resolution, '10')}
-        else:
-            meta_resolution = meta.get('resolution', '')
-            resolved_id = resolution_id.get(meta_resolution, '10')
-            return {'resolution_id': resolved_id}
+        resolution_value = str(resolution) if resolution is not None else str(meta.get('resolution', ''))
+        return {'resolution_id': resolution_id.get(resolution_value, '10')}

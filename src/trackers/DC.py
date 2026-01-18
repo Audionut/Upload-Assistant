@@ -1,21 +1,22 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
+import os
+from typing import Any, Optional, cast
+
 import aiofiles
 import httpx
-import os
 
-from cogs.redaction import redact_private_info
+from cogs.redaction import Redaction
 from src.console import console
 from src.get_desc import DescriptionBuilder
-from src.rehostimages import check_hosts
+from src.rehostimages import RehostImagesManager
 from src.trackers.COMMON import COMMON
-from typing import Any
 
 
 class DC:
     def __init__(self, config: dict[str, Any]):
         self.config = config
         self.common = COMMON(config)
+        self.rehost_images_manager = RehostImagesManager(config)
         self.tracker = 'DC'
         self.base_url = 'https://digitalcore.club'
         self.api_base_url = f'{self.base_url}/api/v1/torrents'
@@ -25,65 +26,76 @@ class DC:
         self.api_key = self.config['TRACKERS'][self.tracker].get('api_key')
         self.session = httpx.AsyncClient(headers={'X-API-KEY': self.api_key}, timeout=30.0)
 
-    async def mediainfo(self, meta: dict[str, Any]):
+    async def mediainfo(self, meta: dict[str, Any]) -> str:
         if meta.get('is_disc') == 'BDMV':
             mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'])
         else:
             mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-            with open(mi_path, 'r', encoding='utf-8') as f:
-                mediainfo = f.read()
+            async with aiofiles.open(mi_path, encoding='utf-8') as f:
+                mediainfo = await f.read()
 
         return mediainfo
 
-    async def generate_description(self, meta: dict[str, Any]):
+    async def generate_description(self, meta: dict[str, Any]) -> str:
         builder = DescriptionBuilder(self.tracker, self.config)
-        desc_parts = []
+        desc_parts: list[str] = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header())
+        custom_header = await builder.get_custom_header()
+        desc_parts.append(custom_header)
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta)
+        title, _episode_image, episode_overview = await builder.get_tv_info(meta)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # File information
-        desc_parts.append(await builder.get_bdinfo_section(meta))
+        bdinfo_section = await builder.get_bdinfo_section(meta)
+        desc_parts.append(bdinfo_section)
 
         # NFO
-        if meta.get('description_nfo_content', ''):
-            desc_parts.append(f"[nfo]{meta.get('description_nfo_content')}[/nfo]")
+        nfo_content = meta.get('description_nfo_content')
+        if isinstance(nfo_content, str) and nfo_content:
+            desc_parts.append(f"[nfo]{nfo_content}[/nfo]")
 
         # User description
-        desc_parts.append(await builder.get_user_description(meta))
+        user_description = await builder.get_user_description(meta)
+        desc_parts.append(user_description)
 
         # Screenshots
-        all_images = []
+        all_images: list[dict[str, Any]] = []
 
-        menu_images = meta.get("menu_images", [])
-        if menu_images:
-            all_images.extend(menu_images)
+        menu_images = meta.get("menu_images")
+        menu_images_list: list[Any] = []
+        if isinstance(menu_images, list):
+            menu_images_list = cast(list[Any], menu_images)
+        all_images.extend(
+            [cast(dict[str, Any], img) for img in menu_images_list if isinstance(img, dict)]
+        )
 
-        if f"{self.tracker}_images_key" in meta:
-            images = meta.get(f"{self.tracker}_images_key")
-        else:
-            images = meta.get("image_list")
-        if images:
-            all_images.extend(images)
+        images_key = f"{self.tracker}_images_key"
+        images_value = meta.get(images_key) if images_key in meta else meta.get("image_list")
+        images_list: list[Any] = []
+        if isinstance(images_value, list):
+            images_list = cast(list[Any], images_value)
+        all_images.extend(
+            [cast(dict[str, Any], img) for img in images_list if isinstance(img, dict)]
+        )
 
         if all_images:
             screenshots_block = ""
             for image in all_images:
                 web_url = image.get("web_url")
                 raw_url = image.get("raw_url")
-                if web_url and raw_url:
+                if isinstance(web_url, str) and isinstance(raw_url, str) and web_url and raw_url:
                     screenshots_block += f"[url={web_url}][img=350]{raw_url}[/img][/url] "
             if screenshots_block:
                 desc_parts.append(f"[center]{screenshots_block}[/center]")
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        tonemapped_header = await builder.get_tonemapped_header(meta)
+        desc_parts.append(tonemapped_header)
 
         # Signature
         desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url][/center]")
@@ -117,7 +129,7 @@ class DC:
 
         return description
 
-    async def get_category_id(self, meta: dict[str, Any]):
+    async def get_category_id(self, meta: dict[str, Any]) -> Optional[int]:
         resolution = meta.get('resolution', '')
         category = meta.get('category', '')
         is_disc = meta.get('is_disc', '')
@@ -151,7 +163,7 @@ class DC:
             return category_map[category].get(resolution)
         return None
 
-    async def search_existing(self, meta: dict[str, Any], _):
+    async def search_existing(self, meta: dict[str, Any], _) -> list[dict[str, Any]]:
         imdb_id = meta.get('imdb_info', {}).get('imdbID')
         category_id = await self.get_category_id(meta)
         if not imdb_id:
@@ -159,36 +171,40 @@ class DC:
             return []
 
         search_params = {'searchText': imdb_id}
-        search_results = []
-        dupes = []
+        search_results: list[Any] = []
+        dupes: list[dict[str, Any]] = []
         try:
             response = await self.session.get(self.api_base_url, params=search_params, headers=self.session.headers, timeout=15)
             response.raise_for_status()
 
             if response.text and response.text != '[]':
-                search_results = response.json()
-                if search_results and isinstance(search_results, list):
-                    for each in search_results:
-                        if each.get('category') == category_id:
-                            name = each.get('name')
-                            torrent_id = each.get('id')
-                            size = each.get('size')
-                            torrent_link = f'{self.torrent_url}{torrent_id}/' if torrent_id else None
-                            dupe_entry = {
-                                'name': name,
-                                'size': size,
-                                'link': torrent_link
-                            }
-                            dupes.append(dupe_entry)
+                json_data = response.json()
+                if isinstance(json_data, list):
+                    search_results = cast(list[Any], json_data)
+                for each in search_results:
+                    if not isinstance(each, dict):
+                        continue
+                    each_dict = cast(dict[str, Any], each)
+                    if each_dict.get('category') == category_id:
+                        name = each_dict.get('name')
+                        torrent_id = each_dict.get('id')
+                        size = each_dict.get('size')
+                        torrent_link = f'{self.torrent_url}{torrent_id}/' if torrent_id else None
+                        dupe_entry: dict[str, Any] = {
+                            'name': name,
+                            'size': size,
+                            'link': torrent_link
+                        }
+                        dupes.append(dupe_entry)
 
-                    return dupes
+                return dupes
 
         except Exception as e:
             console.print(f'[bold red]Error searching for IMDb ID {imdb_id} on {self.tracker}: {e}[/bold red]')
 
         return []
 
-    async def edit_name(self, meta: dict[str, Any]):
+    async def edit_name(self, meta: dict[str, Any]) -> str:
         """
         Edits the name according to DC's naming conventions.
         Scene uploads should use the scene name.
@@ -205,7 +221,7 @@ class DC:
 
         return dc_name
 
-    async def check_image_hosts(self, meta: dict[str, Any]):
+    async def check_image_hosts(self, meta: dict[str, Any]) -> None:
         url_host_mapping = {
             'ibb.co': 'imgbb',
             'imgbox.com': 'imgbox',
@@ -215,10 +231,16 @@ class DC:
             'digitalcore.club': 'sharex',
             'img.digitalcore.club': 'sharex'
         }
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
+        await self.rehost_images_manager.check_hosts(
+            meta,
+            self.tracker,
+            url_host_mapping=url_host_mapping,
+            img_host_index=1,
+            approved_image_hosts=self.approved_image_hosts,
+        )
         return
 
-    async def fetch_data(self, meta: dict[str, Any]):
+    async def fetch_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         anon = '1' if meta['anon'] or self.config['TRACKERS'][self.tracker].get('anon', False) else '0'
 
         data = {
@@ -236,7 +258,7 @@ class DC:
 
         return data
 
-    async def upload(self, meta: dict[str, Any], _):
+    async def upload(self, meta: dict[str, Any], _) -> bool:
         data = await self.fetch_data(meta)
         torrent_title = await self.edit_name(meta)
         response = None
@@ -247,29 +269,31 @@ class DC:
                 await self.common.create_torrent_for_upload(meta, self.tracker, 'DigitalCore.club')
                 torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
-                with open(torrent_path, 'rb') as torrent_file:
-                    files = {'file': (torrent_title + '.torrent', torrent_file, 'application/x-bittorrent')}
+                async with aiofiles.open(torrent_path, 'rb') as torrent_file:
+                    torrent_bytes = await torrent_file.read()
+                files = {'file': (torrent_title + '.torrent', torrent_bytes, 'application/x-bittorrent')}
 
-                    response = await self.session.post(upload_url, data=data, files=files, headers=self.session.headers, timeout=90)
-                    response.raise_for_status()
-                    response_data = response.json()
+                response = await self.session.post(upload_url, data=data, files=files, headers=dict(self.session.headers), timeout=90)
+                response.raise_for_status()
+                response_json = response.json()
+                response_data: dict[str, Any] = cast(dict[str, Any], response_json) if isinstance(response_json, dict) else {}
 
-                    if response.status_code == 200 and response_data.get('id'):
-                        torrent_id = str(response_data['id'])
-                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id + '/'
-                        meta['tracker_status'][self.tracker]['status_message'] = response_data.get('message')
+                if response.status_code == 200 and response_data.get('id'):
+                    torrent_id = str(response_data['id'])
+                    meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id + '/'
+                    meta['tracker_status'][self.tracker]['status_message'] = response_data.get('message')
 
-                        await self.common.download_tracker_torrent(
-                            meta,
-                            self.tracker,
-                            headers=self.session.headers,
-                            downurl=f'{self.api_base_url}/download/{torrent_id}'
-                        )
-                        return True
+                    await self.common.download_tracker_torrent(
+                        meta,
+                        self.tracker,
+                        headers=dict(self.session.headers),
+                        downurl=f'{self.api_base_url}/download/{torrent_id}'
+                    )
+                    return True
 
-                    else:
-                        meta['tracker_status'][self.tracker]['status_message'] = f"data error: {response_data.get('message', 'Unknown API error.')}"
-                        return False
+                else:
+                    meta['tracker_status'][self.tracker]['status_message'] = f"data error: {response_data.get('message', 'Unknown API error.')}"
+                    return False
 
             except httpx.HTTPStatusError as e:
                 meta['tracker_status'][self.tracker]['status_message'] = f'data error: HTTP {e.response.status_code} - {e.response.text}'
@@ -288,7 +312,7 @@ class DC:
 
         else:
             console.print("[cyan]DC Request Data:")
-            console.print(redact_private_info(data))
+            console.print(Redaction.redact_private_info(data))
             meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading'
             await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True  # Debug mode - simulated success

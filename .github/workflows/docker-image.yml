@@ -16,6 +16,9 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
+permissions:
+  contents: read
+
 jobs:
   prepare:
     runs-on: ubuntu-24.04
@@ -53,6 +56,7 @@ jobs:
     needs: prepare
     runs-on: ${{ matrix.runner }}
     permissions:
+      actions: write
       contents: read
       packages: write
     strategy:
@@ -132,6 +136,7 @@ jobs:
     needs: [prepare, build]
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       packages: write
 

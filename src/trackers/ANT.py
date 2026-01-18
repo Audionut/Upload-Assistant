@@ -1,21 +1,22 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
-import aiofiles
 import asyncio
-import cli_ui
-import httpx
 import json
 import os
 import platform
 import re
 from pathlib import Path
+from typing import Any, Union
+
+import aiofiles
+import cli_ui
+import httpx
+
 from src.bbcode import BBCODE
 from src.console import console
 from src.get_desc import DescriptionBuilder
-from src.torrentcreate import create_torrent
+from src.torrentcreate import TorrentCreator
 from src.trackers.COMMON import COMMON
-from typing import Any, Union
 
 
 class ANT:
@@ -40,12 +41,20 @@ class ANT:
 
     async def get_flags(self, meta: dict[str, Any]) -> list[str]:
         flags: list[str] = []
-        for each in ['Directors', 'Extended', 'Uncut', 'Unrated', '4KRemaster']:
-            if each in str(meta.get('edition', '')).replace("'", ""):
-                flags.append(each)
-        for each in ['Dual-Audio', 'Atmos']:
-            if each in meta['audio']:
-                flags.append(each.replace('-', ''))
+        flags.extend(
+            [
+                each
+                for each in ['Directors', 'Extended', 'Uncut', 'Unrated', '4KRemaster']
+                if each in str(meta.get('edition', '')).replace("'", "")
+            ]
+        )
+        flags.extend(
+            [
+                each.replace('-', '')
+                for each in ['Dual-Audio', 'Atmos']
+                if each in meta['audio']
+            ]
+        )
         if meta.get('has_commentary', False) or meta.get('manual_commentary', False):
             flags.append('Commentary')
         if meta['3D'] == "3D":
@@ -77,8 +86,7 @@ class ANT:
             if isinstance(genres, str):
                 tags.append(genres.replace(' ', '.').lower())
             else:
-                for genre in genres:
-                    tags.append(genre.replace(' ', '.').lower())
+                tags.extend(genre.replace(' ', '.').lower() for genre in genres)
         else:
             no_tags = True
         if no_tags and meta.get('imdb_info', {}):
@@ -87,13 +95,13 @@ class ANT:
             if isinstance(imdb_genres, str):
                 tags.append(imdb_genres.replace(' ', '.').lower())
             else:
-                for genre in imdb_genres:
-                    tags.append(genre.replace(' ', '.').lower())
-            for tag in tags:
-                if tag.lower() not in ['action', 'adventure', 'animation', 'comedy', 'crime', 'documentary', 'drama',
-                                       'family', 'fantasy', 'history', 'horror', 'music', 'mystery', 'romance', 'sci.fi',
-                                       'thriller', 'war', 'western']:
-                    tags.remove(tag)
+                tags.extend(genre.replace(' ', '.').lower() for genre in imdb_genres)
+            allowed_tags = {
+                'action', 'adventure', 'animation', 'comedy', 'crime', 'documentary', 'drama',
+                'family', 'fantasy', 'history', 'horror', 'music', 'mystery', 'romance', 'sci.fi',
+                'thriller', 'war', 'western'
+            }
+            tags = [tag for tag in tags if tag.lower() in allowed_tags]
 
         if not tags:
             console.print(f"[yellow]{self.tracker}: No genres found for tagging. Tag required.")
@@ -110,10 +118,7 @@ class ANT:
         if imdb_info.get('type') is not None:
             imdbType = imdb_info.get('type', 'movie').lower()
             if imdbType in ("movie", "tv movie", 'tvmovie'):
-                if int(imdb_info.get('runtime', '60')) >= 45 or int(imdb_info.get('runtime', '60')) == 0:
-                    antType = 0
-                else:
-                    antType = 1
+                antType = 0 if int(imdb_info.get('runtime', '60')) >= 45 or int(imdb_info.get('runtime', '60')) == 0 else 1
             if imdbType == "short":
                 antType = 1
             elif imdbType == "tv mini series":
@@ -124,10 +129,7 @@ class ANT:
             keywords = meta.get("keywords", "").lower()
             tmdb_type = meta.get("tmdb_type", "movie").lower()
             if tmdb_type == "movie":
-                if int(meta.get('runtime', 60)) >= 45 or int(meta.get('runtime', 60)) == 0:
-                    antType = 0
-                else:
-                    antType = 1
+                antType = 0 if int(meta.get('runtime', 60)) >= 45 or int(meta.get('runtime', 60)) == 0 else 1
             if tmdb_type == "miniseries" or "miniseries" in keywords:
                 antType = 2
             if "short" in keywords or "short film" in keywords:
@@ -166,7 +168,7 @@ class ANT:
         if torrent_file_size_kib > 250:  # 250 KiB
             console.print("[yellow]Existing .torrent exceeds 250 KiB and will be regenerated to fit constraints.")
             meta['max_piece_size'] = '128'  # 128 MiB
-            await create_torrent(meta, str(Path(meta['path'])), "ANT", tracker_url=tracker_url)
+            await TorrentCreator.create_torrent(meta, str(Path(meta['path'])), "ANT", tracker_url=tracker_url)
             torrent_filename = "ANT"
 
         await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
@@ -367,7 +369,7 @@ class ANT:
             mediainfo = str(await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'], char_limit=100000))
         else:
             mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-            async with aiofiles.open(mi_path, 'r', encoding='utf-8') as f:
+            async with aiofiles.open(mi_path, encoding='utf-8') as f:
                 mediainfo = str(await f.read())
 
         return mediainfo

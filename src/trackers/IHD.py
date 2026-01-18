@@ -1,19 +1,23 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
+import re
+from typing import Any, Optional, cast
+
 import cli_ui
 import pycountry
-import re
 
 from src.console import console
-from src.languages import process_desc_language, has_english_language
+from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
+
 
 class IHD(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='IHD')
-        self.config = config
+        self.config: Config = config
         self.common = COMMON(config)
         self.tracker = 'IHD'
         self.base_url = 'https://infinityhd.net'
@@ -25,7 +29,13 @@ class IHD(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
+    async def get_category_id(
+        self,
+        meta: Meta,
+        category: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
         category_name = meta['category']
         anime = meta.get('anime', False)
         category_id = {
@@ -60,7 +70,13 @@ class IHD(UNIT3D):
             resolved_id = category_id.get(meta_category, '0')
             return {'category_id': resolved_id}
 
-    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
+    async def get_resolution_id(
+        self,
+        meta: Meta,
+        resolution: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
         resolution_id = {
             '4320p': '1',
             '2160p': '2',
@@ -79,14 +95,18 @@ class IHD(UNIT3D):
             resolved_id = resolution_id.get(meta_resolution, '10')
             return {'resolution_id': resolved_id}
 
-    def _get_language_code(self, track_or_string):
+    def _get_language_code(self, track_or_string: Any) -> str:
         """Extract and normalize language to ISO alpha-2 code"""
         if isinstance(track_or_string, dict):
-            lang = track_or_string.get("Language", "")
-            if isinstance(lang, dict):
-                lang = lang.get("String", "")
+            track_map = cast(dict[str, Any], track_or_string)
+            lang_value = track_map.get("Language", "")
+            if isinstance(lang_value, dict):
+                lang_map = cast(dict[str, Any], lang_value)
+                lang = str(lang_map.get("String", ""))
+            else:
+                lang = str(lang_value)
         else:
-            lang = track_or_string
+            lang = str(track_or_string)
         if not lang:
             return ""
         lang_str = str(lang).lower()
@@ -107,7 +127,7 @@ class IHD(UNIT3D):
         except (AttributeError, KeyError, LookupError):
             return lang_str
 
-    def original_language_check(self, meta):
+    def original_language_check(self, meta: Meta) -> bool:
         if "mediainfo" not in meta:
             return False
 
@@ -119,31 +139,39 @@ class IHD(UNIT3D):
         if not original_languages:
             return False
 
-        tracks = meta["mediainfo"].get("media", {}).get("track", [])
-        for track in tracks:
-            if track.get("@type") != "Audio":
+        tracks_value = meta["mediainfo"].get("media", {}).get("track", [])
+        tracks_list = cast(list[Any], tracks_value) if isinstance(tracks_value, list) else []
+        for track in tracks_list:
+            if not isinstance(track, dict):
                 continue
-            if "commentary" in str(track.get("Title", "")).lower():
+            track_map = cast(dict[str, Any], track)
+            if track_map.get("@type") != "Audio":
                 continue
-            lang_code = self._get_language_code(track)
+            if "commentary" in str(track_map.get("Title", "")).lower():
+                continue
+            lang_code = self._get_language_code(track_map)
             if lang_code and lang_code.lower() in original_languages:
                 return True
         return False
 
-    async def get_name(self, meta):
-        ihd_name = meta['name']
-        resolution = meta.get('resolution')
+    async def get_name(self, meta: Meta) -> dict[str, str]:
+        ihd_name = str(meta.get('name', ''))
+        resolution = str(meta.get('resolution', ''))
 
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, tracker=self.tracker)
-        audio_languages = meta['audio_languages']
-        if audio_languages and not await has_english_language(audio_languages):
-            foreign_lang = meta['audio_languages'][0].upper()
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
+        audio_languages_value = meta.get('audio_languages', [])
+        audio_languages: list[str] = []
+        if isinstance(audio_languages_value, list):
+            audio_languages_list = cast(list[Any], audio_languages_value)
+            audio_languages = [str(item) for item in audio_languages_list]
+        if audio_languages and not await languages_manager.has_english_language(audio_languages):
+            foreign_lang = str(audio_languages[0]).upper()
             ihd_name = ihd_name.replace(resolution, f"{foreign_lang} {resolution}", 1)
 
         return {'name': ihd_name}
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
 
         if meta['resolution'] not in ['4320p', '2160p', '1440p', '1080p', '1080i']:
@@ -156,12 +184,26 @@ class IHD(UNIT3D):
                 console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
             should_continue = False
 
-        if not meta['is_disc'] == "BDMV":
+        if meta['is_disc'] != "BDMV":
             if not meta.get('language_checked', False):
-                await process_desc_language(meta, tracker=self.tracker)
+                await languages_manager.process_desc_language(meta, tracker=self.tracker)
             original_language = self.original_language_check(meta)
-            has_eng_audio = await has_english_language(meta.get('audio_languages'))
-            has_eng_subs = await has_english_language(meta.get('subtitle_languages'))
+            audio_languages_value = meta.get('audio_languages', [])
+            subtitle_languages_value = meta.get('subtitle_languages', [])
+            audio_languages: list[str] = []
+            subtitle_languages: list[str] = []
+            if isinstance(audio_languages_value, list):
+                audio_languages_list = cast(list[Any], audio_languages_value)
+                audio_languages = [str(item) for item in audio_languages_list]
+            else:
+                audio_languages = []
+            if isinstance(subtitle_languages_value, list):
+                subtitle_languages_list = cast(list[Any], subtitle_languages_value)
+                subtitle_languages = [str(item) for item in subtitle_languages_list]
+            else:
+                subtitle_languages = []
+            has_eng_audio = await languages_manager.has_english_language(audio_languages if audio_languages else '')
+            has_eng_subs = await languages_manager.has_english_language(subtitle_languages if subtitle_languages else '')
             # Require at least one English audio/subtitle track or an original language audio track
             if not (original_language or has_eng_audio or has_eng_subs):
                 if not meta['unattended'] or meta['debug']:
@@ -174,10 +216,7 @@ class IHD(UNIT3D):
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
                 console.print(f'[bold red]Pornographic content is not allowed at {self.tracker}, unless it follows strict rules.')
                 yes = cli_ui.ask_yes_no(f'Do you have permission to upload this torrent to {self.tracker}?', default=False)
-                if yes:
-                    should_continue = True
-                else:
-                    should_continue = False
+                should_continue = bool(yes)
             else:
                 if not meta['unattended'] or meta['debug']:
                     console.print('[bold red]Pornographic content is not allowed at IHD, unless it follows strict rules.')
