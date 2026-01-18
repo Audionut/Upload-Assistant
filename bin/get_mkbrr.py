@@ -98,13 +98,15 @@ class MkbrrBinaryManager:
             console.print(f"[blue]Download URL: {download_url}[/blue]")
 
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with (
+                httpx.AsyncClient(timeout=60.0) as client,
+                client.stream("GET", download_url, timeout=60.0) as response,
+            ):
+                response.raise_for_status()
                 temp_archive = bin_dir / f"temp_{file_pattern}"
-                async with client.stream("GET", download_url, timeout=60.0) as response:
-                    response.raise_for_status()
-                    async with aiofiles.open(temp_archive, 'wb') as f:
-                        async for chunk in response.aiter_bytes(chunk_size=8192):
-                            await f.write(chunk)
+                async with aiofiles.open(temp_archive, 'wb') as f:
+                    async for chunk in response.aiter_bytes(chunk_size=8192):
+                        await f.write(chunk)
             if debug:
                 console.print(f"[green]Downloaded {file_pattern}[/green]")
 
@@ -265,15 +267,15 @@ class MkbrrBinaryManager:
         print(f"Downloading from: {download_url}")
 
         try:
-            temp_archive = bin_dir / f"temp_{file_pattern}"
             with (
                 httpx.Client(timeout=60.0) as client,
                 client.stream("GET", download_url) as response,
-                open(temp_archive, 'wb') as f,
             ):
                 response.raise_for_status()
-                for chunk in response.iter_bytes(chunk_size=8192):
-                    f.write(chunk)
+                temp_archive = bin_dir / f"temp_{file_pattern}"
+                with open(temp_archive, 'wb') as f:
+                    for chunk in response.iter_bytes(chunk_size=8192):
+                        f.write(chunk)
 
             print(f"Downloaded {file_pattern}")
 

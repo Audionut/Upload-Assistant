@@ -1400,7 +1400,7 @@ async def process_all_releases(releases: Sequence[Release], meta: Meta) -> list[
                                 log_and_print(f"[yellow]⚠[/yellow] Release has extra audio track not in BDInfo: {release_track}", release_logs)
 
                         if extra_audio_tracks:
-                            extra_penalty = len(extra_audio_tracks * 5)
+                            extra_penalty = len(extra_audio_tracks) * 5
                             score -= extra_penalty
                             log_and_print(f"[red]-[/red] Found {len(extra_audio_tracks)} additional audio tracks in release not in BDInfo", release_logs)
                             if meta.get('debug'):
@@ -1458,7 +1458,7 @@ async def process_all_releases(releases: Sequence[Release], meta: Meta) -> list[
                                 log_and_print(f"[yellow]⚠[/yellow] Release has extra subtitle not in BDInfo: {release_sub}", release_logs)
 
                         if extra_subtitles:
-                            extra_penalty = len(extra_subtitles * 5)
+                            extra_penalty = len(extra_subtitles) * 5
                             score -= extra_penalty
                             log_and_print(f"[red]-[/red] Found {len(extra_subtitles)} additional subtitles in release not in BDInfo", release_logs)
                             if meta.get('debug'):
