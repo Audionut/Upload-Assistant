@@ -7,7 +7,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
-from typing import Any, Optional, Union
+from typing import Any, Callable, Optional, Union
 from typing import cast as typing_cast
 
 import aiofiles
@@ -44,7 +44,12 @@ def _get_parser() -> Args:
     return parser
 
 anitopy_parse_fn: Any = typing_cast(Any, anitopy).parse
-guessit_fn: Any = typing_cast(Any, guessit).guessit
+guessit_module: Any = typing_cast(Any, guessit)
+GuessitFn = Callable[[str, Optional[dict[str, Any]]], dict[str, Any]]
+
+
+def guessit_fn(value: str, options: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    return typing_cast(dict[str, Any], guessit_module.guessit(value, options))
 
 # Module-level dict to store async locks for cache keys to prevent race conditions
 _cache_locks: dict[str, asyncio.Lock] = {}
@@ -178,8 +183,8 @@ class TmdbManager:
         category_value = str(meta.get('category') or 'MOVIE')
         is_disc = bool(meta.get('is_disc'))
         tmdbid = int(meta.get('tmdb_id') or 0)
-        imdbid = meta.get('imdb_id') if isinstance(meta.get('imdb_id'), int) else None
-        tvdbid = meta.get('tvdb_id') if isinstance(meta.get('tvdb_id'), int) else None
+        imdbid = typing_cast(Optional[int], meta.get('imdb_id'))
+        tvdbid = typing_cast(Optional[int], meta.get('tvdb_id'))
         return await get_tmdb_imdb_from_mediainfo(
             mediainfo=mediainfo,
             category=category_value,
@@ -888,7 +893,7 @@ async def get_tmdb_id(
     # try anime name parsing
     if not search_results.get('results'):
         try:
-            parsed_guess = typing_cast(dict[str, Any], guessit_fn(untouched_filename, {"excludes": ["country", "language"]}))
+            parsed_guess = guessit_fn(untouched_filename or "", {"excludes": ["country", "language"]})
             parsed_title_data = typing_cast(dict[str, Any], anitopy_parse_fn(parsed_guess.get('title', '')) or {})
             parsed_title = str(parsed_title_data.get('anime_title', ''))
             if debug:
@@ -1023,11 +1028,11 @@ async def tmdb_other_meta(
 
     if tmdb_id == 0:
         try:
-            guessed = typing_cast(dict[str, Any], guessit_fn(path, {"excludes": ["country", "language"]}))
+            guessed = guessit_fn(path or "", {"excludes": ["country", "language"]})
             title = str(guessed.get('title', '')).lower()
             title = title.split('aka')[0]
             tmdb_id, _ = await get_tmdb_id(
-                str(typing_cast(dict[str, Any], guessit_fn(title, {"excludes": ["country", "language"]})).get('title', '')),
+                str(guessit_fn(title, {"excludes": ["country", "language"]}).get('title', '')),
                 search_year,
                 {'tmdb_id': 0, 'search_year': search_year, 'debug': debug, 'category': category, 'mode': mode},
                 category

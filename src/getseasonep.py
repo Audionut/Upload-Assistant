@@ -6,7 +6,7 @@ import sys
 from collections.abc import Mapping
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Callable, Optional, cast
 
 import anitopy
 import guessit
@@ -17,13 +17,18 @@ from src.exceptions import *  # noqa: F403
 from src.tags import get_tag
 from src.tmdb import TmdbManager
 
-guessit_fn: Any = cast(Any, guessit).guessit
+guessit_module: Any = cast(Any, guessit)
+GuessitFn = Callable[[str, Optional[dict[str, Any]]], dict[str, Any]]
+
+
+def guessit_fn(value: str, options: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    return cast(dict[str, Any], guessit_module.guessit(value, options))
 
 Meta = dict[str, Any]
 
 
 def _guessit_data(value: str, options: Optional[dict[str, Any]] = None) -> dict[str, Any]:
-    return cast(dict[str, Any], guessit_fn(value, options))
+    return guessit_fn(value, options)
 
 
 def _anitopy_parse(value: str) -> dict[str, Any]:
@@ -266,7 +271,7 @@ class SeasonEpisodeManager:
                             if meta['debug']:
                                 console.print_exception()
                             try:
-                                season = guessit_fn(video).get('season', '1')
+                                season = _guessit_data(video).get('season', '1')
                                 season_int = int(season)  # Convert to integer
                             except Exception:
                                 season_int = 1  # Default to 1 if error occurs

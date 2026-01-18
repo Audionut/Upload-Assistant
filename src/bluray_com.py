@@ -292,7 +292,7 @@ async def extract_bluray_release_info(html_content: str, meta: Meta) -> list[Rel
 
                     release_id_match = re.search(r'blu-ray\.com/(movies|dvd)/.*?/(\d+)/', release_url)
                     if release_id_match:
-                        release_id = release_id_match.group(1)
+                        release_id = release_id_match.group(2)
                         if meta.get('debug'):
                             console.print(f"[green]Found release ID: {release_id}[/green]")
 

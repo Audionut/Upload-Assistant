@@ -3,6 +3,8 @@ import json
 import re
 from typing import TYPE_CHECKING, Any, Optional, cast
 
+import aiofiles
+
 if TYPE_CHECKING:
     from upload import Meta
 
@@ -147,8 +149,9 @@ class Redaction:
         if 'matched_episode_ids' in meta:
             del meta['matched_episode_ids']
 
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w', encoding='utf-8') as f:
-            json.dump(meta, f, indent=4)
+        output_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
+        async with aiofiles.open(output_path, 'w', encoding='utf-8') as f:
+            await f.write(json.dumps(meta, indent=4))
 
         return meta
 

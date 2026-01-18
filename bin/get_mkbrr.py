@@ -7,7 +7,8 @@ import zipfile
 from pathlib import Path
 from typing import Union
 
-import requests
+import aiofiles
+import httpx
 
 from src.console import console
 
@@ -97,13 +98,13 @@ class MkbrrBinaryManager:
             console.print(f"[blue]Download URL: {download_url}[/blue]")
 
         try:
-            response = requests.get(download_url, stream=True, timeout=60)
-            response.raise_for_status()
-
-            temp_archive = bin_dir / f"temp_{file_pattern}"
-            with open(temp_archive, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                temp_archive = bin_dir / f"temp_{file_pattern}"
+                async with client.stream("GET", download_url, timeout=60.0) as response:
+                    response.raise_for_status()
+                    async with aiofiles.open(temp_archive, 'wb') as f:
+                        async for chunk in response.aiter_bytes(chunk_size=8192):
+                            await f.write(chunk)
             if debug:
                 console.print(f"[green]Downloaded {file_pattern}[/green]")
 
@@ -207,11 +208,11 @@ class MkbrrBinaryManager:
             if not binary_path.exists():
                 raise Exception(f"Failed to extract mkbrr binary to {binary_path}")
 
-            with open(version_path, 'w', encoding='utf-8') as version_file:
-                version_file.write(f"mkbrr version {version} installed successfully.")
+            async with aiofiles.open(version_path, 'w', encoding='utf-8') as version_file:
+                await version_file.write(f"mkbrr version {version} installed successfully.")
             return str(binary_path)
 
-        except requests.RequestException as e:
+        except httpx.RequestError as e:
             raise Exception(f"Failed to download mkbrr binary: {e}") from e
         except (zipfile.BadZipFile, tarfile.TarError) as e:
             raise Exception(f"Failed to extract mkbrr binary: {e}") from e
@@ -261,12 +262,14 @@ class MkbrrBinaryManager:
         print(f"Downloading from: {download_url}")
 
         try:
-            response = requests.get(download_url, stream=True, timeout=60)
-            response.raise_for_status()
-
             temp_archive = bin_dir / f"temp_{file_pattern}"
-            with open(temp_archive, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
+            with (
+                httpx.Client(timeout=60.0) as client,
+                client.stream("GET", download_url) as response,
+                open(temp_archive, 'wb') as f,
+            ):
+                response.raise_for_status()
+                for chunk in response.iter_bytes(chunk_size=8192):
                     f.write(chunk)
 
             print(f"Downloaded {file_pattern}")

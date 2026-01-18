@@ -3,7 +3,7 @@ import os
 import re
 import sys
 from collections.abc import MutableMapping, Sequence
-from typing import Any, Optional, cast
+from typing import Any, Callable, Optional, cast
 
 import anitopy
 import cli_ui
@@ -14,7 +14,12 @@ from src.cleanup import cleanup_manager
 from src.console import console
 from src.trackers.COMMON import COMMON
 
-guessit_fn: Any = cast(Any, guessit).guessit
+guessit_module: Any = cast(Any, guessit)
+GuessitFn = Callable[[str, Optional[dict[str, Any]]], dict[str, Any]]
+
+
+def guessit_fn(value: str, options: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    return cast(dict[str, Any], guessit_module.guessit(value, options))
 
 TRACKER_DISC_REQUIREMENTS = {
     'ULCX': {'region': 'mandatory', 'distributor': 'mandatory'},
@@ -257,7 +262,7 @@ class NameManager:
             console.print(f"[cyan]Extracting title and year from folder name: {folder_name}[/cyan]")
         # lets do some subsplease handling
         if 'subsplease' in folder_name.lower():
-            guess_data = cast(dict[str, Any], guessit_fn(folder_name, {"excludes": ["country", "language"]}))
+            guess_data = guessit_fn(folder_name, {"excludes": ["country", "language"]})
             parsed = cast(Optional[dict[str, Any]], cast(Any, anitopy).parse(cast(str, guess_data.get('title', ''))))
             parsed_title = parsed.get('anime_title') if parsed else None
             if parsed_title:

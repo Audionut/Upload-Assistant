@@ -3,14 +3,19 @@ import asyncio
 import json
 import traceback
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Callable, Optional, cast
 
 import guessit
 
 from src.console import console
 from src.exceptions import WeirdSystem
 
-guessit_fn: Any = cast(Any, guessit).guessit
+guessit_module: Any = cast(Any, guessit)
+GuessitFn = Callable[[str, Optional[dict[str, Any]]], dict[str, Any]]
+
+
+def guessit_fn(value: str, options: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    return cast(dict[str, Any], guessit_module.guessit(value, options))
 
 
 async def get_source(type: str, video: str, path: str, is_disc: str, meta: dict[str, Any], folder_id: str, base_dir: str) -> tuple[str, str]:
@@ -29,10 +34,10 @@ async def get_source(type: str, video: str, path: str, is_disc: str, meta: dict[
             source = str(meta['manual_source'])
         else:
             try:
-                source = cast(dict[str, Any], guessit_fn(video)).get('source', source)
+                source = guessit_fn(video).get('source', source)
             except Exception:
                 try:
-                    source = cast(dict[str, Any], guessit_fn(path)).get('source', source)
+                    source = guessit_fn(path).get('source', source)
                 except Exception:
                     source = "BluRay"
         if source in ("Blu-ray", "Ultra HD Blu-ray", "BluRay", "BR") or is_disc == "BDMV":
@@ -50,7 +55,7 @@ async def get_source(type: str, video: str, path: str, is_disc: str, meta: dict[
                     raise WeirdSystem  # noqa: F405
             except Exception:
                 try:
-                    other = cast(list[str], cast(dict[str, Any], guessit_fn(video)).get('other', []))
+                    other = cast(list[str], guessit_fn(video).get('other', []))
                     if "PAL" in other:
                         system = "PAL"
                     elif "NTSC" in other:
@@ -69,8 +74,6 @@ async def get_source(type: str, video: str, path: str, is_disc: str, meta: dict[
                     except Exception:
                         system = ""
             finally:
-                if system == "":
-                    system = ""
                 if type == "REMUX":
                     system = f"{system} DVD".strip()
                 source = system

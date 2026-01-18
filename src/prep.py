@@ -214,8 +214,6 @@ class Prep:
                     guessit_fn(video),
                     width="OTHER",
                     scan="p",
-                    _height="OTHER",
-                    _actual_height=0,
                 )
                 try:
                     is_hfr = bdinfo['video'][0]['fps'].split()[0] if bdinfo['video'] else "25"

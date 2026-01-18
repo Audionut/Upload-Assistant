@@ -86,8 +86,6 @@ async def mi_resolution(
     guess: dict[str, Any],
     width: Union[str, int],
     scan: str,
-    _height: Union[str, int],
-    _actual_height: Union[str, int],
 ) -> str:
     res_map = {
         "3840x2160p": "2160p",
@@ -126,48 +124,31 @@ async def mi_resolution(
     }
     resolution = res_map.get(res)
     if resolution is None:
+        width_map = {
+            "3840p": "2160p",
+            "2560p": "1550p",
+            "1920p": "1080p",
+            "1920i": "1080i",
+            "1280p": "720p",
+            "1024p": "576p",
+            "1024i": "576i",
+            "960p": "540p",
+            "960i": "540i",
+            "854p": "480p",
+            "854i": "480i",
+            "720p": "576p",
+            "720i": "576i",
+            "15360p": "4320p",
+            "OTHERp": "OTHER",
+        }
         try:
             resolution = guess["screen_size"]
             # Check if the resolution from guess exists in our map
             if resolution not in res_map:
                 # If not in the map, use width-based mapping
-                width_map = {
-                    "3840p": "2160p",
-                    "2560p": "1550p",
-                    "1920p": "1080p",
-                    "1920i": "1080i",
-                    "1280p": "720p",
-                    "1024p": "576p",
-                    "1024i": "576i",
-                    "960p": "540p",
-                    "960i": "540i",
-                    "854p": "480p",
-                    "854i": "480i",
-                    "720p": "576p",
-                    "720i": "576i",
-                    "15360p": "4320p",
-                    "OTHERp": "OTHER",
-                }
                 resolution = width_map.get(f"{width}{scan}", "OTHER")
         except Exception:
             # If we can't get from guess, use width-based mapping
-            width_map = {
-                "3840p": "2160p",
-                "2560p": "1550p",
-                "1920p": "1080p",
-                "1920i": "1080i",
-                "1280p": "720p",
-                "1024p": "576p",
-                "1024i": "576i",
-                "960p": "540p",
-                "960i": "540i",
-                "854p": "480p",
-                "854i": "480i",
-                "720p": "576p",
-                "720i": "576i",
-                "15360p": "4320p",
-                "OTHERp": "OTHER",
-            }
             resolution = width_map.get(f"{width}{scan}", "OTHER")
 
     # Final check to ensure we have a valid resolution
@@ -430,7 +411,7 @@ async def exportInfo(
         os.chdir(os.path.dirname(video))
 
     if mediainfo_cmd and is_dvd:
-        result: Optional[subprocess.CompletedProcess[str]] = None
+        result = None
         try:
             # Validate and sanitize the video path
             safe_video_path = validate_file_path(video)

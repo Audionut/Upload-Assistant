@@ -10,7 +10,12 @@ import guessit
 
 from src.console import console
 
-guessit_any = cast(Any, guessit)
+guessit_module: Any = cast(Any, guessit)
+GuessitFn = Callable[[str, Optional[dict[str, Any]]], dict[str, Any]]
+
+
+def guessit_fn(value: str, options: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    return cast(dict[str, Any], guessit_module.guessit(value, options))
 
 
 async def get_tag(video: str, meta: dict[str, Any], season_pack_check: bool = False) -> str:
@@ -55,7 +60,6 @@ async def get_tag(video: str, meta: dict[str, Any], season_pack_check: bool = Fa
     # If regex patterns didn't work, fall back to guessit
     if not release_group and meta.get('is_disc'):
         try:
-            guessit_fn = cast(Callable[[str], dict[str, Any]], guessit_any.guessit)
             parsed = guessit_fn(video)
             release_group = cast(Optional[str], parsed.get('release_group'))
             if meta['debug']:

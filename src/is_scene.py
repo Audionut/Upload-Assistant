@@ -157,9 +157,9 @@ class SceneManager:
 
             elif not scene and lower and not meta.get('emby_debug', False):
                 release_name: str = ""
-                name_value = meta.get('filename') if hasattr(meta, 'get') else None
+                name_value = meta.get('filename')
                 name = name_value.replace(" ", ".") if isinstance(name_value, str) else None
-                tag_value = meta.get('tag') if hasattr(meta, 'get') else None
+                tag_value = meta.get('tag')
                 tag = tag_value.replace("-", "") if isinstance(tag_value, str) else None
                 if name and tag:
                     url = f"https://api.srrdb.com/v1/search/start:{name}/group:{tag}"

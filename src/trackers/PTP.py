@@ -821,63 +821,150 @@ class PTP:
                 console.print(f"[yellow]Warning: Could not load pack image data: {str(e)}[/yellow]")
 
         desc = io.StringIO()
-        if True:
-            discs = cast(list[dict[str, Any]], meta.get('discs', []))
-            filelist = cast(list[str], meta.get('filelist', []))
+        discs = cast(list[dict[str, Any]], meta.get('discs', []))
+        filelist = cast(list[str], meta.get('filelist', []))
 
-            # Handle single disc case
-            if len(discs) == 1:
-                each = discs[0]
-                new_screens: list[str] = []
-                bdinfo_keys: list[str] = []
-                if each['type'] == "BDMV":
-                    bdinfo_keys = [key for key in each if key.startswith("bdinfo")]
-                    bdinfo = cast(dict[str, Any], meta.get('bdinfo', {}))
-                    if len(bdinfo_keys) > 1:
-                        edition = str(bdinfo.get("edition", "Unknown Edition"))
-                        desc.write(f"[b]{edition}[/b]\n\n")
-                    desc.write(f"[mediainfo]{each['summary']}[/mediainfo]\n\n")
-                    base2ptp = self.convert_bbcode(base)
-                    if base2ptp.strip() != "":
-                        desc.write(base2ptp)
-                        desc.write("\n\n")
-                    try:
-                        if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
-                            tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
-                            tonemapped_header = self.convert_bbcode(tonemapped_header)
-                            desc.write(tonemapped_header)
-                            desc.write("\n\n")
-                    except Exception as e:
-                        console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
-                    for img_index in range(len(images[:int(meta['screens'])])):
-                        raw_url = str(image_list[img_index].get('raw_url', ''))
-                        desc.write(f"[img]{raw_url}[/img]\n")
-                    desc.write("\n")
-                elif each['type'] == "DVD":
-                    desc.write(f"[b][size=3]{each['name']}:[/size][/b]\n")
-                    desc.write(f"[mediainfo]{each['ifo_mi_full']}[/mediainfo]\n")
-                    desc.write(f"[mediainfo]{each['vob_mi_full']}[/mediainfo]\n\n")
-                    base2ptp = self.convert_bbcode(base)
-                    if base2ptp.strip() != "":
-                        desc.write(base2ptp)
-                        desc.write("\n\n")
-                    for img_index in range(len(images[:int(meta['screens'])])):
-                        raw_url = image_list[img_index]['raw_url']
-                        desc.write(f"[img]{raw_url}[/img]\n")
-                    desc.write("\n")
+        # Handle single disc case
+        if len(discs) == 1:
+            each = discs[0]
+            new_screens: list[str] = []
+            bdinfo_keys: list[str] = []
+            if each['type'] == "BDMV":
+                bdinfo_keys = [key for key in each if key.startswith("bdinfo")]
+                bdinfo = cast(dict[str, Any], meta.get('bdinfo', {}))
                 if len(bdinfo_keys) > 1:
-                    if 'retry_count' not in meta:
-                        meta['retry_count'] = 0
+                    edition = str(bdinfo.get("edition", "Unknown Edition"))
+                    desc.write(f"[b]{edition}[/b]\n\n")
+                desc.write(f"[mediainfo]{each['summary']}[/mediainfo]\n\n")
+                base2ptp = self.convert_bbcode(base)
+                if base2ptp.strip() != "":
+                    desc.write(base2ptp)
+                    desc.write("\n\n")
+                try:
+                    if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
+                        tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
+                        tonemapped_header = self.convert_bbcode(tonemapped_header)
+                        desc.write(tonemapped_header)
+                        desc.write("\n\n")
+                except Exception as e:
+                    console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
+                for img_index in range(len(images[:int(meta['screens'])])):
+                    raw_url = str(image_list[img_index].get('raw_url', ''))
+                    desc.write(f"[img]{raw_url}[/img]\n")
+                desc.write("\n")
+            elif each['type'] == "DVD":
+                desc.write(f"[b][size=3]{each['name']}:[/size][/b]\n")
+                desc.write(f"[mediainfo]{each['ifo_mi_full']}[/mediainfo]\n")
+                desc.write(f"[mediainfo]{each['vob_mi_full']}[/mediainfo]\n\n")
+                base2ptp = self.convert_bbcode(base)
+                if base2ptp.strip() != "":
+                    desc.write(base2ptp)
+                    desc.write("\n\n")
+                for img_index in range(len(images[:int(meta['screens'])])):
+                    raw_url = image_list[img_index]['raw_url']
+                    desc.write(f"[img]{raw_url}[/img]\n")
+                desc.write("\n")
+            if len(bdinfo_keys) > 1:
+                meta['retry_count'] = meta.get('retry_count', 0)
 
-                    for i, key in enumerate(bdinfo_keys[1:], start=1):  # Skip the first bdinfo
-                        new_images_key = f'new_images_playlist_{i}'
-                        bdinfo = each[key]
-                        edition = bdinfo.get("edition", "Unknown Edition")
+                for i, key in enumerate(bdinfo_keys[1:], start=1):  # Skip the first bdinfo
+                    new_images_key = f'new_images_playlist_{i}'
+                    bdinfo = each[key]
+                    edition = bdinfo.get("edition", "Unknown Edition")
 
-                        # Find the corresponding summary for this bdinfo
-                        summary_key = f"summary_{i}" if i > 0 else "summary"
-                        summary = each.get(summary_key, "No summary available")
+                    # Find the corresponding summary for this bdinfo
+                    summary_key = f"summary_{i}" if i > 0 else "summary"
+                    summary = each.get(summary_key, "No summary available")
 
+                    # Check for saved images first
+                    if pack_images_data and 'keys' in pack_images_data and new_images_key in pack_images_data['keys']:
+                        saved_images = cast(list[dict[str, Any]], pack_images_data['keys'][new_images_key]['images'])
+                        if saved_images:
+                            if meta['debug']:
+                                console.print(f"[yellow]Using saved images from pack_image_links.json for {new_images_key}")
+
+                            meta[new_images_key] = []
+                            for img in saved_images:
+                                meta[new_images_key].append({
+                                    'img_url': str(img.get('img_url', '')),
+                                    'raw_url': str(img.get('raw_url', '')),
+                                    'web_url': str(img.get('web_url', ''))
+                                })
+
+                    if new_images_key in meta and meta[new_images_key]:
+                        desc.write(f"\n[b]{edition}[/b]\n\n")
+                        # Use the summary corresponding to the current bdinfo
+                        desc.write(f"[mediainfo]{summary}[/mediainfo]\n\n")
+                        if meta['debug']:
+                            console.print("[yellow]Using original uploaded images for first disc")
+                        for img in meta[new_images_key]:
+                            raw_url = str(img.get('raw_url', ''))
+                            desc.write(f"[img]{raw_url}[/img]\n")
+                    else:
+                        desc.write(f"\n[b]{edition}[/b]\n")
+                        # Use the summary corresponding to the current bdinfo
+                        desc.write(f"[mediainfo]{summary}[/mediainfo]\n\n")
+                        meta['retry_count'] += 1
+                        meta[new_images_key] = []
+                        new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png"))]
+                        if not new_screens:
+                            use_vs = meta.get('vapoursynth', False)
+                            try:
+                                await self.takescreens_manager.disc_screenshots(meta, f"PLAYLIST_{i}", bdinfo, meta['uuid'], meta['base_dir'], use_vs, [], meta.get('ffdebug', False), multi_screens, True)
+                            except Exception as e:
+                                print(f"Error during BDMV screenshot capture: {e}")
+                            new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png"))]
+                        uploaded_images: list[dict[str, Any]] = []
+                        if new_screens and not meta.get('skip_imghost_upload', False):
+                            uploaded_images, _ = await self.uploadscreens_manager.upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
+                            if uploaded_images and not meta.get('skip_imghost_upload', False):
+                                await self.save_image_links(meta, new_images_key, uploaded_images)
+                            for img in uploaded_images:
+                                meta[new_images_key].append({
+                                    'img_url': str(img.get('img_url', '')),
+                                    'raw_url': str(img.get('raw_url', '')),
+                                    'web_url': str(img.get('web_url', ''))
+                                })
+
+                            for img in uploaded_images:
+                                raw_url = str(img.get('raw_url', ''))
+                                desc.write(f"[img]{raw_url}[/img]\n")
+
+                        meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
+                        async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
+                            await f.write(json.dumps(meta, indent=4))
+
+        # Handle multiple discs case
+        elif len(discs) > 1:
+            if 'retry_count' not in meta:
+                meta['retry_count'] = 0
+            for i, each in enumerate(discs):
+                new_images_key = f'new_images_disc_{i}'
+                if each['type'] == "BDMV":
+                    if i == 0:
+                        desc.write(f"[mediainfo]{each['summary']}[/mediainfo]\n\n")
+                        base2ptp = self.convert_bbcode(base)
+                        if base2ptp.strip() != "":
+                            desc.write(base2ptp)
+                            desc.write("\n\n")
+                        try:
+                            if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
+                                tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
+                                tonemapped_header = self.convert_bbcode(tonemapped_header)
+                                desc.write(tonemapped_header)
+                                desc.write("\n\n")
+                        except Exception as e:
+                            console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
+                        for img_index in range(min(multi_screens, len(image_list))):
+                            raw_url = str(image_list[img_index].get('raw_url', ''))
+                            desc.write(f"[img]{raw_url}[/img]\n")
+                        desc.write("\n")
+                    else:
+                        desc.write(f"[mediainfo]{each['summary']}[/mediainfo]\n\n")
+                        base2ptp = self.convert_bbcode(base)
+                        if base2ptp.strip() != "":
+                            desc.write(base2ptp)
+                            desc.write("\n\n")
                         # Check for saved images first
                         if pack_images_data and 'keys' in pack_images_data and new_images_key in pack_images_data['keys']:
                             saved_images = cast(list[dict[str, Any]], pack_images_data['keys'][new_images_key]['images'])
@@ -892,283 +979,61 @@ class PTP:
                                         'raw_url': str(img.get('raw_url', '')),
                                         'web_url': str(img.get('web_url', ''))
                                     })
-
                         if new_images_key in meta and meta[new_images_key]:
-                            desc.write(f"\n[b]{edition}[/b]\n\n")
-                            # Use the summary corresponding to the current bdinfo
-                            desc.write(f"[mediainfo]{summary}[/mediainfo]\n\n")
-                            if meta['debug']:
-                                console.print("[yellow]Using original uploaded images for first disc")
                             for img in meta[new_images_key]:
                                 raw_url = str(img.get('raw_url', ''))
                                 desc.write(f"[img]{raw_url}[/img]\n")
+                            desc.write("\n")
                         else:
-                            desc.write(f"\n[b]{edition}[/b]\n")
-                            # Use the summary corresponding to the current bdinfo
-                            desc.write(f"[mediainfo]{summary}[/mediainfo]\n\n")
                             meta['retry_count'] += 1
                             meta[new_images_key] = []
-                            new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png"))]
+                            new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
                             if not new_screens:
-                                use_vs = meta.get('vapoursynth', False)
                                 try:
-                                    await self.takescreens_manager.disc_screenshots(meta, f"PLAYLIST_{i}", bdinfo, meta['uuid'], meta['base_dir'], use_vs, [], meta.get('ffdebug', False), multi_screens, True)
+                                    await self.takescreens_manager.disc_screenshots(meta, f"FILE_{i}", each['bdinfo'], meta['uuid'], meta['base_dir'], meta.get('vapoursynth', False), [], meta.get('ffdebug', False), multi_screens, True)
                                 except Exception as e:
                                     print(f"Error during BDMV screenshot capture: {e}")
-                                new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png"))]
+                            new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
                             uploaded_images: list[dict[str, Any]] = []
                             if new_screens and not meta.get('skip_imghost_upload', False):
                                 uploaded_images, _ = await self.uploadscreens_manager.upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
-                                if uploaded_images and not meta.get('skip_imghost_upload', False):
-                                    await self.save_image_links(meta, new_images_key, uploaded_images)
+                            if uploaded_images and not meta.get('skip_imghost_upload', False):
+                                await self.save_image_links(meta, new_images_key, uploaded_images)
                                 for img in uploaded_images:
                                     meta[new_images_key].append({
                                         'img_url': str(img.get('img_url', '')),
                                         'raw_url': str(img.get('raw_url', '')),
                                         'web_url': str(img.get('web_url', ''))
                                     })
-
-                                for img in uploaded_images:
                                     raw_url = str(img.get('raw_url', ''))
                                     desc.write(f"[img]{raw_url}[/img]\n")
+                                desc.write("\n")
 
                             meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
                             async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
                                 await f.write(json.dumps(meta, indent=4))
 
-            # Handle multiple discs case
-            elif len(discs) > 1:
-                if 'retry_count' not in meta:
-                    meta['retry_count'] = 0
-                for i, each in enumerate(discs):
-                    new_images_key = f'new_images_disc_{i}'
-                    if each['type'] == "BDMV":
-                        if i == 0:
-                            desc.write(f"[mediainfo]{each['summary']}[/mediainfo]\n\n")
-                            base2ptp = self.convert_bbcode(base)
-                            if base2ptp.strip() != "":
-                                desc.write(base2ptp)
-                                desc.write("\n\n")
-                            try:
-                                if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
-                                    tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
-                                    tonemapped_header = self.convert_bbcode(tonemapped_header)
-                                    desc.write(tonemapped_header)
-                                    desc.write("\n\n")
-                            except Exception as e:
-                                console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
-                            for img_index in range(min(multi_screens, len(image_list))):
-                                raw_url = str(image_list[img_index].get('raw_url', ''))
-                                desc.write(f"[img]{raw_url}[/img]\n")
-                            desc.write("\n")
-                        else:
-                            desc.write(f"[mediainfo]{each['summary']}[/mediainfo]\n\n")
-                            base2ptp = self.convert_bbcode(base)
-                            if base2ptp.strip() != "":
-                                desc.write(base2ptp)
-                                desc.write("\n\n")
-                            # Check for saved images first
-                            if pack_images_data and 'keys' in pack_images_data and new_images_key in pack_images_data['keys']:
-                                saved_images = cast(list[dict[str, Any]], pack_images_data['keys'][new_images_key]['images'])
-                                if saved_images:
-                                    if meta['debug']:
-                                        console.print(f"[yellow]Using saved images from pack_image_links.json for {new_images_key}")
-
-                                    meta[new_images_key] = []
-                                    for img in saved_images:
-                                        meta[new_images_key].append({
-                                            'img_url': str(img.get('img_url', '')),
-                                            'raw_url': str(img.get('raw_url', '')),
-                                            'web_url': str(img.get('web_url', ''))
-                                        })
-                            if new_images_key in meta and meta[new_images_key]:
-                                for img in meta[new_images_key]:
-                                    raw_url = str(img.get('raw_url', ''))
-                                    desc.write(f"[img]{raw_url}[/img]\n")
-                                desc.write("\n")
-                            else:
-                                meta['retry_count'] += 1
-                                meta[new_images_key] = []
-                                new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
-                                if not new_screens:
-                                    try:
-                                        await self.takescreens_manager.disc_screenshots(meta, f"FILE_{i}", each['bdinfo'], meta['uuid'], meta['base_dir'], meta.get('vapoursynth', False), [], meta.get('ffdebug', False), multi_screens, True)
-                                    except Exception as e:
-                                        print(f"Error during BDMV screenshot capture: {e}")
-                                new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
-                                uploaded_images: list[dict[str, Any]] = []
-                                uploaded_images: list[dict[str, Any]] = []
-                                if new_screens and not meta.get('skip_imghost_upload', False):
-                                    uploaded_images, _ = await self.uploadscreens_manager.upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
-                                if uploaded_images and not meta.get('skip_imghost_upload', False):
-                                    await self.save_image_links(meta, new_images_key, uploaded_images)
-                                    for img in uploaded_images:
-                                        meta[new_images_key].append({
-                                            'img_url': str(img.get('img_url', '')),
-                                            'raw_url': str(img.get('raw_url', '')),
-                                            'web_url': str(img.get('web_url', ''))
-                                        })
-                                        raw_url = str(img.get('raw_url', ''))
-                                        desc.write(f"[img]{raw_url}[/img]\n")
-                                    desc.write("\n")
-
-                                meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                                async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
-                                    await f.write(json.dumps(meta, indent=4))
-
-                    elif each['type'] == "DVD":
-                        if i == 0:
-                            desc.write(f"[b][size=3]{each['name']}:[/size][/b]\n")
-                            desc.write(f"[mediainfo]{each['ifo_mi_full']}[/mediainfo]\n")
-                            desc.write(f"[mediainfo]{each['vob_mi_full']}[/mediainfo]\n\n")
-                            base2ptp = self.convert_bbcode(base)
-                            if base2ptp.strip() != "":
-                                desc.write(base2ptp)
-                                desc.write("\n\n")
-                            for img_index in range(min(multi_screens, len(image_list))):
-                                raw_url = image_list[img_index]['raw_url']
-                                desc.write(f"[img]{raw_url}[/img]\n")
-                            desc.write("\n")
-                        else:
-                            desc.write(f"[b][size=3]{each['name']}:[/size][/b]\n")
-                            desc.write(f"[mediainfo]{each['ifo_mi_full']}[/mediainfo]\n")
-                            desc.write(f"[mediainfo]{each['vob_mi_full']}[/mediainfo]\n\n")
-                            base2ptp = self.convert_bbcode(base)
-                            if base2ptp.strip() != "":
-                                desc.write(base2ptp)
-                                desc.write("\n\n")
-                            # Check for saved images first
-                            if pack_images_data and 'keys' in pack_images_data and new_images_key in pack_images_data['keys']:
-                                saved_images = pack_images_data['keys'][new_images_key]['images']
-                                if saved_images:
-                                    if meta['debug']:
-                                        console.print(f"[yellow]Using saved images from pack_image_links.json for {new_images_key}")
-
-                                    meta[new_images_key] = []
-                                    for img in saved_images:
-                                        meta[new_images_key].append({
-                                            'img_url': img.get('img_url', ''),
-                                            'raw_url': img.get('raw_url', ''),
-                                            'web_url': img.get('web_url', '')
-                                        })
-                            if new_images_key in meta and meta[new_images_key]:
-                                for img in meta[new_images_key]:
-                                    raw_url = img['raw_url']
-                                    desc.write(f"[img]{raw_url}[/img]\n")
-                                desc.write("\n")
-                            else:
-                                meta['retry_count'] += 1
-                                meta[new_images_key] = []
-                                new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png"))]
-                                if not new_screens:
-                                    try:
-                                        await self.takescreens_manager.dvd_screenshots(meta, i, multi_screens, True)
-                                    except Exception as e:
-                                        print(f"Error during DVD screenshot capture: {e}")
-                                new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png"))]
-                                uploaded_images: list[dict[str, Any]] = []
-                                if new_screens and not meta.get('skip_imghost_upload', False):
-                                    uploaded_images, _ = await self.uploadscreens_manager.upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
-                                if uploaded_images and not meta.get('skip_imghost_upload', False):
-                                    await self.save_image_links(meta, new_images_key, uploaded_images)
-                                    for img in uploaded_images:
-                                        meta[new_images_key].append({
-                                            'img_url': img['img_url'],
-                                            'raw_url': img['raw_url'],
-                                            'web_url': img['web_url']
-                                        })
-                                        raw_url = img['raw_url']
-                                        desc.write(f"[img]{raw_url}[/img]\n")
-                                    desc.write("\n")
-
-                            meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                            async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
-                                await f.write(json.dumps(meta, indent=4))
-
-            # Handle single file case
-            elif len(filelist) == 1:
-                file = filelist[0]
-                if meta['type'] == 'WEBDL' and meta.get('service_longname', '') != '' and meta.get('description') is None and self.web_source is True:
-                    desc.write(f"[quote][align=center]This release is sourced from {meta['service_longname']}[/align][/quote]")
-                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as mi_file:
-                    mi_dump = await mi_file.read()
-                desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
-                base2ptp = self.convert_bbcode(base)
-                if base2ptp.strip() != "":
-                    desc.write(base2ptp)
-                    desc.write("\n\n")
-                if meta.get('comparison') and 'comparison_groups' in meta and meta['comparison_groups']:
-                    desc.write("\n")
-
-                    comparison_groups = meta['comparison_groups']
-                    group_keys = sorted(comparison_groups.keys(), key=lambda x: int(x))
-                    comparison_names = [comparison_groups[key].get('name', f'Group {key}') for key in group_keys]
-                    comparison_header = ', '.join(comparison_names)
-                    desc.write(f"[comparison={comparison_header}]\n")
-
-                    num_images = min([len(comparison_groups[key]['urls']) for key in group_keys])
-
-                    for img_index in range(num_images):
-                        for key in group_keys:
-                            group = comparison_groups[key]
-                            if img_index < len(group['urls']):
-                                img_data = group['urls'][img_index]
-                                raw_url = img_data.get('raw_url', '')
-                                if raw_url:
-                                    desc.write(f"[img]{raw_url}[/img] ")
-                        desc.write("\n")
-
-                    desc.write("[/comparison]\n\n")
-
-                try:
-                    if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
-                        tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
-                        tonemapped_header = self.convert_bbcode(tonemapped_header)
-                        desc.write(tonemapped_header)
-                        desc.write("\n\n")
-                except Exception as e:
-                    console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
-
-                for img_index in range(len(images[:int(meta['screens'])])):
-                    raw_url = image_list[img_index]['raw_url']
-                    desc.write(f"[img]{raw_url}[/img]\n")
-                desc.write("\n")
-
-            # Handle multiple files case
-            elif len(filelist) > 1:
-                for i in range(len(filelist)):
-                    file = filelist[i]
+                elif each['type'] == "DVD":
                     if i == 0:
-                        if meta['type'] == 'WEBDL' and meta.get('service_longname', '') != '' and meta.get('description') is None and self.web_source is True:
-                            desc.write(f"[quote][align=center]This release is sourced from {meta['service_longname']}[/align][/quote]")
+                        desc.write(f"[b][size=3]{each['name']}:[/size][/b]\n")
+                        desc.write(f"[mediainfo]{each['ifo_mi_full']}[/mediainfo]\n")
+                        desc.write(f"[mediainfo]{each['vob_mi_full']}[/mediainfo]\n\n")
                         base2ptp = self.convert_bbcode(base)
                         if base2ptp.strip() != "":
                             desc.write(base2ptp)
                             desc.write("\n\n")
-                        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as mi_file:
-                            mi_dump = await mi_file.read()
-                        desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
-                        try:
-                            if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
-                                tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
-                                tonemapped_header = self.convert_bbcode(tonemapped_header)
-                                desc.write(tonemapped_header)
-                                desc.write("\n\n")
-                        except Exception as e:
-                            console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
                         for img_index in range(min(multi_screens, len(image_list))):
                             raw_url = image_list[img_index]['raw_url']
                             desc.write(f"[img]{raw_url}[/img]\n")
                         desc.write("\n")
                     else:
-                        mi_dump = MediaInfo.parse(file, output="STRING", full=False)
-                        temp_mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/TEMP_PTP_MEDIAINFO.txt"
-                        async with aiofiles.open(temp_mi_path, "w", encoding="utf-8") as f:
-                            await f.write(mi_dump.replace(file, os.path.basename(file)))
-                        async with aiofiles.open(temp_mi_path, encoding="utf-8") as mi_file:
-                            mi_dump = await mi_file.read()
-                        desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
-                        new_images_key = f'new_images_file_{i}'
+                        desc.write(f"[b][size=3]{each['name']}:[/size][/b]\n")
+                        desc.write(f"[mediainfo]{each['ifo_mi_full']}[/mediainfo]\n")
+                        desc.write(f"[mediainfo]{each['vob_mi_full']}[/mediainfo]\n\n")
+                        base2ptp = self.convert_bbcode(base)
+                        if base2ptp.strip() != "":
+                            desc.write(base2ptp)
+                            desc.write("\n\n")
                         # Check for saved images first
                         if pack_images_data and 'keys' in pack_images_data and new_images_key in pack_images_data['keys']:
                             saved_images = pack_images_data['keys'][new_images_key]['images']
@@ -1189,20 +1054,20 @@ class PTP:
                                 desc.write(f"[img]{raw_url}[/img]\n")
                             desc.write("\n")
                         else:
-                            meta['retry_count'] = meta.get('retry_count', 0) + 1
+                            meta['retry_count'] += 1
                             meta[new_images_key] = []
-                            new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
+                            new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png"))]
                             if not new_screens:
                                 try:
-                                    await self.takescreens_manager.screenshots(
-                                        file, f"FILE_{i}", meta['uuid'], meta['base_dir'], meta, multi_screens, True, "")
+                                    await self.takescreens_manager.dvd_screenshots(meta, i, multi_screens, True)
                                 except Exception as e:
-                                    print(f"Error during generic screenshot capture: {e}")
-                            new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
+                                    print(f"Error during DVD screenshot capture: {e}")
+                            new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png"))]
+                            uploaded_images: list[dict[str, Any]] = []
                             if new_screens and not meta.get('skip_imghost_upload', False):
                                 uploaded_images, _ = await self.uploadscreens_manager.upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
-                                if uploaded_images and not meta.get('skip_imghost_upload', False):
-                                    await self.save_image_links(meta, new_images_key, uploaded_images)
+                            if uploaded_images and not meta.get('skip_imghost_upload', False):
+                                await self.save_image_links(meta, new_images_key, uploaded_images)
                                 for img in uploaded_images:
                                     meta[new_images_key].append({
                                         'img_url': img['img_url'],
@@ -1216,6 +1081,136 @@ class PTP:
                         meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
                         async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
                             await f.write(json.dumps(meta, indent=4))
+
+        # Handle single file case
+        elif len(filelist) == 1:
+            if meta['type'] == 'WEBDL' and meta.get('service_longname', '') != '' and meta.get('description') is None and self.web_source is True:
+                desc.write(f"[quote][align=center]This release is sourced from {meta['service_longname']}[/align][/quote]")
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as mi_file:
+                mi_dump = await mi_file.read()
+            desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
+            base2ptp = self.convert_bbcode(base)
+            if base2ptp.strip() != "":
+                desc.write(base2ptp)
+                desc.write("\n\n")
+            if meta.get('comparison') and 'comparison_groups' in meta and meta['comparison_groups']:
+                desc.write("\n")
+
+                comparison_groups = meta['comparison_groups']
+                group_keys = sorted(comparison_groups.keys(), key=lambda x: int(x))
+                comparison_names = [comparison_groups[key].get('name', f'Group {key}') for key in group_keys]
+                comparison_header = ', '.join(comparison_names)
+                desc.write(f"[comparison={comparison_header}]\n")
+
+                num_images = min([len(comparison_groups[key]['urls']) for key in group_keys])
+
+                for img_index in range(num_images):
+                    for key in group_keys:
+                        group = comparison_groups[key]
+                        if img_index < len(group['urls']):
+                            img_data = group['urls'][img_index]
+                            raw_url = img_data.get('raw_url', '')
+                            if raw_url:
+                                desc.write(f"[img]{raw_url}[/img] ")
+                    desc.write("\n")
+
+                desc.write("[/comparison]\n\n")
+
+            try:
+                if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
+                    tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
+                    tonemapped_header = self.convert_bbcode(tonemapped_header)
+                    desc.write(tonemapped_header)
+                    desc.write("\n\n")
+            except Exception as e:
+                console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
+
+            for img_index in range(len(images[:int(meta['screens'])])):
+                raw_url = image_list[img_index]['raw_url']
+                desc.write(f"[img]{raw_url}[/img]\n")
+            desc.write("\n")
+
+        # Handle multiple files case
+        elif len(filelist) > 1:
+            for i, file in enumerate(filelist):
+                if i == 0:
+                    if meta['type'] == 'WEBDL' and meta.get('service_longname', '') != '' and meta.get('description') is None and self.web_source is True:
+                        desc.write(f"[quote][align=center]This release is sourced from {meta['service_longname']}[/align][/quote]")
+                    base2ptp = self.convert_bbcode(base)
+                    if base2ptp.strip() != "":
+                        desc.write(base2ptp)
+                        desc.write("\n\n")
+                    async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as mi_file:
+                        mi_dump = await mi_file.read()
+                    desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
+                    try:
+                        if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
+                            tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
+                            tonemapped_header = self.convert_bbcode(tonemapped_header)
+                            desc.write(tonemapped_header)
+                            desc.write("\n\n")
+                    except Exception as e:
+                        console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
+                    for img_index in range(min(multi_screens, len(image_list))):
+                        raw_url = image_list[img_index]['raw_url']
+                        desc.write(f"[img]{raw_url}[/img]\n")
+                    desc.write("\n")
+                else:
+                    mi_dump = MediaInfo.parse(file, output="STRING", full=False)
+                    temp_mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/TEMP_PTP_MEDIAINFO.txt"
+                    async with aiofiles.open(temp_mi_path, "w", encoding="utf-8") as f:
+                        await f.write(mi_dump.replace(file, os.path.basename(file)))
+                    async with aiofiles.open(temp_mi_path, encoding="utf-8") as mi_file:
+                        mi_dump = await mi_file.read()
+                    desc.write(f"[mediainfo]{mi_dump}[/mediainfo]\n")
+                    new_images_key = f'new_images_file_{i}'
+                    # Check for saved images first
+                    if pack_images_data and 'keys' in pack_images_data and new_images_key in pack_images_data['keys']:
+                        saved_images = pack_images_data['keys'][new_images_key]['images']
+                        if saved_images:
+                            if meta['debug']:
+                                console.print(f"[yellow]Using saved images from pack_image_links.json for {new_images_key}")
+
+                            meta[new_images_key] = []
+                            for img in saved_images:
+                                meta[new_images_key].append({
+                                    'img_url': img.get('img_url', ''),
+                                    'raw_url': img.get('raw_url', ''),
+                                    'web_url': img.get('web_url', '')
+                                })
+                    if new_images_key in meta and meta[new_images_key]:
+                        for img in meta[new_images_key]:
+                            raw_url = img['raw_url']
+                            desc.write(f"[img]{raw_url}[/img]\n")
+                        desc.write("\n")
+                    else:
+                        meta['retry_count'] = meta.get('retry_count', 0) + 1
+                        meta[new_images_key] = []
+                        new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
+                        if not new_screens:
+                            try:
+                                await self.takescreens_manager.screenshots(
+                                    file, f"FILE_{i}", meta['uuid'], meta['base_dir'], meta, multi_screens, True, "")
+                            except Exception as e:
+                                print(f"Error during generic screenshot capture: {e}")
+                        new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
+                        if new_screens and not meta.get('skip_imghost_upload', False):
+                            uploaded_images, _ = await self.uploadscreens_manager.upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
+                            if uploaded_images and not meta.get('skip_imghost_upload', False):
+                                await self.save_image_links(meta, new_images_key, uploaded_images)
+                            for img in uploaded_images:
+                                meta[new_images_key].append({
+                                    'img_url': img['img_url'],
+                                    'raw_url': img['raw_url'],
+                                    'web_url': img['web_url']
+                                })
+                                raw_url = img['raw_url']
+                                desc.write(f"[img]{raw_url}[/img]\n")
+                            desc.write("\n")
+
+                    meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
+                    async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
+                        await f.write(json.dumps(meta, indent=4))
 
         async with aiofiles.open(
             f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt",

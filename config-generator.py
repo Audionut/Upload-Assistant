@@ -779,7 +779,8 @@ def configure_discord(
     # If Discord is disabled, set defaults and return
     if enable_discord.lower() != "true":
         print("[i] Discord disabled. Setting default values for other Discord settings.")
-        discord_config = {key: default_value for key, default_value in example_discord.items() if key != "use_discord"}
+        discord_config = example_discord.copy()
+        discord_config["use_discord"] = enable_discord
         return discord_config
 
     # Configure other Discord settings if enabled
@@ -831,10 +832,12 @@ def generate_config_file(config_data: ConfigDict, existing_path: Optional[Path] 
         backup_path = Path("data/config.py.bak")
         if config_path.exists():
             overwrite = input(f"{config_path} already exists. Overwrite? (y/n): ").lower()
-            if overwrite != "y":
+            if overwrite == "y":
                 with open(config_path, encoding="utf-8") as src, open(backup_path, "w", encoding="utf-8") as dst:
                     dst.write(src.read())
                 print(f"\n[✓] Created backup of existing config at {backup_path}")
+            else:
+                return False
 
     # Convert boolean values in config to proper Python booleans
     def format_config(obj: Any) -> Any:

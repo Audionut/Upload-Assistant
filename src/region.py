@@ -1,10 +1,15 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
-from typing import Any, Optional, Union, cast
+from typing import Any, Callable, Optional, Union, cast
 
 import guessit
 
-guessit_fn = cast(Any, guessit).guessit
+guessit_module: Any = cast(Any, guessit)
+GuessitFn = Callable[[str, Optional[dict[str, Any]]], dict[str, Any]]
+
+
+def guessit_fn(value: str, options: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    return cast(dict[str, Any], guessit_module.guessit(value, options))
 
 
 async def get_region(bdinfo: dict[str, Any], region: Optional[str] = None) -> str:
@@ -142,13 +147,13 @@ async def get_service(video: Optional[str] = None, tag: Optional[str] = None, au
     if video is None:
         return "", ""
 
-    guess_data = cast(dict[str, Any], guessit_fn(video))
+    guess_data = guessit_fn(video)
     service: str = str(guess_data.get('streaming_service', ""))
 
     video_name = re.sub(r"[.()]", " ", video.replace(tag or '', '').replace(guess_title or '', ''))
     if audio and "DTS-HD MA" in audio:
         video_name = video_name.replace("DTS-HD.MA.", "").replace("DTS-HD MA ", "")
-    title_guess = cast(dict[str, Any], guessit_fn(video, {"excludes": ["country", "language"]}))
+    title_guess = guessit_fn(video, {"excludes": ["country", "language"]})
     title_guess_title = str(title_guess.get('title', ''))
     for key, value in services.items():
         if (' ' + key + ' ') in video_name and key not in title_guess_title or key == service:
