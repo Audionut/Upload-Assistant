@@ -540,27 +540,39 @@ class BJS:
         group_id = task_info['group_id']
         ajax_url = f'{self.base_url}/ajax.php?action=torrent_content&torrentid={torrent_id}&groupid={group_id}'
 
-        try:
-            async with self.semaphore:
-                ajax_response = await self.session.get(ajax_url)
-                if ajax_response.status_code == 503:
-                    await asyncio.sleep(5)
-                    ajax_response = await self.session.get(ajax_url)
-                ajax_response.raise_for_status()
-                ajax_soup = BeautifulSoup(ajax_response.text, "html.parser")
+        max_retries = 3
+        base_delay = 5
+        last_error: Optional[Exception] = None
 
-            return {
-                'success': True,
-                'soup': ajax_soup,
-                'task_info': task_info
-            }
-        except Exception as e:
-            console.print(f'[yellow]Não foi possível buscar a lista de arquivos para o torrent {torrent_id}: {e}[/yellow]')
-            return {
-                'success': False,
-                'error': e,
-                'task_info': task_info
-            }
+        async def _attempt_fetch() -> tuple[Optional[BeautifulSoup], Optional[Exception]]:
+            try:
+                async with self.semaphore:
+                    ajax_response = await self.session.get(ajax_url)
+                    ajax_response.raise_for_status()
+                    ajax_soup = BeautifulSoup(ajax_response.text, "html.parser")
+                return ajax_soup, None
+            except Exception as e:
+                return None, e
+
+        for attempt in range(1, max_retries + 1):
+            ajax_soup, error = await _attempt_fetch()
+            if ajax_soup is not None:
+                return {
+                    'success': True,
+                    'soup': ajax_soup,
+                    'task_info': task_info
+                }
+
+            last_error = error
+            if attempt < max_retries:
+                await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
+
+        console.print(f'[yellow]Não foi possível buscar a lista de arquivos para o torrent {torrent_id}: {last_error}[/yellow]')
+        return {
+            'success': False,
+            'error': last_error,
+            'task_info': task_info
+        }
 
     def _extract_item_name(self, ajax_soup: BeautifulSoup, description_text: str, is_tv_pack: bool, process_folder_name: bool) -> str:
         item_name: str = ""
