@@ -24,7 +24,6 @@ from src.console import console
 
 default_config: dict[str, Any] = {}
 task_limit = 1
-threads = "1"
 cutoff = 1
 ffmpeg_limit = False
 ffmpeg_is_good = False
@@ -36,7 +35,7 @@ desat = 10.0
 
 
 def _apply_config(config: Mapping[str, Any]) -> None:
-    global default_config, task_limit, threads, cutoff
+    global default_config, task_limit, cutoff
     global ffmpeg_limit, ffmpeg_is_good, use_libplacebo
     global tone_map, ffmpeg_compression, algorithm, desat
 
@@ -47,8 +46,6 @@ def _apply_config(config: Mapping[str, Any]) -> None:
         task_limit = int(default_config.get('process_limit', 1) or 1)
     except (TypeError, ValueError):
         task_limit = 1
-
-    threads = str(default_config.get('threads', '1'))
 
     try:
         cutoff = int(default_config.get('cutoff_screens', 1) or 1)

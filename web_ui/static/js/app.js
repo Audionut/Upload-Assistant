@@ -1,5 +1,49 @@
 const { useState, useRef, useEffect } = React;
 
+const API_BASE = window.location.origin + '/api';
+const THEME_KEY = 'ua_config_theme';
+
+const storage = {
+  get(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  },
+  set(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      // Ignore storage failures (private mode, blocked storage, etc.).
+    }
+  },
+  remove(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      // Ignore storage failures.
+    }
+  }
+};
+
+const getStoredTheme = () => {
+  const stored = storage.get(THEME_KEY);
+  if (stored === 'dark') {
+    return true;
+  }
+  if (stored === 'light') {
+    return false;
+  }
+  return true;
+};
+
+const apiFetch = async (url, options = {}) => {
+  const headers = { ...(options.headers || {}) };
+  const response = await fetch(url, { ...options, headers });
+  return response;
+};
+
 // Icon components
 const FolderIcon = () => (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -62,7 +106,7 @@ function AudionutsUAGUI() {
   const [sidebarWidth, setSidebarWidth] = useState(320);
   const [isResizing, setIsResizing] = useState(false);
   const [userInput, setUserInput] = useState('');
-  const [isDarkMode, setIsDarkMode] = useState(true); // Default to dark mode
+  const [isDarkMode, setIsDarkMode] = useState(getStoredTheme);
   
   const terminalRef = useRef(null);
   const terminalContainerRef = useRef(null);
@@ -72,7 +116,7 @@ function AudionutsUAGUI() {
 
   const loadBrowseRoots = async () => {
     try {
-      const response = await fetch(`${API_BASE}/browse_roots`);
+      const response = await apiFetch(`${API_BASE}/browse_roots`);
       const data = await response.json();
 
       if (data.success && data.items) {
@@ -247,6 +291,20 @@ function AudionutsUAGUI() {
   }, [isDarkMode]);
 
   useEffect(() => {
+    storage.set(THEME_KEY, isDarkMode ? 'dark' : 'light');
+  }, [isDarkMode]);
+
+  useEffect(() => {
+    const handleStorage = (event) => {
+      if (event.key === THEME_KEY) {
+        setIsDarkMode(event.newValue === 'dark');
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  useEffect(() => {
     loadBrowseRoots();
   }, []);
 
@@ -274,7 +332,7 @@ function AudionutsUAGUI() {
 
     try {
       // Send the input (empty string sends just Enter)
-      await fetch(`${API_BASE}/input`, {
+      await apiFetch(`${API_BASE}/input`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -317,7 +375,7 @@ function AudionutsUAGUI() {
 
   const loadFolderContents = async (path) => {
     try {
-      const response = await fetch(`${API_BASE}/browse?path=${encodeURIComponent(path)}`);
+      const response = await apiFetch(`${API_BASE}/browse?path=${encodeURIComponent(path)}`);
       const data = await response.json();
       
       if (data.success && data.items) {
@@ -401,7 +459,7 @@ function AudionutsUAGUI() {
     term.writeln('\x1b[1;34m→ Starting execution...\x1b[0m');
 
     try {
-      const response = await fetch(`${API_BASE}/execute`, {
+      const response = await apiFetch(`${API_BASE}/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -456,7 +514,7 @@ function AudionutsUAGUI() {
     // If a process is running, kill it first
     if (isExecuting && sessionId) {
       try {
-        await fetch(`${API_BASE}/kill`, {
+        await apiFetch(`${API_BASE}/kill`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session_id: sessionId })
@@ -553,13 +611,27 @@ function AudionutsUAGUI() {
         <div className={`${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b p-4 flex-shrink-0`}>
           <div className="max-w-6xl mx-auto space-y-4">
             <div className="flex items-center justify-between">
-              <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'} flex items-center gap-2`}>
-                <UploadIcon />
-                Upload Assistant Web UI
-              </h1>
-              
-              {/* Dark Mode Toggle */}
               <div className="flex items-center gap-3">
+                <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'} flex items-center gap-2`}>
+                  <UploadIcon />
+                  Upload Assistant Web UI
+                </h1>
+                <a
+                  href="/logout"
+                  className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors bg-red-600 text-white hover:bg-red-700"
+                >
+                  Logout
+                </a>
+              </div>
+              
+              {/* Controls */}
+              <div className="flex items-center gap-3">
+                <a
+                  href="/config"
+                  className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  View Config
+                </a>
                 <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                   {isDarkMode ? '🌙 Dark' : '☀️ Light'}
                 </span>

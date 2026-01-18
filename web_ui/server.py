@@ -1,6 +1,9 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownParameterType=false
+import ast
+import base64
 import hmac
+import importlib.util
 import json
 import os
 import queue
@@ -13,8 +16,9 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Literal, Optional, TypedDict, Union, cast
 
-from flask import Flask, Response, jsonify, render_template, request  # pyright: ignore[reportMissingImports]
+from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for  # pyright: ignore[reportMissingImports]
 from flask_cors import CORS  # pyright: ignore[reportMissingModuleSource]
+from waitress import serve  # pyright: ignore[reportMissingImports]
 from werkzeug.security import safe_join  # pyright: ignore[reportMissingImports]
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -28,14 +32,40 @@ CORS_fn = cast(Any, CORS)
 safe_join = cast(Any, safe_join)
 
 app: Any = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "some-default-secret-key-change-this")
+
+# Runtime browse roots (set by upload.py when starting web UI)
+_runtime_browse_roots: Optional[str] = None
+
+# Load saved auth from config file
+config_dir = (
+    os.path.join(os.path.expanduser("~"), "AppData", "Roaming", "UploadAssistant") if os.name == "nt" else os.path.join(os.path.expanduser("~"), ".config", "UploadAssistant")
+)
+config_file = os.path.join(config_dir, "config.toml")
+saved_auth = None
+if os.path.exists(config_file):
+    try:
+        with open(config_file) as f:
+            content = f.read()
+        lines = content.strip().split("\n")
+        if lines and lines[0] == "[auth]":
+            for line in lines[1:]:
+                if line.startswith("session_secret = "):
+                    secret = line.split(" = ")[1].strip('"')
+                    decoded = base64.b64decode(secret).decode("utf-8")
+                    username, password = decoded.split(":", 1)
+                    saved_auth = (username, password)
+                    break
+    except Exception:
+        pass
 
 
 def _parse_cors_origins() -> list[str]:
-    raw = os.environ.get('UA_WEBUI_CORS_ORIGINS', '').strip()
+    raw = os.environ.get("UA_WEBUI_CORS_ORIGINS", "").strip()
     if not raw:
         return []
     origins: list[str] = []
-    for part in raw.split(','):
+    for part in raw.split(","):
         part = part.strip()
         if part:
             origins.append(part)
@@ -47,7 +77,8 @@ if cors_origins:
     CORS_fn(app, resources={r"/api/*": {"origins": cors_origins}}, allow_headers=["Content-Type", "Authorization"])
 
 # ANSI color code regex pattern
-ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+
 
 class ProcessInfo(TypedDict):
     process: subprocess.Popen[str]
@@ -62,50 +93,82 @@ class BrowseItem(TypedDict):
 
     name: str
     path: str
-    type: Literal['folder', 'file']
-    children: Union[list['BrowseItem'], None]
+    type: Literal["folder", "file"]
+    children: Union[list["BrowseItem"], None]
+
+
+class ConfigItem(TypedDict, total=False):
+    key: str
+    value: Any
+    source: Literal["config", "example"]
+    children: list["ConfigItem"]
+    help: list[str]
+    subsection: Union[str, bool]
+
+
+class ConfigSection(TypedDict, total=False):
+    section: str
+    items: list[ConfigItem]
+    client_types: list[str]
 
 
 def _webui_auth_configured() -> bool:
-    return bool(os.environ.get('UA_WEBUI_USERNAME')) or bool(os.environ.get('UA_WEBUI_PASSWORD'))
+    return os.path.exists(config_file) or bool(os.environ.get("UA_WEBUI_USERNAME")) or bool(os.environ.get("UA_WEBUI_PASSWORD"))
 
 
 def _webui_auth_ok() -> bool:
-    expected_username = os.environ.get('UA_WEBUI_USERNAME', '')
-    expected_password = os.environ.get('UA_WEBUI_PASSWORD', '')
-
-    # If auth is configured at all, require both values.
-    if not expected_username or not expected_password:
-        return False
+    expected_username = os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else "")
+    expected_password = os.environ.get("UA_WEBUI_PASSWORD") or (saved_auth[1] if saved_auth else "")
 
     auth = request.authorization
-    if not auth or auth.type != 'basic':
+    if not auth or auth.type != "basic":
         return False
 
-    # Constant-time compare to avoid leaking timing info.
-    if not hmac.compare_digest(auth.username or '', expected_username):
-        return False
-    return hmac.compare_digest(auth.password or '', expected_password)
+    has_expected_username = bool(expected_username)
+    has_expected_password = bool(expected_password)
 
+    # If auth is configured (env or saved), require exact match.
+    if has_expected_username or has_expected_password:
+        # Constant-time compare to avoid leaking timing info.
+        if has_expected_username and not hmac.compare_digest(auth.username or "", expected_username):
+            return False
+        if has_expected_password and not hmac.compare_digest(auth.password or "", expected_password):
+            return False
+        # For any unset value, still require a non-empty value to avoid blank auth.
+        if not has_expected_username and not (auth.username or ""):
+            return False
+        return has_expected_password or bool(auth.password or "")
 
-def _auth_required_response():
-    return Response(
-        'Authentication required',
-        401,
-        {'WWW-Authenticate': 'Basic realm="Upload Assistant Web UI"'},
-    )
+    # If auth is not configured, still require non-empty basic auth.
+    return bool(auth.username) and bool(auth.password)
 
 
 @app.before_request
-def _require_basic_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
+def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
     # Health endpoint can be used for orchestration checks.
-    if request.path == '/api/health':
+    if request.path == "/api/health":
         return None
 
-    # If user configured auth, require it for everything (including / and static).
-    # This makes remote deployment safer by default.
-    if _webui_auth_configured() and not _webui_auth_ok():
-        return _auth_required_response()
+    if request.path.startswith("/api/"):
+        # For API, allow basic auth
+        if _webui_auth_ok():
+            return None
+        # Or session auth
+        if session.get("authenticated"):
+            return None
+        # If request accepts HTML (browser), redirect to login; else 401 for API clients
+        if "text/html" in request.headers.get("Accept", ""):
+            return redirect(url_for("login_page"))
+        return jsonify({"error": "Authentication required", "success": False}), 401
+
+    # For web routes
+    if _webui_auth_configured():
+        # Use basic auth for web too if configured
+        pass  # but since /config doesn't require, but to be consistent, perhaps require for /config too
+    else:
+        # Use session auth for web
+        if (request.path == "/config" or request.path in ("/", "/index.html")) and not session.get("authenticated"):
+            return redirect(url_for("login_page"))
 
     return None
 
@@ -116,23 +179,25 @@ def _validate_upload_assistant_args(tokens: Sequence[Any]) -> list[str]:
     safe: list[str] = []
     for tok in tokens:
         if not isinstance(tok, str):
-            raise TypeError('Invalid argument')
+            raise TypeError("Invalid argument")
         if not tok or len(tok) > 1024:
-            raise ValueError('Invalid argument')
-        if '\x00' in tok or '\n' in tok or '\r' in tok:
-            raise ValueError('Invalid characters in argument')
+            raise ValueError("Invalid argument")
+        if "\x00" in tok or "\n" in tok or "\r" in tok:
+            raise ValueError("Invalid characters in argument")
         safe.append(tok)
     return safe
 
 
 def _get_browse_roots() -> list[str]:
-    raw = os.environ.get('UA_BROWSE_ROOTS', '').strip()
+    # Check environment first, then runtime browse roots (set by upload.py)
+    global _runtime_browse_roots
+    raw = os.environ.get("UA_BROWSE_ROOTS", "").strip() or _runtime_browse_roots or ""
     if not raw:
         # Require explicit configuration; do not default to the filesystem root.
         return []
 
     roots: list[str] = []
-    for part in raw.split(','):
+    for part in raw.split(","):
         part = part.strip()
         if not part:
             continue
@@ -140,6 +205,456 @@ def _get_browse_roots() -> list[str]:
         roots.append(root)
 
     return roots
+
+
+def set_runtime_browse_roots(browse_roots: str) -> None:
+    """Set browse roots at runtime (used by upload.py when starting web UI)"""
+    global _runtime_browse_roots
+    _runtime_browse_roots = browse_roots
+
+
+def _load_config_from_file(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+
+    module_name = f"ua_config_{path.stem}_{abs(hash(str(path)))}"
+    spec = importlib.util.spec_from_file_location(module_name, str(path))
+    if spec is None or spec.loader is None:
+        return {}
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    config_value = getattr(module, "config", {})
+    if isinstance(config_value, dict):
+        return config_value
+    return {}
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    return str(value)
+
+
+def _get_nested_value(data: Any, path: list[str]) -> Any:
+    current = data
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _coerce_config_value(raw: Any, example_value: Any) -> Any:
+    if isinstance(example_value, bool):
+        if isinstance(raw, bool):
+            return raw
+        if isinstance(raw, str):
+            return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
+        return bool(raw)
+
+    if isinstance(example_value, int) and not isinstance(example_value, bool):
+        if isinstance(raw, (int, float)):
+            return int(raw)
+        if isinstance(raw, str) and raw.strip():
+            return int(raw.strip())
+        return 0
+
+    if isinstance(example_value, float):
+        if isinstance(raw, (int, float)):
+            return float(raw)
+        if isinstance(raw, str) and raw.strip():
+            return float(raw.strip())
+        return 0.0
+
+    if example_value is None:
+        if isinstance(raw, str) and raw.strip().lower() in {"", "none", "null"}:
+            return None
+        return raw
+
+    if isinstance(example_value, (list, dict)):
+        if isinstance(raw, (list, dict)):
+            return raw
+        if isinstance(raw, str):
+            raw_str = raw.strip()
+            if not raw_str:
+                return [] if isinstance(example_value, list) else {}
+            try:
+                parsed = json.loads(raw_str)
+                return parsed
+            except json.JSONDecodeError:
+                return raw
+        return raw
+
+    if isinstance(raw, str):
+        return raw
+
+    return str(raw)
+
+
+def _python_literal(value: Any) -> str:
+    if isinstance(value, str):
+        return repr(value)
+    if value is None:
+        return "None"
+    if isinstance(value, bool):
+        return "True" if value else "False"
+    return repr(value)
+
+
+def _format_config_tree(tree: ast.AST) -> str:
+    """Format an AST tree in the same style as example-config.py"""
+    lines = []
+
+    # Cast to Module to access body attribute
+    if not isinstance(tree, ast.Module):
+        return ast.unparse(tree)
+
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "config":
+                    if isinstance(node.value, ast.Dict):
+                        lines.append("config = {")
+                        lines.extend(_format_dict(node.value, 1))
+                        lines.append("}")
+                    else:
+                        lines.append(ast.unparse(node))
+                    break
+        else:
+            # Keep other statements as-is
+            lines.append(ast.unparse(node))
+
+    return "\n".join(lines)
+
+
+def _format_dict(dict_node: ast.Dict, indent_level: int) -> list[str]:
+    """Format a dictionary node with proper indentation"""
+    lines = []
+    indent = "    " * indent_level
+
+    for _i, (key_node, value_node) in enumerate(zip(dict_node.keys, dict_node.values)):
+        key_str = repr(key_node.value) if isinstance(key_node, ast.Constant) and isinstance(key_node.value, str) else ast.unparse(key_node) if key_node is not None else "None"
+
+        if isinstance(value_node, ast.Dict):
+            lines.append(f"{indent}{key_str}: {{")
+            lines.extend(_format_dict(value_node, indent_level + 1))
+            lines.append(f"{indent}}},")
+        else:
+            value_str = ast.unparse(value_node)
+            lines.append(f"{indent}{key_str}: {value_str},")
+
+    return lines
+
+
+def _replace_config_value_in_source(source: str, key_path: list[str], new_value: str) -> str:
+    tree = ast.parse(source)
+    config_assign = None
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "config":
+                    config_assign = node
+                    break
+        if config_assign:
+            break
+
+    if config_assign is None or not isinstance(config_assign.value, ast.Dict):
+        raise ValueError("Config assignment not found")
+
+    current_dict = config_assign.value
+    target_node: Optional[ast.AST] = None
+
+    for i, key in enumerate(key_path):
+        found = False
+        for k_node, v_node in zip(current_dict.keys, current_dict.values):
+            if isinstance(k_node, ast.Constant) and isinstance(k_node.value, str) and k_node.value == key:
+                if isinstance(v_node, ast.Dict):
+                    if i < len(key_path) - 1:  # Not the final key
+                        current_dict = v_node
+                        found = True
+                        break
+                    else:  # Final key - update existing value
+                        target_node = v_node
+                        found = True
+                        break
+                target_node = v_node
+                found = True
+                break
+
+        if not found:
+            if i == len(key_path) - 1:  # Final key doesn't exist - need to add it
+                # Add new key-value pair to current_dict
+                new_key_node = ast.Constant(value=key)
+                new_value_node = ast.parse(new_value, mode="eval").body
+
+                current_dict.keys.append(new_key_node)
+                current_dict.values.append(new_value_node)
+
+                # Reconstruct the source with the new key using proper formatting
+                return _format_config_tree(tree)
+            else:
+                raise ValueError(f"Key not found in config: {key}")
+
+        if target_node is not None and i < len(key_path) - 1:
+            raise ValueError("Invalid path for config update")
+
+    if target_node is None:
+        raise ValueError("Target node not found")
+
+    if not hasattr(target_node, "lineno") or not hasattr(target_node, "end_lineno"):
+        raise ValueError("Unable to locate config value position")
+
+    lineno = cast(Optional[int], getattr(target_node, "lineno", None))
+    end_lineno = cast(Optional[int], getattr(target_node, "end_lineno", None))
+    col_offset = cast(int, getattr(target_node, "col_offset", 0))
+    end_col_offset = cast(int, getattr(target_node, "end_col_offset", 0))
+    if lineno is None or end_lineno is None:
+        raise ValueError("Unable to locate config value position")
+
+    lines = source.splitlines(keepends=True)
+    start = sum(len(line) for line in lines[: lineno - 1]) + col_offset
+    end = sum(len(line) for line in lines[: end_lineno - 1]) + end_col_offset
+
+    updated_source = f"{source[:start]}{new_value}{source[end:]}"
+
+    # Reformat the entire config to ensure consistent styling
+    updated_tree = ast.parse(updated_source)
+    return _format_config_tree(updated_tree)
+
+
+def _remove_config_key_in_source(source: str, key_path: list[str]) -> str:
+    """Remove a key from the config source if it exists"""
+    tree = ast.parse(source)
+    config_assign = None
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "config":
+                    config_assign = node
+                    break
+        if config_assign:
+            break
+
+    if config_assign is None or not isinstance(config_assign.value, ast.Dict):
+        return source  # No config found, return as-is
+
+    current_dict = config_assign.value
+
+    for i, key in enumerate(key_path):
+        found = False
+        for j, (k_node, v_node) in enumerate(zip(current_dict.keys, current_dict.values)):
+            if isinstance(k_node, ast.Constant) and isinstance(k_node.value, str) and k_node.value == key:
+                if isinstance(v_node, ast.Dict):
+                    if i < len(key_path) - 1:  # Not the final key
+                        current_dict = v_node
+                        found = True
+                        break
+                    else:  # Final key - remove it
+                        # Remove the key-value pair
+                        del current_dict.keys[j]
+                        del current_dict.values[j]
+                        # Reconstruct the source
+                        return _format_config_tree(tree)
+                else:
+                    if i == len(key_path) - 1:  # Final key - remove it
+                        del current_dict.keys[j]
+                        del current_dict.values[j]
+                        return _format_config_tree(tree)
+                found = True
+                break
+
+        if not found:
+            return source  # Key not found, return as-is
+
+    return source  # Should not reach here
+
+
+def _build_config_items(
+    example_section: dict[str, Any],
+    user_section: Any,
+    comments_map: dict[str, list[str]],
+    subsection_map: dict[str, str],
+    path: list[str],
+) -> list[ConfigItem]:
+    items: list[ConfigItem] = []
+    user_dict = user_section if isinstance(user_section, dict) else {}
+
+    merged_keys = list(example_section.keys())
+    if isinstance(user_section, dict):
+        merged_keys.extend([key for key in user_section if key not in example_section])
+
+    current_subsection: Optional[str] = None
+    subsection_items: list[ConfigItem] = []
+
+    def flush_subsection() -> None:
+        nonlocal subsection_items, current_subsection
+        if current_subsection and subsection_items:
+            items.append(
+                {
+                    "key": current_subsection,
+                    "children": subsection_items,
+                    "source": "example",
+                    "help": [],
+                    "subsection": True,
+                }
+            )
+        subsection_items = []
+
+    for key in merged_keys:
+        example_value = example_section.get(key)
+        user_value = user_dict.get(key)
+        key_path = path + [str(key)]
+        help_text = comments_map.get("/".join(key_path), [])
+        subsection_label = subsection_map.get("/".join(key_path))
+        if subsection_label != current_subsection:
+            flush_subsection()
+            current_subsection = subsection_label
+        if isinstance(example_value, dict) or isinstance(user_value, dict):
+            example_value = example_value if isinstance(example_value, dict) else {}
+            user_value = user_value if isinstance(user_value, dict) else {}
+            children = _build_config_items(example_value, user_value, comments_map, subsection_map, key_path)
+            source: Literal["config", "example"] = "config" if key in user_dict else "example"
+            item: ConfigItem = {
+                "key": str(key),
+                "source": source,
+                "children": children,
+                "help": help_text,
+            }
+        else:
+            if key in user_dict:
+                value = user_value
+                source = "config"
+            else:
+                value = example_value
+                source = "example"
+            item = {
+                "key": str(key),
+                "value": _json_safe(value),
+                "source": source,
+                "help": help_text,
+            }
+
+        if current_subsection:
+            subsection_items.append(item)
+        else:
+            items.append(item)
+
+    flush_subsection()
+
+    return items
+
+
+def _extract_example_metadata(example_path: Path) -> tuple[dict[str, list[str]], dict[str, str]]:
+    if not example_path.exists():
+        return {}, {}
+
+    source = example_path.read_text(encoding="utf-8")
+    lines = source.splitlines()
+    tree = ast.parse(source)
+
+    config_assign: Optional[ast.Assign] = None
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "config":
+                    config_assign = node
+                    break
+        if config_assign:
+            break
+
+    if config_assign is None or not isinstance(config_assign.value, ast.Dict):
+        return {}, {}
+
+    comment_map: dict[str, list[str]] = {}
+    subsection_map: dict[str, str] = {}
+
+    def collect_comments(lineno: int) -> list[str]:
+        idx = lineno - 2
+        comments: list[str] = []
+        while idx >= 0:
+            line = lines[idx]
+            stripped = line.strip()
+            if not stripped:
+                if comments:
+                    break
+                idx -= 1
+                continue
+            if stripped.startswith("#"):
+                comments.insert(0, stripped.lstrip("#").strip())
+                idx -= 1
+                continue
+            break
+        return comments
+
+    def find_headers(
+        start_line: int,
+        end_line: int,
+        child_ranges: list[tuple[int, int]],
+    ) -> list[tuple[int, str]]:
+        headers: list[tuple[int, str]] = []
+        for idx in range(start_line - 1, end_line):
+            if idx <= 0 or idx + 1 >= len(lines):
+                continue
+            stripped = lines[idx].strip()
+            if not stripped.startswith("#"):
+                continue
+            title = stripped.lstrip("#").strip()
+            if not title:
+                continue
+            if title != title.upper():
+                continue
+            if not any(char.isalpha() for char in title):
+                continue
+            if lines[idx - 1].strip() or lines[idx + 1].strip():
+                continue
+            line_no = idx + 1
+            if any(start <= line_no <= end for start, end in child_ranges):
+                continue
+            headers.append((line_no, title))
+        return headers
+
+    def walk_dict(node: ast.Dict, path: list[str]) -> None:
+        key_entries: list[tuple[str, int, ast.AST]] = []
+        child_ranges: list[tuple[int, int]] = []
+        for key_node, value_node in zip(node.keys, node.values):
+            if not isinstance(key_node, ast.Constant) or not isinstance(key_node.value, str):
+                continue
+            key = key_node.value
+            lineno = getattr(key_node, "lineno", None)
+            if isinstance(lineno, int):
+                comment_map["/".join(path + [key])] = collect_comments(lineno)
+                key_entries.append((key, lineno, value_node))
+
+            if isinstance(value_node, ast.Dict):
+                start = getattr(value_node, "lineno", None)
+                end = getattr(value_node, "end_lineno", None)
+                if isinstance(start, int) and isinstance(end, int):
+                    child_ranges.append((start, end))
+
+            if isinstance(value_node, ast.Dict):
+                walk_dict(value_node, path + [key])
+
+        start_line = getattr(node, "lineno", None)
+        end_line = getattr(node, "end_lineno", None)
+        if isinstance(start_line, int) and isinstance(end_line, int) and key_entries:
+            headers = sorted(find_headers(start_line, end_line, child_ranges), key=lambda h: h[0])
+            key_entries.sort(key=lambda entry: entry[1])
+            header_idx = 0
+            current_header: Optional[str] = None
+            for key, lineno, _ in key_entries:
+                while header_idx < len(headers) and headers[header_idx][0] < lineno:
+                    current_header = headers[header_idx][1]
+                    header_idx += 1
+                if current_header:
+                    subsection_map["/".join(path + [key])] = current_header
+
+    walk_dict(config_assign.value, [])
+    return comment_map, subsection_map
 
 
 def _resolve_user_path(
@@ -150,19 +665,19 @@ def _resolve_user_path(
 ) -> str:
     roots = _get_browse_roots()
     if not roots:
-        raise ValueError('Browsing is not configured')
+        raise ValueError("Browsing is not configured")
 
     default_root = roots[0]
 
-    if user_path is None or user_path == '':
-        expanded = ''
+    if user_path is None or user_path == "":
+        expanded = ""
     else:
         if not isinstance(user_path, str):
-            raise ValueError('Path must be a string')
+            raise ValueError("Path must be a string")
         if len(user_path) > 4096:
-            raise ValueError('Invalid path')
-        if '\x00' in user_path or '\n' in user_path or '\r' in user_path:
-            raise ValueError('Invalid characters in path')
+            raise ValueError("Invalid path")
+        if "\x00" in user_path or "\n" in user_path or "\r" in user_path:
+            raise ValueError("Invalid characters in path")
 
         expanded = os.path.expandvars(os.path.expanduser(user_path))
 
@@ -196,7 +711,7 @@ def _resolve_user_path(
 
                 # Handle the case where the path equals the root exactly.
                 # safe_join may return None for '.' in some Werkzeug versions.
-                if rel == '.':
+                if rel == ".":
                     matched_root = check_root
                     candidate_norm = os.path.normpath(check_root)
                     break
@@ -220,28 +735,28 @@ def _resolve_user_path(
         else:
             joined = safe_join(matched_root, expanded)
             if joined is None:
-                raise ValueError('Browsing this path is not allowed')
+                raise ValueError("Browsing this path is not allowed")
             candidate_norm = os.path.normpath(joined)
 
     if not matched_root or not candidate_norm:
-        raise ValueError('Browsing this path is not allowed')
+        raise ValueError("Browsing this path is not allowed")
 
     candidate_real = os.path.realpath(candidate_norm)
     root_real = os.path.realpath(matched_root)
     try:
         if os.path.commonpath([candidate_real, root_real]) != root_real:
-            raise ValueError('Browsing this path is not allowed')
+            raise ValueError("Browsing this path is not allowed")
     except ValueError as e:
         # ValueError can happen on Windows if drives differ.
-        raise ValueError('Browsing this path is not allowed') from e
+        raise ValueError("Browsing this path is not allowed") from e
 
     candidate = candidate_real
 
     if require_exists and not os.path.exists(candidate):
-        raise ValueError('Path does not exist')
+        raise ValueError("Path does not exist")
 
     if require_dir and not os.path.isdir(candidate):
-        raise ValueError('Not a directory')
+        raise ValueError("Not a directory")
 
     return candidate
 
@@ -252,63 +767,243 @@ def _resolve_browse_path(user_path: Union[str, None]) -> str:
 
 def strip_ansi(text: str) -> str:
     """Remove ANSI escape codes from text"""
-    return ANSI_ESCAPE.sub('', text)
+    return ANSI_ESCAPE.sub("", text)
 
 
-@app.route('/')
+@app.route("/")
 def index():
     """Serve the main UI"""
     try:
-        return render_template('index.html')
+        return render_template("index.html")
     except Exception as e:
         print(f"Error loading template: {e}")
         print(traceback.format_exc())
         return "<pre>Internal server error</pre>", 500
 
 
-@app.route('/api/health')
+@app.route("/login", methods=["GET", "POST"])
+def login_page():
+    global saved_auth
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
+        remember = request.form.get("remember") == "1"
+        if _webui_auth_configured():
+            # Validate against env vars or saved_auth
+            expected_username = os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else "")
+            expected_password = os.environ.get("UA_WEBUI_PASSWORD") or (saved_auth[1] if saved_auth else "")
+            if username == expected_username and password == expected_password:
+                session["authenticated"] = True
+                if remember:
+                    session.permanent = True
+                return redirect(url_for("config_page"))
+            else:
+                return render_template("login.html", error="Invalid credentials")
+        else:
+            # No env, accept any non-empty
+            if username and password:
+                session["authenticated"] = True
+                if remember:
+                    session.permanent = True
+                # Save auth to config file if not already exists
+                if not os.path.exists(config_file):
+                    os.makedirs(config_dir, exist_ok=True)
+                    encoded = base64.b64encode(f"{username}:{password}".encode()).decode()
+                    with open(config_file, "w") as f:
+                        f.write("[auth]\n")
+                        f.write(f'session_secret = "{encoded}"\n')
+                    # Update saved_auth
+                    saved_auth = (username, password)
+                return redirect(url_for("config_page"))
+            else:
+                return render_template("login.html", error="Invalid credentials")
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    session.pop("authenticated", None)
+    return redirect(url_for("login_page"))
+
+
+@app.route("/config")
+def config_page():
+    """Serve the config UI"""
+    try:
+        return render_template("config.html")
+    except Exception as e:
+        print(f"Error loading config template: {e}")
+        print(traceback.format_exc())
+        return "<pre>Internal server error</pre>", 500
+
+
+@app.route("/api/health")
 def health():
     """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'success': True,
-        'message': 'Upload Assistant Web UI is running'
-    })
+    return jsonify({"status": "healthy", "success": True, "message": "Upload Assistant Web UI is running"})
 
 
-@app.route('/api/browse_roots')
+@app.route("/api/browse_roots")
 def browse_roots():
     """Return configured browse roots"""
     roots = _get_browse_roots()
     if not roots:
-        return jsonify({'error': 'Browsing is not configured', 'success': False}), 400
+        return jsonify({"error": "Browsing is not configured", "success": False}), 400
 
     items: list[BrowseItem] = []
     for root in roots:
         display_name = os.path.basename(root.rstrip(os.sep)) or root
-        items.append({
-            'name': display_name,
-            'path': root,
-            'type': 'folder',
-            'children': []
-        })
+        items.append({"name": display_name, "path": root, "type": "folder", "children": []})
 
-    return jsonify({
-        'items': items,
-        'success': True
-    })
+    return jsonify({"items": items, "success": True})
 
 
-@app.route('/api/browse')
+@app.route("/api/config_options")
+def config_options():
+    """Return config options based on example-config.py with overrides from config.py"""
+    base_dir = Path(__file__).parent.parent
+    example_path = base_dir / "data" / "example-config.py"
+    config_path = base_dir / "data" / "config.py"
+
+    example_config = _load_config_from_file(example_path)
+    user_config = _load_config_from_file(config_path)
+    comments_map, subsection_map = _extract_example_metadata(example_path)
+
+    sections: list[ConfigSection] = []
+
+    for section_name, example_section in example_config.items():
+        if not isinstance(example_section, dict):
+            continue
+
+        user_section = user_config.get(section_name, {})
+        items = _build_config_items(example_section, user_section, comments_map, subsection_map, [str(section_name)])
+
+        # Add special client list items to DEFAULT section
+        if section_name == "DEFAULT":
+            # Check if they already exist in items
+            existing_keys = {item.get("key", "") for item in items if item.get("key")}
+            if "injecting_client_list" not in existing_keys:
+                items.append(
+                    {
+                        "key": "injecting_client_list",
+                        "value": user_section.get("injecting_client_list", []),
+                        "source": "config" if "injecting_client_list" in user_section else "example",
+                        "help": [
+                            "A list of clients to use for injection (aka actually adding the torrent for uploading)",
+                            'eg: ["qbittorrent", "rtorrent"]',
+                        ],
+                        "subsection": "CLIENT SETUP",
+                    }
+                )
+            if "searching_client_list" not in existing_keys:
+                items.append(
+                    {
+                        "key": "searching_client_list",
+                        "value": user_section.get("searching_client_list", []),
+                        "source": "config" if "searching_client_list" in user_section else "example",
+                        "help": [
+                            "A list of clients to search for torrents.",
+                            'eg: ["qbittorrent", "qbittorrent_searching"]',
+                            "will fallback to default_torrent_client if empty",
+                        ],
+                        "subsection": "CLIENT SETUP",
+                    }
+                )
+            # Update subsection_map for these items
+            subsection_map["DEFAULT/injecting_client_list"] = "CLIENT SETUP"
+            subsection_map["DEFAULT/searching_client_list"] = "CLIENT SETUP"
+
+        sections.append({"section": str(section_name), "items": items})
+
+        if section_name == "TORRENT_CLIENTS":
+            client_types = set()
+            for item in items:
+                if "children" in item and item["children"]:
+                    client_type_item = next((c for c in item["children"] if c.get("key") == "torrent_client"), None)
+                    if client_type_item:
+                        client_types.add(client_type_item.get("value", "unknown"))
+            sections[-1]["client_types"] = sorted(client_types, key=lambda x: (x != 'qbit', x))
+
+    return jsonify({"success": True, "sections": sections})
+
+
+@app.route("/api/torrent_clients")
+def torrent_clients():
+    """Return list of available torrent client names from TORRENT_CLIENTS section"""
+    base_dir = Path(__file__).parent.parent
+    config_path = base_dir / "data" / "config.py"
+
+    user_config = _load_config_from_file(config_path)
+
+    # Get clients only from user config
+    user_clients = user_config.get("TORRENT_CLIENTS", {})
+
+    # Include all configured clients in the dropdown
+    client_names = list(user_clients.keys())
+
+    return jsonify({"success": True, "clients": sorted(client_names)})
+
+
+@app.route("/api/config_update", methods=["POST"])
+def config_update():
+    """Update a config value in data/config.py"""
+    data = request.json or {}
+    path = data.get("path")
+    raw_value = data.get("value")
+
+    if not isinstance(path, list) or not all(isinstance(p, str) and p for p in path):
+        return jsonify({"success": False, "error": "Invalid path"}), 400
+
+    base_dir = Path(__file__).parent.parent
+    example_path = base_dir / "data" / "example-config.py"
+    config_path = base_dir / "data" / "config.py"
+
+    example_config = _load_config_from_file(example_path)
+    example_value = _get_nested_value(example_config, path)
+
+    # Special handling for client lists that don't exist in example config
+    key = path[-1] if path else ""
+    if key in ["injecting_client_list", "searching_client_list"]:
+        example_value = []  # Default to empty list
+    elif example_value is None:
+        return jsonify({"success": False, "error": "Path not found in example config"}), 400
+
+    coerced_value = _coerce_config_value(raw_value, example_value)
+    new_value_literal = _python_literal(coerced_value)
+
+    # Special handling for client lists that should remain commented unless user provides values
+    key = path[-1] if path else ""
+    if key in ["injecting_client_list", "searching_client_list"] and coerced_value == []:
+        # Remove the key from config if it exists
+        try:
+            source = config_path.read_text(encoding="utf-8")
+            updated_source = _remove_config_key_in_source(source, path)
+            config_path.write_text(updated_source, encoding="utf-8")
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({"success": True, "value": _json_safe(coerced_value)})
+    # Else proceed with normal update
+
+    try:
+        source = config_path.read_text(encoding="utf-8")
+        updated_source = _replace_config_value_in_source(source, path, new_value_literal)
+        config_path.write_text(updated_source, encoding="utf-8")
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+    return jsonify({"success": True, "value": _json_safe(coerced_value)})
+
+
+@app.route("/api/browse")
 def browse_path():
     """Browse filesystem paths"""
-    requested = request.args.get('path', '')
+    requested = request.args.get("path", "")
     try:
         path = _resolve_browse_path(requested)
     except ValueError as e:
         # Log details server-side, but avoid leaking paths/internal details to clients.
         print(f"Path resolution error for requested {requested!r}: {e}")
-        return jsonify({'error': 'Invalid path specified', 'success': False}), 400
+        return jsonify({"error": "Invalid path specified", "success": False}), 400
 
     print(f"Browsing path: {path}")
 
@@ -317,19 +1012,14 @@ def browse_path():
         try:
             for item in sorted(os.listdir(path)):
                 # Skip hidden files
-                if item.startswith('.'):
+                if item.startswith("."):
                     continue
 
                 full_path = os.path.join(path, item)
                 try:
                     is_dir = os.path.isdir(full_path)
 
-                    items.append({
-                        'name': item,
-                        'path': full_path,
-                        'type': 'folder' if is_dir else 'file',
-                        'children': [] if is_dir else None
-                    })
+                    items.append({"name": item, "path": full_path, "type": "folder" if is_dir else "file", "children": [] if is_dir else None})
                 except (PermissionError, OSError):
                     continue
 
@@ -337,44 +1027,36 @@ def browse_path():
 
         except PermissionError:
             print(f"Error: Permission denied: {path}")
-            return jsonify({'error': 'Permission denied', 'success': False}), 403
+            return jsonify({"error": "Permission denied", "success": False}), 403
 
-        return jsonify({
-            'items': items,
-            'success': True,
-            'path': path,
-            'count': len(items)
-        })
+        return jsonify({"items": items, "success": True, "path": path, "count": len(items)})
 
     except Exception as e:
         print(f"Error browsing {path}: {e}")
         print(traceback.format_exc())
-        return jsonify({'error': 'Error browsing path', 'success': False}), 500
+        return jsonify({"error": "Error browsing path", "success": False}), 500
 
 
-@app.route('/api/execute', methods=['POST', 'OPTIONS'])
+@app.route("/api/execute", methods=["POST", "OPTIONS"])
 def execute_command():
     """Execute upload.py with interactive terminal support"""
 
-    if request.method == 'OPTIONS':
-        return '', 204
+    if request.method == "OPTIONS":
+        return "", 204
 
     try:
         data = request.json
         if not data:
-            return jsonify({'error': 'No JSON data received', 'success': False}), 400
+            return jsonify({"error": "No JSON data received", "success": False}), 400
 
-        path = data.get('path')
-        args = data.get('args', '')
-        session_id = data.get('session_id', 'default')
+        path = data.get("path")
+        args = data.get("args", "")
+        session_id = data.get("session_id", "default")
 
         print(f"Execute request - Path: {path}, Args: {args}, Session: {session_id}")
 
         if not path:
-            return jsonify({
-                'error': 'Missing path',
-                'success': False
-            }), 400
+            return jsonify({"error": "Missing path", "success": False}), 400
 
         def generate():
             try:
@@ -382,8 +1064,8 @@ def execute_command():
                 validated_path = _resolve_user_path(path, require_exists=True, require_dir=False)
 
                 base_dir = Path(__file__).parent.parent
-                upload_script = str(base_dir / 'upload.py')
-                command = [sys.executable, '-u', upload_script, validated_path]
+                upload_script = str(base_dir / "upload.py")
+                command = [sys.executable, "-u", upload_script, validated_path]
 
                 # Add arguments if provided
                 if args:
@@ -399,8 +1081,8 @@ def execute_command():
 
                 # Set environment to unbuffered and force line buffering
                 env = os.environ.copy()
-                env['PYTHONUNBUFFERED'] = '1'
-                env['PYTHONIOENCODING'] = 'utf-8'
+                env["PYTHONUNBUFFERED"] = "1"
+                env["PYTHONIOENCODING"] = "utf-8"
                 # Disable Python output buffering
 
                 process = subprocess.Popen(  # lgtm[py/command-line-injection]
@@ -412,13 +1094,11 @@ def execute_command():
                     bufsize=0,  # Completely unbuffered
                     cwd=str(base_dir),
                     env=env,
-                    universal_newlines=True
+                    universal_newlines=True,
                 )
 
                 # Store process for input handling (no queue needed)
-                active_processes[session_id] = {
-                    'process': process
-                }
+                active_processes[session_id] = {"process": process}
 
                 # Thread to read stdout - stream raw output with ANSI codes
                 def read_stdout():
@@ -430,7 +1110,7 @@ def execute_command():
                             chunk = process.stdout.read(1)
                             if not chunk:
                                 break
-                            output_queue.put(('stdout', chunk))
+                            output_queue.put(("stdout", chunk))
                     except Exception as e:
                         print(f"stdout read error: {e}")
 
@@ -443,7 +1123,7 @@ def execute_command():
                             chunk = process.stderr.read(1)
                             if not chunk:
                                 break
-                            output_queue.put(('stderr', chunk))
+                            output_queue.put(("stderr", chunk))
                     except Exception as e:
                         print(f"stderr read error: {e}")
 
@@ -491,34 +1171,34 @@ def execute_command():
                 if session_id in active_processes:
                     del active_processes[session_id]
 
-        return Response(generate(), mimetype='text/event-stream')
+        return Response(generate(), mimetype="text/event-stream")
 
     except Exception as e:
         print(f"Request error: {e}")
         print(traceback.format_exc())
-        return jsonify({'error': 'Request error', 'success': False}), 500
+        return jsonify({"error": "Request error", "success": False}), 500
 
 
-@app.route('/api/input', methods=['POST'])
+@app.route("/api/input", methods=["POST"])
 def send_input():
     """Send user input to running process"""
     try:
         data = request.json
-        session_id = data.get('session_id', 'default')
-        user_input = data.get('input', '')
+        session_id = data.get("session_id", "default")
+        user_input = data.get("input", "")
 
         print(f"Received input for session {session_id}: '{user_input}'")
 
         if session_id not in active_processes:
-            return jsonify({'error': 'No active process', 'success': False}), 404
+            return jsonify({"error": "No active process", "success": False}), 404
 
         # Always add newline to send the input
-        input_with_newline = user_input + '\n'
+        input_with_newline = user_input + "\n"
 
         # Write to process stdin
         try:
             process_info = active_processes[session_id]
-            process = process_info['process']
+            process = process_info["process"]
 
             if process.poll() is None:  # Process still running
                 if process.stdin is not None:
@@ -527,36 +1207,36 @@ def send_input():
                     print(f"Sent to stdin: '{input_with_newline.strip()}'")
             else:
                 print(f"Process already terminated for session {session_id}")
-                return jsonify({'error': 'Process not running', 'success': False}), 400
+                return jsonify({"error": "Process not running", "success": False}), 400
 
         except Exception as e:
             print(f"Error writing to stdin for session {session_id}: {e}")
             print(traceback.format_exc())
-            return jsonify({'error': 'Failed to write input', 'success': False}), 500
+            return jsonify({"error": "Failed to write input", "success": False}), 500
 
-        return jsonify({'success': True})
+        return jsonify({"success": True})
 
     except Exception as e:
         print(f"Input error: {e}")
         print(traceback.format_exc())
-        return jsonify({'error': 'Input error', 'success': False}), 500
+        return jsonify({"error": "Input error", "success": False}), 500
 
 
-@app.route('/api/kill', methods=['POST'])
+@app.route("/api/kill", methods=["POST"])
 def kill_process():
     """Kill a running process"""
     try:
         data = request.json
-        session_id = data.get('session_id')
+        session_id = data.get("session_id")
 
         print(f"Kill request for session {session_id}")
 
         if session_id not in active_processes:
-            return jsonify({'error': 'No active process', 'success': False}), 404
+            return jsonify({"error": "No active process", "success": False}), 404
 
         # Get the process
         process_info = active_processes[session_id]
-        process = process_info['process']
+        process = process_info["process"]
 
         # Terminate the process
         process.terminate()
@@ -572,58 +1252,51 @@ def kill_process():
         del active_processes[session_id]
 
         print(f"Process killed for session {session_id}")
-        return jsonify({'success': True, 'message': 'Process terminated'})
+        return jsonify({"success": True, "message": "Process terminated"})
 
     except Exception as e:
         print(f"Kill error: {e}")
         print(traceback.format_exc())
-        return jsonify({'error': 'Kill error', 'success': False}), 500
+        return jsonify({"error": "Kill error", "success": False}), 500
 
 
 @app.errorhandler(404)
 def not_found(_e: Exception):
-    return jsonify({'error': 'Not found', 'success': False}), 404
+    return jsonify({"error": "Not found", "success": False}), 404
 
 
 @app.errorhandler(500)
 def internal_error(e: Exception):
     print(f"500 error: {str(e)}")
     print(traceback.format_exc())
-    return jsonify({'error': 'Internal server error', 'success': False}), 500
+    return jsonify({"error": "Internal server error", "success": False}), 500
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("=" * 50)
     print("Starting Upload Assistant Web UI...")
     print("=" * 50)
     print(f"Python version: {sys.version}")
     print(f"Working directory: {os.getcwd()}")
-    host = os.environ.get('UA_WEBUI_HOST', '127.0.0.1').strip() or '127.0.0.1'
+    host = os.environ.get("UA_WEBUI_HOST", "127.0.0.1").strip() or "127.0.0.1"
     try:
-        port = int(os.environ.get('UA_WEBUI_PORT', '5000'))
+        port = int(os.environ.get("UA_WEBUI_PORT", "5000"))
     except ValueError:
         port = 5000
 
-    scheme = 'http'
+    scheme = "http"
     print(f"Server will run at: {scheme}://{host}:{port}")
     print(f"Health check: {scheme}://{host}:{port}/api/health")
     if _webui_auth_configured():
-        if not os.environ.get('UA_WEBUI_USERNAME') or not os.environ.get('UA_WEBUI_PASSWORD'):
-            print("WARNING: UA_WEBUI_USERNAME/UA_WEBUI_PASSWORD must both be set for auth to work")
-        else:
-            print("Auth: HTTP Basic Auth enabled")
+        if not os.environ.get("UA_WEBUI_USERNAME") or not os.environ.get("UA_WEBUI_PASSWORD"):
+            print("WARNING: One of UA_WEBUI_USERNAME/UA_WEBUI_PASSWORD is missing; only the configured value will be enforced")
+        print("Auth: HTTP Basic Auth enabled")
     else:
-        print("Auth: disabled (set UA_WEBUI_USERNAME and UA_WEBUI_PASSWORD to enable)")
+        print("Auth: Session-based (login page for web, basic auth for API)")
     print("=" * 50)
 
     try:
-        app.run(
-            host=host,
-            port=port,
-            debug=False,
-            threaded=True,
-            use_reloader=False
-        )
+        serve(app, host=host, port=port)
     except Exception as e:
         print(f"FATAL: Failed to start server: {str(e)}")
         print(traceback.format_exc())

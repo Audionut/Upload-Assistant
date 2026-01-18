@@ -17,13 +17,13 @@ Docker will automatically pull the correct image for your system.
 
 ---
 
-## How to install L4G natively on Unraid
+## How to install Upload Assistant natively on Unraid
 
 **Disclaimer:** This guide comes as is, and I do not claim to be someone who knows how to fix things if you break it.
 
-As unraid is completely focused on docker, I was having issues installing L4g to work on unraid, I also didn't find using the docker image to be easy.
+As unraid is completely focused on docker, I was having issues installing Upload Assistant to work on unraid, I also didn't find using the docker image to be easy.
 
-So here are the steps you will need to take to get l4g to work directly on unraid.
+So here are the steps you will need to take to get Upload Assistant to work directly on unraid.
 
 ### Step 1: Install Nerd Tools
 
@@ -33,7 +33,7 @@ You will need the nerd tools package, this can be installed from CA app. After t
 
 ### Step 2: Clone the Repository
 
-Open a terminal on unraid, cd to the directory you want to install L4g or make a directory.
+Open a terminal on unraid, cd to the directory you want to install Upload Assistant or make a directory.
 
 ```bash
 git clone https://github.com/Audionut/Upload-Assistant.git
@@ -73,7 +73,7 @@ cp -r ffprobe /usr/bin
 
 This adds ffmpeg and ffprobe to be called anywhere.
 
-You now are done, and l4g should work natively.
+You now are done, and Upload Assistant should work natively.
 
 *Thank you to noraa for all your help, shoutout to deeznuts and ringbear*
 
@@ -81,7 +81,7 @@ You now are done, and l4g should work natively.
 
 ## Since people were asking how to do it in Unraid when still wanting CLI options, here goes:
 
-1. Create `/mnt/user/appdata/l4g-upload-assistant`
+1. Create `/mnt/user/appdata/upload-assistant`
 2. cd into folder, `nano run-cli.sh`, paste contents
 3. Adjust contents to match your setup
 4. Ctrl+X to save
@@ -92,23 +92,23 @@ You now are done, and l4g should work natively.
 
 ```bash
 #!/bin/sh
-docker rm l4g-upload-assistant-cli
+docker rm upload-assistant-cli
 
 docker run \
   -d \
-  --name='l4g-upload-assistant-cli' \
+  --name='upload-assistant-cli' \
   --network=htpc \
   # Optional: Uncomment next line for non-root execution
   # --user 99:100 \
   --entrypoint tail \
   -v '/mnt/user/share_media':'/data':'rw' \
-  -v '/mnt/user/appdata/l4g-upload-assistant/config.py':'/Upload-Assistant/data/config.py':'rw' \
+  -v '/mnt/user/appdata/upload-assistant/config.py':'/Upload-Assistant/data/config.py':'rw' \
   -v '/mnt/user/appdata/qbittorrent/qBittorrent/BT_backup/':'/BT_backup':'rw' \
-  -v '/mnt/user/appdata/l4g-upload-assistant/tmp':'/Upload-Assistant/tmp':'rw' \
+  -v '/mnt/user/appdata/upload-assistant/tmp':'/Upload-Assistant/tmp':'rw' \
   'ghcr.io/audionut/upload-assistant:latest' \
   -f /dev/null
 
-docker exec -it l4g-upload-assistant-cli /bin/sh
+docker exec -it upload-assistant-cli /bin/sh
 ## After this, you can python3 upload.py --help
 ## To stop, type exit
 ## The container will continue to run
@@ -122,7 +122,7 @@ docker exec -it l4g-upload-assistant-cli /bin/sh
 
 ---
 
-## How to use L4G-Audionut's fork with docker-compose on unraid
+## How to use Upload Assistant with docker-compose on unraid
 
 This would work on any OS where you can use docker compose but I will focus on unraid here.
 
@@ -134,15 +134,15 @@ The installation is quite simple, just pull the Dockge container from CA and log
 
 On the homepage, you'll see a massive + button to add a compose file.
 
-You want to name this container "l4g-upload-assistant-cli" (without the quotes) and remove the sample text that exists.
+You want to name this container "upload-assistant-cli" (without the quotes) and remove the sample text that exists.
 
 ### Docker Compose Configuration
 
 ```yaml
 services:
-  l4g-upload-assistant-cli:
+  upload-assistant-cli:
     image: ghcr.io/audionut/upload-assistant:latest
-    container_name: l4g-upload-assistant-cli
+    container_name: upload-assistant-cli
     restart: unless-stopped
     # Optional: Run as non-root for improved security
     # user: "99:100"  # Unraid's nobody:users - uncomment if desired
@@ -152,7 +152,7 @@ services:
     command: -f /dev/null
     volumes:
       - /mnt/user/Data/torrents/:/data/torrents/:rw #map this to qbit download location, map exactly as qbittorent template on both sides.
-      - /mnt/user/appdata/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw #map this to config.py exactly
+      - /mnt/user/appdata/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw # Optional: will be created automatically if missing
       - /mnt/user/appdata/qBittorrent/data/BT_backup/:/torrent_storage_dir:rw #map this to your qbittorrent bt_backup
       - /mnt/user/appdata/Upload-Assistant/tmp/:/Upload-Assistant/tmp:rw #map this to your /tmp folder.
 networks:
@@ -162,7 +162,7 @@ networks:
 
 ### Path Mapping Explanation
 
-Here you will need to customize your paths as to how your qbittorrent and L4G-uploadassistant is located. You also want to change networks on 2 values to how your custom network is configured. It has to be on the same network as your qbittorrent.
+Here you will need to customize your paths as to how your qbittorrent and Upload Assistant is located. You also want to change networks on 2 values to how your custom network is configured. It has to be on the same network as your qbittorrent.
 
 I will explain what each path mapping needs to be:
 
@@ -233,7 +233,7 @@ For docker-compose, add the `user` directive:
 
 ```yaml
 services:
-  l4g-upload-assistant-cli:
+  upload-assistant-cli:
     image: ghcr.io/audionut/upload-assistant:latest
     user: "99:100"
     # ... rest of config

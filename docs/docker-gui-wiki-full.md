@@ -50,11 +50,15 @@ mkdir -p /path/to/Upload-Assistant/tmp
 
 ### Step 2: Add Configuration
 
+**Option 1: Use existing config.py**
 Copy your `config.py` into the data folder:
 
 ```bash
 cp config.py /path/to/Upload-Assistant/data/
 ```
+
+**Option 2: Let WebUI create config automatically**
+If you don't have a `config.py` file yet, the WebUI will create one automatically from the example config when you first access it. The volume mount will ensure the created config persists on your host.
 
 ### Step 3: Download docker-compose.yml
 
@@ -72,7 +76,7 @@ Example docker-compose.yml:
 
 ```yaml
 services:
-  l4g-upload-assistant-cli:
+  upload-assistant-cli:
     image: ghcr.io/audionut/upload-assistant:master-webui
     container_name: UA
     restart: unless-stopped
@@ -102,10 +106,11 @@ services:
     entrypoint: /bin/bash
     command: -c "source /venv/bin/activate && python /Upload-Assistant/web_ui/server.py & tail -f /dev/null"
     volumes:
-      - /path/to/torrents/:/data/torrents/:rw  # Map to qbit download location
-      - /path/to/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw
-      - /path/to/qBittorrent/BT_backup/:/torrent_storage_dir:rw  # Map to your qbittorrent bt_backup if qbit API access does not work
-      - /path/to/Upload-Assistant/tmp/:/Upload-Assistant/tmp:rw
+      - /path/to/torrents/:/data/torrents/:rw #map this to qbit download location, map exactly as qbittorent template on both sides.
+      - /mnt/user/appdata/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw # Optional: will be created automatically if missing
+      - /mnt/user/appdata/qBittorrent/data/BT_backup/:/torrent_storage_dir:rw #map this to your qbittorrent bt_backup
+      - /mnt/user/appdata/Upload-Assistant/tmp/:/Upload-Assistant/tmp:rw #map this to your /tmp folder.
+      # - /mnt/user/appdata/Upload-Assistant/webui-auth:/root/.config/UploadAssistant:rw # Optional: persist web UI session auth config
 networks:
   "yournetwork":
     external: true
@@ -170,7 +175,7 @@ Example Unraid docker-compose.yml:
 
 ```yaml
 services:
-  l4g-upload-assistant-cli:
+  upload-assistant-cli:
     image: ghcr.io/audionut/upload-assistant:master-webui
     container_name: UA
     restart: unless-stopped
@@ -191,10 +196,10 @@ services:
       # - UA_WEBUI_USERNAME=admin
       # - UA_WEBUI_PASSWORD=change-me
     entrypoint: /bin/bash
-    command: -c "source /venv/bin/activate && python /Upload-Assistant/web_ui/server.py & tail -f /dev/null"
+    command: -c "source /venv/bin/activate && python /Upload-Assistant/web_ui/server.py"
     volumes:
       - /mnt/user/Data/torrents/:/data/torrents/:rw
-      - /mnt/user/appdata/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw
+      - /mnt/user/appdata/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw # Optional: will be created automatically if missing
       - /mnt/user/appdata/qBittorrent/data/BT_backup/:/torrent_storage_dir:rw
       - /mnt/user/appdata/Upload-Assistant/tmp/:/Upload-Assistant/tmp:rw
 networks:
@@ -241,7 +246,7 @@ sudo chmod 700 /path/to/Upload-Assistant/tmp
 
 ```yaml
 services:
-  l4g-upload-assistant-cli:
+  upload-assistant-cli:
     image: ghcr.io/audionut/upload-assistant:master-webui
     user: "1000:1000"
     # ... rest of config
@@ -260,7 +265,7 @@ chmod 700 /mnt/user/appdata/Upload-Assistant/tmp
 
 ```yaml
 services:
-  l4g-upload-assistant-cli:
+  upload-assistant-cli:
     image: ghcr.io/audionut/upload-assistant:master-webui
     user: "99:100"
     # ... rest of config

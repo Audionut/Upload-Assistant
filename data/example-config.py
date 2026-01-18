@@ -1,6 +1,9 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 config = {
     "DEFAULT": {
+
+        # MAIN SETTINGS
+
         # will print a notice if an update is available
         "update_notification": True,
         # will print the changelog if an update is available
@@ -10,8 +13,22 @@ config = {
         # visit "https://www.themoviedb.org/settings/api" copy api key and insert below
         "tmdb_api": "",
 
-        # btn api key used to get details from btn
-        "btn_api": "",
+        # Play the bell sound effect when asking for confirmation
+        "sfx_on_prompt": True,
+
+        # How many trackers need to pass successful checking to continue with the upload process
+        # Default = 1. If 1 (or more) tracker/s pass banned_group, content and dupe checking, uploading will continue
+        # If less than the number of trackers pass the checking, exit immediately.
+        "tracker_pass_checks": "1",
+
+        # Set true to suppress config warnings on startup
+        "suppress_warnings": False,
+
+        # NOT RECOMMENDED UNLESS YOU KNOW WHAT YOU ARE DOING.
+        # Will prevent meta.json file from being deleted before running
+        "keep_meta": False,
+
+        # IMAGE HOSTING SETTINGS
 
         # Order of image hosts. primary host as first with others as backup
         # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, onlyimage, dalexni, zipline, passtheimage, seedpool_cdn, sharex
@@ -38,18 +55,57 @@ config = {
         "sharex_url": "https://img.digitalcore.club/api/upload",
         "sharex_api_key": "",
 
-        # Whether to add a logo for the show/movie from TMDB to the top of the description
-        "add_logo": False,
+        # GETTING METADATA
 
-        # Logo image size
-        "logo_size": "300",
+        # btn api key used to get details from btn
+        "btn_api": "",
 
-        # logo language (ISO 639-1) - default is 'en' (English)
-        # If a logo with this language cannot be found, English will be used instead
-        "logo_language": "",
+        # set true to skip automated client torrent searching
+        # this will search qbittorrent clients for matching torrents
+        # and use found torrent id's for existing hash and site searching
+        'skip_auto_torrent': False,
 
-        # set true to add episode overview to description
-        "episode_overview": False,
+        # Set to true to always just use the largest playlist on a blu-ray, without selection prompt.
+        "use_largest_playlist": False,
+
+        # Set False to skip getting images from tracker descriptions
+        "keep_images": True,
+
+        # set true to only grab meta id's from trackers, not descriptions
+        "only_id": False,
+
+        # set true to use argument overrides from data/templates/user-args.json
+        "user_overrides": False,
+
+        # If there is no region/distributor ids specified, we can use existing torrents to check
+        # This will use data from matching torrents in qBitTorrent/RuTorrent to find matching site ids
+        # and then try and find region/distributor ids from those sites
+        # Requires "skip_auto_torrent" to be set to False
+        "ping_unit3d": False,
+
+        # If processing a dvd/bluray disc, get related information from bluray.com
+        # This will set region and distribution info
+        # Must have imdb id to work
+        "get_bluray_info": False,
+
+        # A release with 100% score will have complete matching details between bluray.com and bdinfo
+        # Each missing Audio OR Subtitle track will reduce the score by 5
+        # Partial matched audio tracks have a 2.5 score penalty
+        # If only a single bdinfo audio/subtitle track, penalties are doubled
+        # Video codec/resolution and disc size mismatches have huge penalities
+        # Only useful in unattended mode. If not unattended you will be prompted to confirm release
+        # Final score must be greater than this value to be considered a match
+        # Only works with blu-ray discs, not dvd
+        "bluray_score": 94.5,
+
+        # If there is only a single release on bluray.com, you may wish to relax the score a little
+        "bluray_single_score": 89.5,
+
+        # Set true to also try searching predb for scene release
+        # predb is not consistent, can timeout, but can find some releases not found on SRRDB
+        "check_predb": False,
+
+        # SCREENSHOT HANDLING
 
         # Number of screenshots to capture
         "screens": "4",
@@ -62,16 +118,18 @@ config = {
         # description, skip creating and uploading any further screenshots.
         "cutoff_screens": "4",
 
-        # Providing the option to change the size of the screenshot thumbnails where supported.
-        # Default is 350, ie [img=350]
-        "thumbnail_size": "350",
-
-        # Number of screenshots per row in the description. Default is single row.
-        # Only for sites that use common description for now
-        "screens_per_row": "",
-
         # Overlay Frame number/type and "Tonemapped" if applicable to screenshots
         "frame_overlay": False,
+
+        # MULTI PROCESSING
+        # The optimization task is resource intensive.
+        # The final value used will be the lowest value of either 'number of screens'
+        # or this value. Recommended value is enough to cover your normal number of screens.
+        # If you're on a shared seedbox you may want to limit this to avoid hogging resources.
+        "process_limit": "4",
+
+        # Set true to limit the amount of CPU when running ffmpeg.
+        "ffmpeg_limit": False,
 
         # Overlay text size (scales with resolution)
         "overlay_text_size": "18",
@@ -98,25 +156,32 @@ config = {
         "algorithm": "mobius",
         "desat": "10.0",
 
+        # DESCRIPTION SETTINGS
+
+        # Whether to add a logo for the show/movie from TMDB to the top of the description
+        "add_logo": False,
+
+        # Logo image size
+        "logo_size": "300",
+
+        # logo language (ISO 639-1) - default is 'en' (English)
+        # If a logo with this language cannot be found, English will be used instead
+        "logo_language": "",
+
+        # set true to add episode overview to description
+        "episode_overview": False,
+
+        # Providing the option to change the size of the screenshot thumbnails where supported.
+        # Default is 350, ie [img=350]
+        "thumbnail_size": "350",
+
+        # Number of screenshots per row in the description. Default is single row.
+        # Only for sites that use common description for now
+        "screens_per_row": "",
+
         # Add this header above screenshots in description when screens have been tonemapped (in bbcode)
         # Can be overridden in a per-tracker setting by adding this same config
         "tonemapped_header": "[center][code] Screenshots have been tonemapped for reference [/code][/center]",
-
-        # MULTI PROCESSING
-        # The optimization task is resource intensive.
-        # The final value used will be the lowest value of either 'number of screens'
-        # or this value. Recommended value is enough to cover your normal number of screens.
-        # If you're on a shared seedbox you may want to limit this to avoid hogging resources.
-        "process_limit": "4",
-
-        # When optimizing images, limit to this many threads spawned by each process above.
-        # Recommended value is the number of logical processors on your system.
-        # This is equivalent to the old shared_seedbox setting, however the existing process
-        # only used a single process. You probably need to limit this to 1 or 2 to avoid hogging resources.
-        "threads": "10",
-
-        # Set true to limit the amount of CPU when running ffmpeg.
-        "ffmpeg_limit": False,
 
         # Number of screenshots to use for each (ALL) disc/episode when uploading packs to supported sites.
         # 0 equals old behavior where only the original description and images are added.
@@ -162,11 +227,27 @@ config = {
         # Can be overridden in a per-tracker setting by adding this same config
         "custom_signature": "",
 
+        # Add bluray.com link to description
+        # Requires "get_bluray_info" to be set to True
+        "add_bluray_link": False,
+
+        # Add cover/back/slip images from bluray.com to description if available
+        # Requires "get_bluray_info" to be set to True
+        "use_bluray_images": False,
+
+        # Size of bluray.com cover images.
+        # bbcode is width limited, cover images are mostly hight dominant
+        # So you probably want a smaller size than screenshots for instance
+        "bluray_image_size": "250",
+
+        # CLIENT SETUP
+
         # Which client are you using.
         "default_torrent_client": "qbittorrent",
 
         # A list of clients to use for injection (aka actually adding the torrent for uploading)
         # eg: ["qbittorrent", "rtorrent"]
+        # Will fallback to default_torrent_client if empty
         # "injecting_client_list": [""],
 
         # A list of clients to search for torrents.
@@ -174,27 +255,7 @@ config = {
         # will fallback to default_torrent_client if empty
         # "searching_client_list": [""],
 
-        # set true to skip automated client torrent searching
-        # this will search qbittorrent clients for matching torrents
-        # and use found torrent id's for existing hash and site searching
-        'skip_auto_torrent': False,
-
-        # Play the bell sound effect when asking for confirmation
-        "sfx_on_prompt": True,
-
-        # How many trackers need to pass successful checking to continue with the upload process
-        # Default = 1. If 1 (or more) tracker/s pass banned_group, content and dupe checking, uploading will continue
-        # If less than the number of trackers pass the checking, exit immediately.
-        "tracker_pass_checks": "1",
-
-        # Set to true to always just use the largest playlist on a blu-ray, without selection prompt.
-        "use_largest_playlist": False,
-
-        # Set False to skip getting images from tracker descriptions
-        "keep_images": True,
-
-        # set true to only grab meta id's from trackers, not descriptions
-        "only_id": False,
+        # ARR* INTEGRATION SETTINGS
 
         # set true to use sonarr for tv show searching
         "use_sonarr": False,
@@ -216,6 +277,17 @@ config = {
         "radarr_url_1": "http://my-second-instance:7878",
         "radarr_api_key_1": "",
 
+        # Add a directory for Emby linking. This is the folder where the emby files will be linked to.
+        # If not set, Emby linking will not be performed. Symlinking only, linux not tested
+        # path in quotes (double quotes for windows), e.g. "C:\\Emby\\Movies"
+        # this path for movies
+        # "emby_dir": None,
+
+        # this path for TV shows
+        # "emby_tv_dir": None,
+
+        # TORRENT CREATION
+
         # set true to use mkbrr for torrent creation
         "mkbrr": True,
 
@@ -224,49 +296,16 @@ config = {
         # Conversely, you can set a lower amount such as 1 to protect system resources (default "0" (auto))
         "mkbrr_threads": "0",
 
-        # set true to use argument overrides from data/templates/user-args.json
-        "user_overrides": False,
+        # Set true to prefer torrents with piece size <= 16 MiB when searching for existing torrents in clients
+        # Does not override MTV preference for small pieces
+        "prefer_max_16_torrent": False,
 
-        # If there is no region/distributor ids specified, we can use existing torrents to check
-        # This will use data from matching torrents in qBitTorrent/RuTorrent to find matching site ids
-        # and then try and find region/distributor ids from those sites
-        # Requires "skip_auto_torrent" to be set to False
-        "ping_unit3d": False,
+        # Tracker based rehashing cooldown,set true to enable
+        # For trackers that might need specific piece size rehashing, using a value higher than 0 will add the specified cooldown
+        # in (seconds) before rehashing begins, to allow other tasks to complete quickly, before resources are consumed by rehashing
+        "rehash_cooldown": "0",
 
-        # If processing a dvd/bluray disc, get related information from bluray.com
-        # This will set region and distribution info
-        # Must have imdb id to work
-        "get_bluray_info": False,
-
-        # Add bluray.com link to description
-        # Requires "get_bluray_info" to be set to True
-        "add_bluray_link": False,
-
-        # Add cover/back/slip images from bluray.com to description if available
-        # Requires "get_bluray_info" to be set to True
-        "use_bluray_images": False,
-
-        # Size of bluray.com cover images.
-        # bbcode is width limited, cover images are mostly hight dominant
-        # So you probably want a smaller size than screenshots for instance
-        "bluray_image_size": "250",
-
-        # A release with 100% score will have complete matching details between bluray.com and bdinfo
-        # Each missing Audio OR Subtitle track will reduce the score by 5
-        # Partial matched audio tracks have a 2.5 score penalty
-        # If only a single bdinfo audio/subtitle track, penalties are doubled
-        # Video codec/resolution and disc size mismatches have huge penalities
-        # Only useful in unattended mode. If not unattended you will be prompted to confirm release
-        # Final score must be greater than this value to be considered a match
-        # Only works with blu-ray discs, not dvd
-        "bluray_score": 94.5,
-
-        # If there is only a single release on bluray.com, you may wish to relax the score a little
-        "bluray_single_score": 89.5,
-
-        # NOT RECOMMENDED UNLESS YOU KNOW WHAT YOU ARE DOING
-        # set true to not delete existing meta.json file before running
-        "keep_meta": False,
+        # POST UPLOAD
 
         # Whether or not to print how long the upload process took for each tracker
         # Useful for knowing which trackers are slowing down the overall upload process
@@ -278,39 +317,14 @@ config = {
         # Whether or not to print direct torrent links for the uploaded content
         "print_tracker_links": True,
 
-        # Add a directory for Emby linking. This is the folder where the emby files will be linked to.
-        # If not set, Emby linking will not be performed. Symlinking only, linux not tested
-        # path in quotes (double quotes for windows), e.g. "C:\\Emby\\Movies"
-        # this path for movies
-        "emby_dir": None,
-
-        # this path for TV shows
-        "emby_tv_dir": None,
-
         # Set true to search for matching requests on supported trackers
         "search_requests": False,
-
-        # Set true to also try searching predb for scene release
-        # predb is not consistent, can timeout, but can find some releases not found on SRRDB
-        "check_predb": False,
-
-        # Set true to prefer torrents with piece size <= 16 MiB when searching for existing torrents in clients
-        # Does not override MTV preference for small pieces
-        "prefer_max_16_torrent": False,
 
         # Set false to disable adding cross-seed suitable torrents found during existing search (dupe) checking
         "cross_seeding": True,
         # Set true to cross-seed check every valid tracker defined in your config
         # regardless of whether the tracker was selected for upload or not (needs cross-seeding above to be True)
         "cross_seed_check_everything": False,
-
-        # Set true to suppress config warnings on startup
-        "suppress_warnings": False,
-
-        # Tracker based rehashing cooldown,set true to enable
-        # For trackers that might need specific piece size rehashing, using a value higher than 0 will add the specified cooldown
-        # in (seconds) before rehashing begins, to allow other tasks to complete quickly, before resources are consumed by rehashing
-        "rehash_cooldown": "0",
 
     },
 

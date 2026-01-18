@@ -11,14 +11,8 @@ The Web UI is a small Flask app that:
 ### Python
 - Python 3.9+
 - The main Upload Assistant dependencies (see the repo root `requirements.txt`)
-- Web UI Python dependencies:
-  - `flask`
-  - `flask-cors`
 
 Note: `werkzeug` is installed automatically as a dependency of `flask`.
-
-### Docker image
-If you use the `-webui` Docker image / Dockerfile that installs Flask, you do **not** need to install extra Python packages manually.
 
 ## Quick start (Docker)
 
@@ -56,7 +50,6 @@ From the repo root:
 
 ```bash
 python -m pip install -r requirements.txt
-python -m pip install flask flask-cors
 python web_ui/server.py
 ```
 
@@ -96,6 +89,20 @@ Enables HTTP Basic Auth.
 
 - If either variable is set, **both** must be set or authentication will fail.
 - When configured, auth is applied to **all** routes (including `/` and static files), except `/api/health`.
+- **Docker note**: In containerized environments, use these environment variables instead of the login page to ensure auth settings persist between container restarts.
+
+### Session-Based Authentication
+When `UA_WEBUI_USERNAME` and `UA_WEBUI_PASSWORD` are not set, the Web UI uses session-based authentication with a login page.
+
+- On first access, any username/password combination is accepted and saved to a config file.
+- The config file location is platform-dependent:
+  - **Windows**: `%APPDATA%\UploadAssistant\config.toml`
+  - **Linux/macOS**: `~/.config/UploadAssistant/config.toml`
+- **Docker note**: In containers, this is typically `/root/.config/UploadAssistant/config.toml`. Since containers are ephemeral, consider using environment variables for auth instead, or mount a volume to persist the config file:
+  ```yaml
+  volumes:
+    - /host/path/to/webui-config:/root/.config/UploadAssistant
+  ```
 
 ### `UA_WEBUI_CORS_ORIGINS`
 Optional comma-separated allowlist of origins for `/api/*` routes.

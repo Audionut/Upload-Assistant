@@ -54,6 +54,18 @@ from src.uploadscreens import UploadScreensManager
 cli_ui.setup(color='always', title="Upload Assistant")
 base_dir = os.path.abspath(os.path.dirname(__file__))
 
+# Early check for -webui to create config if needed
+_config_path = os.path.join(base_dir, "data", "config.py")
+_example_config_path = os.path.join(base_dir, "data", "example-config.py")
+if "-webui" in sys.argv or "--webui" in sys.argv and not os.path.exists(_config_path) and os.path.exists(_example_config_path):
+    print("No config.py found. Creating default config from example-config.py...")
+    try:
+        shutil.copy2(_example_config_path, _config_path)
+        print("Default config created successfully!")
+    except Exception as e:
+        print(f"Failed to create default config: {e}")
+        print("Continuing without config file...")
+
 Meta: TypeAlias = dict[str, Any]
 
 from src.prep import Prep  # noqa: E402
@@ -1229,6 +1241,44 @@ async def do_the_thing(base_dir: str) -> None:
             meta['path'] = None  # Clear the dummy path after parsing
         else:
             meta, _help, _before_args = cast(tuple[Meta, Any, Any], parser.parse(list(' '.join(sys.argv[1:]).split(' ')), meta))
+
+        # Start web UI if requested (exclusive mode - doesn't continue with uploads)
+        if meta.get('webui'):
+            webui_addr = meta['webui']
+            if ':' not in webui_addr:
+                console.print("[red]Invalid web UI address format. Use HOST:PORT[/red]")
+                sys.exit(1)
+
+            try:
+                host, port_str = webui_addr.split(':', 1)
+                port = int(port_str)
+            except ValueError:
+                console.print("[red]Invalid port number in web UI address[/red]")
+                sys.exit(1)
+
+            console.print(f"[green]Starting Web UI server on {host}:{port}...[/green]")
+
+            from waitress import serve
+
+            from web_ui.server import app, set_runtime_browse_roots
+
+            # Set browse roots for web UI
+            browse_roots = os.environ.get('UA_BROWSE_ROOTS', '').strip()
+            if not browse_roots and meta.get('path'):
+                # Use the path from command line as browse roots
+                path_value = meta['path']
+                browse_roots = ' '.join(str(p) for p in cast(list[Any], path_value)) if isinstance(path_value, list) else str(path_value)
+            if not browse_roots:
+                browse_roots = '.'  # Fallback to current directory
+
+            set_runtime_browse_roots(browse_roots)
+
+            try:
+                serve(app, host=host, port=port)
+            except Exception as e:
+                console.print(f"[red]Web UI server error: {e}[/red]")
+                sys.exit(1)
+            return  # Exit early when running web UI only
 
         # Validate config structure and types (after args parsed so we have trackers list)
         from src.configvalidator import group_warnings, validate_config

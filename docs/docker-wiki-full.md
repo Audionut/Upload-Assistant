@@ -54,7 +54,7 @@ docker run --rm -it --network=host \
   -v /full/path/to/config.py:/Upload-Assistant/data/config.py \
   -v /full/path/to/downloads:/downloads \
   --entrypoint python \
-  ghcr.io/audionut/upload-assistant:master /Upload-Assistant/config-generator.py
+  ghcr.io/audionut/upload-assistant:latest /Upload-Assistant/config-generator.py
 ```
 
 ---
@@ -95,8 +95,6 @@ docker run --rm -it --network=host \
 | `master` | Latest build from master branch |
 | `<version>` | Specific release version (e.g., `v1.2.3`) |
 | `<branch>` | Specific branch build |
-| `<version>-webui` | Specific version with WebUI included |
-| `<branch>-webui` | Branch build with WebUI included |
 | `<commit-hash>` | Specific commit (first 6-7 characters) |
 
 **Examples:**
@@ -104,8 +102,8 @@ docker run --rm -it --network=host \
 # Latest stable
 ghcr.io/audionut/upload-assistant:latest
 
-# Master branch with WebUI
-ghcr.io/audionut/upload-assistant:master-webui
+# Master branch (bleeding edge)
+ghcr.io/audionut/upload-assistant:master
 
 # Specific version
 ghcr.io/audionut/upload-assistant:v2.0.0
@@ -115,9 +113,8 @@ ghcr.io/audionut/upload-assistant:v2.0.0
 
 ## Web UI (Docker / Compose)
 
-Upload Assistant has an optional Web UI (Flask) which is included in the `*-webui` images.
+Upload Assistant has an optional Web UI (Flask).
 
-- Use an image tag that includes the Web UI, e.g. `ghcr.io/audionut/upload-assistant:master-webui` or `<version>-webui`.
 - Set `ENABLE_WEB_UI=true`.
 - Set `UA_BROWSE_ROOTS` (required): a comma-separated list of directories inside the container that the UI is allowed to browse/execute within.
 
@@ -126,7 +123,7 @@ Recommended compose pattern (localhost-only on the Docker host by default):
 ```yaml
 services:
   upload-assistant-webui:
-    image: ghcr.io/audionut/upload-assistant:master-webui
+    image: ghcr.io/audionut/upload-assistant:latest
     ports:
       # Localhost-only on the Docker host (recommended default).
       # Change to "0.0.0.0:5000:5000" (or "5000:5000") to allow access from other devices.
@@ -149,10 +146,6 @@ services:
 
 ```
 
-For more details (auth, CORS, troubleshooting), see [docs/web-ui.md](web-ui.md).
-
----
-
 ## How do I update the docker image?
 
 ```bash
@@ -171,6 +164,49 @@ docker run --rm -it --network=host \
 ```
 
 Where `abc123` is the first 6 digits of the hash of the commit.
+
+---
+
+### Docker Run with Web UI
+
+**Using -webui flag**
+
+```bash
+docker run --rm -it --network=host \
+  -p 127.0.0.1:5000:5000 \
+  -v /path/to/torrents:/data:rw \
+  -v /path/to/Upload-Assistant/tmp:/Upload-Assistant/tmp:rw \
+  -v /path/to/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw \
+  ghcr.io/audionut/upload-assistant:latest path/to/browse/root -webui 0.0.0.0:5000
+```
+
+**Note:** The `-p 127.0.0.1:5000:5000` port mapping is required to access the Web UI from the host. For the `-webui` method, the port in `-p` must match the port in the command argument
+
+**Session Authentication Config File:** If using session-based authentication (no `UA_WEBUI_USERNAME`/`UA_WEBUI_PASSWORD` set), the login credentials are saved to `/root/.config/UploadAssistant/config.toml` inside the container. To persist this between container restarts, mount a volume:
+```bash
+-v /host/path/to/webui-auth:/root/.config/UploadAssistant
+```
+
+**Using ENABLE_WEB_UI=true (entrypoint method):**
+
+```bash
+docker run --rm -it --network=host \
+  -p 127.0.0.1:5000:5000 \
+  -e ENABLE_WEB_UI=true \
+  -e UA_WEBUI_HOST=0.0.0.0 \
+  -e UA_WEBUI_PORT=5000 \
+  -e UA_BROWSE_ROOTS=/data,/Upload-Assistant/tmp \
+  -e UA_WEBUI_USERNAME=admin \
+  -e UA_WEBUI_PASSWORD=change-me \
+  -v /path/to/torrents:/data:rw \
+  -v /path/to/Upload-Assistant/tmp:/Upload-Assistant/tmp:rw \
+  -v /path/to/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw \
+  ghcr.io/audionut/upload-assistant:latest path/to/content
+```
+```
+```
+
+For more details (auth, CORS, troubleshooting), see [docs/web-ui.md](web-ui.md).
 
 ---
 
