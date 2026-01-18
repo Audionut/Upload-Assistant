@@ -1,11 +1,11 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
+from typing import Any
+
 from src.console import console
-from src.languages import process_desc_language, has_english_language
+from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
-from typing import Any
 
 
 class AITHER(UNIT3D):
@@ -50,13 +50,13 @@ class AITHER(UNIT3D):
         source: str = meta.get("source", "")
 
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
         audio_languages: list[str] = meta['audio_languages']
-        if audio_languages and not await has_english_language(audio_languages):
+        if audio_languages and not await languages_manager.has_english_language(audio_languages):
             foreign_lang = audio_languages[0].upper()
             if (name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
                 aither_name = aither_name.replace(str(meta['year']), f"{meta['year']} {foreign_lang}", 1)
-            elif not meta.get('is_disc') == "BDMV":
+            elif meta.get('is_disc') != "BDMV":
                 aither_name = aither_name.replace(meta['resolution'], f"{foreign_lang} {meta['resolution']}", 1)
 
         if name_type == "DVDRIP":

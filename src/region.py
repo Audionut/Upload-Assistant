@@ -1,9 +1,18 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
-from guessit import guessit
+from typing import Any, Callable, Optional, Union, cast
+
+import guessit
+
+guessit_module: Any = cast(Any, guessit)
+GuessitFn = Callable[[str, Optional[dict[str, Any]]], dict[str, Any]]
 
 
-async def get_region(bdinfo, region=None):
+def guessit_fn(value: str, options: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    return cast(dict[str, Any], guessit_module.guessit(value, options))
+
+
+async def get_region(bdinfo: dict[str, Any], region: Optional[str] = None) -> str:
     label = bdinfo.get('label', bdinfo.get('title', bdinfo.get('path', ''))).replace('.', ' ')
     if region is not None:
         region = region.upper()
@@ -54,7 +63,7 @@ async def get_region(bdinfo, region=None):
     return region
 
 
-async def get_distributor(distributor_in):
+async def get_distributor(distributor_in: Optional[str]) -> str:
     distributor_list = [
         '01 DISTRIBUTION', '100 DESTINATIONS TRAVEL FILM', '101 FILMS', '1FILMS', '2 ENTERTAIN VIDEO', '20TH CENTURY FOX', '2L', '3D CONTENT HUB', '3D MEDIA', '3L FILM', '4DIGITAL', '4DVD', '4K ULTRA HD MOVIES', '4K UHD', '8-FILMS', '84 ENTERTAINMENT', '88 FILMS', '@ANIME', 'ANIME', 'A CONTRACORRIENTE', 'A CONTRACORRIENTE FILMS', 'A&E HOME VIDEO', 'A&E', 'A&M RECORDS', 'A+E NETWORKS', 'A+R', 'A-FILM', 'AAA', 'AB VIDÉO', 'AB VIDEO', 'ABC - (AUSTRALIAN BROADCASTING CORPORATION)', 'ABC', 'ABKCO', 'ABSOLUT MEDIEN', 'ABSOLUTE', 'ACCENT FILM ENTERTAINMENT', 'ACCENTUS', 'ACORN MEDIA', 'AD VITAM', 'ADA', 'ADITYA VIDEOS', 'ADSO FILMS', 'AFM RECORDS', 'AGFA', 'AIX RECORDS',
         'ALAMODE FILM', 'ALBA RECORDS', 'ALBANY RECORDS', 'ALBATROS', 'ALCHEMY', 'ALIVE', 'ALL ANIME', 'ALL INTERACTIVE ENTERTAINMENT', 'ALLEGRO', 'ALLIANCE', 'ALPHA MUSIC', 'ALTERDYSTRYBUCJA', 'ALTERED INNOCENCE', 'ALTITUDE FILM DISTRIBUTION', 'ALUCARD RECORDS', 'AMAZING D.C.', 'AMAZING DC', 'AMMO CONTENT', 'AMUSE SOFT ENTERTAINMENT', 'ANCONNECT', 'ANEC', 'ANIMATSU', 'ANIME HOUSE', 'ANIME LTD', 'ANIME WORKS', 'ANIMEIGO', 'ANIPLEX', 'ANOLIS ENTERTAINMENT', 'ANOTHER WORLD ENTERTAINMENT', 'AP INTERNATIONAL', 'APPLE', 'ARA MEDIA', 'ARBELOS', 'ARC ENTERTAINMENT', 'ARP SÉLECTION', 'ARP SELECTION', 'ARROW', 'ART SERVICE', 'ART VISION', 'ARTE ÉDITIONS', 'ARTE EDITIONS', 'ARTE VIDÉO',
@@ -72,14 +81,14 @@ async def get_distributor(distributor_in):
         'MASTERS OF CINEMA', 'MOC'
     ]
     distributor_out = ""
-    if distributor_in not in [None, "None", ""]:
+    if distributor_in is not None and distributor_in not in ["None", ""]:
         for each in distributor_list:
             if distributor_in.upper() == each:
                 distributor_out = each
     return distributor_out
 
 
-async def get_service(video=None, tag=None, audio=None, guess_title=None, get_services_only=False):
+async def get_service(video: Optional[str] = None, tag: Optional[str] = None, audio: Optional[str] = None, guess_title: Optional[str] = None, get_services_only: bool = False) -> Union[dict[str, str], tuple[str, str]]:
     services = {
         '9NOW': '9NOW', '9Now': '9NOW', 'ADN': 'ADN', 'Animation Digital Network': 'ADN', 'AE': 'AE', 'A&E': 'AE', 'AJAZ': 'AJAZ', 'Al Jazeera English': 'AJAZ',
         'ALL4': 'ALL4', 'Channel 4': 'ALL4', 'AMBC': 'AMBC', 'ABC': 'AMBC', 'AMC': 'AMC', 'AMZN': 'AMZN',
@@ -123,7 +132,7 @@ async def get_service(video=None, tag=None, audio=None, guess_title=None, get_se
         'Spike': 'SPIK', 'Spike TV': 'SPKE', 'SPRT': 'SPRT', 'Sprout': 'SPRT', 'STAN': 'STAN', 'Stan': 'STAN', 'STARZ': 'STARZ',
         'STRP': 'STRP', 'Star+': 'STRP', 'STZ': 'STZ', 'Starz': 'STZ', 'SVT': 'SVT', 'Sveriges Television': 'SVT', 'SWER': 'SWER',
         'SwearNet': 'SWER', 'SYFY': 'SYFY', 'Syfy': 'SYFY', 'TBS': 'TBS', 'TEN': 'TEN', 'TIMV': 'TIMV', 'TIMvision': 'TIMV',
-        'TFOU': 'TFOU', 'TFou': 'TFOU', 'TIMV': 'TIMV', 'TLC': 'TLC', 'TOU': 'TOU', 'TRVL': 'TRVL', 'TUBI': 'TUBI', 'TubiTV': 'TUBI',
+        'TFOU': 'TFOU', 'TFou': 'TFOU', 'TLC': 'TLC', 'TOU': 'TOU', 'TRVL': 'TRVL', 'TUBI': 'TUBI', 'TubiTV': 'TUBI',
         'TV3': 'TV3', 'TV3 Ireland': 'TV3', 'TV4': 'TV4', 'TV4 Sweeden': 'TV4', 'TVING': 'TVING', 'TVL': 'TVL', 'TV Land': 'TVL',
         'TVNZ': 'TVNZ', 'UFC': 'UFC', 'UKTV': 'UKTV', 'UNIV': 'UNIV', 'Univision': 'UNIV', 'USAN': 'USAN', 'USA Network': 'USAN',
         'VH1': 'VH1', 'VIAP': 'VIAP', 'VICE': 'VICE', 'Viceland': 'VICE', 'Viki': 'VIKI', 'VIMEO': 'VIMEO', 'Vivamax': 'VMAX', 'VMAX': 'VMAX', 'Vivaone': 'VONE', 'VONE': 'VONE', 'VLCT': 'VLCT',
@@ -134,17 +143,22 @@ async def get_service(video=None, tag=None, audio=None, guess_title=None, get_se
 
     if get_services_only:
         return services
-    service = guessit(video).get('streaming_service', "")
 
-    video_name = re.sub(r"[.()]", " ", video.replace(tag, '').replace(guess_title, ''))
-    if "DTS-HD MA" in audio:
+    if video is None:
+        return "", ""
+
+    guess_data = guessit_fn(video)
+    service: str = str(guess_data.get('streaming_service', ""))
+
+    video_name = re.sub(r"[.()]", " ", video.replace(tag or '', '').replace(guess_title or '', ''))
+    if audio and "DTS-HD MA" in audio:
         video_name = video_name.replace("DTS-HD.MA.", "").replace("DTS-HD MA ", "")
+    title_guess = guessit_fn(video, {"excludes": ["country", "language"]})
+    title_guess_title = str(title_guess.get('title', ''))
     for key, value in services.items():
-        if (' ' + key + ' ') in video_name and key not in guessit(video, {"excludes": ["country", "language"]}).get('title', ''):
+        if (' ' + key + ' ') in video_name and key not in title_guess_title or key == service:
             service = value
-        elif key == service:
-            service = value
-    service_longname = service
+    service_longname: str = service
     for key, value in services.items():
         if value == service and len(key) > len(service_longname):
             service_longname = key

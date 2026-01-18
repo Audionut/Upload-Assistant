@@ -1,21 +1,24 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiofiles
 import os
 import re
+from typing import Any, cast
+
+import aiofiles
+
 from src.console import console
 from src.get_desc import DescriptionBuilder
-from src.languages import process_desc_language
-from src.rehostimages import check_hosts
+from src.languages import languages_manager
+from src.rehostimages import RehostImagesManager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
 
 class HUNO(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]) -> None:
         super().__init__(config, tracker_name='HUNO')
         self.config = config
         self.common = COMMON(config)
+        self.rehost_images_manager = RehostImagesManager(config)
         self.tracker = 'HUNO'
         self.base_url = 'https://hawke.uno'
         self.id_url = f'{self.base_url}/api/torrents/'
@@ -32,7 +35,7 @@ class HUNO(UNIT3D):
         self.approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'pixhost', 'bam']
         pass
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         should_continue = True
 
         if await self.get_audio(meta) == "SKIPPED":
@@ -84,10 +87,10 @@ class HUNO(UNIT3D):
 
         return should_continue
 
-    async def get_stream(self, meta):
-        return {'stream': await self.is_plex_friendly(meta)}
+    async def get_stream(self, meta: dict[str, Any]) -> dict[str, str]:
+        return {'stream': str(await self.is_plex_friendly(meta))}
 
-    async def check_image_hosts(self, meta):
+    async def check_image_hosts(self, meta: dict[str, Any]) -> None:
         url_host_mapping = {
             "ibb.co": "imgbb",
             "ptpimg.me": "ptpimg",
@@ -95,72 +98,82 @@ class HUNO(UNIT3D):
             "imgbox.com": "imgbox",
             "imagebam.com": "bam",
         }
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=self.approved_image_hosts)
+        await self.rehost_images_manager.check_hosts(
+            meta,
+            self.tracker,
+            url_host_mapping=url_host_mapping,
+            img_host_index=1,
+            approved_image_hosts=self.approved_image_hosts,
+        )
 
-    async def get_description(self, meta):
-        if 'HUNO_images_key' in meta:
-            image_list = meta['HUNO_images_key']
-        else:
-            image_list = meta['image_list']
+    async def get_description(self, meta: dict[str, Any]) -> dict[str, str]:
+        image_list = meta['HUNO_images_key'] if 'HUNO_images_key' in meta else meta['image_list']
 
         return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, image_list=image_list, approved_image_hosts=self.approved_image_hosts)}
 
-    async def get_mediainfo(self, meta):
+    async def get_mediainfo(self, meta: dict[str, Any]) -> dict[str, str]:
         if meta['bdinfo'] is not None:
             mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'])
         else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8') as f:
                 mediainfo = await f.read()
 
         return {'mediainfo': mediainfo}
 
-    async def get_featured(self, meta):
+    async def get_featured(self, _meta: dict[str, Any]) -> dict[str, Any]:
         return {}
 
-    async def get_free(self, meta):
+    async def get_free(self, meta: dict[str, Any]) -> dict[str, str]:
         if meta.get('freeleech', 0) != 0:
             free = meta.get('freeleech', 0)
-            return {'free': free}
+            return {'free': str(free)}
         return {}
 
-    async def get_doubleup(self, meta):
+    async def get_doubleup(self, _meta: dict[str, Any]) -> dict[str, Any]:
         return {}
 
-    async def get_sticky(self, meta):
+    async def get_sticky(self, _meta: dict[str, Any]) -> dict[str, Any]:
         return {}
 
-    async def get_season_number(self, meta):
+    async def get_season_number(self, meta: dict[str, Any]) -> dict[str, str]:
         if meta.get('category') == 'TV' and meta.get('tv_pack') == 1:
-            return {'season_pack': 1}
+            return {'season_pack': '1'}
         return {}
 
-    async def get_episode_number(self, meta):
+    async def get_episode_number(self, meta: dict[str, Any]) -> dict[str, Any]:
+        _ = meta
         return {}
 
-    async def get_personal_release(self, meta):
+    async def get_personal_release(self, meta: dict[str, Any]) -> dict[str, Any]:
+        _ = meta
         return {}
 
-    async def get_internal(self, meta):
+    async def get_internal(self, meta: dict[str, Any]) -> dict[str, str]:
         internal = 0
-        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                internal = 1
+        if (
+            self.config['TRACKERS'][self.tracker].get('internal', False) is True
+            and meta['tag'] != ''
+            and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', []))
+        ):
+            internal = 1
 
-        return {'internal': internal}
+        return {'internal': str(internal)}
 
-    async def get_additional_files(self, meta):
+    async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, Any]:
+        _ = meta
         return {}
 
-    async def get_audio(self, meta):
-        channels = meta.get('channels', "")
-        codec = meta.get('audio', "").replace("DD+", "DDP").replace("EX", "").replace("Dual-Audio", "").replace("Dubbed", "").replace(channels, "")
+    async def get_audio(self, meta: dict[str, Any]) -> str:
+        channels = str(meta.get('channels', "") or "")
+        codec = str(meta.get('audio', "") or "").replace("DD+", "DDP").replace("EX", "").replace("Dual-Audio", "").replace("Dubbed", "").replace(channels, "")
         languages_result = "SKIPPED"
 
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
         audio_languages = meta.get('audio_languages')
-        if audio_languages:
-            normalized_languages = set(audio_languages)
+        if isinstance(audio_languages, list):
+            audio_languages_list = cast(list[Any], audio_languages)
+            normalized_languages = {str(lang) for lang in audio_languages_list}
             if "zxx" in normalized_languages:
                 languages_result = "NONE"
             elif len(normalized_languages) > 2:
@@ -168,26 +181,24 @@ class HUNO(UNIT3D):
             elif len(normalized_languages) > 1:
                 languages_result = "Dual"
             else:
-                languages_result = next(iter(normalized_languages), "SKIPPED")
+                languages_result = str(next(iter(normalized_languages), "SKIPPED"))
 
             if not languages_result:
                 languages_result = "SKIPPED"
 
         return f'{codec} {channels} {languages_result}'
 
-    def get_basename(self, meta):
+    def get_basename(self, meta: dict[str, Any]) -> str:
         path = next(iter(meta['filelist']), meta['path'])
-        return os.path.basename(path)
+        return os.path.basename(str(path))
 
-    async def get_name(self, meta):
-        distributor_name = meta.get('distributor', "")
+    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
+        distributor_name = str(meta.get('distributor') or "")
         region = meta.get('region', '')
 
+        name = ""
         basename = self.get_basename(meta)
-        if meta.get('hardcoded_subs'):
-            hc = "Hardsubbed"
-        else:
-            hc = ""
+        hc = "Hardsubbed" if meta.get('hardcoded_subs') else ""
         type = meta.get('type', "").upper()
         title = meta.get('title', "")
         year = meta.get('year', "")
@@ -221,16 +232,10 @@ class HUNO(UNIT3D):
         hdr = meta.get('hdr', "")
         if not hdr.strip():
             hdr = "SDR"
-        if distributor_name and distributor_name.upper() in ['CRITERION', 'BFI', 'SHOUT FACTORY']:
-            distributor = distributor_name.title()
-        else:
-            if meta.get('distributor', "") and meta.get('distributor').upper() in ['CRITERION', 'BFI', 'SHOUT FACTORY']:
-                distributor = meta.get('distributor').title()
-            else:
-                distributor = ""
+        distributor = distributor_name.title() if distributor_name and distributor_name.upper() in ['CRITERION', 'BFI', 'SHOUT FACTORY'] else ""
         video_codec = meta.get('video_codec', "")
         video_encode = meta.get('video_encode', "").replace(".", "")
-        if 'x265' in basename and not meta.get('type') == "WEBDL":
+        if 'x265' in basename and meta.get('type') != "WEBDL":
             video_encode = video_encode.replace('H', 'x')
         dvd_size = meta.get('dvd_size', "")
         edition = meta.get('edition', "")
@@ -282,7 +287,8 @@ class HUNO(UNIT3D):
         name = re.sub(r'\s{2,}', ' ', name)
         return {'name': name}
 
-    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
+    async def get_type_id(self, meta: dict[str, Any], type: Any = None, reverse: bool = False, mapping_only: bool = False) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         type_value = (meta.get('type') or '').lower()
         video_encode = (meta.get('video_encode') or '').lower()
 
@@ -299,7 +305,8 @@ class HUNO(UNIT3D):
 
         return {'type_id': type_id}
 
-    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
+    async def get_resolution_id(self, meta: dict[str, Any], resolution: Any = None, reverse: bool = False, mapping_only: bool = False) -> dict[str, str]:
+        _ = (resolution, reverse, mapping_only)
         resolution_id = {
             'Other': '10',
             '4320p': '1',
@@ -317,7 +324,7 @@ class HUNO(UNIT3D):
         }.get(meta['resolution'], '10')
         return {'resolution_id': resolution_id}
 
-    async def is_plex_friendly(self, meta):
+    async def is_plex_friendly(self, meta: dict[str, Any]) -> int:
         lossy_audio_codecs = ["AAC", "DD", "DD+", "OPUS"]
 
         if any(codec in meta["audio"] for codec in lossy_audio_codecs):

@@ -1,15 +1,15 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
-import aiofiles
 import asyncio
 import glob
-import httpx
 import json
 import os
 import platform
 import re
-from typing import Any, Union, Optional
+from typing import Any, Optional, Union
+
+import aiofiles
+import httpx
 from typing_extensions import TypeAlias
 
 from src.console import console
@@ -40,11 +40,11 @@ class UNIT3D:
         self.upload_url = ""
         pass
 
-    async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
+    async def get_additional_checks(self, _meta: dict[str, Any]) -> bool:
         should_continue = True
         return should_continue
 
-    async def search_existing(self, meta: dict[str, Any], _) -> list[dict[str, Any]]:
+    async def search_existing(self, meta: dict[str, Any], _: Any) -> list[dict[str, Any]]:
         dupes: list[dict[str, Any]] = []
 
         # Ensure tracker_status keys exist before any potential writes
@@ -81,7 +81,7 @@ class UNIT3D:
         resolution_id = str(resolutions["resolution_id"])
         if resolution_id in ["3", "4"]:
             # Convert params to list of tuples to support duplicate keys
-            params_list = [(k, v) for k, v in params_dict.items()]
+            params_list = list(params_dict.items())
             params_list.append(("resolutions[]", "3"))
             params_list.append(("resolutions[]", "4"))
         else:
@@ -106,10 +106,7 @@ class UNIT3D:
                 params_dict["name"] = params_dict["name"] + season_value
 
         request_params: ParamsList
-        if params_list is not None:
-            request_params = params_list
-        else:
-            request_params = [(k, v) for k, v in params_dict.items()]
+        request_params = params_list if params_list is not None else list(params_dict.items())
 
         try:
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
@@ -198,19 +195,19 @@ class UNIT3D:
         }
 
     async def get_mediainfo(self, meta: dict[str, Any]) -> dict[str, str]:
-        if meta.get("bdinfo", None) is not None:
+        if meta.get("bdinfo") is not None:
             mediainfo = ""
         else:
             async with aiofiles.open(
-                f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", "r", encoding="utf-8"
+                f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding="utf-8"
             ) as f:
                 mediainfo = await f.read()
         return {"mediainfo": mediainfo}
 
     async def get_bdinfo(self, meta: dict[str, Any]) -> dict[str, str]:
-        if meta.get("bdinfo", None) is not None:
+        if meta.get("bdinfo") is not None:
             async with aiofiles.open(
-                f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", "r", encoding="utf-8"
+                f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding="utf-8"
             ) as f:
                 bdinfo = await f.read()
         else:
@@ -286,13 +283,10 @@ class UNIT3D:
             return {"resolution_id": resolved_id}
 
     async def get_anonymous(self, meta: dict[str, Any]) -> dict[str, str]:
-        if meta["anon"] == 0 and not self.tracker_config.get("anon", False):
-            anonymous = "0"
-        else:
-            anonymous = "1"
+        anonymous = "0" if meta["anon"] == 0 and not self.tracker_config.get("anon", False) else "1"
         return {"anonymous": anonymous}
 
-    async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, str]:
+    async def get_additional_data(self, _meta: dict[str, Any]) -> dict[str, str]:
         # Used to add additional data if needed
         """
         data = {
@@ -341,7 +335,7 @@ class UNIT3D:
     async def get_mal(self, meta: dict[str, Any]) -> dict[str, str]:
         return {"mal": f"{meta['mal_id']}"}
 
-    async def get_igdb(self, meta: dict[str, Any]) -> dict[str, str]:
+    async def get_igdb(self, _meta: dict[str, Any]) -> dict[str, str]:
         return {"igdb": "0"}
 
     async def get_stream(self, meta: dict[str, Any]) -> dict[str, str]:
@@ -359,11 +353,10 @@ class UNIT3D:
 
     async def get_internal(self, meta: dict[str, Any]) -> dict[str, str]:
         internal = "0"
-        if self.tracker_config.get("internal", False) is True:
-            if meta["tag"] != "" and (
-                meta["tag"][1:] in self.tracker_config.get("internal_groups", [])
-            ):
-                internal = "1"
+        if self.tracker_config.get("internal", False) is True and meta["tag"] != "" and (
+            meta["tag"][1:] in self.tracker_config.get("internal_groups", [])
+        ):
+            internal = "1"
 
         return {"internal": internal}
 
@@ -381,7 +374,7 @@ class UNIT3D:
 
         return data
 
-    async def get_featured(self, meta: dict[str, Any]) -> dict[str, str]:
+    async def get_featured(self, _meta: dict[str, Any]) -> dict[str, str]:
         return {"featured": "0"}
 
     async def get_free(self, meta: dict[str, Any]) -> dict[str, str]:
@@ -391,10 +384,10 @@ class UNIT3D:
 
         return {"free": free}
 
-    async def get_doubleup(self, meta: dict[str, Any]) -> dict[str, str]:
+    async def get_doubleup(self, _meta: dict[str, Any]) -> dict[str, str]:
         return {"doubleup": "0"}
 
-    async def get_sticky(self, meta: dict[str, Any]) -> dict[str, str]:
+    async def get_sticky(self, _meta: dict[str, Any]) -> dict[str, str]:
         return {"sticky": "0"}
 
     async def get_data(self, meta: dict[str, Any]) -> dict[str, str]:
@@ -435,9 +428,7 @@ class UNIT3D:
         # Handle exclusive flag centrally for all UNIT3D trackers
         # Priority: meta['exclusive'] > tracker config > default (not set)
         exclusive_flag = None
-        if meta.get("exclusive", False):
-            exclusive_flag = "1"
-        elif self.tracker_config.get("exclusive", False):
+        if meta.get("exclusive", False) or self.tracker_config.get("exclusive", False):
             exclusive_flag = "1"
         if exclusive_flag:
             merged["exclusive"] = exclusive_flag
@@ -450,10 +441,9 @@ class UNIT3D:
         uuid = meta["uuid"]
         specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
         nfo_files = glob.glob(specified_dir_path)
-        if not nfo_files and meta.get('keep_nfo', False):
-            if meta.get('keep_folder', False) or meta.get('isdir', False):
-                search_dir = os.path.dirname(meta["path"])
-                nfo_files = glob.glob(os.path.join(search_dir, "*.nfo"))
+        if not nfo_files and meta.get('keep_nfo', False) and (meta.get('keep_folder', False) or meta.get('isdir', False)):
+            search_dir = os.path.dirname(meta["path"])
+            nfo_files = glob.glob(os.path.join(search_dir, "*.nfo"))
 
         if nfo_files:
             async with aiofiles.open(nfo_files[0], "rb") as f:
@@ -462,7 +452,7 @@ class UNIT3D:
 
         return files
 
-    async def upload(self, meta: dict[str, Any], _):
+    async def upload(self, meta: dict[str, Any], _: Any) -> bool:
         data = await self.get_data(meta)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
         async with aiofiles.open(torrent_file_path, "rb") as f:
@@ -482,7 +472,7 @@ class UNIT3D:
             timeout = 40.0
 
             for attempt in range(max_retries):
-                try:
+                try:  # noqa: PERF203
                     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
                         response = await client.post(
                             url=self.upload_url, files=files, data=data, headers=headers
@@ -509,7 +499,7 @@ class UNIT3D:
                         )
                         return True  # Success
 
-                except httpx.HTTPStatusError as e:
+                except httpx.HTTPStatusError as e:  # noqa: PERF203
                     if e.response.status_code in [403, 302]:
                         # Don't retry auth/permission errors
                         if e.response.status_code == 403:
@@ -588,7 +578,9 @@ class UNIT3D:
             )
             return True  # Debug mode - simulated success
 
-    async def get_torrent_id(self, response_data: dict[str, Any]):
+        return False
+
+    async def get_torrent_id(self, response_data: dict[str, Any]) -> str:
         """Matches /12345.abcde and returns 12345"""
         torrent_id = ""
         try:

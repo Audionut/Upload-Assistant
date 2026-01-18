@@ -1,19 +1,20 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
-from typing import Any, Optional
-import aiofiles
 import asyncio
 import base64
 import datetime
-import httpx
 import re
+from typing import Any, Optional, cast
+
+import aiofiles
+import httpx
+
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.trackers.COMMON import COMMON
 
 
-class RTF():
+class RTF:
     """
     Edit for Tracker:
         Edit BASE.torrent with announce and source
@@ -38,7 +39,7 @@ class RTF():
         self.banned_groups: list[str] = []
         pass
 
-    async def upload(self, meta: dict[str, Any], disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
         """Upload a torrent to RetroFlix tracker.
 
         Args:
@@ -53,18 +54,19 @@ class RTF():
         await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, signature=self.forum_link)
         if meta['bdinfo'] is not None:
             mi_dump = None
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8') as f:
                 bd_dump = await f.read()
         else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as f:
                 mi_dump = await f.read()
             bd_dump = None
 
-        screenshots = []
-        for image in meta['image_list']:
-            if image['raw_url'] is not None:
-                screenshots.append(image['raw_url'])
+        screenshots = [
+            image['raw_url'] for image in meta['image_list'] if image['raw_url'] is not None
+        ]
 
+        imdb_url_value = meta.get('imdb_info', {}).get('imdb_url', '')
+        imdb_url = str(imdb_url_value) if imdb_url_value else ''
         json_data = {
             'name': meta['name'],
             # description does not work for some reason
@@ -73,7 +75,7 @@ class RTF():
             # editing mediainfo so that instead of 1 080p its 1,080p as site mediainfo parser wont work other wise.
             'mediaInfo': re.sub(r"(\d+)\s+(\d+)", r"\1,\2", mi_dump or "") if bd_dump is None else f"{bd_dump}",
             "nfo": "",
-            "url": str(meta.get('imdb_info', {}).get('imdb_url', '') + '/'),
+            "url": f"{imdb_url}/" if imdb_url else "",
             # auto pulled from IMDB
             "descr": "",
             "poster": meta["poster"] if meta["poster"] is not None else "",
@@ -178,13 +180,13 @@ class RTF():
             console.print("[cyan]RTF Request Data:")
             debug_data = json_data.copy()
             if 'file' in debug_data and debug_data['file']:
-                debug_data['file'] = debug_data['file'][:10] + '...'
+                debug_data['file'] = f"{str(debug_data['file'])[:10]}..."
             console.print(debug_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
             await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True  # Debug mode - simulated success
 
-    async def search_existing(self, meta: dict[str, Any], disctype: str) -> list[dict[str, Any]]:
+    async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[dict[str, Any]]:
         """Search for existing torrents on RetroFlix tracker.
 
         Validates content eligibility (age requirements, no adult content) and searches
@@ -205,35 +207,38 @@ class RTF():
             meta['skipping'] = "RTF"
             return []
 
-        year = meta.get('year')
+        year_value = meta.get('year')
+        year = int(year_value) if year_value and str(year_value).isdigit() else None
         # Collect all possible years from different sources
-        years = []
+        years: list[int] = []
 
         # IMDB end year
         imdb_end_year = meta.get('imdb_info', {}).get('end_year')
-        if imdb_end_year:
+        if imdb_end_year and str(imdb_end_year).isdigit():
             years.append(int(imdb_end_year))
 
         # TVDB episode year
         tvdb_episode_year = meta.get('tvdb_episode_year')
-        if tvdb_episode_year:
+        if tvdb_episode_year and str(tvdb_episode_year).isdigit():
             years.append(int(tvdb_episode_year))
 
         # Get most recent aired date from all TVDB episodes
         most_recent_aired_date = None
-        tvdb_episodes = meta.get('tvdb_episode_data', {}).get('episodes', [])
+        tvdb_episodes_value = meta.get('tvdb_episode_data', {}).get('episodes', [])
+        tvdb_episodes = cast(list[dict[str, Any]], tvdb_episodes_value) if isinstance(tvdb_episodes_value, list) else []
         if tvdb_episodes:
             for episode in tvdb_episodes:
-                aired_date = episode.get('aired', '')
+                aired_date = str(episode.get('aired', ''))
                 if aired_date and '-' in aired_date:
                     try:
-                        episode_date = datetime.datetime.strptime(aired_date, '%Y-%m-%d').date()
+                        episode_date = datetime.datetime.strptime(aired_date, '%Y-%m-%d').replace(tzinfo=datetime.timezone.utc).date()
                         if most_recent_aired_date is None or episode_date > most_recent_aired_date:
                             most_recent_aired_date = episode_date
                     except (ValueError, AttributeError):
                         try:
-                            episode_year = int(aired_date.split('-')[0])
-                            years.append(episode_year)
+                            episode_year_value = aired_date.split('-')[0]
+                            if episode_year_value.isdigit():
+                                years.append(int(episode_year_value))
                         except (ValueError, AttributeError):
                             continue
 
@@ -251,10 +256,10 @@ class RTF():
         # Check if content is at least 10 years old using actual date comparison
         if meta.get('category') == "MOVIE" and meta.get('release_date'):
             try:
-                release_date = datetime.datetime.strptime(meta['release_date'], '%Y-%m-%d').date()
+                release_date = datetime.datetime.strptime(meta['release_date'], '%Y-%m-%d').replace(tzinfo=datetime.timezone.utc).date()
                 year = release_date.year
                 # Calculate date exactly 10 years ago from today
-                ten_years_ago = datetime.date.today() - datetime.timedelta(days=365*10 + 3)  # add leeway
+                ten_years_ago = datetime.datetime.now(datetime.timezone.utc).date() - datetime.timedelta(days=365*10 + 3)  # add leeway
                 if release_date > ten_years_ago:
                     if not meta.get('unattended', False):
                         console.print("[red]Content must be older than 10 Years to upload at RTF")
@@ -265,7 +270,7 @@ class RTF():
                 release_year = meta['release_date'].split('-')[0]
                 if release_year.isdigit():
                     year = int(release_year)
-                    if datetime.date.today().year - year <= 9:
+                    if datetime.datetime.now(datetime.timezone.utc).date().year - year <= 9:
                         if not meta.get('unattended', False):
                             console.print("[red]Content must be older than 10 Years to upload at RTF")
                         meta['skipping'] = "RTF"
@@ -273,7 +278,7 @@ class RTF():
 
         elif meta.get('category') == "TV" and most_recent_aired_date:
             # For TV shows, use the most recent aired date for comparison if available
-            ten_years_ago = datetime.date.today() - datetime.timedelta(days=365*10 + 3)  # add leeway
+            ten_years_ago = datetime.datetime.now(datetime.timezone.utc).date() - datetime.timedelta(days=365*10 + 3)  # add leeway
             if most_recent_aired_date > ten_years_ago:
                 if not meta.get('unattended', False):
                     console.print("[red]Content must be older than 10 Years to upload at RTF")
@@ -281,28 +286,30 @@ class RTF():
                 return []
 
         else:
-            if year is not None and datetime.date.today().year - year <= 9:
+            if year is not None and datetime.datetime.now(datetime.timezone.utc).date().year - int(year) <= 9:
                 if not meta.get('unattended', False):
                     console.print("[red]Content must be older than 10 Years to upload at RTF")
                 meta['skipping'] = "RTF"
                 return []
 
-        dupes = []
+        dupes: list[dict[str, Any]] = []
         headers = {
             'accept': 'application/json',
             'Authorization': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
         }
         params = {'includingDead': '1'}
 
-        if meta['imdb_id'] != 0:
-            params['imdbId'] = str(meta['imdb_id']) if str(meta['imdb_id']).startswith("tt") else "tt" + str(meta['imdb_id'])
+        imdb_id_value = int(meta.get('imdb_id', 0) or 0)
+        if imdb_id_value != 0:
+            imdb_id_str = str(meta.get('imdb_id'))
+            params['imdbId'] = imdb_id_str if imdb_id_str.startswith("tt") else "tt" + imdb_id_str
         else:
             params['search'] = meta['title'].replace(':', '').replace("'", '').replace(",", '')
 
-        def build_download_url(entry):
+        def build_download_url(entry: dict[str, Any]) -> str:
             torrent_id = entry.get('id')
-            torrent_url = entry.get('url', '')
-            if not torrent_id and isinstance(torrent_url, str):
+            torrent_url = str(entry.get('url', ''))
+            if not torrent_id:
                 match = re.search(r"/browse/t/(\d+)", torrent_url)
                 if match:
                     torrent_id = match.group(1)
@@ -316,14 +323,14 @@ class RTF():
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(self.search_url, params=params, headers=headers)
                 if response.status_code == 200:
-                    data = response.json()
+                    data = cast(list[dict[str, Any]], response.json())
                     for each in data:
                         download_url = build_download_url(each)
                         result = {
-                            'name': each['name'],
-                            'size': each['size'],
-                            'files': each['name'],
-                            'link': each['url'],
+                            'name': str(each.get('name', '')),
+                            'size': each.get('size', 0),
+                            'files': str(each.get('name', '')),
+                            'link': str(each.get('url', '')),
                             'download': download_url,
                         }
                         dupes.append(result)
@@ -415,8 +422,8 @@ class RTF():
                     self.config['TRACKERS'][self.tracker]['api_key'] = token
 
                     # Now we update the config file on disk using utf-8 encoding
-                    with open(config_path, 'r', encoding='utf-8') as file:
-                        config_data = file.read()
+                    async with aiofiles.open(config_path, encoding='utf-8') as file:
+                        config_data = await file.read()
 
                     # Find the RTF tracker and replace the api_key value
                     new_config_data = re.sub(
@@ -426,8 +433,8 @@ class RTF():
                     )
 
                     # Write the updated config back to the file
-                    with open(config_path, 'w', encoding='utf-8') as file:
-                        file.write(new_config_data)
+                    async with aiofiles.open(config_path, 'w', encoding='utf-8') as file:
+                        await file.write(new_config_data)
 
                     console.print(f'[bold green]API Key successfully saved to {config_path}')
                     return True

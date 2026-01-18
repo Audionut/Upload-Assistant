@@ -7,12 +7,13 @@ support DVD IFO/VOB file parsing with language information.
 """
 import os
 import platform
-import requests
 import shutil
 import stat
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+import requests
 
 MEDIAINFO_VERSION = "23.04"
 MEDIAINFO_CLI_BASE_URL = "https://mediaarea.net/download/binary/mediainfo"

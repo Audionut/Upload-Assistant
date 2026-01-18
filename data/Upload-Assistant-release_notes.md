@@ -10,12 +10,15 @@ v7.0.0
  - Fixed an issue with unit3d based upload timeout handling. Given that UA can now run each tracker upload independently, it defers to having a longer timeout period for slow responding trackers.
  - Moved a complete season pack check into a function that always runs, instead of only running when rehashing torrents. The function now also includes a group tag check, which will warn if a season pack has different group tagged files.
  - Added Aither semi-automated trump handling, using their new api endpoint (thanks you). See further notes below.
+ - richardr1126 added arm64 support for docker.
+ - CptCherry added TOS support. TOS has some specific support for using NFO files, as is required by their rules. See help for --keep-nfo
  
  ## SECURITY
  - There have been a number of changes in the UA coding process, with the specific intent of improving security.
  - Some of the changes protect against malicious attacks that could have occurred, under quite specific circumstances, such as attacks via downloaded binaries. These would likely have never occurred, but are now mitigated against.
  - It has been brought to my attention, that many users who are running the docker webui, have been exposing their ui to the web. You should not expose to the web unless strictly necessary, set it as localhost only.
  - I've defaulted to 127.0.0.1 only, and added some basic auth, but users should ensure that their network is properly protected if exposing to the web. See updated docs https://github.com/Audionut/Upload-Assistant/tree/master/docs
+ - The non-webui builds can be run effectively without root also, see docs.
 
 ## CONFIG VALIDATION
 - UA now performs some config validation, and gives better feedback on hard loading errors. Did you accidentally edit out a pesky little comma.....
@@ -23,6 +26,7 @@ v7.0.0
 ## New config options - see example.py
  - suppress_warnings - which will suppress config validation warnings.
  - Sharex image host.
+ - rehash_cooldown - set in seconds. adds that specified small delay to trackers needing specific torrent rehashing, which allows all of the other tracker uploads to process, before resources are consumed by rehashing.
 
 ## New command argument
 - -ddc or --double-dupe-check, if you want to race uploads, but tend to lose, this arg will perform a secondary dupe check right before the actual upload process.
@@ -38,3 +42,4 @@ v7.0.0
 - UA will preference a single episode that has matching group tag.
 - Internal release episodes cannot be trump reported by standard users. Internal groups can trump their own single episodes, with the same config used for internal uploads.
 - Pay attention, you must pass a few prompts to be able to trump, so the onus is on you to only file correct reports.
+- In debug mode. it will do everything except actually file the report.

@@ -4,15 +4,27 @@ target-version = "py39"
 
 [tool.ruff.lint]
 select = [
-  "E",   # pycodestyle errors
-  "F",   # pyflakes
-  "W",   # pycodestyle warnings
-  "I",   # isort
-  "UP",  # pyupgrade
-  "B",   # bugbear
-  "C4",  # comprehensions
-  "SIM", # simplify
-  "PERF",# performance
+  # Core correctness
+  "E",
+  "F",
+  "W",
+  "B",
+
+  # Imports & modernization
+  "I",
+  "UP",
+
+  # Code quality
+  "C4",
+  "SIM",
+  "PERF",
+  "ARG",
+
+  # Dates & time
+  "DTZ",
+
+  # Async (if applicable)
+  "ASYNC",
 ]
 ignore = ["E501"]
 

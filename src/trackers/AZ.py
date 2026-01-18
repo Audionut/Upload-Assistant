@@ -1,8 +1,8 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-from src.trackers.COMMON import COMMON
-from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
 from typing import Any
+
+from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
+from src.trackers.COMMON import COMMON
 
 
 class AZ(AZTrackerBase):
@@ -108,19 +108,17 @@ class AZ(AZTrackerBase):
                 'Upload this content to our sister site CinemaZ.to instead.'
             )
 
-        if not is_disc:
-            if meta.get('container') not in ['mkv', 'mp4', 'avi']:
-                warnings.append('Allowed containers: MKV, MP4, AVI.')
+        if not is_disc and meta.get('container') not in ['mkv', 'mp4', 'avi']:
+            warnings.append('Allowed containers: MKV, MP4, AVI.')
 
-        if not is_disc:
-            if video_codec not in ('avc', 'h.264', 'h.265', 'x264', 'x265', 'hevc', 'divx', 'xvid'):
-                warnings.append(
-                    f'Video codec not allowed in your upload: {video_codec}.\n'
-                    'Allowed: H264/x264/AVC, H265/x265/HEVC, DivX/Xvid\n'
-                    'Exceptions:\n'
-                    '    MPEG2 for Full DVD discs and HDTV recordings\n'
-                    "    VC-1/MPEG2 for Bluray only if that's what is on the disc"
-                )
+        if not is_disc and video_codec not in ('avc', 'h.264', 'h.265', 'x264', 'x265', 'hevc', 'divx', 'xvid'):
+            warnings.append(
+                f'Video codec not allowed in your upload: {video_codec}.\n'
+                'Allowed: H264/x264/AVC, H265/x265/HEVC, DivX/Xvid\n'
+                'Exceptions:\n'
+                '    MPEG2 for Full DVD discs and HDTV recordings\n'
+                "    VC-1/MPEG2 for Bluray only if that's what is on the disc"
+            )
 
         if is_disc:
             pass
@@ -164,7 +162,7 @@ class AZ(AZTrackerBase):
                     invalid_codecs.append(codec)
 
             if invalid_codecs:
-                unique_invalid_codecs = sorted(list(set(invalid_codecs)))
+                unique_invalid_codecs = sorted(set(invalid_codecs))
                 warnings.append(
                     f"Unallowed audio codec(s) detected: {', '.join(unique_invalid_codecs)}\n"
                     f'Allowed codecs: AC3 (Dolby Digital), Dolby TrueHD, DTS, DTS-HD (MA), FLAC, AAC, MP3, etc.\n'

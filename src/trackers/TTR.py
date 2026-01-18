@@ -1,16 +1,20 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
+from typing import Any, Optional, cast
+
 from src.console import console
-from src.languages import process_desc_language
+from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
+
+Meta = dict[str, Any]
+Config = dict[str, Any]
 
 
 class TTR(UNIT3D):
 
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='TTR')
-        self.config = config
+        self.config: Config = config
         self.common = COMMON(config)
         self.tracker = 'TTR'
         self.base_url = 'https://torrenteros.org'
@@ -22,25 +26,22 @@ class TTR(UNIT3D):
         self.ttr_name = ''  # Initialize instance variable
         pass
 
-    async def get_name(self, meta):
-        try:
-            name = self.ttr_name
-        except AttributeError:
-            name = await self.build_name(meta)
+    async def get_name(self, meta: Meta) -> dict[str, str]:
+        name = self.ttr_name or await self.build_name(meta)
 
         return {'name': name}
 
-    async def build_name(self, meta):
-        name = meta['name_notag']
+    async def build_name(self, meta: Meta) -> str:
+        name = str(meta.get('name_notag', ''))
 
-        async def ask_spanish_type(kind):
+        async def ask_spanish_type(kind: str) -> str:
             console.print(f"{self.tracker}: [green]Found Spanish {kind} track.[/green] [yellow]Is it Castellano or Latino?[/yellow]")
             console.print("1 = Castellano")
             console.print("2 = Latino")
             console.print("3 = Castellano Latino")
-            return await self.common.async_input()
+            return str(await self.common.async_input())
 
-        def get_spanish_type(lang_code):
+        def get_spanish_type(lang_code: str) -> Optional[str]:
             if not lang_code:
                 return None
             lang_code = lang_code.lower()
@@ -74,7 +75,10 @@ class TTR(UNIT3D):
                 name += f" {suffix}"
 
         else:
-            tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
+            tracks = cast(
+                list[dict[str, Any]],
+                cast(dict[str, Any], meta.get('mediainfo', {})).get('media', {}).get('track', []),
+            )
             spanish_audio_type = None
             spanish_subs_type = None
 
@@ -101,7 +105,7 @@ class TTR(UNIT3D):
             elif spanish_subs_type:
                 name += f" {spanish_subs_type} Subs"
 
-        tag = meta.get('tag', "")
+        tag = str(meta.get('tag', ""))
         if tag:
             name += tag
 
@@ -109,16 +113,16 @@ class TTR(UNIT3D):
 
         return name
 
-    async def get_additional_data(self, meta):
-        data = {
+    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+        data: dict[str, Any] = {
             'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
         }
 
         return data
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         if not meta.get("language_checked", False):
-            await process_desc_language(meta, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
         if "Spanish" not in meta.get('audio_languages', []):
             if "Spanish" not in meta.get('subtitle_languages', []):
