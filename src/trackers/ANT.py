@@ -357,26 +357,33 @@ class ANT:
             return False
 
     async def get_audio(self, meta: Meta) -> str:
-        '''
+        """
         Possible values:
-        MP2, MP3, AAC, AC3, DTS, FLAC, PCM, True-HD, Opus
-        '''
-        audio = meta.get('audio', '').upper()
+        DD+, DD, DTS-HD MA, DTS, TrueHD, FLAC, PCM, OPUS, AAC, MP3, MP2
+        """
+        audio = str(meta.get("audio", ""))
+        if not audio:
+            return "NoAudio"
+
         audio_map = {
-            'MP2': 'MP2',
-            'MP3': 'MP3',
-            'AAC': 'AAC',
-            'DD': 'AC3',
-            'DTS': 'DTS',
-            'FLAC': 'FLAC',
-            'PCM': 'PCM',
-            'TRUEHD': 'True-HD',
-            'OPUS': 'Opus'
+            "DD+": "EAC3",
+            "DD": "AC3",
+            "DTS-HD MA": "DTSMA",
+            "DTS": "DTS",
+            "TRUEHD": "TrueHD",
+            "FLAC": "FLAC",
+            "PCM": "PCM",
+            "OPUS": "Opus",
+            "AAC": "AAC",
+            "MP3": "MP3",
+            "MP2": "MP2",
         }
         for key, value in audio_map.items():
-            if key in audio:
+            if key in audio.upper():
                 return value
-        console.print(f'{self.tracker}: Unexpected audio format: {audio}. The format must be one of the following: MP2, MP3, AAC, AC3, DTS, FLAC, PCM, True-HD, Opus')
+        console.print(
+            f"{self.tracker}: Unexpected audio format: {audio}. The format must be one of the following: DD+, DD, DTS-HD MA, DTS, TRUEHD, FLAC, PCM, OPUS, AAC, MP3, MP2"
+        )
         return ""
 
     async def mediainfo(self, meta: Meta) -> str:
@@ -437,6 +444,7 @@ class ANT:
         description = bbcode.remove_img_resize(description)
         description = bbcode.remove_sup(description)
         description = bbcode.remove_sub(description)
+        description = bbcode.remove_list(description)
         description = description.replace('•', '-').replace('’', "'").replace('–', '-')
         description = bbcode.remove_extra_lines(description)
         description = description.strip()
