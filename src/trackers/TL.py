@@ -212,13 +212,13 @@ class TL:
                 str(meta.get('type', '')) == 'REMUX' and str(meta.get('source', '')) in ('BluRay', 'HDDVD')
             ):
                 return categories['MovieBluray']
-            elif (str(meta.get('type', '')) == 'ENCODE' and str(meta.get('source', '')) in ('BluRay', 'HDDVD')) or str(meta.get('type', '')) == 'DVDRIP':
+            elif str(meta.get('type', '')) == 'ENCODE' and str(meta.get('source', '')) in ('BluRay', 'HDDVD'):
                 return categories['MovieBlurayRip']
             elif str(meta.get('is_disc', '')) == 'DVD' or (
                 str(meta.get('type', '')) == 'REMUX' and 'DVD' in str(meta.get('source', ''))
             ):
                 return categories['MovieDvd']
-            elif str(meta.get('type', '')) == 'ENCODE' and 'DVD' in str(meta.get('source', '')):
+            elif (str(meta.get('type', '')) == 'ENCODE' and 'DVD' in str(meta.get('source', ''))) or str(meta.get('type', '')) == 'DVDRIP':
                 return categories['MovieDvdRip']
             elif 'WEB' in str(meta.get('type', '')):
                 return categories['MovieWebrip']
