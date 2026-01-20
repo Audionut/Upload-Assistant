@@ -399,11 +399,6 @@ class DupeChecker:
                 await log_exclusion("file extension mismatch (is_disc=True)", each)
                 return True
 
-            if meta.get('is_disc') == "BDMV" and tracker_name in ["HDB", "BHD"]:
-                if len(each) >= 1 and tag == "":
-                    return False
-                return not (tag.strip() and tag.strip() in normalized)
-
             if is_sd == 1 and tracker_name in {"BHD", "AITHER"} and any(str(res) in each for res in [1080, 720, 2160]):
                 return False
 
@@ -581,13 +576,14 @@ class DupeChecker:
                     return True
 
             if meta.get('debug'):
-                console.log(f"[debug] Passed all checks: {each}")
+                console.log(f"[cyan]Release PASSED all checks: {each}")
             return False
 
         new_dupes = [each for each in processed_dupes if not await process_exclusion(each)]
 
         if new_dupes and not meta.get('unattended', False) and meta.get('debug'):
-            console.log(f"[yellow]Filtered dupes on {tracker_name}: ")
+            if len(processed_dupes) > 1:
+                console.log(f"[yellow]Filtered dupes on {tracker_name}: ")
             # Limit filtered dupe output for readability
             filtered_dupes_to_print: list[dict[str, Any]] = []
 
@@ -604,7 +600,8 @@ class DupeChecker:
 
                 filtered_dupes_to_print.append(limited_dupe)
 
-            console.log(filtered_dupes_to_print)
+            if len(processed_dupes) > 1:
+                console.log(filtered_dupes_to_print)
 
         return new_dupes
 

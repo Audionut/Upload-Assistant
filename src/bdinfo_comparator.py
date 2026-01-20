@@ -81,7 +81,7 @@ def remove_playlist_variations(summary: str, extended: str, duplicate: str) -> t
     return process_content(summary), process_content(extended), process_content(duplicate)
 
 
-def compare_bdinfo(meta: dict[str, Any], entry: dict[str, Any]) -> tuple[str, str]:
+def compare_bdinfo(meta: dict[str, Any], entry: dict[str, Any], tracker_name: str) -> tuple[str, str]:
     release_name = str(entry.get("name", "") or "")
     duplicate_content = has_bdinfo_content(entry)
     source_lines, target_lines = get_relevant_lines(meta, duplicate_content)
@@ -116,12 +116,14 @@ def compare_bdinfo(meta: dict[str, Any], entry: dict[str, Any]) -> tuple[str, st
             has_detected_changes = True
 
         style = "bold red" if prefix == "- " else "bold green" if prefix == "+ " else "bold white"
-        label = "YOURS" if prefix == "- " else "DUPLICATE" if prefix == "+ " else "MATCH"
+        label = "YOURS" if prefix == "- " else "DUPE TRACK" if prefix == "+ " else "EXACT TRACK MATCH"
         symbol = prefix.strip() or " "
 
         console.print(f"[{style}][{symbol}] {label.ljust(10)}: {content}[/{style}]", soft_wrap=True)
 
     warning_message = generate_warning(release_name, duplicate_content, has_detected_changes)
+    if has_detected_changes and tracker_name in ["LST", "AITHER"]:
+        console.print(f"[green]{tracker_name} allows uploads for different BD discs.[/green]")
 
     add_val = f"+{stats['+ ']}".ljust(3)
     rem_val = f"-{stats['- ']}".ljust(3)
@@ -140,7 +142,7 @@ def generate_warning(release_name: str, has_content: str, has_changes: bool) -> 
     if not has_content:
         return f"[yellow]⚠  Warning[/yellow] for dupe [bold green]{release_name}[/bold green]: [red]No BDInfo found![/red]"
     if not has_changes:
-        return f"[yellow]⚠  Warning[/yellow] for dupe [bold green]{release_name}[/bold green]: [red]No differences found.[/red]"
+        return f"[red]⚠  Warning[/red] for dupe [bold green]{release_name}[/bold green]: [red]No differences found.[/red]"
     return ""
 
 

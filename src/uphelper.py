@@ -174,7 +174,7 @@ class UploadHelper:
                         if meta.get('dupe', False) is False:
                             try:
                                 if meta.get('is_disc') == "BDMV":
-                                    self.ask_bdinfo_comparison(meta, dupes_list)
+                                    self.ask_bdinfo_comparison(meta, dupes_list, tracker_name)
                                 upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
                                 meta['we_asked'] = True
                             except EOFError:
@@ -253,7 +253,7 @@ class UploadHelper:
 
                 return False, meta
 
-    def ask_bdinfo_comparison(self, meta: Meta, dupes: list[Union[DupeEntry, str]]) -> None:
+    def ask_bdinfo_comparison(self, meta: Meta, dupes: list[Union[DupeEntry, str]], tracker_name: str) -> None:
         """
         Check if any duplicate has BDInfo content and ask the user
         if they want to perform a comparison.
@@ -268,7 +268,7 @@ class UploadHelper:
 
         question = (
             "\033[1;35mFound BDInfo content in potential duplicates."
-            "\033[0m Perform comparison?"
+            "\033[0m Perform a comparison?"
         )
         if cli_ui.ask_yes_no(question, default=True):
             warnings: list[str] = []
@@ -278,7 +278,7 @@ class UploadHelper:
                 if not isinstance(entry, dict):
                     continue
 
-                warning_message, results_message = compare_bdinfo(meta, entry)
+                warning_message, results_message = compare_bdinfo(meta, entry, tracker_name)
 
                 if warning_message:
                     warnings.append(warning_message)
