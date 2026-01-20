@@ -10,6 +10,7 @@ import aiofiles
 import cli_ui
 
 from cogs.redaction import Redaction
+from src.bdinfo_comparator import compare_bdinfo, has_bdinfo_content
 from src.cleanup import cleanup_manager
 from src.console import console
 from src.trackersetup import tracker_class_map
@@ -172,6 +173,8 @@ class UploadHelper:
                             console.print(f"[bold cyan]{dupe_text}[/bold cyan]")
                         if meta.get('dupe', False) is False:
                             try:
+                                if meta.get('is_disc') == "BDMV":
+                                    self.ask_bdinfo_comparison(meta, dupes_list, tracker_name)
                                 upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
                                 meta['we_asked'] = True
                             except EOFError:
@@ -249,6 +252,47 @@ class UploadHelper:
                         meta['name'] = f"{meta['name']} DUPE?"
 
                 return False, meta
+
+    def ask_bdinfo_comparison(self, meta: Meta, dupes: list[Union[DupeEntry, str]], tracker_name: str) -> None:
+        """
+        Check if any duplicate has BDInfo content and ask the user
+        if they want to perform a comparison.
+        """
+        possible = any(
+            isinstance(entry, dict) and has_bdinfo_content(entry)
+            for entry in dupes
+        )
+
+        if not possible:
+            return
+
+        question = (
+            "\033[1;35mFound BDInfo content in potential duplicates."
+            "\033[0m Perform a comparison?"
+        )
+        if cli_ui.ask_yes_no(question, default=True):
+            warnings: list[str] = []
+            results: list[str] = []
+
+            for entry in dupes:
+                if not isinstance(entry, dict):
+                    continue
+
+                warning_message, results_message = compare_bdinfo(meta, entry, tracker_name)
+
+                if warning_message:
+                    warnings.append(warning_message)
+                if results_message:
+                    results.append(results_message)
+
+            if warnings:
+                console.print()
+                console.print("\n\n".join(warnings), soft_wrap=True)
+
+            if results:
+                console.print()
+                console.print("\n".join(results), soft_wrap=True)
+                console.print()
 
     async def get_confirmation(self, meta: Meta) -> bool:
         confirm: bool = False

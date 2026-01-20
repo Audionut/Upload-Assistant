@@ -203,7 +203,7 @@ class TrackerStatusManager:
                                 elif isinstance(tracker_rename, str):
                                     display_name = tracker_rename
 
-                            if display_name is not None and display_name != "" and display_name != meta['name'] and not meta.get('cross_seeding', False):
+                            if display_name is not None and display_name != "" and display_name != meta['name']:
                                 console.print(f"[bold yellow]{tracker_name} applies a naming change for this release: [green]{display_name}[/green][/bold yellow]")
                             try:
                                 edit_choice = "y" if local_meta['unattended'] else input("Enter 'y' to upload, or press enter to skip uploading:")

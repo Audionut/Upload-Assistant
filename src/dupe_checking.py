@@ -26,6 +26,8 @@ class DupeEntry(TypedDict, total=False):
     type: Optional[str]
     res: Optional[str]
     internal: Union[int, bool]
+    bd_info: Optional[str]
+    description: Optional[str]
 
 
 DupeInput: TypeAlias = Union[str, DupeEntry, MutableMapping[str, Any]]
@@ -85,6 +87,8 @@ class DupeChecker:
                     'type': None,
                     'res': None,
                     'internal': 0,
+                    'bd_info': None,
+                    'description': None,
                 })
             elif isinstance(d, dict):
                 # Create a base entry with default values
@@ -101,6 +105,8 @@ class DupeChecker:
                     'type': d.get('type', None),
                     'res': d.get('res', None),
                     'internal': d.get('internal', 0),
+                    'bd_info': d.get('bd_info', ''),
+                    'description': d.get('description', ''),
                 }
 
                 # Case 3: Dict with files and file_count
@@ -393,11 +399,6 @@ class DupeChecker:
                 await log_exclusion("file extension mismatch (is_disc=True)", each)
                 return True
 
-            if meta.get('is_disc') == "BDMV" and tracker_name in ["AITHER", "LST", "HDB", "BHD"]:
-                if len(each) >= 1 and tag == "":
-                    return False
-                return not (tag.strip() and tag.strip() in normalized)
-
             if is_sd == 1 and tracker_name in {"BHD", "AITHER"} and any(str(res) in each for res in [1080, 720, 2160]):
                 return False
 
@@ -575,23 +576,32 @@ class DupeChecker:
                     return True
 
             if meta.get('debug'):
-                console.log(f"[debug] Passed all checks: {each}")
+                console.log(f"[cyan]Release PASSED all checks: {each}")
             return False
 
         new_dupes = [each for each in processed_dupes if not await process_exclusion(each)]
 
         if new_dupes and not meta.get('unattended', False) and meta.get('debug'):
+            if len(processed_dupes) > 1:
+                console.log(f"[yellow]Filtered dupes on {tracker_name}: ")
             # Limit filtered dupe output for readability
             filtered_dupes_to_print: list[dict[str, Any]] = []
+
             for dupe in new_dupes:
-                # Limit files list to first 10 items
                 limited_dupe = Redaction.redact_private_info(dupe).copy()
+                # Limit files list to first 10 items
                 limited_files = limited_dupe.get('files', [])
                 if len(limited_files) > 10:
                     dupe_files = dupe.get('files', [])
                     limited_dupe['files'] = limited_files[:10] + [f"... and {len(dupe_files) - 10} more files"]
+
+                if isinstance(limited_dupe.get('description'), str) and len(limited_dupe['description']) > 200:
+                    limited_dupe['description'] = limited_dupe['description'][:200] + "..."
+
                 filtered_dupes_to_print.append(limited_dupe)
-            console.log(f"[yellow]Filtered dupes on {tracker_name}: {filtered_dupes_to_print}")
+
+            if len(processed_dupes) > 1:
+                console.log(filtered_dupes_to_print)
 
         return new_dupes
 

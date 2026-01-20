@@ -618,7 +618,7 @@ class BJS:
 
         for result in ajax_results:
             if isinstance(result, Exception):
-                console.print(f'[yellow]Erro na chamada AJAX: {result}[/yellow]')
+                console.print(f'[yellow]Error in AJAX call: {result}[/yellow]')
                 continue
 
             fetch_result = cast(dict[str, Any], result)
@@ -627,12 +627,14 @@ class BJS:
 
             task_info = fetch_result.get('task_info', {})
             soup_obj = fetch_result.get('soup')
+
             if not isinstance(task_info, dict) or not isinstance(soup_obj, BeautifulSoup):
                 continue
 
             task_info = cast(dict[str, Any], task_info)
             description_text = str(task_info.get('description_text', ''))
             process_folder_name = bool(task_info.get('process_folder_name'))
+
             item_name = self._extract_item_name(
                 soup_obj,
                 description_text,
@@ -640,11 +642,20 @@ class BJS:
                 process_folder_name
             )
 
+            torrent_description = ""
+            desc_block = soup_obj.find(
+                lambda tag: tag.name == "blockquote" and "Informações Adicionais:" in tag.get_text()
+            )
+
+            if desc_block:
+                torrent_description = desc_block.get_text("\n", strip=True)
+
             if item_name:
                 found_items.append({
                     'name': item_name,
                     'size': str(task_info.get('size') or ''),
-                    'link': str(task_info.get('link') or '')
+                    'link': str(task_info.get('link') or ''),
+                    'description': torrent_description,
                 })
 
         return found_items
