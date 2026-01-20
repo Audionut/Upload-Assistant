@@ -384,7 +384,8 @@ class ANT:
         console.print(
             f"{self.tracker}: Unexpected audio format: {audio}. The format must be one of the following: DD+, DD, DTS-HD MA, DTS, TRUEHD, FLAC, PCM, OPUS, AAC, MP3, MP2"
         )
-        return ""
+        console.print(f"{self.tracker}: Audio will be set to 'Other'. [bold red]Correct manually if necessary.[/bold red]")
+        return "Other"
 
     async def mediainfo(self, meta: Meta) -> str:
         if meta.get('is_disc') == 'BDMV':
