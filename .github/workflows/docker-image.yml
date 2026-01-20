@@ -24,17 +24,15 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       image_name: ${{ steps.image-name.outputs.image_name }}
-      tags_standard: ${{ steps.meta-standard.outputs.tags }}
-      labels_standard: ${{ steps.meta-standard.outputs.labels }}
-      tags_webui: ${{ steps.meta-webui.outputs.tags }}
-      labels_webui: ${{ steps.meta-webui.outputs.labels }}
+      tags: ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
     steps:
       - name: Compute lowercase image name
         id: image-name
         run: echo "image_name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
-      - name: Extract metadata (tags, labels) for Docker - Standard
-        id: meta-standard
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ steps.image-name.outputs.image_name }}
@@ -42,15 +40,6 @@ jobs:
             type=raw,value=latest,enable=${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.use_latest_tag == true) }},priority=1000
             type=ref,event=tag
             type=ref,event=branch,enable=${{ !inputs.use_latest_tag }}
-
-      - name: Extract metadata (tags, labels) for Docker - WebUI
-        id: meta-webui
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ steps.image-name.outputs.image_name }}
-          tags: |
-            type=ref,event=tag,suffix=-webui
-            type=ref,event=branch,suffix=-webui
 
   build:
     needs: prepare
@@ -63,18 +52,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Standard variant - amd64
-          - variant: standard
-            dockerfile: ./Dockerfile.standard
-            arch: amd64
-            platform: linux/amd64
-            runner: ubuntu-24.04
-          # Standard variant - arm64
-          - variant: standard
-            dockerfile: ./Dockerfile.standard
-            arch: arm64
-            platform: linux/arm64
-            runner: ubuntu-24.04-arm
           # WebUI variant - amd64
           - variant: webui
             dockerfile: ./Dockerfile
@@ -112,7 +89,7 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platform }}
-          labels: ${{ matrix.variant == 'standard' && needs.prepare.outputs.labels_standard || needs.prepare.outputs.labels_webui }}
+          labels: ${{ needs.prepare.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.variant }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-${{ matrix.arch }}
           provenance: false
@@ -158,31 +135,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create manifest list and push - Standard
-        working-directory: /tmp/digests/standard
-        run: |
-          docker buildx imagetools create \
-            $(echo "$TAGS" | xargs -I {} echo -t {}) \
-            $(printf '${{ env.REGISTRY }}/${{ needs.prepare.outputs.image_name }}@sha256:%s ' *)
-        env:
-          TAGS: ${{ needs.prepare.outputs.tags_standard }}
-
-      - name: Create manifest list and push - WebUI
+      - name: Create manifest list and push
         working-directory: /tmp/digests/webui
         run: |
           docker buildx imagetools create \
             $(echo "$TAGS" | xargs -I {} echo -t {}) \
             $(printf '${{ env.REGISTRY }}/${{ needs.prepare.outputs.image_name }}@sha256:%s ' *)
         env:
-          TAGS: ${{ needs.prepare.outputs.tags_webui }}
+          TAGS: ${{ needs.prepare.outputs.tags }}
 
       - name: Output build information
         run: |
           echo "✅ Docker images built and pushed successfully!"
-          echo "🐋 Standard Images:"
-          echo '${{ needs.prepare.outputs.tags_standard }}' | sed 's/^/  - /'
-          echo "🐋 WebUI Images:"
-          echo '${{ needs.prepare.outputs.tags_webui }}' | sed 's/^/  - /'
+          echo "🐋 Images:"
+          echo '${{ needs.prepare.outputs.tags }}' | sed 's/^/  - /'
           echo "📝 Event: ${{ github.event_name }}"
           if [ "${{ github.event_name }}" == "release" ]; then
             echo "📝 Triggered by release: ${{ github.event.release.tag_name }}"
