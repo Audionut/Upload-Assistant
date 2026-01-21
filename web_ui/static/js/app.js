@@ -115,61 +115,37 @@ function AudionutsUAGUI() {
   const inputRef = useRef(null);
 
   const appendHtmlFragment = (rawHtml) => {
-    try {
-      // Debug: log sanitizer availability and fragment sizes
-      try {
-        console.debug('appendHtmlFragment: DOMPurify=', !!window.DOMPurify, 'rawLen=', (rawHtml || '').length);
-      } catch (e) { /* no-op */ }
-      const sanitizeHtml = (html) => {
-        if (window.DOMPurify) {
-          const cleaned = DOMPurify.sanitize(html, { ALLOWED_ATTR: ['style', 'class', 'href', 'src'] });
-          try {
-            console.debug('appendHtmlFragment: sanitized contains style=', cleaned.includes('style="'));
-            console.debug('appendHtmlFragment: sanitized sample=', cleaned.slice(0,200));
-          } catch (e) {}
-          return cleaned;
-        }
-        try {
-          const doc = new DOMParser().parseFromString(html, 'text/html');
-          doc.querySelectorAll('script,style').forEach((el) => el.remove());
-          doc.querySelectorAll('*').forEach((el) => {
-            [...el.attributes].forEach((attr) => {
-              if (attr.name && attr.name.toLowerCase().startsWith('on')) el.removeAttribute(attr.name);
-              if ((attr.name === 'href' || attr.name === 'src') && String(attr.value).trim().toLowerCase().startsWith('javascript:')) el.removeAttribute(attr.name);
-            });
-          });
-          return doc.body.innerHTML;
-        } catch (e) {
-          return rawHtml.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        }
-      };
-
-      const container = richOutputRef.current;
-      if (container) {
-        const clean = sanitizeHtml((rawHtml || '').trim());
-            const wrapper = document.createElement('div');
-            wrapper.innerHTML = clean;
-            container.appendChild(wrapper);
-            // Debug: verify whether inline styles are applied by checking computed color
-            try {
-              setTimeout(() => {
-                const span = wrapper.querySelector('span');
-                if (span) {
-                  const computed = window.getComputedStyle(span).color;
-                  const containerColor = window.getComputedStyle(container).color;
-                  console.debug('appendHtmlFragment: computed span color=', computed, 'container color=', containerColor);
-                }
-              }, 20);
-            } catch (e) { /* ignore */ }
-        // Use scrollIntoView to avoid clipping of the last line
-        setTimeout(() => {
-          const last = container.lastElementChild;
-          if (last && last.scrollIntoView) last.scrollIntoView({ block: 'end' });
-          else container.scrollTop = container.scrollHeight;
-        }, 0);
+    const sanitizeHtml = (html) => {
+      if (window.DOMPurify) {
+        return DOMPurify.sanitize(html, { ALLOWED_ATTR: ['style', 'class', 'href', 'src'] });
       }
-    } catch (e) {
-      console.error('appendHtmlFragment error:', e);
+      try {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        doc.querySelectorAll('script,style').forEach((el) => el.remove());
+        doc.querySelectorAll('*').forEach((el) => {
+          [...el.attributes].forEach((attr) => {
+            if (attr.name && attr.name.toLowerCase().startsWith('on')) el.removeAttribute(attr.name);
+            if ((attr.name === 'href' || attr.name === 'src') && String(attr.value).trim().toLowerCase().startsWith('javascript:')) el.removeAttribute(attr.name);
+          });
+        });
+        return doc.body.innerHTML;
+      } catch (e) {
+        return rawHtml.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+    };
+
+    const container = richOutputRef.current;
+    if (container) {
+      const clean = sanitizeHtml((rawHtml || '').trim());
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = clean;
+      container.appendChild(wrapper);
+      // Use scrollIntoView to avoid clipping of the last line
+      setTimeout(() => {
+        const last = container.lastElementChild;
+        if (last && last.scrollIntoView) last.scrollIntoView({ block: 'end' });
+        else container.scrollTop = container.scrollHeight;
+      }, 0);
     }
   };
 

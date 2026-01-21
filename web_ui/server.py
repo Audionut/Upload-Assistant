@@ -1066,6 +1066,20 @@ def execute_command():
         path = data.get("path")
         args = data.get("args", "")
         session_id = data.get("session_id", "default")
+        # If a previous run for this session left state behind, attempt to
+        # terminate/cleanup it so the new execution starts with a clean slate.
+        try:
+            existing = active_processes.pop(session_id, None)
+            if existing:
+                try:
+                    proc = existing.get("process")
+                    if proc and getattr(proc, "poll", None) is None:
+                        with contextlib.suppress(Exception):
+                            proc.kill()
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
         print(f"Execute request - Path: {path}, Args: {args}, Session: {session_id}")
 
@@ -1244,68 +1258,84 @@ def execute_command():
                         worker = threading.Thread(target=run_upload, daemon=True)
                         worker.start()
 
-                        # Stream full HTML snapshots from the recorder while the worker runs
+                        # Stream full HTML snapshots from the recorder while the worker runs.
+                        # To avoid spinning the SSE thread and growing the server task queue
+                        # when the uploader prints heavily, block waiting for print events
+                        # with a short timeout and coalesce multiple prints into a
+                        # single exported snapshot.
                         last_body = ""
-                        while worker.is_alive() or True:
-                            try:
-                                # Apply any queued print calls from the worker thread
+                        try:
+                            while worker.is_alive():
                                 try:
-                                    while True:
+                                    # Wait for the next print event (blocks briefly). This
+                                    # prevents the generator from busy-waiting and tying up
+                                    # Waitress worker threads.
+                                    r_args, r_kwargs = render_queue.get(timeout=0.5)
+                                    with contextlib.suppress(Exception):
+                                        record_console.print(*r_args, **r_kwargs)
+
+                                    # Drain any additional queued prints so we can coalesce
+                                    # them into a single exported snapshot.
+                                    while not render_queue.empty():
                                         try:
                                             r_args, r_kwargs = render_queue.get_nowait()
-                                        except Exception:
+                                        except queue.Empty:
                                             break
                                         with contextlib.suppress(Exception):
                                             record_console.print(*r_args, **r_kwargs)
-                                except Exception:
-                                    pass
 
+                                    # Export and yield a full HTML snapshot only when the
+                                    # rendered body has changed.
+                                    html_doc = record_console.export_html(inline_styles=True)
+                                    m = re.search(r"<body[^>]*>(.*?)</body>", html_doc, re.S | re.I)
+                                    body = m.group(1).strip() if m else html_doc
+                                    if body != last_body:
+                                        last_body = body
+                                        yield f"data: {json.dumps({'type': 'html_full', 'data': body})}\n\n"
+                                except queue.Empty:
+                                    # No print activity within the timeout — send a keepalive
+                                    # to keep the SSE connection alive without busy-waiting.
+                                    yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
+                                except Exception:
+                                    # Swallow per-iteration errors to keep the stream alive.
+                                    yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
+
+                            # Worker finished; drain any remaining prints and send final snapshot
+                            while not render_queue.empty():
+                                try:
+                                    r_args, r_kwargs = render_queue.get_nowait()
+                                except queue.Empty:
+                                    break
+                                with contextlib.suppress(Exception):
+                                    record_console.print(*r_args, **r_kwargs)
+
+                            try:
                                 html_doc = record_console.export_html(inline_styles=True)
                                 m = re.search(r"<body[^>]*>(.*?)</body>", html_doc, re.S | re.I)
                                 body = m.group(1).strip() if m else html_doc
                                 if body != last_body:
-                                    last_body = body
-                                    with contextlib.suppress(Exception):
-                                        print(f"[webui] Yielding html_full snapshot len={len(body)}")
                                     yield f"data: {json.dumps({'type': 'html_full', 'data': body})}\n\n"
-                                if not worker.is_alive():
-                                    break
                             except Exception:
                                 pass
-                            # keepalive
-                            yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
-
-                        # Final snapshot / exit
-                        try:
-                            html_doc = record_console.export_html(inline_styles=True)
-                            m = re.search(r"<body[^>]*>(.*?)</body>", html_doc, re.S | re.I)
-                            body = m.group(1).strip() if m else html_doc
-                            with contextlib.suppress(Exception):
-                                print(f"[webui] Final html_full snapshot len={len(body)}")
-                            yield f"data: {json.dumps({'type': 'html_full', 'data': body})}\n\n"
                         except Exception:
-                            pass
+                            # Ensure generator continues and yields a final keepalive on error
+                            yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
 
                     finally:
                         # restore patched functions and argv
                         try:
-                            if getattr(orig_console, "_ua_wrapped", False):
-                                # Restore originals saved on the console object
+                            # Prefer restoring originals from the module-level store
+                            console_key = id(orig_console)
+                            if console_key in _ua_console_store:
+                                stored = _ua_console_store.pop(console_key, {})
                                 with contextlib.suppress(Exception):
-                                    orig_console.print = getattr(orig_console, "_ua_orig_print", orig_console.print)
+                                    orig_console.print = stored.get("orig_print", orig_console.print)
                                 with contextlib.suppress(Exception):
-                                    orig_in = getattr(orig_console, "_ua_orig_input", None)
+                                    orig_in = stored.get("orig_input", None)
                                     if orig_in is not None:
                                         orig_console.input = orig_in
-                                # Clear flags
-                                with contextlib.suppress(Exception):
-                                    delattr(orig_console, "_ua_wrapped")
-                                with contextlib.suppress(Exception):
-                                    delattr(orig_console, "_ua_orig_print")
-                                with contextlib.suppress(Exception):
-                                    delattr(orig_console, "_ua_orig_input")
                         except Exception:
-                            # best-effort restore
+                            # best-effort restore using locals
                             with contextlib.suppress(Exception):
                                 orig_console.print = orig_print
                             with contextlib.suppress(Exception):
@@ -1320,6 +1350,10 @@ def execute_command():
                                 _cli_ui.ask_string = orig_ask_string
 
                         sys.argv = old_argv
+
+                        # Remove process tracking for this session
+                        with contextlib.suppress(Exception):
+                            active_processes.pop(session_id, None)
 
                     return
 
