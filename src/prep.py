@@ -152,7 +152,8 @@ class Prep:
             meta['is_disc'], videoloc, bdinfo, meta['discs'] = await self.disc_info_manager.get_disc(meta)
         except Exception:
             raise
-
+        if meta.get('debug', False):
+            console.print(f"[blue]is_disc: [yellow]{meta['is_disc']}[/yellow][/blue]")
         # Debugging information
         # console.print(f"Debug: meta['filelist'] before population: {meta.get('filelist', 'Not Set')}")
 
@@ -306,7 +307,7 @@ class Prep:
             meta['sd'] = await video_manager.is_sd(meta['resolution'])
 
         else:
-            videopath, meta['filelist'] = await video_manager.get_video(videoloc, meta.get('mode', 'discord'), meta.get('sorted_filelist', False))
+            videopath, meta['filelist'] = await video_manager.get_video(videoloc, meta.get('mode', 'discord'), meta.get('sorted_filelist', False), meta.get('debug', False))
             filelist = cast(list[str], meta.get('filelist') or [])
             meta['filelist'] = filelist
             search_term = os.path.basename(filelist[0]) if filelist else ""

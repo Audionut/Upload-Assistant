@@ -212,7 +212,7 @@ class ANT:
             data['censored'] = 1
 
         tags = await self.get_tags(meta)
-        if tags:
+        if tags != "":
             data.update({'tags': ','.join(tags)})
 
         release_group = await self.get_release_group(meta)
@@ -228,7 +228,7 @@ class ANT:
                 console.print('[bold red]Adult content detected[/bold red]')
                 if cli_ui.ask_yes_no("Are the screenshots safe?", default=False):
                     data.update({'screenshots': '\n'.join([x['raw_url'] for x in meta['image_list']][:4])})
-                    if not tags:
+                    if tags == "":
                         data.update({'flagchangereason': "Adult with screens uploaded with Upload Assistant"})
                     else:
                         data.update({'flagchangereason': "Adult with screens uploaded with Upload Assistant. User to add tags manually."})
@@ -238,7 +238,7 @@ class ANT:
                 data.update({'screenshots': ''})
         else:
             data.update({'screenshots': '\n'.join([x['raw_url'] for x in meta['image_list']][:4])})
-            if tags:
+            if tags != "":
                 data.update({'flagchangereason': "User prompted to add tags manually"})
 
         headers = {
@@ -357,27 +357,35 @@ class ANT:
             return False
 
     async def get_audio(self, meta: Meta) -> str:
-        '''
+        """
         Possible values:
-        MP2, MP3, AAC, AC3, DTS, FLAC, PCM, True-HD, Opus
-        '''
-        audio = meta.get('audio', '').upper()
+        DD+, DD, DTS-HD MA, DTS, TrueHD, FLAC, PCM, OPUS, AAC, MP3, MP2
+        """
+        audio = str(meta.get("audio", ""))
+        if not audio:
+            return "NoAudio"
+
         audio_map = {
-            'MP2': 'MP2',
-            'MP3': 'MP3',
-            'AAC': 'AAC',
-            'DD': 'AC3',
-            'DTS': 'DTS',
-            'FLAC': 'FLAC',
-            'PCM': 'PCM',
-            'TRUEHD': 'True-HD',
-            'OPUS': 'Opus'
+            "DD+": "EAC3",
+            "DD": "AC3",
+            "DTS-HD MA": "DTSMA",
+            "DTS": "DTS",
+            "TRUEHD": "TrueHD",
+            "FLAC": "FLAC",
+            "PCM": "PCM",
+            "OPUS": "Opus",
+            "AAC": "AAC",
+            "MP3": "MP3",
+            "MP2": "MP2",
         }
         for key, value in audio_map.items():
-            if key in audio:
+            if key in audio.upper():
                 return value
-        console.print(f'{self.tracker}: Unexpected audio format: {audio}. The format must be one of the following: MP2, MP3, AAC, AC3, DTS, FLAC, PCM, True-HD, Opus')
-        return ""
+        console.print(
+            f"{self.tracker}: Unexpected audio format: {audio}. The format must be one of the following: DD+, DD, DTS-HD MA, DTS, TRUEHD, FLAC, PCM, OPUS, AAC, MP3, MP2"
+        )
+        console.print(f"{self.tracker}: Audio will be set to 'Other'. [bold red]Correct manually if necessary.[/bold red]")
+        return "Other"
 
     async def mediainfo(self, meta: Meta) -> str:
         if meta.get('is_disc') == 'BDMV':
@@ -437,6 +445,7 @@ class ANT:
         description = bbcode.remove_img_resize(description)
         description = bbcode.remove_sup(description)
         description = bbcode.remove_sub(description)
+        description = bbcode.remove_list(description)
         description = description.replace('•', '-').replace('’', "'").replace('–', '-')
         description = bbcode.remove_extra_lines(description)
         description = description.strip()

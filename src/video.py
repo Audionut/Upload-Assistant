@@ -1,5 +1,4 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import glob
 import json
 import os
 import re
@@ -144,37 +143,62 @@ class VideoManager:
             video_codec = f"MPEG-{mi_dict['media']['track'][1].get('Format_Version')}"
         return video_encode, video_codec, has_encode_settings, bit_depth
 
-    async def get_video(self, videoloc: str, mode: str, sorted_filelist: bool = False) -> tuple[str, list[str]]:
+    async def get_video(self, videoloc: str, mode: str, sorted_filelist: bool = False, debug: bool = False) -> tuple[str, list[str]]:
         filelist: list[str] = []
         videoloc = os.path.abspath(videoloc)
+        if debug:
+            console.print(f"[blue]Video location: [yellow]{videoloc}[/yellow][/blue]")
         video = ""
         if os.path.isdir(videoloc):
-            globlist = [os.path.basename(f) for f in glob.glob(os.path.join(videoloc, "*.mkv"))] + [os.path.basename(f) for f in glob.glob(os.path.join(videoloc, "*.mp4"))] + [os.path.basename(f) for f in glob.glob(os.path.join(videoloc, "*.ts"))]
-            for file in globlist:
-                if not file.lower().endswith('sample.mkv') or "!sample" in file.lower():
-                    filelist.append(os.path.abspath(f"{videoloc}{os.sep}{file}"))
-                    filelist = sorted(filelist)
-                    if len(filelist) > 1:
-                        for f in filelist:
-                            if "sample" in os.path.basename(f).lower():
-                                console.print("[green]Filelist:[/green]")
-                                for tf in filelist:
-                                    console.print(f"[cyan]{tf}")
-                                console.print(f"[bold red]Possible sample file detected in filelist!: [yellow]{f}")
-                                try:
-                                    if cli_ui.ask_yes_no("Do you want to remove it?", default=True):
-                                        filelist.remove(f)
-                                except EOFError:
-                                    console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-                                    await cleanup_manager.cleanup()
-                                    cleanup_manager.reset_terminal()
-                                    sys.exit(1)
+            if debug:
+                console.print("[blue]Scanning directory for video files...[/blue]")
+            try:
+                entries = [e for e in os.listdir(videoloc) if os.path.isfile(os.path.join(videoloc, e))]
+            except Exception:
+                entries = []
+
+            video_exts = {'.mkv', '.mp4', '.ts'}
+            for file in entries:
+                fname_lower = file.lower()
+                ext = os.path.splitext(file)[1].lower()
+                if ext not in video_exts:
+                    continue
+
+                # Skip obvious sample files unless explicitly marked with !sample
+                if 'sample' in fname_lower and '!sample' not in fname_lower:
+                    continue
+
+                filelist.append(os.path.abspath(os.path.join(videoloc, file)))
+
+            filelist = sorted(filelist)
+            if debug and filelist:
+                console.print(f"[blue]Found {len(filelist)} video files in directory.[/blue]")
+            if len(filelist) > 1:
+                for f in list(filelist):
+                    if 'sample' in os.path.basename(f).lower() and '!sample' not in os.path.basename(f).lower():
+                        console.print("[green]Filelist:[/green]")
+                        for tf in filelist:
+                            console.print(f"[cyan]{tf}")
+                        console.print(f"[bold red]Possible sample file detected in filelist!: [yellow]{f}")
+                        try:
+                            if cli_ui.ask_yes_no("Do you want to remove it?", default=True):
+                                filelist.remove(f)
+                        except EOFError:
+                            console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+                            await cleanup_manager.cleanup()
+                            cleanup_manager.reset_terminal()
+                            sys.exit(1)
             for file in filelist:
                 if any(tag in file for tag in ['{tmdb-', '{imdb-', '{tvdb-']):
                     console.print(f"[bold red]This looks like some *arr renamed file which is not allowed: [yellow]{file}")
                     try:
-                        if cli_ui.ask_yes_no("Do you want to upload with this file?", default=True):
+                        if cli_ui.ask_yes_no("Do you want to upload with this file?", default=False):
                             pass
+                        else:
+                            console.print("[red]Exiting on user request[/red]")
+                            await cleanup_manager.cleanup()
+                            cleanup_manager.reset_terminal()
+                            sys.exit(1)
                     except EOFError:
                         console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                         await cleanup_manager.cleanup()
@@ -193,8 +217,13 @@ class VideoManager:
             if any(tag in videoloc for tag in ['{tmdb-', '{imdb-', '{tvdb-']):
                 console.print(f"[bold red]This looks like some *arr renamed file which is not allowed: [yellow]{videoloc}")
                 try:
-                    if cli_ui.ask_yes_no("Do you want to upload with this file?", default=True):
+                    if cli_ui.ask_yes_no("Do you want to upload with this file?", default=False):
                         pass
+                    else:
+                        console.print("[red]Exiting on user request[/red]")
+                        await cleanup_manager.cleanup()
+                        cleanup_manager.reset_terminal()
+                        sys.exit(1)
                 except EOFError:
                     console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                     await cleanup_manager.cleanup()
