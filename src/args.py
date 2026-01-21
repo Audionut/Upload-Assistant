@@ -131,7 +131,6 @@ class Args:
         parser.add_argument('-aither', '--aither', nargs=1, required=False, help="Aither torrent id/link", type=str)
         parser.add_argument('-lst', '--lst', nargs=1, required=False, help="LST torrent id/link", type=str)
         parser.add_argument('-oe', '--oe', nargs=1, required=False, help="OE torrent id/link", type=str)
-        parser.add_argument('-tik', '--tik', nargs=1, required=False, help="TIK torrent id/link", type=str)
         parser.add_argument('-hdb', '--hdb', nargs=1, required=False, help="HDB torrent id/link", type=str)
         parser.add_argument('-btn', '--btn', nargs=1, required=False, help="BTN torrent id/link", type=str)
         parser.add_argument('-bhd', '--bhd', nargs=1, required=False, help="BHD torrent_id/link", type=str)

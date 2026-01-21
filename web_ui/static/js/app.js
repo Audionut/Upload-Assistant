@@ -105,6 +105,8 @@ function AudionutsUAGUI() {
   const [sessionId, setSessionId] = useState('');
   const [sidebarWidth, setSidebarWidth] = useState(320);
   const [isResizing, setIsResizing] = useState(false);
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(320);
+  const [isResizingRight, setIsResizingRight] = useState(false);
   const [userInput, setUserInput] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(getStoredTheme);
   
@@ -353,12 +355,12 @@ function AudionutsUAGUI() {
     }
   };
   useEffect(() => {
-    if (fitAddonRef.current && !isResizing) {
+    if (fitAddonRef.current && !isResizing && !isResizingRight) {
       setTimeout(() => {
         fitAddonRef.current.fit();
       }, 100);
     }
-  }, [sidebarWidth, isResizing]);
+  }, [sidebarWidth, rightSidebarWidth, isResizing, isResizingRight]);
 
   const toggleFolder = async (path) => {
     const newExpanded = new Set(expandedFolders);
@@ -580,6 +582,224 @@ function AudionutsUAGUI() {
     }
   }, [isResizing]);
 
+  // Right sidebar resizing
+  const startResizingRight = () => {
+    setIsResizingRight(true);
+  };
+
+  const stopResizingRight = () => {
+    setIsResizingRight(false);
+  };
+
+  const resizeRight = (e) => {
+    if (isResizingRight) {
+      // Calculate width from right edge
+      const newWidth = window.innerWidth - e.clientX;
+      if (newWidth >= 200 && newWidth <= 800) {
+        setRightSidebarWidth(newWidth);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (isResizingRight) {
+      window.addEventListener('mousemove', resizeRight);
+      window.addEventListener('mouseup', stopResizingRight);
+      return () => {
+        window.removeEventListener('mousemove', resizeRight);
+        window.removeEventListener('mouseup', stopResizingRight);
+      };
+    }
+  }, [isResizingRight]);
+
+  // Argument categories for the right sidebar (placeholders shown for info only)
+  const argumentCategories = [
+    {
+      title: "Modes / Workflows",
+      args: [
+        { label: "--queue", placeholder: "QUEUE_NAME", description: "Process a named queue from a folder path" },
+        { label: "--limit-queue", placeholder: "N", description: "Limit queue successful uploads" },
+        { label: "--site-check", description: "Site check (can it be uploaded)" },
+        { label: "--site-upload", placeholder: "TRACKER", description: "Site upload (process site check content)" },
+        { label: "--search_requests", description: "Search supported site for matching requests (config)" },
+        { label: "--unit3d", description: "Upload from UNIT3D-Upload-Checker results" }
+      ]
+    },
+    {
+      title: "Metadata / IDs",
+      subtitle: "Getting these correct is 90% of a successful upload!",
+      args: [
+        { label: "--tmdb", placeholder: "movie/123", description: "TMDb id" },
+        { label: "--imdb", placeholder: "tt0111161", description: "IMDb id" },
+        { label: "--mal", placeholder: "ID", description: "MAL id" },
+        { label: "--tvmaze", placeholder: "ID", description: "TVMaze id" },
+        { label: "--tvdb", placeholder: "ID", description: "TVDB id" }
+      ]
+    },
+    {
+      title: "Screenshots / Images",
+      args: [
+        { label: "--screens", placeholder: "N", description: "Number of screenshots to use" },
+        { label: "--manual_frames", placeholder: '"1,250,500"', description: "Manual frame numbers for screenshots" },
+        { label: "--comparison", placeholder: "PATH", description: "Comparison images folder" },
+        { label: "--comparison_index", placeholder: "N", description: "Comparison main index" },
+        { label: "--disc-menus", placeholder: "PATH", description: "Folder containing disc menus screenshots" },
+        { label: "--imghost", placeholder: "HOST", description: "Specific image host to use" },
+        { label: "--skip-imagehost-upload", description: "Skip uploading screenshots" }
+      ]
+    },
+    {
+      title: "TV Fields",
+      args: [
+        { label: "--season", placeholder: "S01", description: "Season number" },
+        { label: "--episode", placeholder: "E01", description: "Episode number" },
+        { label: "--manual-episode-title", placeholder: "TITLE", description: "Manual episode title" },
+        { label: "--daily", placeholder: "YYYY-MM-DD", description: "Air date for daily shows" }
+      ]
+    },
+    {
+      title: "Title Shaping",
+      args: [
+        { label: "--year", placeholder: "YYYY", description: "Override year" },
+        { label: "--no-season", description: "Remove season" },
+        { label: "--no-year", description: "Remove year" },
+        { label: "--no-aka", description: "Remove AKA" },
+        { label: "--no-dub", description: "Remove Dubbed" },
+        { label: "--no-dual", description: "Remove Dual-Audio" },
+        { label: "--no-tag", description: "Remove group tag" },
+        { label: "--no-edition", description: "Remove edition" },
+        { label: "--dual-audio", description: "Add Dual-Audio" },
+        { label: "--tag", placeholder: "GROUP", description: "Group tag" },
+        { label: "--service", placeholder: "SERVICE", description: "Streaming service" },
+        { label: "--region", placeholder: "REGION", description: "Disc Region" },
+        { label: "--edition", placeholder: "TEXT", description: "Edition marker" },
+        { label: "--repack", placeholder: "TEXT", description: "Repack" }
+      ]
+    },
+    {
+      title: "Description / NFO",
+      args: [
+        { label: "--desclink", placeholder: "URL", description: "Custom description link" },
+        { label: "--descfile", placeholder: "PATH", description: "Custom description file" },
+        { label: "--nfo", description: "Use .nfo for description" }
+      ]
+    },
+    {
+      title: "Language",
+      args: [
+        { label: "--original-language", placeholder: "en", description: "Original language of content" },
+        { label: "--only-if-languages", placeholder: "en,fr", description: "Only proceed with upload if the content has these languages" }
+      ]
+    },
+    {
+      title: "Misc Metadata Flags",
+      args: [
+        { label: "--commentary", description: "Commentary" },
+        { label: "--sfx-subtitles", description: "SFX subtitles" },
+        { label: "--extras", description: "Extras included" },
+        { label: "--distributor", placeholder: "NAME", description: "Disc distributor" },
+        { label: "--sorted-filelist", description: "Sorted filelist (handles typical anime nonsense)" },
+        { label: "--keep-folder", description: "Keep top folder with single file uploads" },
+        { label: "--keep-nfo", description: "Keep nfo (extremely site specific)" },
+      ]
+    },
+    {
+      title: "Tracker References",
+      subtitle: "Pull metadata ids, descriptions, and screenshots from these trackers",
+      args: [
+        { label: "--onlyID", description: "Only grab meta ids, not descriptions" },
+        { label: "--ptp", placeholder: "ID_OR_URL", description: "PTP id/link" },
+        { label: "--blu", placeholder: "ID_OR_URL", description: "BLU id/link" },
+        { label: "--aither", placeholder: "ID_OR_URL", description: "Aither id/link" },
+        { label: "--lst", placeholder: "ID_OR_URL", description: "LST id/link" },
+        { label: "--oe", placeholder: "ID_OR_URL", description: "OE id/link" },
+        { label: "--hdb", placeholder: "ID_OR_URL", description: "HDB id/link" },
+        { label: "--btn", placeholder: "ID_OR_URL", description: "BTN id/link" },
+        { label: "--bhd", placeholder: "ID_OR_URL", description: "BHD id/link" },
+        { label: "--huno", placeholder: "ID_OR_URL", description: "HUNO id/link" },
+        { label: "--ulcx", placeholder: "ID_OR_URL", description: "ULCX id/link" },
+        { label: "--torrenthash", placeholder: "HASH", description: "(qBitTorrent only, get site id from Torrent hash" }
+      ]
+    },
+    {
+      title: "Upload Selection / Dupe",
+      args: [
+        { label: "--trackers", placeholder: "aither,lst,ptp,etc", description: "Specific Trackers list for uploading" },
+        { label: "--trackers-remove", placeholder: "blu,xyz,etc", description: "Remove these trackers from the default list for this upload" },
+        { label: "--trackers-pass", placeholder: "N", description: "How many trackers need to pass all checks for upload to proceed" },
+        { label: "--skip_auto_torrent", description: "Skip auto torrent searching" },
+        { label: "--skip-dupe-check", description: "Skip dupe check" },
+        { label: "--skip-dupe-asking", description: "Accept any reported dupes without prompting about it" },
+        { label: "--double-dupe-check", description: "Run another dupe check right before upload" },
+        { label: "--draft", description: "Send to Draft at supported sites (config)" },
+        { label: "--modq", description: "Send to modQ at supported sites (config)" },
+        { label: "--freeleech", placeholder: "25%", description: "Mark upload as Freeleech (percentage)" }
+      ]
+    },
+    {
+      title: "Anonymity / Seeding / Streaming",
+      args: [
+        { label: "--anon", description: "Anon upload at supported sites (config)" },
+        { label: "--no-seed", description: "Don't send torrents to client" },
+        { label: "--stream", description: "Stream" },
+        { label: "--webdv", description: "Dolby Vision hybrid" },
+        { label: "--hardcoded-subs", description: "Release contains hardcoded subs" },
+        { label: "--personalrelease", description: "Personal release" }
+      ]
+    },
+    {
+      title: "Torrent Creation / Hashing",
+      args: [
+        { label: "--max-piece-size", placeholder: "N", description: "Max piece size of created torrent (1 MiB <> 128 MiB)" },
+        { label: "--nohash", description: "Don't rehash torrent even if it was needed" },
+        { label: "--rehash", description: "Create a fresh torrent from the actual data, not an existing .torrent file" },
+        { label: "--mkbrr", description: "Use mkbrr for torrent creation (config)" },
+        { label: "--entropy", placeholder: "N", description: "Entropy" },
+        { label: "--randomized", placeholder: "N", description: "Randomized" },
+        { label: "--infohash", placeholder: "HASH", description: "Use this Infohash as the existing torrent from client" },
+        { label: "--force-recheck", description: "Force recheck" }
+      ]
+    },
+    {
+      title: "Torrent Client Integration",
+      args: [
+        { label: "--client", placeholder: "NAME", description: "Client name (config)" },
+        { label: "--qbit-tag", placeholder: "TAG", description: "qBittorrent tag (config)" },
+        { label: "--qbit-cat", placeholder: "CATEGORY", description: "qBittorrent category (config)" },
+        { label: "--rtorrent-label", placeholder: "LABEL", description: "rTorrent label (config)" }
+      ]
+    },
+    {
+      title: "Cleanup / Temp",
+      args: [
+        { label: "--delete-tmp", description: "Delete the tmp folder associated with this upload" },
+        { label: "--cleanup", description: "Cleanup the entire UA tmp folder" }
+      ]
+    },
+    {
+      title: "Debug / Output",
+      args: [
+        { label: "--debug", description: "Debug mode" },
+        { label: "--ffdebug", description: "FFmpeg debug" },
+        { label: "--upload-timer", description: "Upload timer (config)" }
+      ]
+    },
+    {
+      title: "Misc Options",
+      args: [
+        { label: "--not-anime", description: "Can speed up tv data extraction when not anime content" },
+        { label: "--channel", placeholder: "ID_OR_TAG", description: "SPD channel" },
+        { label: "--unattended", description: "Unattended" },
+        { label: "--unattended_confirm", description: "Unattended confirm" }
+      ]
+    }
+  ];
+
+  // Append only the plain argument flag to the input (no example values)
+  const addArgument = (arg) => {
+    setCustomArgs((prev) => (prev && prev.length ? `${prev} ${arg}` : arg));
+  };
+
   return (
     <div className={`flex h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} overflow-hidden`}>
       {/* Left Sidebar - Resizable */}
@@ -752,6 +972,63 @@ function AudionutsUAGUI() {
               </button>
             </div>
           </div>
+        </div>
+      </div>
+      {/* Right Resize Handle */}
+      <div
+        className={`w-1 ${isDarkMode ? 'bg-gray-700 hover:bg-purple-500' : 'bg-gray-300 hover:bg-purple-500'} cursor-col-resize transition-colors`}
+        onMouseDown={startResizingRight}
+        style={{ userSelect: 'none' }}
+      />
+
+      {/* Right Sidebar - Arguments */}
+      <div
+        className={`${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-l flex flex-col`}
+        style={{ width: `${rightSidebarWidth}px`, minWidth: '200px', maxWidth: '800px' }}
+      >
+        <div className={`p-4 border-b ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gradient-to-l from-purple-50 to-blue-50'}`}>
+          <h2 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'} flex items-center gap-2`}>
+            <TerminalIcon />
+            Arguments
+          </h2>
+        </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-4">
+          {argumentCategories.map((cat) => (
+            <div key={cat.title}>
+              <div>
+                <div className={`text-lg font-bold mb-1 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{cat.title}</div>
+                {cat.subtitle && (
+                  <div className={`text-sm mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-500'}`}>{cat.subtitle}</div>
+                )}
+              </div>
+              <div className="space-y-2">
+                {cat.args.map((a) => (
+                  <div
+                    key={a.label}
+                    className={`w-full p-2 rounded-lg border ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <button
+                        onClick={() => addArgument(a.label)}
+                        disabled={isExecuting}
+                        className={`px-3 py-1 text-sm font-mono rounded-md border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white hover:bg-purple-600 hover:text-white' : 'bg-white border-gray-200 text-gray-800 hover:bg-purple-600 hover:text-white'} transition-colors`}
+                      >
+                        {a.label}
+                      </button>
+                      <div className="flex-1 text-right">
+                        {a.placeholder && (
+                          <div className={`text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-500'} font-mono`}>{a.placeholder}</div>
+                        )}
+                      </div>
+                    </div>
+                    {a.description && (
+                      <div className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{a.description}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

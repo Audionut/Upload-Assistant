@@ -1,6 +1,9 @@
 name: Create and publish Docker images
 
 on:
+  push:
+    branches:
+      - updated-webui-config
   release:
     types:
       - published
