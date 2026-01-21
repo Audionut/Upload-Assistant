@@ -2,6 +2,7 @@
 # pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownParameterType=false
 import ast
 import base64
+import contextlib
 import hmac
 import importlib.util
 import json
@@ -22,6 +23,12 @@ from waitress import serve  # pyright: ignore[reportMissingImports]
 from werkzeug.security import safe_join  # pyright: ignore[reportMissingImports]
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Helper to convert ANSI -> HTML using Rich (optional)
+try:
+    from src.console import ansi_to_html
+except Exception:
+    ansi_to_html = None
 
 Flask = cast(Any, Flask)
 Response = cast(Any, Response)
@@ -80,12 +87,19 @@ if cors_origins:
 ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
 
-class ProcessInfo(TypedDict):
+class ProcessInfo(TypedDict, total=False):
     process: subprocess.Popen[str]
+    mode: str
+    input_queue: "queue.Queue[str]"
+    # Rich Console type is not imported for typing reasons here; use Any
+    record_console: Any
 
 
 # Store active processes
 active_processes: dict[str, ProcessInfo] = {}
+
+# Local store for consoles we've wrapped to avoid assigning attributes on Console
+_ua_console_store: dict[int, dict[str, Any]] = {}
 
 
 class BrowseItem(TypedDict):
@@ -1079,26 +1093,257 @@ def execute_command():
 
                 yield f"data: {json.dumps({'type': 'system', 'data': f'Executing: {command_str}'})}\n\n"
 
-                # Set environment to unbuffered and force line buffering
-                env = os.environ.copy()
-                env["PYTHONUNBUFFERED"] = "1"
-                env["PYTHONIOENCODING"] = "utf-8"
-                # Disable Python output buffering
 
-                process = subprocess.Popen(  # lgtm[py/command-line-injection]
-                    command,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    bufsize=0,  # Completely unbuffered
-                    cwd=str(base_dir),
-                    env=env,
-                    universal_newlines=True,
-                )
+                # Decide whether to run as a subprocess or in-process. In-process
+                # preserves Rich output and allows capturing console.input / cli_ui prompts.
+                use_subprocess = bool(os.environ.get("UA_WEBUI_USE_SUBPROCESS", "").strip())
 
-                # Store process for input handling (no queue needed)
-                active_processes[session_id] = {"process": process}
+                if not use_subprocess:
+                    # In-process execution path
+                    import cli_ui as _cli_ui
+
+                    from src import console as src_console
+
+                    print("Running in-process (rich-captured) mode")
+
+                    # Prepare input queue for prompts
+                    input_queue: queue.Queue[str] = queue.Queue()
+
+                    # Prepare a recording Console to capture rich output
+                    import io
+
+                    from rich.console import Console as RichConsole
+
+                    # Use an in-memory file for the recorder to avoid duplicating
+                    # output to the real stdout. record=True still records renderables.
+                    record_console = RichConsole(record=True, force_terminal=True, width=120, file=io.StringIO())
+
+                    # Queue to serialize print actions from the worker thread
+                    render_queue: queue.Queue[tuple[Any, dict[str, Any]]] = queue.Queue()
+
+                    # Monkeypatch the existing shared console to record prints and intercept input
+                    orig_console = src_console.console
+
+                    # Avoid double-wrapping the console if already patched by a previous run
+                    console_key = id(orig_console)
+                    if console_key not in _ua_console_store:
+                        # Store originals so we can restore later
+                        _ua_console_store[console_key] = {
+                            "orig_print": orig_console.print,
+                            "orig_input": getattr(orig_console, "input", None),
+                        }
+
+                        # Wrap print to duplicate into the recorder
+                        orig_print = orig_console.print
+
+                        def wrapped_print(*p_args: Any, **p_kwargs: Any) -> Any:
+                            # Enqueue print calls to be applied from the SSE thread
+                            with contextlib.suppress(Exception):
+                                render_queue.put((p_args, p_kwargs))
+                            return orig_print(*p_args, **p_kwargs)
+
+                        orig_console.print = cast(Any, wrapped_print)
+
+                        # Intercept console.input to send prompt to client and wait for queue
+                        orig_input = getattr(orig_console, "input", None)
+
+                        def wrapped_input(prompt: str = "") -> str:
+                            # Print the prompt so it appears in the recorded output
+                            with contextlib.suppress(Exception):
+                                wrapped_print(prompt)
+                            # Block until input is provided via /api/input
+                            try:
+                                return input_queue.get(block=True)
+                            except Exception:
+                                return ""
+
+                        orig_console.input = cast(Any, wrapped_input)
+                    else:
+                        # Already wrapped; retrieve stored originals so restoration works
+                        stored = _ua_console_store.get(console_key, {})
+                        orig_print = stored.get("orig_print", orig_console.print)
+                        orig_input = stored.get("orig_input", getattr(orig_console, "input", None))
+
+                    # Monkeypatch cli_ui.ask_yes_no and ask_string similarly
+                    orig_ask_yes_no = None
+                    orig_ask_string = None
+                    try:
+                        orig_ask_yes_no = _cli_ui.ask_yes_no
+
+                        def wrapped_ask_yes_no(question: str, default: bool = False) -> bool:
+                            with contextlib.suppress(Exception):
+                                wrapped_print(question)
+                            resp = ""
+                            try:
+                                resp = input_queue.get(block=True)
+                            except Exception:
+                                return default
+                            resp = resp.strip().lower()
+                            if resp in ("y", "yes"):
+                                return True
+                            if resp in ("n", "no"):
+                                return False
+                            return default
+
+                        _cli_ui.ask_yes_no = wrapped_ask_yes_no
+
+                        # ask_string: prompt user for an arbitrary string
+                        try:
+                            orig_ask_string = _cli_ui.ask_string
+
+                            def wrapped_ask_string(prompt: str, default: Optional[str] = None) -> str:
+                                with contextlib.suppress(Exception):
+                                    wrapped_print(prompt)
+                                try:
+                                    resp = input_queue.get(block=True)
+                                    return resp
+                                except Exception:
+                                    return default or ""
+
+                            _cli_ui.ask_string = wrapped_ask_string
+                        except Exception:
+                            orig_ask_string = None
+                    except Exception:
+                        orig_ask_yes_no = None
+
+                    # Prepare sys.argv for upload.py to parse
+                    old_argv = list(sys.argv)
+                    try:
+                        import shlex
+
+                        parsed_args = []
+                        if args:
+                            parsed_args = shlex.split(args)
+                            parsed_args = _validate_upload_assistant_args(parsed_args)
+
+                        sys.argv = [str(upload_script), validated_path] + parsed_args
+
+                        # Store in active_processes so /api/input can post into the queue
+                        active_processes[session_id] = {"mode": "inproc", "input_queue": input_queue, "record_console": record_console}
+
+                        # Run the upload main loop in a separate thread to avoid blocking SSE generator
+                        def run_upload():
+                            try:
+                                # Run the async main() entry point of upload.py
+                                import asyncio
+
+                                from upload import main as upload_main
+
+                                # Ensure Windows event loop policy when needed
+                                if sys.platform == "win32":
+                                    with contextlib.suppress(Exception):
+                                        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+                                asyncio.run(upload_main())
+                            except Exception as e:
+                                print(f"In-process execution error: {e}")
+                                print(traceback.format_exc())
+                            finally:
+                                # Restore sys.argv in finally block
+                                pass
+
+                        worker = threading.Thread(target=run_upload, daemon=True)
+                        worker.start()
+
+                        # Stream full HTML snapshots from the recorder while the worker runs
+                        last_body = ""
+                        while worker.is_alive() or True:
+                            try:
+                                # Apply any queued print calls from the worker thread
+                                try:
+                                    while True:
+                                        try:
+                                            r_args, r_kwargs = render_queue.get_nowait()
+                                        except Exception:
+                                            break
+                                        with contextlib.suppress(Exception):
+                                            record_console.print(*r_args, **r_kwargs)
+                                except Exception:
+                                    pass
+
+                                html_doc = record_console.export_html(inline_styles=True)
+                                m = re.search(r"<body[^>]*>(.*?)</body>", html_doc, re.S | re.I)
+                                body = m.group(1).strip() if m else html_doc
+                                if body != last_body:
+                                    last_body = body
+                                    with contextlib.suppress(Exception):
+                                        print(f"[webui] Yielding html_full snapshot len={len(body)}")
+                                    yield f"data: {json.dumps({'type': 'html_full', 'data': body})}\n\n"
+                                if not worker.is_alive():
+                                    break
+                            except Exception:
+                                pass
+                            # keepalive
+                            yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
+
+                        # Final snapshot / exit
+                        try:
+                            html_doc = record_console.export_html(inline_styles=True)
+                            m = re.search(r"<body[^>]*>(.*?)</body>", html_doc, re.S | re.I)
+                            body = m.group(1).strip() if m else html_doc
+                            with contextlib.suppress(Exception):
+                                print(f"[webui] Final html_full snapshot len={len(body)}")
+                            yield f"data: {json.dumps({'type': 'html_full', 'data': body})}\n\n"
+                        except Exception:
+                            pass
+
+                    finally:
+                        # restore patched functions and argv
+                        try:
+                            if getattr(orig_console, "_ua_wrapped", False):
+                                # Restore originals saved on the console object
+                                with contextlib.suppress(Exception):
+                                    orig_console.print = getattr(orig_console, "_ua_orig_print", orig_console.print)
+                                with contextlib.suppress(Exception):
+                                    orig_in = getattr(orig_console, "_ua_orig_input", None)
+                                    if orig_in is not None:
+                                        orig_console.input = orig_in
+                                # Clear flags
+                                with contextlib.suppress(Exception):
+                                    delattr(orig_console, "_ua_wrapped")
+                                with contextlib.suppress(Exception):
+                                    delattr(orig_console, "_ua_orig_print")
+                                with contextlib.suppress(Exception):
+                                    delattr(orig_console, "_ua_orig_input")
+                        except Exception:
+                            # best-effort restore
+                            with contextlib.suppress(Exception):
+                                orig_console.print = orig_print
+                            with contextlib.suppress(Exception):
+                                if orig_input is not None:
+                                    orig_console.input = orig_input
+
+                        with contextlib.suppress(Exception):
+                            if orig_ask_yes_no is not None:
+                                _cli_ui.ask_yes_no = orig_ask_yes_no
+                        with contextlib.suppress(Exception):
+                            if orig_ask_string is not None:
+                                _cli_ui.ask_string = orig_ask_string
+
+                        sys.argv = old_argv
+
+                    return
+
+                else:
+                    # Set environment to unbuffered and force line buffering
+                    env = os.environ.copy()
+                    env["PYTHONUNBUFFERED"] = "1"
+                    env["PYTHONIOENCODING"] = "utf-8"
+                    # Disable Python output buffering
+
+                    process = subprocess.Popen(  # lgtm[py/command-line-injection]
+                        command,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        bufsize=0,  # Completely unbuffered
+                        cwd=str(base_dir),
+                        env=env,
+                        universal_newlines=True,
+                    )
+
+                    # Store process for input handling (no queue needed)
+                    active_processes[session_id] = {"process": process}
 
                 # Thread to read stdout - stream raw output with ANSI codes
                 def read_stdout():
@@ -1142,16 +1387,61 @@ def execute_command():
                     except queue.Empty:
                         return False, None
 
-                # Stream output as raw characters
+                # Stream output as buffered chunks and always emit HTML fragments
+                # If we are running the upload as a subprocess, stream ANSI->HTML as before.
+                buffers: dict[str, str] = {"stdout": "", "stderr": ""}
+
                 while process.poll() is None or not output_queue.empty():
                     has_output, output = _read_output(output_queue)
                     if has_output and output is not None:
                         output_type, char = output
-                        # Send raw character data (preserves ANSI codes)
-                        yield f"data: {json.dumps({'type': output_type, 'data': char})}\n\n"
+                        if output_type not in buffers:
+                            buffers[output_type] = ""
+                        buffers[output_type] += char
+
+                        # Flush on newline or when buffer grows large
+                        if char == "\n" or len(buffers[output_type]) > 512:
+                            chunk = buffers[output_type]
+                            buffers[output_type] = ""
+
+                            # Convert to HTML fragment. If helper missing, escape and wrap in <pre>
+                            try:
+                                if ansi_to_html:
+                                    html_fragment = ansi_to_html(chunk)
+                                else:
+                                    import html as _html
+
+                                    html_fragment = f"<pre>{_html.escape(chunk)}</pre>"
+
+                                yield f"data: {json.dumps({'type': 'html', 'data': html_fragment, 'origin': output_type})}\n\n"
+                            except Exception as e:
+                                print(f"HTML conversion error: {e}")
+                                import html as _html
+
+                                html_fragment = f"<pre>{_html.escape(chunk)}</pre>"
+                                yield f"data: {json.dumps({'type': 'html', 'data': html_fragment, 'origin': output_type})}\n\n"
                     else:
-                        # Send keepalive
+                        # keepalive to keep SSE connection alive
                         yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
+
+                # Flush remaining buffers as HTML
+                for t, remaining in list(buffers.items()):
+                    if remaining:
+                        try:
+                            if ansi_to_html:
+                                html_fragment = ansi_to_html(remaining)
+                            else:
+                                import html as _html
+
+                                html_fragment = f"<pre>{_html.escape(remaining)}</pre>"
+
+                            yield f"data: {json.dumps({'type': 'html', 'data': html_fragment, 'origin': t})}\n\n"
+                        except Exception as e:
+                            print(f"HTML flush error: {e}")
+                            import html as _html
+
+                            html_fragment = f"<pre>{_html.escape(remaining)}</pre>"
+                            yield f"data: {json.dumps({'type': 'html', 'data': html_fragment, 'origin': t})}\n\n"
 
                 # Wait for process to finish
                 process.wait()
@@ -1189,16 +1479,29 @@ def send_input():
 
         print(f"Received input for session {session_id}: '{user_input}'")
 
+
         if session_id not in active_processes:
             return jsonify({"error": "No active process", "success": False}), 404
 
-        # Always add newline to send the input
-        input_with_newline = user_input + "\n"
-
-        # Write to process stdin
+        # If this session is an in-process run, push to its input queue
         try:
             process_info = active_processes[session_id]
-            process = process_info["process"]
+            if process_info.get("mode") == "inproc":
+                raw_q = process_info.get("input_queue")
+                if raw_q is None:
+                    return jsonify({"error": "No input queue", "success": False}), 500
+                q = raw_q
+                q.put(user_input)
+                print(f"Queued input for inproc session {session_id}: '{user_input}'")
+                return jsonify({"success": True})
+
+            # Otherwise write to subprocess stdin
+            # Always add newline to send the input
+            input_with_newline = user_input + "\n"
+
+            process = process_info.get("process")
+            if process is None:
+                return jsonify({"error": "No process found", "success": False}), 500
 
             if process.poll() is None:  # Process still running
                 if process.stdin is not None:
@@ -1210,9 +1513,9 @@ def send_input():
                 return jsonify({"error": "Process not running", "success": False}), 400
 
         except Exception as e:
-            print(f"Error writing to stdin for session {session_id}: {e}")
+            print(f"Error handling input for session {session_id}: {e}")
             print(traceback.format_exc())
-            return jsonify({"error": "Failed to write input", "success": False}), 500
+            return jsonify({"error": "Failed to handle input", "success": False}), 500
 
         return jsonify({"success": True})
 
@@ -1236,7 +1539,10 @@ def kill_process():
 
         # Get the process
         process_info = active_processes[session_id]
-        process = process_info["process"]
+        process = process_info.get("process")
+
+        if process is None:
+            return jsonify({"error": "No process found", "success": False}), 500
 
         # Terminate the process
         process.terminate()
