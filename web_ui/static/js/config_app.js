@@ -263,12 +263,10 @@ function ConfigLeaf({
           </div>
         </div>
         <div className={fullWidth ? 'col-span-12' : 'col-span-7'}>
-          <label className="inline-flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={checked}
-              onChange={(e) => {
-                const nextValue = e.target.checked;
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                const nextValue = !checked;
                 setChecked(nextValue);
                 onValueChange(path, nextValue, {
                   originalValue,
@@ -277,10 +275,13 @@ function ConfigLeaf({
                   readOnly: false
                 });
               }}
-              className={isDarkMode ? 'h-4 w-4 accent-purple-500' : 'h-4 w-4 accent-purple-600'}
-            />
+              aria-pressed={checked}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-purple-600' : 'bg-gray-300'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
             <span className={isDarkMode ? 'text-gray-200' : 'text-gray-700'}>{checked ? 'True' : 'False'}</span>
-          </label>
+          </div>
         </div>
         {!fullWidth && (
           <div className="col-span-1 text-right">
