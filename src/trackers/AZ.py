@@ -1,11 +1,12 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-from src.trackers.COMMON import COMMON
+from typing import Any
+
 from src.trackers.AVISTAZ_NETWORK import AZTrackerBase
+from src.trackers.COMMON import COMMON
 
 
 class AZ(AZTrackerBase):
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]):
         super().__init__(config, tracker_name='AZ')
         self.config = config
         self.common = COMMON(config)
@@ -16,8 +17,8 @@ class AZ(AZTrackerBase):
         self.torrent_url = f'{self.base_url}/torrent/'
         self.requests_url = f'{self.base_url}/requests'
 
-    async def rules(self, meta):
-        warnings = []
+    async def rules(self, meta: dict[str, Any]) -> str:
+        warnings: list[str] = []
 
         is_disc = False
         if meta.get('is_disc', ''):
@@ -107,19 +108,17 @@ class AZ(AZTrackerBase):
                 'Upload this content to our sister site CinemaZ.to instead.'
             )
 
-        if not is_disc:
-            if meta.get('container') not in ['mkv', 'mp4', 'avi']:
-                warnings.append('Allowed containers: MKV, MP4, AVI.')
+        if not is_disc and meta.get('container') not in ['mkv', 'mp4', 'avi']:
+            warnings.append('Allowed containers: MKV, MP4, AVI.')
 
-        if not is_disc:
-            if video_codec not in ('avc', 'h.264', 'h.265', 'x264', 'x265', 'hevc', 'divx', 'xvid'):
-                warnings.append(
-                    f'Video codec not allowed in your upload: {video_codec}.\n'
-                    'Allowed: H264/x264/AVC, H265/x265/HEVC, DivX/Xvid\n'
-                    'Exceptions:\n'
-                    '    MPEG2 for Full DVD discs and HDTV recordings\n'
-                    "    VC-1/MPEG2 for Bluray only if that's what is on the disc"
-                )
+        if not is_disc and video_codec not in ('avc', 'h.264', 'h.265', 'x264', 'x265', 'hevc', 'divx', 'xvid'):
+            warnings.append(
+                f'Video codec not allowed in your upload: {video_codec}.\n'
+                'Allowed: H264/x264/AVC, H265/x265/HEVC, DivX/Xvid\n'
+                'Exceptions:\n'
+                '    MPEG2 for Full DVD discs and HDTV recordings\n'
+                "    VC-1/MPEG2 for Bluray only if that's what is on the disc"
+            )
 
         if is_disc:
             pass
@@ -134,7 +133,7 @@ class AZ(AZTrackerBase):
             if isinstance(audio_field, str) and 'opus' in audio_field.lower() and bool(meta.get('untouched', False)):
                 is_untouched_opus = True
 
-            audio_tracks = []
+            audio_tracks: list[dict[str, Any]] = []
             media_tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
             for track in media_tracks:
                 if track.get('@type') == 'Audio':
@@ -145,7 +144,7 @@ class AZ(AZTrackerBase):
                         'language': track.get('Language', '')
                     })
 
-            invalid_codecs = []
+            invalid_codecs: list[str] = []
             for track in audio_tracks:
                 codec = track['codec']
                 if not codec:
@@ -163,7 +162,7 @@ class AZ(AZTrackerBase):
                     invalid_codecs.append(codec)
 
             if invalid_codecs:
-                unique_invalid_codecs = sorted(list(set(invalid_codecs)))
+                unique_invalid_codecs = sorted(set(invalid_codecs))
                 warnings.append(
                     f"Unallowed audio codec(s) detected: {', '.join(unique_invalid_codecs)}\n"
                     f'Allowed codecs: AC3 (Dolby Digital), Dolby TrueHD, DTS, DTS-HD (MA), FLAC, AAC, MP3, etc.\n'
@@ -174,4 +173,4 @@ class AZ(AZTrackerBase):
             all_warnings = '\n\n'.join(filter(None, warnings))
             return all_warnings
 
-        return
+        return ''

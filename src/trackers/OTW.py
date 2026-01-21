@@ -1,16 +1,21 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import cli_ui
 import re
-from src.trackers.COMMON import COMMON
+from typing import Any, Optional, cast
+
+import cli_ui
+
 from src.console import console
+from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
+
+Meta = dict[str, Any]
+Config = dict[str, Any]
 
 
 class OTW(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='OTW')
-        self.config = config
+        self.config: Config = config
         self.common = COMMON(config)
         self.tracker = 'OTW'
         self.base_url = 'https://oldtoons.world'
@@ -31,10 +36,11 @@ class OTW(UNIT3D):
         ]
         pass
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
-
-        if not any(genre in meta['combined_genres'] for genre in ['Animation', 'Family']):
+        combined_genres_value = meta.get('combined_genres', [])
+        combined_genres = cast(list[str], combined_genres_value) if isinstance(combined_genres_value, list) else [str(combined_genres_value)]
+        if not any(genre in combined_genres for genre in ['Animation', 'Family']):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]Genre does not match Animation or Family for OTW.')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
@@ -44,7 +50,10 @@ class OTW(UNIT3D):
             else:
                 return False
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
+        keywords_value = meta.get('keywords', '')
+        keywords = ', '.join(cast(list[str], keywords_value)) if isinstance(keywords_value, list) else str(keywords_value)
+        combined_genres_text = ', '.join(combined_genres)
+        genres = f"{keywords} {combined_genres_text}"
         adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy', 'hentai', 'adult animation', 'softcore']
         if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
@@ -56,26 +65,42 @@ class OTW(UNIT3D):
             else:
                 return False
 
-        if meta['type'] not in ['WEBDL'] and not meta['is_disc']:
-            if meta.get('tag', "") in ['CMRG', 'EVO', 'TERMiNAL', 'ViSION']:
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at OTW[/bold red]')
-                    if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                        pass
-                    else:
-                        return False
+        game_show_keywords = ['reality', 'game show', 'game-show', 'reality tv', 'reality television']
+        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in game_show_keywords):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print('[bold red]Reality / Game Show content not allowed at OTW.')
+                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                    pass
                 else:
                     return False
+            else:
+                return False
+
+        if meta['type'] not in ['WEBDL'] and not meta['is_disc'] and meta.get('tag', "") in ['CMRG', 'EVO', 'TERMiNAL', 'ViSION']:
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at OTW[/bold red]')
+                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                    pass
+                else:
+                    return False
+            else:
+                return False
 
         return should_continue
 
-    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
-        type = meta['type']
+    async def get_type_id(
+        self,
+        meta: Meta,
+        type: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
+        meta_type = str(meta.get('type', ''))
         if meta.get('is_disc') == 'BDMV':
             return {'type_id': '1'}
         elif meta.get('is_disc') and meta.get('is_disc') != 'BDMV':
             return {'type_id': '7'}
-        if type == "DVDRIP":
+        if meta_type == "DVDRIP":
             return {'type_id': '8'}
         type_id = {
             'DISC': '1',
@@ -89,27 +114,25 @@ class OTW(UNIT3D):
             return type_id
         elif reverse:
             return {v: k for k, v in type_id.items()}
-        elif type is not None:
-            return {'type_id': type_id.get(type, '0')}
-        else:
-            meta_type = meta.get('type', '')
-            resolved_id = type_id.get(meta_type, '0')
-            return {'type_id': resolved_id}
+        type_value = str(type) if type is not None else meta_type
+        return {'type_id': type_id.get(type_value, '0')}
 
-    async def get_name(self, meta):
-        otw_name = meta['name']
-        source = meta['source']
-        resolution = meta['resolution']
-        aka = meta.get('aka', '')
-        type = meta['type']
-        video_codec = meta.get('video_codec', '')
+    async def get_name(self, meta: Meta) -> dict[str, str]:
+        otw_name = str(meta.get('name', ''))
+        source = str(meta.get('source', ''))
+        resolution = str(meta.get('resolution', ''))
+        aka = str(meta.get('aka', ''))
+        type = str(meta.get('type', ''))
+        video_codec = str(meta.get('video_codec', ''))
         if aka:
             otw_name = otw_name.replace(f"{aka} ", '')
-        if meta['is_disc'] == "DVD" or (type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
-            otw_name = otw_name.replace((meta['source']), f"{resolution} {meta['source']}", 1)
-            otw_name = otw_name.replace((meta['audio']), f"{video_codec} {meta['audio']}", 1)
-        if meta['category'] == "TV":
-            years = []
+        is_disc = str(meta.get('is_disc', ''))
+        audio = str(meta.get('audio', ''))
+        if is_disc == "DVD" or (type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
+            otw_name = otw_name.replace(source, f"{resolution} {source}", 1)
+            otw_name = otw_name.replace(audio, f"{video_codec} {audio}", 1)
+        if str(meta.get('category', '')) == "TV":
+            years: list[int] = []
 
             tmdb_year = meta.get('year')
             if tmdb_year and str(tmdb_year).isdigit():
@@ -118,22 +141,25 @@ class OTW(UNIT3D):
                 if tmdb_year and str(tmdb_year).isdigit():
                     years.append(int(tmdb_year))
 
-                imdb_year = meta.get('imdb_info', {}).get('year')
+                imdb_info = cast(dict[str, Any], meta.get('imdb_info', {}))
+                imdb_year = imdb_info.get('year')
                 if imdb_year and str(imdb_year).isdigit():
                     years.append(int(imdb_year))
 
-                series_year = meta.get('tvdb_episode_data', {}).get('series_year')
+                tvdb_episode_data = cast(dict[str, Any], meta.get('tvdb_episode_data', {}))
+                series_year = tvdb_episode_data.get('series_year')
                 if series_year and str(series_year).isdigit():
                     years.append(int(series_year))
                 # Use the oldest year if any found, else empty string
                 year = str(min(years)) if years else ""
             if not meta.get('no_year', False) and not meta.get('search_year', ''):
-                otw_name = otw_name.replace(meta['title'], f"{meta['title']} {year}", 1)
+                title = str(meta.get('title', ''))
+                otw_name = otw_name.replace(title, f"{title} {year}", 1)
 
         return {'name': otw_name}
 
-    async def get_additional_data(self, meta):
-        data = {
+    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+        data: dict[str, Any] = {
             'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
         }
 

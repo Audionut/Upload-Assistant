@@ -1,15 +1,20 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
+import re
+from typing import Any
+
 import aiofiles
 import cli_ui
-import re
+
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.trackers.UNIT3D import UNIT3D
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
+
 
 class ULCX(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='ULCX')
         self.config = config
         self.tracker = 'ULCX'
@@ -27,7 +32,7 @@ class ULCX(UNIT3D):
         ]
         pass
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
         if 'concert' in meta['keywords']:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
@@ -47,16 +52,20 @@ class ULCX(UNIT3D):
                     return False
             else:
                 return False
-        if meta['type'] == "ENCODE" and meta['resolution'] not in ['8640p', '4320p', '2160p', '1440p', '1080p', '1080i', '720p']:
+        if meta['type'] in ["ENCODE", "HDTV"] and meta['resolution'] not in ['8640p', '4320p', '2160p', '1440p', '1080p', '1080i', '720p']:
             if not meta['unattended']:
                 console.print(f'[bold red]Encodes must be at least 720p resolution for {self.tracker}.[/bold red]')
             return False
 
-        if not meta['is_disc'] == "BDMV":
-            if not await self.common.check_language_requirements(
-                meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True
-            ):
-                return False
+        if meta['type'] in ["DVDRIP"]:
+            if not meta['unattended']:
+                console.print(f'[bold red]DVDRIPs are not allowed for {self.tracker}.[/bold red]')
+            return False
+
+        if meta['is_disc'] != "BDMV" and not await self.common.check_language_requirements(
+            meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True
+        ):
+            return False
 
         if not meta['valid_mi_settings']:
             console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
@@ -64,22 +73,22 @@ class ULCX(UNIT3D):
 
         return should_continue
 
-    async def get_additional_data(self, meta):
+    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
         data = {
             'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
         }
 
         return data
 
-    async def get_description(self, meta):
-        desc = await DescriptionBuilder(self.config).unit3d_edit_desc(meta, self.tracker, comparison=True)
+    async def get_description(self, meta: Meta) -> dict[str, str]:
+        desc = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, comparison=True)
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
         adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
         if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             pattern = r'(\[center\](?:\s*\[url=[^\]]+\]\[img(?:=[0-9]+)?\][^\]]+\[/img\]\[/url\]\s*)+\[/center\])'
 
-            def wrap_in_spoiler(match):
+            def wrap_in_spoiler(match: re.Match[str]) -> str:
                 center_block = match.group(1)
                 return f'[center][spoiler=Screenshots]{center_block}[/spoiler][/center]'
 
@@ -89,7 +98,7 @@ class ULCX(UNIT3D):
 
         return {'description': desc}
 
-    async def get_name(self, meta):
+    async def get_name(self, meta: Meta) -> dict[str, str]:
         ulcx_name = meta['name']
         imdb_name = meta.get('imdb_info', {}).get('title', "")
         imdb_year = str(meta.get('imdb_info', {}).get('year', ""))
@@ -104,7 +113,7 @@ class ULCX(UNIT3D):
                 ulcx_name = ulcx_name.replace(f"{imdb_name}", f"{imdb_name} AKA {imdb_aka}", 1)
         if "Hybrid" in ulcx_name:
             ulcx_name = ulcx_name.replace("Hybrid ", "", 1)
-        if not meta.get('category') == "TV" and imdb_year and imdb_year.strip() and year and year.strip() and imdb_year != year:
+        if meta.get('category') != "TV" and imdb_year and imdb_year.strip() and year and year.strip() and imdb_year != year:
             ulcx_name = ulcx_name.replace(f"{year}", imdb_year, 1)
 
         return {'name': ulcx_name}

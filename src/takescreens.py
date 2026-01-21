@@ -1,40 +1,73 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import os
-import re
-import glob
-import time
-import ffmpeg
-import random
-import json
-import platform
 import asyncio
-import psutil
-import sys
+import contextlib
 import gc
+import glob
+import json
+import os
+import platform
+import random
+import re
+import sys
+import time
 import traceback
+from collections.abc import Awaitable, Mapping
+from pathlib import Path
+from typing import Any, Optional, Union, cast
+
+import ffmpeg
+import psutil
 from pymediainfo import MediaInfo
+
+from src.cleanup import cleanup_manager
 from src.console import console
-from data.config import config
-from src.cleanup import cleanup, reset_terminal
 
-task_limit = int(config['DEFAULT'].get('process_limit', 1))
-threads = str(config['DEFAULT'].get('threads', '1'))
-cutoff = int(config['DEFAULT'].get('cutoff_screens', 1))
-ffmpeg_limit = config['DEFAULT'].get('ffmpeg_limit', False)
-ffmpeg_is_good = config['DEFAULT'].get('ffmpeg_is_good', False)
-use_libplacebo = config['DEFAULT'].get('use_libplacebo', True)
-
-try:
-    task_limit = int(task_limit)  # Convert to integer
-except ValueError:
-    task_limit = 1
-tone_map = config['DEFAULT'].get('tone_map', False)
-ffmpeg_compression = str(config['DEFAULT'].get('ffmpeg_compression', '6'))
-algorithm = config['DEFAULT'].get('algorithm', 'mobius').strip()
-desat = float(config['DEFAULT'].get('desat', 10.0))
+default_config: dict[str, Any] = {}
+task_limit = 1
+threads = "1"
+cutoff = 1
+ffmpeg_limit = False
+ffmpeg_is_good = False
+use_libplacebo = True
+tone_map = False
+ffmpeg_compression = "6"
+algorithm = "mobius"
+desat = 10.0
 
 
-async def run_ffmpeg(command):
+def _apply_config(config: Mapping[str, Any]) -> None:
+    global default_config, task_limit, threads, cutoff
+    global ffmpeg_limit, ffmpeg_is_good, use_libplacebo
+    global tone_map, ffmpeg_compression, algorithm, desat
+
+    default_section = config.get('DEFAULT', {})
+    default_config = cast(dict[str, Any], default_section) if isinstance(default_section, Mapping) else {}
+
+    try:
+        task_limit = int(default_config.get('process_limit', 1) or 1)
+    except (TypeError, ValueError):
+        task_limit = 1
+
+    threads = str(default_config.get('threads', '1'))
+
+    try:
+        cutoff = int(default_config.get('cutoff_screens', 1) or 1)
+    except (TypeError, ValueError):
+        cutoff = 1
+
+    ffmpeg_limit = default_config.get('ffmpeg_limit', False)
+    ffmpeg_is_good = default_config.get('ffmpeg_is_good', False)
+    use_libplacebo = default_config.get('use_libplacebo', True)
+    tone_map = default_config.get('tone_map', False)
+    ffmpeg_compression = str(default_config.get('ffmpeg_compression', '6'))
+    algorithm = str(default_config.get('algorithm', 'mobius')).strip()
+    try:
+        desat = float(default_config.get('desat', 10.0))
+    except (TypeError, ValueError):
+        desat = 10.0
+
+
+async def run_ffmpeg(command: Any) -> tuple[Optional[int], bytes, bytes]:
     if platform.system() == 'Linux':
         ffmpeg_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'bin', 'ffmpeg', 'ffmpeg')
         if os.path.exists(ffmpeg_path):
@@ -47,7 +80,7 @@ async def run_ffmpeg(command):
                 stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await process.communicate()
-            return process.returncode, stdout, stderr
+            return (process.returncode or -1), stdout, stderr
 
     process = await asyncio.create_subprocess_exec(
         *command.compile(),
@@ -58,43 +91,61 @@ async def run_ffmpeg(command):
     return process.returncode, stdout, stderr
 
 
-async def sanitize_filename(filename):
+async def sanitize_filename(filename: str) -> str:
     # Replace invalid characters like colons with an underscore
     return re.sub(r'[<>:"/\\|?*]', '_', filename)
 
 
-async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, image_list, ffdebug, num_screens=None, force_screenshots=False):
+async def disc_screenshots(
+        meta: dict[str, Any],
+        filename: str,
+        bdinfo: dict[str, Any],
+        folder_id: str,
+        base_dir: str,
+        use_vs: bool,
+        image_list: Union[list[dict[str, str]], None] = None,
+        ffdebug: bool = False,
+        num_screens: int = 0,
+        force_screenshots: bool = False
+) -> None:
     img_host = await get_image_host(meta)
     screens = meta['screens']
-    if meta['debug']:
-        start_time = time.time()
+    start_time = time.time() if meta.get('debug') else 0.0
     if 'image_list' not in meta:
         meta['image_list'] = []
-    existing_images = [img for img in meta['image_list'] if isinstance(img, dict) and img.get('img_url', '').startswith('http')]
+    image_list_entries = cast(list[dict[str, Any]], meta['image_list'])
+    existing_images: list[dict[str, Any]] = [
+        img
+        for img in image_list_entries
+        if str(img.get('img_url', '')).startswith('http')
+    ]
 
     if len(existing_images) >= cutoff and not force_screenshots:
         console.print(f"[yellow]There are already at least {cutoff} images in the image list. Skipping additional screenshots.")
         return
 
-    if num_screens is None:
+    if not num_screens:
         num_screens = screens
-    if num_screens == 0 or len(image_list) >= num_screens:
+    if num_screens == 0 or (image_list and len(image_list) >= num_screens):
         return
 
     sanitized_filename = await sanitize_filename(filename)
-    length = 0
-    file = None
-    frame_rate = None
-    for each in bdinfo['files']:
+    length: float = 0.0
+    file_path: str = ""
+    frame_rate: Optional[float] = None
+    bdinfo_files = cast(list[dict[str, Any]], bdinfo.get('files', []))
+    bdinfo_path = cast(str, bdinfo.get('path', ''))
+    for each in bdinfo_files:
         # Calculate total length in seconds, including fractional part
-        int_length = sum(float(x) * 60 ** i for i, x in enumerate(reversed(each['length'].split(':'))))
+        length_str = str(each.get('length', '0'))
+        int_length = sum(float(x) * 60 ** i for i, x in enumerate(reversed(length_str.split(':'))))
 
         if int_length > length:
             length = int_length
-            for root, dirs, files in os.walk(bdinfo['path']):
+            for root, _dirs, files in os.walk(bdinfo_path):
                 for name in files:
-                    if name.lower() == each['file'].lower():
-                        file = os.path.join(root, name)
+                    if name.lower() == str(each.get('file', '')).lower():
+                        file_path = os.path.join(root, name)
                         break  # Stop searching once the file is found
 
     if 'video' in bdinfo and bdinfo['video']:
@@ -105,16 +156,15 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
             except ValueError:
                 console.print("[red]Error: Unable to parse frame rate from bdinfo['video'][0]['fps']")
 
+    file_path = str(file_path)
+
     keyframe = 'nokey' if "VC-1" in bdinfo['video'][0]['codec'] or bdinfo['video'][0]['hdr_dv'] != "" else 'none'
     if meta['debug']:
-        print(f"File: {file}, Length: {length}, Frame Rate: {frame_rate}")
+        print(f"File: {file_path}, Length: {length}, Frame Rate: {frame_rate}")
     os.chdir(f"{base_dir}/tmp/{folder_id}")
     existing_screens = glob.glob(f"{sanitized_filename}-*.png")
     total_existing = len(existing_screens) + len(existing_images)
-    if not force_screenshots:
-        num_screens = max(0, screens - total_existing)
-    else:
-        num_screens = num_screens
+    num_screens = max(0, screens - total_existing) if not force_screenshots else num_screens
 
     if num_screens == 0 and not force_screenshots:
         console.print('[bold green]Reusing existing screenshots. No additional screenshots needed.')
@@ -129,22 +179,23 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
     else:
         hdr_tonemap = False
 
-    ss_times = await valid_ss_time([], num_screens, length, frame_rate, meta, retake=force_screenshots)
+    ss_times = await valid_ss_time([], num_screens, length, frame_rate or 24.0, meta, retake=force_screenshots)
 
     if meta.get('frame_overlay', False):
         console.print("[yellow]Getting frame information for overlays...")
-        frame_info_tasks = [
-            get_frame_info(file, ss_times[i], meta)
+        # Build list of (original_index, task) to preserve index correspondence
+        frame_info_tasks_with_idx = [
+            (i, get_frame_info(file_path, ss_times[i], meta))
             for i in range(num_screens + 1)
-            if not os.path.exists(f"{base_dir}/tmp/{folder_id}/{sanitized_filename}-{i}.png")
+            if not os.path.exists(f"{base_dir}/tmp/{folder_id}/{sanitized_filename}-{len(existing_screens) + i}.png")
             or meta.get('retake', False)
         ]
-        frame_info_results = await asyncio.gather(*frame_info_tasks)
+        frame_info_results = await asyncio.gather(*[task for _, task in frame_info_tasks_with_idx])
         meta['frame_info_map'] = {}
 
-        # Create a mapping from time to frame info
-        for i, info in enumerate(frame_info_results):
-            meta['frame_info_map'][ss_times[i]] = info
+        # Create a mapping from time to frame info using preserved indices
+        for (orig_idx, _), info in zip(frame_info_tasks_with_idx, frame_info_results):
+            meta['frame_info_map'][ss_times[orig_idx]] = info
 
         if meta['debug']:
             console.print(f"[cyan]Collected frame information for {len(frame_info_results)} frames")
@@ -154,30 +205,38 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
     if meta['debug']:
         console.print(f"Using {num_workers} worker(s) for {num_screens} image(s)")
 
-    capture_tasks = []
-    capture_results = []
+    capture_tasks: list[Awaitable[Optional[tuple[int, str]]]] = []
+    capture_results: list[str] = []
+    valid_results: list[str] = []
+    remaining_retakes: list[str] = []
     if use_vs:
         from src.vs import vs_screengn
-        vs_screengn(source=file, encode=None, filter_b_frames=False, num=num_screens, dir=f"{base_dir}/tmp/{folder_id}/")
+        vs_screengn(source=file_path, encode=None, num=num_screens, dir=f"{base_dir}/tmp/{folder_id}/")
     else:
-        if meta.get('ffdebug', False):
-            loglevel = 'verbose'
-        else:
-            loglevel = 'quiet'
+        loglevel = 'verbose' if ffdebug else 'quiet'
 
         existing_indices = {int(p.split('-')[-1].split('.')[0]) for p in existing_screens}
 
         # Create semaphore to limit concurrent tasks
         semaphore = asyncio.Semaphore(task_limit)
 
-        async def capture_disc_with_semaphore(*args):
+        async def capture_disc_with_semaphore(
+            index: int,
+            file: str,
+            ss_time: str,
+            image_path: str,
+            keyframe: str,
+            loglevel: str,
+            hdr_tonemap: bool,
+            meta: dict[str, Any]
+        ) -> Optional[tuple[int, str]]:
             async with semaphore:
-                return await capture_disc_task(*args)
+                return await capture_disc_task(index, file, ss_time, image_path, keyframe, loglevel, hdr_tonemap, meta)
 
         capture_tasks = [
             capture_disc_with_semaphore(
                 i,
-                file,
+                file_path,
                 ss_times[i],
                 os.path.abspath(f"{base_dir}/tmp/{folder_id}/{sanitized_filename}-{len(existing_indices) + i}.png"),
                 keyframe,
@@ -189,17 +248,17 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
         ]
 
         results = await asyncio.gather(*capture_tasks)
-        filtered_results = [r for r in results if isinstance(r, tuple) and len(r) == 2]
+        filtered_results: list[tuple[int, str]] = [r for r in results if r is not None]
 
         if len(filtered_results) != len(results):
             console.print(f"[yellow]Warning: {len(results) - len(filtered_results)} capture tasks returned invalid results.")
 
         filtered_results.sort(key=lambda x: x[0])  # Ensure order is preserved
-        capture_results = [r[1] for r in filtered_results if r[1] is not None]
+        capture_results = [r[1] for r in filtered_results]
 
         if capture_results and len(capture_results) > num_screens:
             try:
-                smallest = min(capture_results, key=os.path.getsize)
+                smallest: str = min(capture_results, key=os.path.getsize)
                 if meta['debug']:
                     console.print(f"[yellow]Removing smallest image: {smallest} ({os.path.getsize(smallest)} bytes)")
                 os.remove(smallest)
@@ -225,21 +284,21 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
                 console.print(f"[yellow]Image {image_path} is incredibly small, retaking.")
                 retake = True
             else:
-                if "imgbb" in img_host:
+                if img_host and "imgbb" in img_host:
                     if image_size <= 31000000:
                         if meta['debug']:
                             console.print(f"[green]Image {image_path} meets size requirements for imgbb.[/green]")
                     else:
                         console.print(f"[red]Image {image_path} with size {image_size} bytes: does not meet size requirements for imgbb, retaking.")
                         retake = True
-                elif img_host in ["imgbox", "pixhost"]:
+                elif img_host and img_host in ["imgbox", "pixhost"]:
                     if 75000 < image_size <= 10000000:
                         if meta['debug']:
                             console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
                     else:
                         console.print(f"[red]Image {image_path} with size {image_size} bytes: does not meet size requirements for {img_host}, retaking.")
                         retake = True
-                elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn"]:
+                elif img_host and img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn", "sharex"]:
                     if meta['debug']:
                         console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
                 else:
@@ -255,28 +314,27 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
                         if os.path.exists(image_path):
                             os.remove(image_path)
 
-                        random_time = random.uniform(0, length)
+                        random_time = random.uniform(0, length)  # nosec B311 - Random screenshot timing, not cryptographic
                         screenshot_response = await capture_disc_task(
-                            index, file, random_time, image_path, keyframe, loglevel, hdr_tonemap, meta
+                            index, file_path, str(random_time), image_path, keyframe, loglevel, hdr_tonemap, meta
                         )
-                        new_size = os.path.getsize(screenshot_response)
+                        new_size = os.path.getsize(image_path)
                         valid_image = False
 
-                        if "imgbb" in img_host:
+                        if img_host and "imgbb" in img_host:
                             if new_size > 75000 and new_size <= 31000000:
-                                console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
+                                console.print(f"[green]Successfully retaken screenshot for: {image_path} ({new_size} bytes)[/green]")
                                 valid_image = True
-                        elif img_host in ["imgbox", "pixhost"]:
+                        elif img_host and img_host in ["imgbox", "pixhost"]:
                             if new_size > 75000 and new_size <= 10000000:
-                                console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
+                                console.print(f"[green]Successfully retaken screenshot for: {image_path} ({new_size} bytes)[/green]")
                                 valid_image = True
-                        elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn"]:
-                            if new_size > 75000:
-                                console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
-                                valid_image = True
+                        elif img_host and img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn", "sharex"] and new_size > 75000:
+                            console.print(f"[green]Successfully retaken screenshot for: {image_path} ({new_size} bytes)[/green]")
+                            valid_image = True
 
                         if valid_image:
-                            valid_results.append(screenshot_response)
+                            valid_results.append(image_path)
                             break
                         else:
                             console.print(f"[red]Retaken image {screenshot_response} does not meet the size requirements for {img_host}. Retrying...[/red]")
@@ -298,7 +356,7 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
         finish_time = time.time()
         console.print(f"Screenshots processed in {finish_time - start_time:.4f} seconds")
 
-    multi_screens = int(config['DEFAULT'].get('multiScreens', 2))
+    multi_screens = int(default_config.get('multiScreens', 2))
     discs = meta.get('discs', [])
     one_disc = True
     if discs and len(discs) == 1:
@@ -307,13 +365,13 @@ async def disc_screenshots(meta, filename, bdinfo, folder_id, base_dir, use_vs, 
         one_disc = False
 
     if (not meta.get('tv_pack') and one_disc) or multi_screens == 0:
-        await cleanup()
+        await cleanup_manager.cleanup()
 
 
-async def capture_disc_task(index, file, ss_time, image_path, keyframe, loglevel, hdr_tonemap, meta):
+async def capture_disc_task(index: int, file: str, ss_time: str, image_path: str, keyframe: str, loglevel: str, hdr_tonemap: bool, meta: dict[str, Any]) -> Optional[tuple[int, str]]:
     try:
         # Build filter chain
-        vf_filters = []
+        vf_filters: list[str] = []
 
         if hdr_tonemap:
             vf_filters.extend([
@@ -340,7 +398,7 @@ async def capture_disc_task(index, file, ss_time, image_path, keyframe, loglevel
 
             frame_type = frame_info.get('frame_type', 'Unknown')
 
-            text_size = int(config['DEFAULT'].get('overlay_text_size', 18))
+            text_size = int(default_config.get('overlay_text_size', 18))
             # Get the resolution and convert it to integer
             resol = int(''.join(filter(str.isdigit, meta.get('resolution', '1080p'))))
             font_size = round(text_size*resol/1080)
@@ -413,41 +471,61 @@ async def capture_disc_task(index, file, ss_time, image_path, keyframe, loglevel
             return (index, image_path)
         else:
             console.print(f"[red]FFmpeg error capturing screenshot: {stderr.decode()}")
-            return (index, None)  # Ensure tuple format
+            return None  # Ensure tuple format
     except Exception as e:
         console.print(f"[red]Error capturing screenshot: {e}")
         return None
 
 
-async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
+async def dvd_screenshots(
+        meta: dict[str, Any],
+        disc_num: int,
+        num_screens: int = 0,
+        retry_cap: bool = False
+) -> None:
     screens = meta['screens']
     if 'image_list' not in meta:
         meta['image_list'] = []
-    existing_images = [img for img in meta['image_list'] if isinstance(img, dict) and img.get('img_url', '').startswith('http')]
+    image_list_entries = cast(list[dict[str, Any]], meta['image_list'])
+    existing_images: list[dict[str, Any]] = [
+        img
+        for img in image_list_entries
+        if str(img.get('img_url', '')).startswith('http')
+    ]
 
     if len(existing_images) >= cutoff and not retry_cap:
         console.print(f"[yellow]There are already at least {cutoff} images in the image list. Skipping additional screenshots.")
         return
     screens = meta.get('screens', 6)
-    if num_screens is None:
+    if not num_screens:
         num_screens = screens - len(existing_images)
     if num_screens == 0 or (len(meta.get('image_list', [])) >= screens and disc_num == 0):
         return
 
-    if len(glob.glob(f"{meta['base_dir']}/tmp/{meta['uuid']}/{meta['discs'][disc_num]['name']}-*.png")) >= num_screens:
+    sanitized_disc_name = await sanitize_filename(meta['discs'][disc_num]['name'])
+    if len(glob.glob(f"{meta['base_dir']}/tmp/{meta['uuid']}/{sanitized_disc_name}-*.png")) >= num_screens:
         i = num_screens
         console.print('[bold green]Reusing screenshots')
         return
 
     ifo_mi = MediaInfo.parse(f"{meta['discs'][disc_num]['path']}/VTS_{meta['discs'][disc_num]['main_set'][0][:2]}_0.IFO", mediainfo_options={'inform_version': '1'})
-    sar = 1
-    for track in ifo_mi.tracks:
+    sar = 1.0
+    w_sar = 1.0
+    h_sar = 1.0
+    par: float = 1.0
+    dar: float = 1.0
+    width: float = 0.0
+    height: float = 0.0
+    frame_rate: float = 24.0
+    tracks: list[Any] = []
+    tracks.extend(cast(list[Any], getattr(ifo_mi, "tracks", [])))
+    for track in tracks:
         if track.track_type == "Video":
             if isinstance(track.duration, str):
                 durations = [float(d) for d in track.duration.split(' / ')]
-                length = max(durations) / 1000  # Use the longest duration
+                _ = max(durations) / 1000  # Use the longest duration (unused)
             else:
-                length = float(track.duration) / 1000  # noqa #F841 # Convert to seconds
+                _ = float(track.duration) / 1000  # Convert to seconds (unused)
 
             par = float(track.pixel_aspect_ratio)
             dar = float(track.display_aspect_ratio)
@@ -455,19 +533,19 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
             height = float(track.height)
             frame_rate = float(track.frame_rate)
     if par < 1:
-        new_height = dar * height
+        new_height: float = dar * height
         sar = width / new_height
-        w_sar = 1
+        w_sar = 1.0
         h_sar = sar
     else:
         sar = par
         w_sar = sar
-        h_sar = 1
+        h_sar = 1.0
 
-    async def _is_vob_good(n, loops, num_screens):
+    async def _is_vob_good(n: int, loops: int, _num_screens: int) -> tuple[float, float]:
         max_loops = 6
         fallback_duration = 300
-        valid_tracks = []
+        valid_tracks: list[dict[str, Any]] = []
 
         while loops < max_loops:
             try:
@@ -490,7 +568,7 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
 
                 if valid_tracks:
                     # Sort by duration, take longest track
-                    longest_track = max(valid_tracks, key=lambda x: x['duration'])
+                    longest_track: dict[str, Any] = max(valid_tracks, key=lambda x: x['duration'])
                     return longest_track['duration'], longest_track['track_index']
 
             except Exception as e:
@@ -499,34 +577,33 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
             n = (n + 1) % len(main_set)
             loops += 1
 
-        return fallback_duration, 0
+        return fallback_duration, 0.0
 
     main_set = meta['discs'][disc_num]['main_set'][1:] if len(meta['discs'][disc_num]['main_set']) > 1 else meta['discs'][disc_num]['main_set']
     os.chdir(f"{meta['base_dir']}/tmp/{meta['uuid']}")
-    voblength, n = await _is_vob_good(0, 0, num_screens)
+    voblength, _vob_index = await _is_vob_good(0, 0, num_screens)
     ss_times = await valid_ss_time([], num_screens, voblength, frame_rate, meta, retake=retry_cap)
-    capture_tasks = []
-    existing_images = 0
-    existing_image_paths = []
+    capture_tasks: list[Awaitable[tuple[int, Optional[str]]]] = []
+    existing_images_count = 0
+    existing_image_paths: list[str] = []
 
     for i in range(num_screens + 1):
-        image = f"{meta['base_dir']}/tmp/{meta['uuid']}/{meta['discs'][disc_num]['name']}-{i}.png"
+        image = f"{meta['base_dir']}/tmp/{meta['uuid']}/{sanitized_disc_name}-{i}.png"
         input_file = f"{meta['discs'][disc_num]['path']}/VTS_{main_set[i % len(main_set)]}"
         if os.path.exists(image) and not meta.get('retake', False):
-            existing_images += 1
+            existing_images_count += 1
             existing_image_paths.append(image)
 
-    if existing_images == num_screens and not meta.get('retake', False):
+    if existing_images_count == num_screens and not meta.get('retake', False):
         console.print("[yellow]The correct number of screenshots already exists. Skipping capture process.")
-        capture_results = existing_image_paths
+        capture_results: list[str] = existing_image_paths
         return
     else:
         capture_tasks = []
-        image_paths = []
-        input_files = []
+        image_paths: list[str] = []
+        input_files: list[str] = []
 
         for i in range(num_screens + 1):
-            sanitized_disc_name = await sanitize_filename(meta['discs'][disc_num]['name'])
             image = f"{meta['base_dir']}/tmp/{meta['uuid']}/{sanitized_disc_name}-{i}.png"
             input_file = f"{meta['discs'][disc_num]['path']}/VTS_{main_set[i % len(main_set)]}"
             image_paths.append(image)
@@ -558,7 +635,7 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
         # Create semaphore to limit concurrent tasks
         semaphore = asyncio.Semaphore(task_limit)
 
-        async def capture_dvd_with_semaphore(args):
+        async def capture_dvd_with_semaphore(args: tuple[int, str, str, str, dict[str, Any], float, float, float, float]) -> tuple[int, Optional[str]]:
             async with semaphore:
                 return await capture_dvd_screenshot(args)
 
@@ -570,9 +647,9 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
                     )
                 )
 
-        capture_results = []
+        capture_results: list[str] = []
         results = await asyncio.gather(*capture_tasks)
-        filtered_results = [r for r in results if isinstance(r, tuple) and len(r) == 2]
+        filtered_results: list[tuple[int, Optional[str]]] = list(results)
 
         if len(filtered_results) != len(results):
             console.print(f"[yellow]Warning: {len(results) - len(filtered_results)} capture tasks returned invalid results.")
@@ -583,7 +660,7 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
         if capture_results and len(capture_results) > num_screens:
             smallest = None
             smallest_size = float('inf')
-            for screens in glob.glob1(f"{meta['base_dir']}/tmp/{meta['uuid']}/", f"{meta['discs'][disc_num]['name']}-*"):
+            for screens in [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}/", f"{meta['discs'][disc_num]['name']}-*"))]:
                 screen_path = os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}/", screens)
                 try:
                     screen_size = os.path.getsize(screen_path)
@@ -600,8 +677,8 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
                 os.remove(smallest)
                 capture_results.remove(smallest)
 
-        valid_results = []
-        remaining_retakes = []
+        valid_results: list[str] = []
+        remaining_retakes: list[str] = []
 
         for image in capture_results:
             if "Error" in image:
@@ -621,7 +698,7 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
 
                     index = int(image.rsplit('-', 1)[-1].split('.')[0])
                     input_file = f"{meta['discs'][disc_num]['path']}/VTS_{main_set[index % len(main_set)]}"
-                    adjusted_time = random.uniform(0, voblength)
+                    adjusted_time = random.uniform(0, voblength)  # nosec B311 - Random screenshot timing, not cryptographic
 
                     if os.path.exists(image):  # Prevent unnecessary deletion error
                         try:
@@ -631,15 +708,9 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
                             break
 
                     try:
-                        # Ensure `capture_dvd_screenshot()` always returns a tuple
                         screenshot_response = await capture_dvd_screenshot(
-                            (index, input_file, image, adjusted_time, meta, width, height, w_sar, h_sar)
+                            (index, input_file, image, str(adjusted_time), meta, width, height, w_sar, h_sar)
                         )
-
-                        # Ensure it is a tuple before unpacking
-                        if not isinstance(screenshot_response, tuple) or len(screenshot_response) != 2:
-                            console.print(f"[red]Failed to capture screenshot for {image}. Retrying...[/red]")
-                            continue
 
                         index, screenshot_result = screenshot_response  # Safe unpacking
 
@@ -668,7 +739,7 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
     if not retry_cap and meta['debug']:
         console.print(f"[green]Successfully captured {len(valid_results)} screenshots.")
 
-    multi_screens = int(config['DEFAULT'].get('multiScreens', 2))
+    multi_screens = int(default_config.get('multiScreens', 2))
     discs = meta.get('discs', [])
     one_disc = True
     if discs and len(discs) == 1:
@@ -677,22 +748,33 @@ async def dvd_screenshots(meta, disc_num, num_screens=None, retry_cap=None):
         one_disc = False
 
     if (not meta.get('tv_pack') and one_disc) or multi_screens == 0:
-        await cleanup()
+        await cleanup_manager.cleanup()
 
 
-async def capture_dvd_screenshot(task):
-    index, input_file, image, seek_time, meta, width, height, w_sar, h_sar = task
+async def capture_dvd_screenshot(task: tuple[int, str, str, str, dict[str, Any], float, float, float, float]) -> tuple[int, Optional[str]]:
+    index, input_file, image, seek_time_str, meta, width, height, w_sar, h_sar = task
+    seek_time = float(seek_time_str)
 
     try:
         loglevel = 'verbose' if meta.get('ffdebug', False) else 'quiet'
         media_info = MediaInfo.parse(input_file)
-        video_duration = next((track.duration for track in media_info.tracks if track.track_type == "Video"), None)
+        video_duration: Optional[float] = None
+        tracks: list[Any] = []
+        tracks.extend(cast(list[Any], getattr(media_info, "tracks", [])))
+        for track in tracks:
+            if track.track_type == "Video":
+                try:
+                    if track.duration is not None:
+                        video_duration = float(track.duration)
+                except (TypeError, ValueError):
+                    video_duration = None
+                break
 
         if video_duration and seek_time > video_duration:
             seek_time = max(0, video_duration - 1)
 
         # Build filter chain
-        vf_filters = []
+        vf_filters: list[str] = []
         if w_sar != 1 or h_sar != 1:
             scaled_w = int(round(width * w_sar))
             scaled_h = int(round(height * h_sar))
@@ -715,7 +797,7 @@ async def capture_dvd_screenshot(task):
 
             frame_type = frame_info.get('frame_type', 'Unknown')
 
-            text_size = int(config['DEFAULT'].get('overlay_text_size', 18))
+            text_size = int(default_config.get('overlay_text_size', 18))
             # Get the resolution and convert it to integer
             resol = int(''.join(filter(str.isdigit, meta.get('resolution', '576p'))))
             font_size = round(text_size*resol/576)
@@ -767,7 +849,7 @@ async def capture_dvd_screenshot(task):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
-        stdout, stderr = await process.communicate()
+        _stdout, stderr = await process.communicate()
         returncode = process.returncode
 
         if returncode != 0:
@@ -785,105 +867,119 @@ async def capture_dvd_screenshot(task):
         return (index, None)
 
 
-async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=None, force_screenshots=False, manual_frames=None):
+async def screenshots(
+        path: str,
+        filename: str,
+        folder_id: str,
+        base_dir: str,
+        meta: dict[str, Any],
+        num_screens: int = 0,
+        force_screenshots: bool = False,
+        manual_frames: Union[str, list[str]] = "",
+) -> Union[list[str], None]:
     img_host = await get_image_host(meta)
     screens = meta['screens']
+    start_time = time.time() if meta.get('debug') else 0.0
     if meta['debug']:
-        start_time = time.time()
         console.print("Image Host:", img_host)
     if 'image_list' not in meta:
         meta['image_list'] = []
 
-    existing_images = [img for img in meta['image_list'] if isinstance(img, dict) and img.get('img_url', '').startswith('http')]
+    image_list_entries = cast(list[dict[str, Any]], meta['image_list'])
+    existing_images: list[dict[str, Any]] = [
+        img
+        for img in image_list_entries
+        if str(img.get('img_url', '')).startswith('http')
+    ]
 
     if len(existing_images) >= cutoff and not force_screenshots:
         console.print(f"[yellow]There are already at least {cutoff} images in the image list. Skipping additional screenshots.")
-        return
+        return None
 
     try:
-        with open(f"{base_dir}/tmp/{folder_id}/MediaInfo.json", encoding='utf-8') as f:
-            mi = json.load(f)
-            video_track = mi['media']['track'][1]
+        mi_text = await asyncio.to_thread(Path(f"{base_dir}/tmp/{folder_id}/MediaInfo.json").read_text, encoding='utf-8')
+        mi = json.loads(mi_text)
+        video_track = mi['media']['track'][1]
 
-            def safe_float(value, default=0.0, field_name=""):
-                if isinstance(value, (int, float)):
+        def safe_float(value: Any, default: float = 0.0, field_name: str = "") -> float:
+            if isinstance(value, (int, float)):
+                return float(value)
+            elif isinstance(value, str):
+                try:
                     return float(value)
-                elif isinstance(value, str):
-                    try:
-                        return float(value)
-                    except ValueError:
-                        console.print(f"[yellow]Warning: Could not convert string '{value}' to float for {field_name}, using default {default}[/yellow]")
-                        return default
-                elif isinstance(value, dict):
-                    for key in ['#value', 'value', 'duration', 'Duration']:
-                        if key in value:
-                            return safe_float(value[key], default, field_name)
-                    console.print(f"[yellow]Warning: {field_name} is a dict but no usable value found: {value}, using default {default}[/yellow]")
+                except ValueError:
+                    console.print(f"[yellow]Warning: Could not convert string '{value}' to float for {field_name}, using default {default}[/yellow]")
                     return default
-                else:
-                    console.print(f"[yellow]Warning: Unable to convert to float: {type(value)} {value} for {field_name}, using default {default}[/yellow]")
-                    return default
-
-            length = safe_float(
-                video_track.get('Duration'),
-                safe_float(mi['media']['track'][0].get('Duration'), 3600.0, "General Duration"),
-                "Video Duration"
-            )
-
-            width = safe_float(video_track.get('Width'), 1920.0, "Width")
-            height = safe_float(video_track.get('Height'), 1080.0, "Height")
-            par = safe_float(video_track.get('PixelAspectRatio'), 1.0, "PixelAspectRatio")
-            dar = safe_float(video_track.get('DisplayAspectRatio'), 16.0/9.0, "DisplayAspectRatio")
-            frame_rate = safe_float(video_track.get('FrameRate'), 24.0, "FrameRate")
-
-            if par == 1:
-                sar = w_sar = h_sar = 1
-            elif par < 1:
-                new_height = dar * height
-                sar = width / new_height
-                w_sar = 1
-                h_sar = sar
+            elif isinstance(value, dict):
+                for key in ['#value', 'value', 'duration', 'Duration']:
+                    if key in value:
+                        return safe_float(value[key], default, field_name)
+                console.print(f"[yellow]Warning: {field_name} is a dict but no usable value found: {value}, using default {default}[/yellow]")
+                return default
             else:
-                sar = w_sar = par
-                h_sar = 1
+                console.print(f"[yellow]Warning: Unable to convert to float: {type(value)} {value} for {field_name}, using default {default}[/yellow]")
+                return default
+
+        length = safe_float(
+            video_track.get('Duration'),
+            safe_float(mi['media']['track'][0].get('Duration'), 3600.0, "General Duration"),
+            "Video Duration"
+        )
+
+        width = safe_float(video_track.get('Width'), 1920.0, "Width")
+        height = safe_float(video_track.get('Height'), 1080.0, "Height")
+        par = safe_float(video_track.get('PixelAspectRatio'), 1.0, "PixelAspectRatio")
+        dar = safe_float(video_track.get('DisplayAspectRatio'), 16.0/9.0, "DisplayAspectRatio")
+        frame_rate = safe_float(video_track.get('FrameRate'), 24.0, "FrameRate")
+
+        if par == 1:
+            sar = w_sar = h_sar = 1.0
+        elif par < 1:
+            new_height = dar * height
+            sar = width / new_height
+            w_sar = 1.0
+            h_sar = sar
+        else:
+            sar = w_sar = par
+            h_sar = 1
     except Exception as e:
         console.print(f"[red]Error processing MediaInfo.json: {e}")
         if meta.get('debug', False):
             import traceback
             console.print(traceback.format_exc())
-        return
+        return None
     meta['frame_rate'] = frame_rate
     loglevel = 'verbose' if meta.get('ffdebug', False) else 'quiet'
     os.chdir(f"{base_dir}/tmp/{folder_id}")
 
     if manual_frames and meta['debug']:
         console.print(f"[yellow]Using manual frames: {manual_frames}")
-    ss_times = []
+    ss_times: list[str] = []
     if manual_frames and not force_screenshots:
         try:
+            manual_frames_list: list[int]
             if isinstance(manual_frames, str):
                 manual_frames_list = [int(frame.strip()) for frame in manual_frames.split(',') if frame.strip()]
-            elif isinstance(manual_frames, list):
-                manual_frames_list = [int(frame) if isinstance(frame, str) else frame for frame in manual_frames]
             else:
-                manual_frames_list = []
+                manual_frames_list = [int(frame) for frame in manual_frames]
             num_screens = len(manual_frames_list)
             if num_screens > 0:
-                ss_times = [frame / frame_rate for frame in manual_frames_list]
+                ss_times = [str(frame / frame_rate) for frame in manual_frames_list]
         except (TypeError, ValueError) as e:
             if meta['debug'] and manual_frames:
                 console.print(f"[red]Error processing manual frames: {e}[/red]")
                 sys.exit(1)
 
-    if num_screens is None or num_screens <= 0:
+    if num_screens <= 0:
         num_screens = screens - len(existing_images)
     if num_screens <= 0:
-        return
+        return None
 
     sanitized_filename = await sanitize_filename(filename)
+    test_image_path = os.path.abspath(f"{base_dir}/tmp/{folder_id}/{sanitized_filename}-libplacebo-test.png")
 
     existing_images_count = 0
-    existing_image_paths = []
+    existing_image_paths: list[str] = []
     for i in range(num_screens):
         image_path = os.path.abspath(f"{base_dir}/tmp/{folder_id}/{sanitized_filename}-{i}.png")
         if os.path.exists(image_path) and not meta.get('retake', False):
@@ -902,18 +998,19 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
     if meta.get('frame_overlay', False):
         if meta['debug']:
             console.print("[yellow]Getting frame information for overlays...")
-        frame_info_tasks = [
-            get_frame_info(path, ss_times[i], meta)
+        # Build list of (original_index, task) to preserve index correspondence
+        frame_info_tasks_with_idx = [
+            (i, get_frame_info(path, ss_times[i], meta))
             for i in range(num_capture)
-            if not os.path.exists(f"{base_dir}/tmp/{folder_id}/{sanitized_filename}-{i}.png")
+            if not os.path.exists(f"{base_dir}/tmp/{folder_id}/{sanitized_filename}-{existing_images_count + i}.png")
             or meta.get('retake', False)
         ]
-        frame_info_results = await asyncio.gather(*frame_info_tasks)
+        frame_info_results = await asyncio.gather(*[task for _, task in frame_info_tasks_with_idx])
         meta['frame_info_map'] = {}
 
-        # Create a mapping from time to frame info
-        for i, info in enumerate(frame_info_results):
-            meta['frame_info_map'][ss_times[i]] = info
+        # Create a mapping from time to frame info using preserved indices
+        for (orig_idx, _), info in zip(frame_info_tasks_with_idx, frame_info_results):
+            meta['frame_info_map'][ss_times[orig_idx]] = info
 
         if meta['debug']:
             console.print(f"[cyan]Collected frame information for {len(frame_info_results)} frames")
@@ -922,15 +1019,13 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
     num_workers = min(num_tasks, task_limit)
 
     meta['libplacebo'] = False
+    hdr_tonemap: bool = False
     if tone_map and ("HDR" in meta['hdr'] or "DV" in meta['hdr'] or "HLG" in meta['hdr']):
         if use_libplacebo and not meta.get('frame_overlay', False):
             if not ffmpeg_is_good:
-                test_time = ss_times[0] if ss_times else 0
-                test_image = image_path if isinstance(image_path, str) else (
-                    image_path[0] if isinstance(image_path, list) and image_path else None
-                )
+                test_time = str(ss_times[0] if ss_times else 0)
                 libplacebo, compatible = await check_libplacebo_compatibility(
-                    w_sar, h_sar, width, height, path, test_time, test_image, loglevel, meta
+                    w_sar, h_sar, width, height, path, test_time, test_image_path, loglevel, meta
                 )
                 if compatible:
                     hdr_tonemap = True
@@ -943,14 +1038,14 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                     hdr_tonemap = False
                     console.print("[yellow]FFMPEG failed tonemap checking.[/yellow]")
                     await asyncio.sleep(2)
-                if not libplacebo and "HDR" not in meta.get('hdr'):
+                if not libplacebo and "HDR" not in meta.get('hdr', ''):
                     hdr_tonemap = False
             else:
                 hdr_tonemap = True
                 meta['tonemapped'] = True
                 meta['libplacebo'] = True
         else:
-            if "HDR" not in meta.get('hdr'):
+            if "HDR" not in meta.get('hdr', ''):
                 hdr_tonemap = False
             else:
                 hdr_tonemap = True
@@ -964,26 +1059,34 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
     # Create semaphore to limit concurrent tasks
     semaphore = asyncio.Semaphore(num_workers)
 
-    async def capture_with_semaphore(args):
+    async def capture_with_semaphore(args: tuple[int, str, float, str, float, float, float, float, str, bool, dict[str, Any]]) -> Optional[tuple[int, Optional[str]]]:
         async with semaphore:
             return await capture_screenshot(args)
 
-    capture_tasks = []
+    capture_tasks: list[Awaitable[Optional[tuple[int, Optional[str]]]]] = []
     for i in range(num_capture):
         image_index = existing_images_count + i
         image_path = os.path.abspath(f"{base_dir}/tmp/{folder_id}/{sanitized_filename}-{image_index}.png")
         if not os.path.exists(image_path) or meta.get('retake', False):
             capture_tasks.append(
                 capture_with_semaphore(
-                    (i, path, ss_times[i], image_path, width, height, w_sar, h_sar, loglevel, hdr_tonemap, meta)
+                    (i, path, float(ss_times[i]), image_path, width, height, w_sar, h_sar, loglevel, hdr_tonemap, meta)
                 )
             )
 
     try:
-        results = await asyncio.gather(*capture_tasks, return_exceptions=True)
-        capture_results = [r for r in results if isinstance(r, tuple) and len(r) == 2]
-        capture_results.sort(key=lambda x: x[0])
-        capture_results = [r[1] for r in capture_results if r[1] is not None]
+        results = cast(list[object], await asyncio.gather(*capture_tasks, return_exceptions=True))
+        # Log any error strings that were returned (these indicate exceptions in capture_screenshot)
+        for r in results:
+            if isinstance(r, Exception):
+                console.print(f"[red]Screenshot capture exception: {r}[/red]")
+        capture_result_tuples: list[tuple[int, Optional[str]]] = [
+            cast(tuple[int, Optional[str]], r)
+            for r in results
+            if isinstance(r, tuple)
+        ]
+        capture_result_tuples.sort(key=lambda x: x[0])
+        capture_results: list[str] = [r[1] for r in capture_result_tuples if r[1] is not None]
 
     except KeyboardInterrupt:
         console.print("\n[red]CTRL+C detected. Cancelling capture tasks...[/red]")
@@ -991,19 +1094,19 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
         await kill_all_child_processes()
         console.print("[red]All tasks cancelled. Exiting.[/red]")
         gc.collect()
-        reset_terminal()
+        cleanup_manager.reset_terminal()
         sys.exit(1)
     except asyncio.CancelledError:
         await asyncio.sleep(0.1)
         await kill_all_child_processes()
         gc.collect()
-        reset_terminal()
+        cleanup_manager.reset_terminal()
         sys.exit(1)
     except Exception:
         await asyncio.sleep(0.1)
         await kill_all_child_processes()
         gc.collect()
-        reset_terminal()
+        cleanup_manager.reset_terminal()
         sys.exit(1)
     finally:
         await asyncio.sleep(0.1)
@@ -1014,13 +1117,9 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
     if not force_screenshots and meta['debug']:
         console.print(f"[green]Successfully captured {len(capture_results)} screenshots.")
 
-    valid_results = []
-    remaining_retakes = []
+    valid_results: list[str] = []
+    remaining_retakes: list[str] = []
     for image_path in capture_results:
-        if "Error" in image_path:
-            console.print(f"[red]{image_path}")
-            continue
-
         retake = False
         image_size = os.path.getsize(image_path)
         if meta['debug']:
@@ -1030,21 +1129,21 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                 console.print(f"[yellow]Image {image_path} is incredibly small, retaking.")
                 retake = True
             else:
-                if "imgbb" in img_host:
+                if img_host and "imgbb" in img_host:
                     if image_size <= 31000000:
                         if meta['debug']:
                             console.print(f"[green]Image {image_path} meets size requirements for imgbb.[/green]")
                     else:
                         console.print(f"[red]Image {image_path} with size {image_size} bytes: does not meet size requirements for imgbb, retaking.")
                         retake = True
-                elif img_host in ["imgbox", "pixhost"]:
+                elif img_host and img_host in ["imgbox", "pixhost"]:
                     if 75000 < image_size <= 10000000:
                         if meta['debug']:
                             console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
                     else:
                         console.print(f"[red]Image {image_path} with size {image_size} bytes: does not meet size requirements for {img_host}, retaking.")
                         retake = True
-                elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn"]:
+                elif img_host and img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn", "sharex"]:
                     if meta['debug']:
                         console.print(f"[green]Image {image_path} meets size requirements for {img_host}.[/green]")
                 else:
@@ -1056,12 +1155,12 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
             retry_offsets = [5.0, 10.0, -10.0, 100.0, -100.0]
             frame_rate = meta.get('frame_rate', 24.0)
             original_index = int(image_path.rsplit('-', 1)[-1].split('.')[0])
-            original_time = ss_times[original_index] if 'ss_times' in locals() and original_index < len(ss_times) else None
+            original_time = ss_times[original_index] if original_index < len(ss_times) else None
 
             for attempt in range(1, retry_attempts + 1):
                 if original_time is not None:
                     for offset in retry_offsets:
-                        adjusted_time = max(0, original_time + offset)
+                        adjusted_time = max(0, float(original_time) + offset)
                         console.print(f"[yellow]Retaking screenshot for: {image_path} (Attempt {attempt}/{retry_attempts}) at {adjusted_time:.2f}s (offset {offset:+.2f}s)[/yellow]")
                         try:
                             if os.path.exists(image_path):
@@ -1082,21 +1181,20 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                             new_size = os.path.getsize(screenshot_path)
                             valid_image = False
 
-                            if "imgbb" in img_host:
+                            if img_host and "imgbb" in img_host:
                                 if 75000 < new_size <= 31000000:
-                                    console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
+                                    console.print(f"[green]Successfully retaken screenshot for: {screenshot_path} ({new_size} bytes)[/green]")
                                     valid_image = True
-                            elif img_host in ["imgbox", "pixhost"]:
+                            elif img_host and img_host in ["imgbox", "pixhost"]:
                                 if 75000 < new_size <= 10000000:
-                                    console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
+                                    console.print(f"[green]Successfully retaken screenshot for: {screenshot_path} ({new_size} bytes)[/green]")
                                     valid_image = True
-                            elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn"]:
-                                if new_size > 75000:
-                                    console.print(f"[green]Successfully retaken screenshot for: {screenshot_response} ({new_size} bytes)[/green]")
-                                    valid_image = True
+                            elif img_host and img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn", "sharex"] and new_size > 75000:
+                                console.print(f"[green]Successfully retaken screenshot for: {screenshot_path} ({new_size} bytes)[/green]")
+                                valid_image = True
 
                             if valid_image:
-                                valid_results.append(screenshot_response)
+                                valid_results.append(screenshot_path)
                                 break
                         except Exception as e:
                             console.print(f"[red]Error retaking screenshot for {image_path} at {adjusted_time:.2f}s: {e}[/red]")
@@ -1105,7 +1203,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                     break
                 else:
                     # Fallback: use random time if original_time is not available
-                    random_time = random.uniform(0, length)
+                    random_time = random.uniform(0, length)  # nosec B311 - Random screenshot timing, not cryptographic
                     console.print(f"[yellow]Retaking screenshot for: {image_path} (Attempt {attempt}/{retry_attempts}) at random time {random_time:.2f}s[/yellow]")
                     try:
                         if os.path.exists(image_path):
@@ -1126,18 +1224,17 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
                         new_size = os.path.getsize(screenshot_path)
                         valid_image = False
 
-                        if "imgbb" in img_host:
+                        if img_host and "imgbb" in img_host:
                             if 75000 < new_size <= 31000000:
                                 valid_image = True
-                        elif img_host in ["imgbox", "pixhost"]:
+                        elif img_host and img_host in ["imgbox", "pixhost"]:
                             if 75000 < new_size <= 10000000:
                                 valid_image = True
-                        elif img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn"]:
-                            if new_size > 75000:
-                                valid_image = True
+                        elif img_host and img_host in ["ptpimg", "lensdump", "ptscreens", "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn", "sharex"] and new_size > 75000:
+                            valid_image = True
 
                         if valid_image:
-                            valid_results.append(screenshot_response)
+                            valid_results.append(screenshot_path)
                             break
                     except Exception as e:
                         console.print(f"[red]Error retaking screenshot for {image_path} at random time {random_time:.2f}s: {e}[/red]")
@@ -1159,7 +1256,7 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
         finish_time = time.time()
         console.print(f"Screenshots processed in {finish_time - start_time:.4f} seconds")
 
-    multi_screens = int(config['DEFAULT'].get('multiScreens', 2))
+    multi_screens = int(default_config.get('multiScreens', 2))
     discs = meta.get('discs', [])
     one_disc = True
     if discs and len(discs) == 1:
@@ -1168,22 +1265,27 @@ async def screenshots(path, filename, folder_id, base_dir, meta, num_screens=Non
         one_disc = False
 
     if (not meta.get('tv_pack') and one_disc) or multi_screens == 0:
-        await cleanup()
+        await cleanup_manager.cleanup()
+
+    return valid_results if valid_results else None
 
 
-async def capture_screenshot(args):
+async def capture_screenshot(args: tuple[int, str, float, str, float, float, float, float, str, bool, dict[str, Any]]) -> Optional[tuple[int, Optional[str]]]:
     index, path, ss_time, image_path, width, height, w_sar, h_sar, loglevel, hdr_tonemap, meta = args
 
     try:
-        def set_ffmpeg_threads():
+        def set_ffmpeg_threads() -> list[str]:
             threads_value = '1'
             os.environ['FFREPORT'] = 'level=32'  # Reduce ffmpeg logging overhead
             return ['-threads', threads_value]
         if width <= 0 or height <= 0:
-            return "Error: Invalid width or height for scaling"
+            return None
 
         if ss_time < 0:
-            return f"Error: Invalid timestamp {ss_time}"
+            return None
+
+        scaled_w = int(round(width * w_sar))
+        scaled_h = int(round(height * h_sar))
 
         # Normalize path for cross-platform compatibility
         path = os.path.normpath(path)
@@ -1194,18 +1296,18 @@ async def capture_screenshot(args):
             console.print(f"[yellow]{error_msg}[/yellow]")
 
             # Use meta that's passed directly to the function
-            if meta and isinstance(meta, dict) and 'filelist' in meta and meta['filelist']:
+            if 'filelist' in meta and meta['filelist']:
                 video_file = meta['filelist'][0]
                 console.print(f"[green]Using first file from filelist: {video_file}[/green]")
                 path = video_file
             else:
-                return error_msg
+                return None
 
         # After potential path correction, validate again
         if not os.path.exists(path):
             error_msg = f"Error: Input file does not exist: {path}"
             console.print(f"[red]{error_msg}[/red]")
-            return error_msg
+            return None
 
         # Debug output showing the exact path being used
         if loglevel == 'verbose' or (meta and meta.get('debug', False)):
@@ -1214,7 +1316,7 @@ async def capture_screenshot(args):
         if not meta.get('frame_overlay', False):
             # Warm-up (only for first screenshot index or if not warmed)
             if use_libplacebo:
-                warm_up = config['DEFAULT'].get('ffmpeg_warmup', False)
+                warm_up = default_config.get('ffmpeg_warmup', False)
                 if warm_up:
                     meta['_libplacebo_warmed'] = False
                 else:
@@ -1226,7 +1328,7 @@ async def capture_screenshot(args):
 
             threads_value = set_ffmpeg_threads()
             threads_val = threads_value[1]
-            vf_filters = []
+            vf_filters: list[str] = []
 
             if w_sar != 1 or h_sar != 1:
                 scaled_w = int(round(width * w_sar))
@@ -1261,7 +1363,7 @@ async def capture_screenshot(args):
             threads_value = ['-threads', '1']
             threads_val = threads_value[1]
 
-            def build_cmd(use_libplacebo=True):
+            def build_cmd(use_libplacebo: bool = True) -> list[str]:
                 cmd_local = [
                     "ffmpeg",
                     "-y",
@@ -1292,7 +1394,7 @@ async def capture_screenshot(args):
                 console.print(f"[cyan]FFmpeg command: {' '.join(cmd)}[/cyan]", emoji=False)
 
             # --- Execute with retry/fallback if libplacebo fails ---
-            async def run_cmd(run_cmd_list, timeout_sec):
+            async def run_cmd(run_cmd_list: list[str], timeout_sec: float) -> tuple[Optional[int], bytes, bytes]:
                 proc = await asyncio.create_subprocess_exec(
                     *run_cmd_list,
                     stdout=asyncio.subprocess.PIPE,
@@ -1302,10 +1404,8 @@ async def capture_screenshot(args):
                     stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_sec)
                 except asyncio.TimeoutError:
                     proc.kill()
-                    try:
+                    with contextlib.suppress(Exception):
                         await proc.wait()
-                    except Exception:
-                        pass
                     return -1, b"", b"Timeout"
                 return proc.returncode, stdout, stderr
 
@@ -1323,7 +1423,7 @@ async def capture_screenshot(args):
                     console.print("[red]libplacebo failed twice; falling back to zscale tonemap[/red]")
                 meta['libplacebo'] = False
                 # Rebuild chain with zscale
-                z_vf_filters = []
+                z_vf_filters: list[str] = []
                 if w_sar != 1 or h_sar != 1:
                     z_vf_filters.append(f"scale={scaled_w}:{scaled_h}")
                 z_vf_filters.extend([
@@ -1359,7 +1459,7 @@ async def capture_screenshot(args):
         threads_val = threads_value[1]
 
         # Build filter chain
-        vf_filters = []
+        vf_filters: list[str] = []
 
         if w_sar != 1 or h_sar != 1:
             scaled_w = int(round(width * w_sar))
@@ -1391,7 +1491,7 @@ async def capture_screenshot(args):
 
             frame_type = frame_info.get('frame_type', 'Unknown')
 
-            text_size = int(config['DEFAULT'].get('overlay_text_size', 18))
+            text_size = int(default_config.get('overlay_text_size', 18))
             # Get the resolution and convert it to integer
             resol = int(''.join(filter(str.isdigit, meta.get('resolution', '1080p'))))
             font_size = round(text_size*resol/1080)
@@ -1455,7 +1555,7 @@ async def capture_screenshot(args):
                 stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await process.communicate()
-            returncode = process.returncode
+            returncode = process.returncode or -1
 
             # Print stdout and stderr if in verbose mode
             if loglevel == 'verbose':
@@ -1477,21 +1577,18 @@ async def capture_screenshot(args):
             else:
                 console.print(f"[red]FFmpeg error capturing screenshot: {stderr_text}[/red]")
             return (index, None)
-    except Exception as e:
+    except Exception:
         console.print(traceback.format_exc())
-        return f"Error: {str(e)}"
+        return None
 
 
-async def valid_ss_time(ss_times, num_screens, length, frame_rate, meta, retake=False):
-    if meta['is_disc']:
-        total_screens = num_screens + 1
-    else:
-        total_screens = num_screens
+async def valid_ss_time(ss_times: list[str], num_screens: int, length: float, frame_rate: float, meta: dict[str, Any], retake: bool = False) -> list[str]:
+    total_screens = num_screens + 1 if meta['is_disc'] else num_screens
     total_frames = int(length * frame_rate)
 
     # Track retake calls and adjust start frame accordingly
     retake_offset = 0
-    if retake and meta is not None:
+    if retake:
         if 'retake_call_count' not in meta:
             meta['retake_call_count'] = 0
 
@@ -1517,20 +1614,17 @@ async def valid_ss_time(ss_times, num_screens, length, frame_rate, meta, retake=
     start_frame = min(start_frame, max_start_frame)
 
     usable_frames = end_frame - start_frame
-    chosen_frames = []
+    chosen_frames: list[int] = []
 
-    if total_screens > 1:
-        frame_interval = usable_frames // total_screens
-    else:
-        frame_interval = usable_frames
+    frame_interval = usable_frames // total_screens if total_screens > 1 else usable_frames
 
-    result_times = ss_times.copy()
+    result_times: list[str] = ss_times.copy()
 
     for i in range(total_screens):
         frame = start_frame + (i * frame_interval)
         chosen_frames.append(frame)
         time = frame / frame_rate
-        result_times.append(time)
+        result_times.append(str(time))
 
     if meta['debug']:
         console.print(f"[purple]Screenshots information:[/purple] \n[slate_blue3]Screenshots: [gold3]{total_screens}[/gold3] \nTotal Frames: [gold3]{total_frames}[/gold3]")
@@ -1541,7 +1635,7 @@ async def valid_ss_time(ss_times, num_screens, length, frame_rate, meta, retake=
     return result_times
 
 
-async def kill_all_child_processes():
+async def kill_all_child_processes() -> None:
     """Ensures all child processes are terminated."""
     try:
         current_process = psutil.Process()
@@ -1551,7 +1645,7 @@ async def kill_all_child_processes():
             console.print(f"[red]Killing stuck worker process: {child.pid}[/red]")
             child.terminate()
 
-        gone, still_alive = psutil.wait_procs(children, timeout=3)  # Wait for termination
+        _gone, still_alive = psutil.wait_procs(children, timeout=3)  # Wait for termination
         for process in still_alive:
             console.print(f"[red]Force killing stubborn process: {process.pid}[/red]")
             process.kill()
@@ -1562,10 +1656,12 @@ async def kill_all_child_processes():
         console.print(f"[yellow]Warning: Error during child process cleanup: {e}[/yellow]")
 
 
-async def get_frame_info(path, ss_time, meta):
+async def get_frame_info(path: str, ss_time: Union[str, float], meta: dict[str, Any]) -> dict[str, Any]:
     """Get frame information (type, exact timestamp) for a specific frame"""
     try:
-        info_ff = ffmpeg.input(path, ss=ss_time)
+        ss_time_value = float(ss_time)
+        ffmpeg_module = cast(Any, ffmpeg)
+        info_ff = ffmpeg_module.input(path, ss=ss_time_value)
         # Use video stream selector and apply showinfo filter
         filtered = info_ff['v:0'].filter('showinfo')
         info_command = (
@@ -1575,20 +1671,26 @@ async def get_frame_info(path, ss_time, meta):
         )
 
         # Print the actual FFmpeg command for debugging
-        cmd = info_command.compile()
+        cmd = cast(list[str], info_command.compile())
         if meta.get('debug', False):
             console.print(f"[cyan]FFmpeg showinfo command: {' '.join(cmd)}[/cyan]", emoji=False)
 
         returncode, _, stderr = await run_ffmpeg(info_command)
-        assert returncode is not None
+        # Check if subprocess completed properly
+        if returncode is None:
+            cmd_str = ' '.join(cmd)
+            raise RuntimeError(
+                f"FFmpeg subprocess did not complete properly. The process may have been "
+                f"terminated unexpectedly or failed to start. Command: {cmd_str}"
+            )
         stderr_text = stderr.decode('utf-8', errors='replace')
 
         # Calculate frame number based on timestamp and framerate
         frame_rate = meta.get('frame_rate', 24.0)
-        calculated_frame = int(ss_time * frame_rate)
+        calculated_frame = int(ss_time_value * frame_rate)
 
         # Default values
-        frame_info = {
+        frame_info: dict[str, Any] = {
             'frame_type': 'Unknown',
             'frame_number': calculated_frame
         }
@@ -1617,15 +1719,15 @@ async def get_frame_info(path, ss_time, meta):
             console.print(traceback.format_exc())
         return {
             'frame_type': 'Unknown',
-            'frame_number': int(ss_time * meta.get('frame_rate', 24.0))
+            'frame_number': int(float(ss_time) * meta.get('frame_rate', 24.0))
         }
 
 
-async def check_libplacebo_compatibility(w_sar, h_sar, width, height, path, ss_time, image_path, loglevel, meta):
+async def check_libplacebo_compatibility(w_sar: float, h_sar: float, width: float, height: float, path: str, ss_time: str, image_path: str, loglevel: str, meta: dict[str, Any]) -> tuple[bool, bool]:
     test_image_path = image_path.replace('.png', '_test.png')
 
-    async def run_check(w_sar, h_sar, width, height, path, ss_time, image_path, loglevel, meta, try_libplacebo=False, test_image_path=None):
-        filter_parts = []
+    async def run_check(w_sar: float, h_sar: float, width: float, height: float, path: str, ss_time: str, _image_path: str, loglevel: str, meta: dict[str, Any], try_libplacebo: bool = False, test_image_path: str = "") -> bool:
+        filter_parts: list[str] = []
         input_label = "[0:v]"
         output_map = "0:v"  # Default output mapping
 
@@ -1677,23 +1779,21 @@ async def check_libplacebo_compatibility(w_sar, h_sar, width, height, path, ss_t
         )
 
         try:
-            stdout, stderr = await asyncio.wait_for(
+            _stdout, _stderr = await asyncio.wait_for(
                 process.communicate(),
                 timeout=30.0  # 30 second timeout for compatibility test
             )
-            return process.returncode
+            return process.returncode == 0
         except asyncio.TimeoutError:
             console.print("[red]libplacebo compatibility test timed out after 30 seconds[/red]")
             process.kill()
-            try:
+            with contextlib.suppress(Exception):
                 await process.wait()
-            except Exception:
-                pass
             return False
 
     if not meta['is_disc']:
         is_libplacebo_compatible = await run_check(w_sar, h_sar, width, height, path, ss_time, image_path, loglevel, meta, try_libplacebo=True, test_image_path=test_image_path)
-        if is_libplacebo_compatible == 0:
+        if is_libplacebo_compatible:
             if meta['debug']:
                 console.print("[green]libplacebo compatibility test succeeded[/green]")
             try:
@@ -1704,7 +1804,7 @@ async def check_libplacebo_compatibility(w_sar, h_sar, width, height, path, ss_t
             return True, True
         else:
             can_hdr = await run_check(w_sar, h_sar, width, height, path, ss_time, image_path, loglevel, meta, try_libplacebo=False, test_image_path=test_image_path)
-            if can_hdr == 0:
+            if can_hdr:
                 if meta['debug']:
                     console.print("[yellow]libplacebo compatibility test failed, but zscale HDR tonemapping is compatible[/yellow]")
                 # Clean up the test image regardless of success/failure
@@ -1717,7 +1817,7 @@ async def check_libplacebo_compatibility(w_sar, h_sar, width, height, path, ss_t
     return False, False
 
 
-async def libplacebo_warmup(path, meta, loglevel):
+async def libplacebo_warmup(path: str, meta: dict[str, Any], loglevel: str) -> None:
     if not meta.get('libplacebo') or meta.get('_libplacebo_warmed'):
         return
     if not os.path.exists(path):
@@ -1748,10 +1848,8 @@ async def libplacebo_warmup(path, meta, loglevel):
             await asyncio.wait_for(proc.communicate(), timeout=40)
         except asyncio.TimeoutError:
             proc.kill()
-            try:
+            with contextlib.suppress(Exception):
                 await proc.wait()
-            except Exception:
-                pass
             if loglevel == 'verbose' or meta.get('debug', False):
                 console.print("[yellow]libplacebo warm-up timed out (continuing anyway)[/yellow]")
         meta['_libplacebo_warmed'] = True
@@ -1760,7 +1858,7 @@ async def libplacebo_warmup(path, meta, loglevel):
             console.print(f"[yellow]libplacebo warm-up failed: {e} (continuing)[/yellow]")
 
 
-async def get_image_host(meta):
+async def get_image_host(meta: dict[str, Any]) -> Optional[str]:
     if meta.get('imghost') is not None:
         host = meta['imghost']
 
@@ -1768,14 +1866,148 @@ async def get_image_host(meta):
             return host.lower().strip()
 
         elif isinstance(host, list):
-            for item in host:
+            host_list = cast(list[Any], host)
+            for item in host_list:
                 if item and isinstance(item, str):
                     return item.lower().strip()
     else:
-        img_host_config = [
-            config["DEFAULT"][key].lower()
-            for key in sorted(config["DEFAULT"].keys())
+        img_host_config: list[str] = [
+            str(default_config[key]).lower()
+            for key in sorted(default_config.keys())
             if key.startswith("img_host_1") and not key.endswith("0")
         ]
         if img_host_config:
-            return str(img_host_config[0])
+            return img_host_config[0]
+    return None
+
+
+class TakeScreensManager:
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+        _apply_config(config)
+
+    async def run_ffmpeg(self, command: Any) -> tuple[Optional[int], bytes, bytes]:
+        return await run_ffmpeg(command)
+
+    async def sanitize_filename(self, filename: str) -> str:
+        return await sanitize_filename(filename)
+
+    async def disc_screenshots(
+            self,
+            meta: dict[str, Any],
+            filename: str,
+            bdinfo: dict[str, Any],
+            folder_id: str,
+            base_dir: str,
+            use_vs: bool,
+            image_list: Union[list[dict[str, str]], None] = None,
+            ffdebug: bool = False,
+            num_screens: int = 0,
+            force_screenshots: bool = False
+    ) -> None:
+        await disc_screenshots(
+            meta,
+            filename,
+            bdinfo,
+            folder_id,
+            base_dir,
+            use_vs,
+            image_list,
+            ffdebug,
+            num_screens,
+            force_screenshots
+        )
+
+    async def capture_disc_task(
+            self,
+            index: int,
+            file: str,
+            ss_time: str,
+            image_path: str,
+            keyframe: str,
+            loglevel: str,
+            hdr_tonemap: bool,
+            meta: dict[str, Any]
+    ) -> Optional[tuple[int, str]]:
+        return await capture_disc_task(index, file, ss_time, image_path, keyframe, loglevel, hdr_tonemap, meta)
+
+    async def dvd_screenshots(
+            self,
+            meta: dict[str, Any],
+            disc_num: int,
+            num_screens: int = 0,
+            retry_cap: bool = False
+    ) -> None:
+        await dvd_screenshots(meta, disc_num, num_screens, retry_cap)
+
+    async def capture_dvd_screenshot(
+            self,
+            task: tuple[int, str, str, str, dict[str, Any], float, float, float, float]
+    ) -> tuple[int, Optional[str]]:
+        return await capture_dvd_screenshot(task)
+
+    async def screenshots(
+            self,
+            path: str,
+            filename: str,
+            folder_id: str,
+            base_dir: str,
+            meta: dict[str, Any],
+            num_screens: int = 0,
+            force_screenshots: bool = False,
+            manual_frames: Union[str, list[str]] = "",
+    ) -> Optional[list[str]]:
+        return await screenshots(path, filename, folder_id, base_dir, meta, num_screens, force_screenshots, manual_frames)
+
+    async def capture_screenshot(
+            self,
+            args: tuple[int, str, float, str, float, float, float, float, str, bool, dict[str, Any]]
+    ) -> Optional[tuple[int, Optional[str]]]:
+        return await capture_screenshot(args)
+
+    async def valid_ss_time(
+            self,
+            ss_times: list[str],
+            num_screens: int,
+            length: float,
+            frame_rate: float,
+            meta: dict[str, Any],
+            retake: bool = False
+    ) -> list[str]:
+        return await valid_ss_time(ss_times, num_screens, length, frame_rate, meta, retake)
+
+    async def kill_all_child_processes(self) -> None:
+        await kill_all_child_processes()
+
+    async def get_frame_info(self, path: str, ss_time: str, meta: dict[str, Any]) -> dict[str, Any]:
+        return await get_frame_info(path, ss_time, meta)
+
+    async def check_libplacebo_compatibility(
+            self,
+            w_sar: float,
+            h_sar: float,
+            width: float,
+            height: float,
+            path: str,
+            ss_time: str,
+            image_path: str,
+            loglevel: str,
+            meta: dict[str, Any]
+    ) -> tuple[bool, bool]:
+        return await check_libplacebo_compatibility(
+            w_sar,
+            h_sar,
+            width,
+            height,
+            path,
+            ss_time,
+            image_path,
+            loglevel,
+            meta
+        )
+
+    async def libplacebo_warmup(self, path: str, meta: dict[str, Any], loglevel: str) -> None:
+        await libplacebo_warmup(path, meta, loglevel)
+
+    async def get_image_host(self, meta: dict[str, Any]) -> Optional[str]:
+        return await get_image_host(meta)

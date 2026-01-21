@@ -1,119 +1,127 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiofiles
 import glob
-import httpx
 import os
 import platform
 import re
+from typing import Any, Optional, Union, cast
+from urllib.parse import urlparse
+
+import aiofiles
+import httpx
 from bs4 import BeautifulSoup
+
 from src.bbcode import BBCODE
 from src.console import console
-from src.cookie_auth import CookieValidator, CookieAuthUploader
+from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
-from urllib.parse import urlparse
+
+Meta = dict[str, Any]
+Config = dict[str, Any]
 
 
 class HDT:
-    def __init__(self, config):
-        self.config = config
+    secret_token: str = ''
+
+    def __init__(self, config: Config) -> None:
+        self.config: Config = config
         self.cookie_validator = CookieValidator(config)
         self.cookie_auth_uploader = CookieAuthUploader(config)
         self.tracker = 'HDT'
         self.source_flag = 'hd-torrents.org'
+        self.auth_token: Optional[str] = None
 
-        url_from_config = self.config['TRACKERS'][self.tracker].get('url')
+        tracker_config = self.config.get('TRACKERS', {}).get(self.tracker, {})
+        tracker_config_dict = cast(dict[str, Any], tracker_config) if isinstance(tracker_config, dict) else {}
+        url_from_config = str(tracker_config_dict.get('url', ''))
         parsed_url = urlparse(url_from_config)
         self.config_url = parsed_url.netloc
         self.base_url = f'https://{self.config_url}'
 
         self.torrent_url = f'{self.base_url}/details.php?id='
-        self.announce_url = self.config['TRACKERS'][self.tracker]['announce_url']
+        self.announce_url = str(tracker_config_dict.get('announce_url', ''))
         self.banned_groups = []
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
         }, timeout=60.0)
 
-    async def validate_credentials(self, meta):
-        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+    async def validate_credentials(self, meta: Meta) -> bool:
+        cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        self.session.cookies.clear()
+        if cookies is not None:
+            self.session.cookies.update(cookies)
         return await self.cookie_validator.cookie_validation(
             meta=meta,
             tracker=self.tracker,
             test_url=f'{self.base_url}/upload.php',
             success_text='usercp.php',
-            token_pattern=r'name="csrfToken" value="([^"]+)"'
+            token_pattern=r'name="csrfToken" value="([^"]+)"'  # nosec B106
         )
 
-    async def get_category_id(self, meta):
-        if meta['category'] == 'MOVIE':
+    async def get_category_id(self, meta: Meta) -> int:
+        cat_id = 0
+        category = str(meta.get('category', ''))
+        resolution = str(meta.get('resolution', ''))
+        if category == 'MOVIE':
             # BDMV
             if meta.get('is_disc', '') == "BDMV" or meta.get('type', '') == "DISC":
-                if meta['resolution'] == '2160p':
+                if resolution == '2160p':
                     # 70 = Movie/UHD/Blu-Ray
                     cat_id = 70
-                if meta['resolution'] in ('1080p', '1080i'):
+                if resolution in ('1080p', '1080i'):
                     # 1 = Movie/Blu-Ray
                     cat_id = 1
 
             # REMUX
             if meta.get('type', '') == 'REMUX':
-                if meta.get('uhd', '') == 'UHD' and meta['resolution'] == '2160p':
-                    # 71 = Movie/UHD/Remux
-                    cat_id = 71
-                else:
-                    # 2 = Movie/Remux
-                    cat_id = 2
+                cat_id = 71 if meta.get('uhd', '') == 'UHD' and meta['resolution'] == '2160p' else 2
 
             # REST OF THE STUFF
             if meta.get('type', '') not in ("DISC", "REMUX"):
-                if meta['resolution'] == '2160p':
+                if resolution == '2160p':
                     # 64 = Movie/2160p
                     cat_id = 64
-                elif meta['resolution'] in ('1080p', '1080i'):
+                elif resolution in ('1080p', '1080i'):
                     # 5 = Movie/1080p/i
                     cat_id = 5
-                elif meta['resolution'] == '720p':
+                elif resolution == '720p':
                     # 3 = Movie/720p
                     cat_id = 3
 
-        if meta['category'] == 'TV':
+        if category == 'TV':
             # BDMV
             if meta.get('is_disc', '') == "BDMV" or meta.get('type', '') == "DISC":
-                if meta['resolution'] == '2160p':
+                if resolution == '2160p':
                     # 72 = TV Show/UHD/Blu-ray
                     cat_id = 72
-                if meta['resolution'] in ('1080p', '1080i'):
+                if resolution in ('1080p', '1080i'):
                     # 59 = TV Show/Blu-ray
                     cat_id = 59
 
             # REMUX
             if meta.get('type', '') == 'REMUX':
-                if meta.get('uhd', '') == 'UHD' and meta['resolution'] == '2160p':
-                    # 73 = TV Show/UHD/Remux
-                    cat_id = 73
-                else:
-                    # 60 = TV Show/Remux
-                    cat_id = 60
+                cat_id = 73 if meta.get('uhd', '') == 'UHD' and meta['resolution'] == '2160p' else 60
 
             # REST OF THE STUFF
             if meta.get('type', '') not in ("DISC", "REMUX"):
-                if meta['resolution'] == '2160p':
+                if resolution == '2160p':
                     # 65 = TV Show/2160p
                     cat_id = 65
-                elif meta['resolution'] in ('1080p', '1080i'):
+                elif resolution in ('1080p', '1080i'):
                     # 30 = TV Show/1080p/i
                     cat_id = 30
-                elif meta['resolution'] == '720p':
+                elif resolution == '720p':
                     # 38 = TV Show/720p
                     cat_id = 38
 
         return cat_id
 
-    async def edit_name(self, meta):
-        hdt_name = meta['name']
+    async def edit_name(self, meta: Meta) -> str:
+        hdt_name = str(meta.get('name', ''))
+        audio = str(meta.get('audio', ''))
+        hdr = str(meta.get('hdr', ''))
         if meta.get('type') in ('WEBDL', 'WEBRIP', 'ENCODE'):
-            hdt_name = hdt_name.replace(meta['audio'], meta['audio'].replace(' ', '', 1))
-        if 'DV' in meta.get('hdr', ''):
+            hdt_name = hdt_name.replace(audio, audio.replace(' ', '', 1))
+        if 'DV' in hdr:
             hdt_name = hdt_name.replace(' DV ', ' DoVi ')
         if 'BluRay REMUX' in hdt_name:
             hdt_name = hdt_name.replace('BluRay REMUX', 'Blu-ray Remux')
@@ -123,20 +131,20 @@ class HDT:
         hdt_name = hdt_name.replace(':', '').replace('..', ' ').replace('  ', ' ')
         return hdt_name
 
-    async def edit_desc(self, meta):
-        builder = DescriptionBuilder(self.config)
-        desc_parts = []
+    async def edit_desc(self, meta: Meta) -> str:
+        builder = DescriptionBuilder(self.tracker, self.config)
+        desc_parts: list[str] = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(self.tracker))
+        desc_parts.append(await builder.get_custom_header())
 
         # Logo
-        logo_resize_url = meta.get('tmdb_logo', '')
+        logo_resize_url = str(meta.get('tmdb_logo', ''))
         if logo_resize_url:
             desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/center]")
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker, resize=True)
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, resize=True)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
 
@@ -146,7 +154,7 @@ class HDT:
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # File information
-        mediainfo = await builder.get_mediainfo_section(meta, self.tracker)
+        mediainfo = await builder.get_mediainfo_section(meta)
         if mediainfo:
             desc_parts.append(f'[left][font=consolas]{mediainfo}[/font][/left]')
 
@@ -158,21 +166,36 @@ class HDT:
         desc_parts.append(await builder.get_user_description(meta))
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         # Screenshot Header
-        desc_parts.append(await builder.screenshot_header(self.tracker))
+        desc_parts.append(await builder.screenshot_header())
 
         # Screenshots
-        images = meta.get('image_list', [])
+        images_value = meta.get('image_list', [])
+        images: list[dict[str, Any]] = []
+        if isinstance(images_value, list):
+            images_list = cast(list[Any], images_value)
+            images.extend(
+                [
+                    cast(dict[str, Any], item)
+                    for item in images_list
+                    if isinstance(item, dict)
+                ]
+            )
         if images:
             screenshots_block = ''
             for image in images:
-                screenshots_block += f"<a href='{image['raw_url']}'><img src='{image['img_url']}' height=137></a> "
+                raw_url = str(image.get('raw_url', ''))
+                img_url = str(image.get('img_url', ''))
+                if raw_url and img_url:
+                    screenshots_block += f"<a href='{raw_url}'><img src='{img_url}' height=137></a> "
             desc_parts.append('[center]\n' + screenshots_block + '[/center]')
 
         # Signature
-        desc_parts.append(f"[right][url=https://github.com/Audionut/Upload-Assistant][size=1]{meta['ua_signature']}[/size][/url][/right]")
+        desc_parts.append(
+            f"[right][url=https://github.com/Audionut/Upload-Assistant][size=1]{meta.get('ua_signature', '')}[/size][/url][/right]"
+        )
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 
@@ -202,8 +225,8 @@ class HDT:
 
         return description
 
-    async def search_existing(self, meta, disctype):
-        if meta['resolution'] not in ['2160p', '1080p', '1080i', '720p']:
+    async def search_existing(self, meta: Meta, _disctype: str) -> list[dict[str, Optional[str]]]:
+        if str(meta.get('resolution', '')) not in ['2160p', '1080p', '1080i', '720p']:
             console.print('[bold red]Resolution must be at least 720p resolution for HDT.')
             meta['skipping'] = f'{self.tracker}'
             return []
@@ -216,10 +239,10 @@ class HDT:
                 return []
 
         search_url = f'{self.base_url}/torrents.php?'
-        if int(meta.get('imdb_id', 0)) != 0:
-            imdbID = f"tt{meta['imdb']}"
-            params = {
-                'csrfToken': HDT.secret_token,
+        if int(meta.get('imdb_id', 0) or 0) != 0:
+            imdbID = f"tt{meta.get('imdb', '')}"
+            params: dict[str, Union[str, int]] = {
+                'csrfToken': self.secret_token,
                 'search': imdbID,
                 'active': '0',
                 'options': '2',
@@ -227,13 +250,13 @@ class HDT:
             }
         else:
             params = {
-                'csrfToken': HDT.secret_token,
-                'search': meta['title'],
+                'csrfToken': self.secret_token,
+                'search': str(meta.get('title', '')),
                 'category[]': await self.get_category_id(meta),
                 'options': '3'
             }
 
-        results = []
+        results: list[dict[str, Optional[str]]] = []
 
         try:
             response = await self.session.get(search_url, params=params)
@@ -241,10 +264,10 @@ class HDT:
             rows = soup.find_all('tr')
 
             for row in rows:
-                if row.find('td', class_='mainblockcontent', string='Filename') is not None:
+                if row.find(string='Filename', attrs={'class': 'mainblockcontent'}) is not None:  # type: ignore
                     continue
 
-                name_tag = row.find('a', href=lambda href: href and href.startswith('details.php?id='))
+                name_tag = row.find('a', attrs={'href': re.compile(r'details\.php\?id=')})
 
                 name = name_tag.text.strip() if name_tag else None
                 link = f'{self.base_url}/{name_tag["href"]}' if name_tag else None
@@ -279,61 +302,67 @@ class HDT:
 
         return results
 
-    async def get_data(self, meta):
-        data = {
+    async def get_data(self, meta: Meta) -> dict[str, Any]:
+        data: dict[str, Any] = {
             'filename': await self.edit_name(meta),
             'category': await self.get_category_id(meta),
             'info': await self.edit_desc(meta),
-            'csrfToken': HDT.secret_token,
+            'csrfToken': self.secret_token,
         }
 
         # 3D
-        if "3D" in meta.get('3d', ''):
+        if "3D" in str(meta.get('3d', '')):
             data['3d'] = 'true'
 
         # HDR
-        if "HDR" in meta.get('hdr', ''):
-            if "HDR10+" in meta['hdr']:
+        hdr_value = str(meta.get('hdr', ''))
+        if "HDR" in hdr_value:
+            if "HDR10+" in hdr_value:
                 data['HDR10'] = 'true'
                 data['HDR10Plus'] = 'true'
             else:
                 data['HDR10'] = 'true'
-        if "DV" in meta.get('hdr', ''):
+        if "DV" in hdr_value:
             data['DolbyVision'] = 'true'
 
         # IMDB
-        if int(meta.get('imdb_id')) != 0:
-            data['infosite'] = str(meta.get('imdb_info', {}).get('imdb_url', '') + '/')
+        if int(meta.get('imdb_id') or 0) != 0:
+            data['infosite'] = f"{meta.get('imdb_info', {}).get('imdb_url', '')}/"
 
         # Full Season Pack
-        if int(meta.get('tv_pack', '0')) != 0:
+        if int(meta.get('tv_pack', '0') or 0) != 0:
             data['season'] = 'true'
         else:
             data['season'] = 'false'
 
         # Anonymous check
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
+        if int(meta.get('anon', 0) or 0) == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
             data['anonymous'] = 'false'
         else:
             data['anonymous'] = 'true'
 
         return data
 
-    async def get_nfo(self, meta):
-        nfo_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
+    async def get_nfo(self, meta: Meta) -> dict[str, tuple[str, bytes, str]]:
+        nfo_dir = os.path.join(str(meta.get('base_dir', '')), "tmp", str(meta.get('uuid', '')))
         nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
 
         if nfo_files:
             nfo_path = nfo_files[0]
-            return {'nfos': (os.path.basename(nfo_path), open(nfo_path, "rb"), "application/octet-stream")}
+            async with aiofiles.open(nfo_path, "rb") as nfo_file:
+                nfo_bytes = await nfo_file.read()
+            return {'nfos': (os.path.basename(nfo_path), nfo_bytes, "application/octet-stream")}
         return {}
 
-    async def upload(self, meta, disctype):
-        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+    async def upload(self, meta: Meta, _disctype: str) -> bool:
+        cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        self.session.cookies.clear()
+        if cookies is not None:
+            self.session.cookies.update(cookies)
         data = await self.get_data(meta)
         files = await self.get_nfo(meta)
 
-        await self.cookie_auth_uploader.handle_upload(
+        is_uploaded = await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -348,4 +377,4 @@ class HDT:
             additional_files=files,
         )
 
-        return
+        return is_uploaded

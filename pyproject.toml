@@ -1,0 +1,41 @@
+[tool.ruff]
+line-length = 176
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+  # Core correctness
+  "E",
+  "F",
+  "W",
+  "B",
+
+  # Imports & modernization
+  "I",
+  "UP",
+
+  # Code quality
+  "C4",
+  "SIM",
+  "PERF",
+  "ARG",
+
+  # Dates & time
+  "DTZ",
+
+  # Async (if applicable)
+  "ASYNC",
+]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cogs", "data", "src", "web_ui"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[tool.pyright]
+pythonVersion = "3.9"
+typeCheckingMode = "strict"
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportUnknownMemberType = true
+reportUnknownVariableType = true

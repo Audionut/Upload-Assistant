@@ -1,11 +1,10 @@
+data/banned/*.*
 data/config.json
 data/config.py
 data/config*
+data/cookies/
 data/tags.json
-data/cookies/*.txt
-data/cookies/*.pkl
-data/cookies/*.pickle
-data/banned/*.*
+data/tvdb/
 data/web_ui/*.*
 data/web_ui/templates/*.html
 data/web_ui/static/js/*.js
@@ -26,3 +25,4 @@ data/nfos/*
 data/*.json
 .venv/*
 venv/*
+.pyright

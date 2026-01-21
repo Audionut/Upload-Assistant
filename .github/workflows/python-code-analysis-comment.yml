@@ -1,0 +1,324 @@
+name: Python Code Analysis Comment
+
+on:
+  workflow_run:
+    workflows: ["Python Code Analysis"]
+    types:
+      - completed
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  pr-comment:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion != 'skipped'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download Bandit Results
+      uses: actions/download-artifact@v4
+      with:
+        run-id: ${{ github.event.workflow_run.id }}
+        repository: ${{ github.repository }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        pattern: bandit-results-*
+        merge-multiple: true
+        path: artifacts
+
+    - name: Download Vulture Results
+      uses: actions/download-artifact@v4
+      with:
+        run-id: ${{ github.event.workflow_run.id }}
+        repository: ${{ github.repository }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        pattern: vulture-results-*
+        merge-multiple: true
+        path: artifacts
+
+    - name: Download Safety Results
+      uses: actions/download-artifact@v4
+      with:
+        run-id: ${{ github.event.workflow_run.id }}
+        repository: ${{ github.repository }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        pattern: safety-results-*
+        merge-multiple: true
+        path: artifacts
+
+    - name: Download Pyright Results
+      uses: actions/download-artifact@v4
+      with:
+        run-id: ${{ github.event.workflow_run.id }}
+        repository: ${{ github.repository }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        pattern: pyright-results-*
+        merge-multiple: true
+        path: artifacts
+
+    - name: Download Ruff Results
+      uses: actions/download-artifact@v4
+      with:
+        run-id: ${{ github.event.workflow_run.id }}
+        repository: ${{ github.repository }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        pattern: ruff-results-*
+        merge-multiple: true
+        path: artifacts
+
+    - name: Download Deprecation Warnings
+      uses: actions/download-artifact@v4
+      with:
+        run-id: ${{ github.event.workflow_run.id }}
+        repository: ${{ github.repository }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        pattern: deprecation-warnings-*
+        merge-multiple: true
+        path: artifacts
+
+    - name: Post Results to PR
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+
+          const workflowRun = context.payload.workflow_run;
+          const prs = workflowRun.pull_requests || [];
+
+          async function resolvePrNumber() {
+            if (prs.length > 0) {
+              return { number: prs[0].number, source: 'workflow_run.pull_requests[0]' };
+            }
+
+            const headRepo = workflowRun.head_repository && workflowRun.head_repository.owner
+              ? workflowRun.head_repository.owner.login
+              : null;
+            const headBranch = workflowRun.head_branch || null;
+            const headSha = workflowRun.head_sha || null;
+
+            if (headRepo && headBranch) {
+              const headRef = `${headRepo}:${headBranch}`;
+              const candidates = await github.paginate(github.rest.pulls.list, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                head: headRef,
+                per_page: 100
+              });
+              if (candidates.length === 1) {
+                return { number: candidates[0].number, source: `head=${headRef}` };
+              }
+              if (candidates.length > 1) {
+                console.log(`Multiple PRs matched head ref ${headRef}; refusing to guess.`);
+                return null;
+              }
+            }
+
+            if (headSha) {
+              const candidates = await github.paginate(github.rest.pulls.list, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                per_page: 100
+              });
+              const matches = candidates.filter(pr => pr.head && pr.head.sha === headSha);
+              if (matches.length === 1) {
+                return { number: matches[0].number, source: `head_sha=${headSha}` };
+              }
+              if (matches.length > 1) {
+                console.log(`Multiple PRs matched head SHA ${headSha}; refusing to guess.`);
+                return null;
+              }
+            }
+
+            return null;
+          }
+
+          const prInfo = await resolvePrNumber();
+          if (!prInfo) {
+            console.log('No pull request associated with this workflow run.');
+            return;
+          }
+          const prNumber = prInfo.number;
+          console.log(`Resolved PR #${prNumber} (${prInfo.source}).`);
+
+          const artifactsDir = path.resolve('artifacts');
+          if (!fs.existsSync(artifactsDir)) {
+            console.log('Artifacts directory not found.');
+            return;
+          }
+
+          const MAX_BYTES = 1024 * 1024; // 1MB limit per file
+          const allowedExtensions = new Set(['.txt']);
+
+          function safeReadText(filePath) {
+            const resolved = path.resolve(filePath);
+            if (!resolved.startsWith(artifactsDir + path.sep)) {
+              console.log(`Skipping unexpected path: ${filePath}`);
+              return '';
+            }
+            const stat = fs.statSync(resolved);
+            if (!stat.isFile()) {
+              return '';
+            }
+            if (stat.size > MAX_BYTES) {
+              console.log(`Skipping large file: ${path.basename(filePath)} (${stat.size} bytes)`);
+              return '';
+            }
+            if (!allowedExtensions.has(path.extname(resolved))) {
+              return '';
+            }
+            return fs.readFileSync(resolved, 'utf8');
+          }
+
+          function collectFilesByPrefix(prefix) {
+            return fs.readdirSync(artifactsDir)
+              .filter(name => name.startsWith(prefix) && name.endsWith('.txt'))
+              .map(name => path.join(artifactsDir, name));
+          }
+
+          function readMergedResult(baseName) {
+            const mergedFile = path.join(artifactsDir, `${baseName}.txt`);
+            if (fs.existsSync(mergedFile)) {
+              try {
+                return safeReadText(mergedFile);
+              } catch (error) {
+                console.log(`Error reading ${baseName}: ${error.message}`);
+              }
+            }
+            return '';
+          }
+
+          function collectDedupedResults(prefix) {
+            const files = collectFilesByPrefix(prefix);
+            const byContent = new Map();
+            for (const file of files) {
+              try {
+                const content = safeReadText(file).trim();
+                if (content) {
+                  const version = path.basename(file).replace(prefix + '-', '').replace('.txt', '');
+                  if (!byContent.has(content)) {
+                    byContent.set(content, []);
+                  }
+                  byContent.get(content).push(version);
+                }
+              } catch (error) {
+                console.log(`Error reading ${file}: ${error.message}`);
+              }
+            }
+
+            let output = '';
+            for (const [content, versions] of byContent.entries()) {
+              versions.sort((a, b) => parseFloat(a) - parseFloat(b));
+              if (versions.length === 1) {
+                output += `=== Python ${versions[0]} ===\n${content}\n\n`;
+              } else {
+                output += `=== Python ${versions.join(', ')} (identical results) ===\n${content}\n\n`;
+              }
+            }
+            return output;
+          }
+
+          let banditResults = collectDedupedResults('bandit-results');
+          let vultureResults = collectDedupedResults('vulture-results');
+          let safetyResults = collectDedupedResults('safety-results');
+          let pyrightResults = collectDedupedResults('pyright-results');
+          let ruffResults = collectDedupedResults('ruff-results');
+          let deprecationResults = collectDedupedResults('deprecation-warnings');
+
+          banditResults = banditResults.trim();
+          vultureResults = vultureResults.trim();
+          safetyResults = safetyResults.trim();
+          pyrightResults = pyrightResults.trim();
+          ruffResults = ruffResults.trim();
+          deprecationResults = deprecationResults.trim();
+
+          let cleanBanditResults = '';
+          if (banditResults) {
+            const lines = banditResults.split('\n');
+            const filteredLines = lines.filter(line => !line.includes('[manager]\tWARNING\tTest in comment'));
+            cleanBanditResults = filteredLines.join('\n').trim();
+          }
+
+          function normalizeSafetyOutput(raw) {
+            if (!raw) {
+              return '';
+            }
+            const reportIndex = raw.indexOf('REPORT');
+            if (reportIndex !== -1) {
+              return raw.slice(reportIndex).trim();
+            }
+            return raw.trim();
+          }
+
+          function safetyHasIssues(raw) {
+            const normalized = normalizeSafetyOutput(raw);
+            if (!normalized) {
+              return false;
+            }
+            if (/No known security vulnerabilities found/i.test(normalized)) {
+              return false;
+            }
+            const match = normalized.match(/\b(\d+)\s+vulnerab/i);
+            if (match) {
+              return parseInt(match[1], 10) > 0;
+            }
+            return true;
+          }
+
+          const hasBanditIssues = cleanBanditResults && cleanBanditResults.includes('Issue: [');
+          const hasVultureIssues = vultureResults && vultureResults.includes('(100% confidence)');
+          const hasSafetyIssues = safetyHasIssues(safetyResults);
+          const hasPyrightIssues = pyrightResults && !pyrightResults.includes('0 errors') && pyrightResults.trim() !== '';
+          const hasRuffIssues = ruffResults && !ruffResults.includes('All checks passed!') && ruffResults.trim() !== '';
+          const hasDeprecationWarnings = deprecationResults && deprecationResults.trim() !== '';
+
+          if (!hasBanditIssues && !hasVultureIssues && !hasSafetyIssues && !hasPyrightIssues && !hasRuffIssues && !hasDeprecationWarnings) {
+            console.log('No security, dead code, dependency, type issues, lint issues, or deprecation warnings found, skipping PR comment.');
+            return;
+          }
+
+          let body = '## 🔍 Code Analysis Results\n\n';
+
+          if (hasPyrightIssues) {
+            body += '### 🔍 Pyright Type Checking\n\n```\n' + pyrightResults + '\n```\n\n';
+          }
+
+          if (hasRuffIssues) {
+            body += '### 🧹 Ruff Lint\n\n```\n' + ruffResults + '\n```\n\n';
+          }
+
+          if (hasDeprecationWarnings) {
+            body += '### ⚠️ Deprecation Warnings (Runtime)\n\n```\n' + deprecationResults + '\n```\n\n';
+          }
+
+          if (hasBanditIssues) {
+            body += '### 🔒 Bandit Security Analysis\n\n```\n' + cleanBanditResults + '\n```\n\n';
+          }
+
+          if (hasVultureIssues) {
+            body += '### 🧹 Dead Code Analysis (Vulture)\n\n```\n' + vultureResults + '\n```\n\n';
+          }
+
+          if (hasSafetyIssues) {
+            const safetyBody = normalizeSafetyOutput(safetyResults);
+            body += '### 📦 Dependency Security Analysis (Safety)\n\n```\n' + safetyBody + '\n```\n\n';
+          }
+
+          body += '*This comment was automatically generated by the CI pipeline.*';
+
+          try {
+            await github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+            console.log('Successfully posted code analysis results to PR');
+          } catch (error) {
+            console.error(`Failed to post PR comment: ${error.message}`);
+            throw error;
+          }

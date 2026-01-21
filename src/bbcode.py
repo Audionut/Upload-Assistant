@@ -1,8 +1,10 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import re
 import html
-import urllib.parse
 import os
+import re
+import urllib.parse
+from typing import Any
+
 from src.console import console
 
 # Bold - KEEP
@@ -35,14 +37,14 @@ from src.console import console
 
 
 class BBCODE:
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
-    def clean_hdb_description(self, description):
+    def clean_hdb_description(self, description: str) -> tuple[str, list[dict[str, Any]]]:
         # Unescape html
         desc = html.unescape(description)
         desc = desc.replace('\r\n', '\n')
-        imagelist = []
+        imagelist: list[dict[str, Any]] = []
 
         # First pass: Remove entire comparison sections
         # Start by finding section headers for comparisons
@@ -107,7 +109,7 @@ class BBCODE:
 
         # Extract images wrapped in URL tags (e.g., [url=https://imgbox.com/xxx][img]https://thumbs.imgbox.com/xxx[/img][/url])
         url_img_pattern = r"\[url=(https?:\/\/[^\]]+)\]\[img\](https?:\/\/[^\]]+)\[\/img\]\[\/url\]"
-        url_img_matches = re.findall(url_img_pattern, desc, flags=re.IGNORECASE)
+        url_img_matches: list[tuple[str, str]] = re.findall(url_img_pattern, desc, flags=re.IGNORECASE)
         for web_url, img_url in url_img_matches:
             # Skip HDBits images
             if "hdbits.org" in web_url.lower() or "hdbits.org" in img_url.lower():
@@ -132,11 +134,11 @@ class BBCODE:
             return "", imagelist
         return description, imagelist
 
-    def clean_bhd_description(self, description, meta):
+    def clean_bhd_description(self, description: str, meta: dict[str, Any]) -> tuple[str, list[dict[str, Any]]]:
         # Unescape html
         desc = html.unescape(description)
         desc = desc.replace('\r\n', '\n')
-        imagelist = []
+        imagelist: list[dict[str, Any]] = []
 
         if "framestor" in meta and meta['framestor']:
             framestor_desc = desc
@@ -208,7 +210,7 @@ class BBCODE:
 
         return description, imagelist
 
-    def clean_ptp_description(self, desc, is_disc):
+    def clean_ptp_description(self, desc: str, is_disc: str) -> tuple[str, list[dict[str, Any]]]:
         # console.print("[yellow]Cleaning PTP description...")
 
         # Convert Bullet Points to -
@@ -219,15 +221,21 @@ class BBCODE:
         desc = desc.replace('\r\n', '\n')
 
         # Remove url tags with PTP/HDB links
-        url_tags = re.findall(
+        url_tags: list[str] = re.findall(
             r"(?:\[url(?:=|\])[^\]]*https?:\/\/passthepopcorn\.m[^\]]*\]|\bhttps?:\/\/passthepopcorn\.m[^\s]+)",
             desc,
             flags=re.IGNORECASE,
         )
-        url_tags += re.findall(r"(\[url[\=\]]https?:\/\/hdbits\.o[^\]]+)([^\[]+)(\[\/url\])?", desc, flags=re.IGNORECASE)
+        url_tags += [
+            ''.join(tag)
+            for tag in re.findall(
+                r"(\[url[\=\]]https?:\/\/hdbits\.o[^\]]+)([^\[]+)(\[\/url\])?",
+                desc,
+                flags=re.IGNORECASE,
+            )
+        ]
         if url_tags:
             for url_tag in url_tags:
-                url_tag = ''.join(url_tag)
                 url_tag_removed = re.sub(r"(\[url[\=\]]https?:\/\/passthepopcorn\.m[^\]]+])", "", url_tag, flags=re.IGNORECASE)
                 url_tag_removed = re.sub(r"(\[url[\=\]]https?:\/\/hdbits\.o[^\]]+])", "", url_tag_removed, flags=re.IGNORECASE)
                 url_tag_removed = url_tag_removed.replace("[/url]", "")
@@ -238,8 +246,8 @@ class BBCODE:
         desc = desc.replace('http://hdbits.org', 'HDB').replace('https://hdbits.org', 'HDB')
 
         # Catch Stray Images and Prepare Image List
-        imagelist = []
-        excluded_urls = set()
+        imagelist: list[dict[str, Any]] = []
+        excluded_urls: set[str] = set()
 
         source_encode_comps = re.findall(r"\[comparison=Source, Encode\][\s\S]*", desc, flags=re.IGNORECASE)
         source_vs_encode_sections = re.findall(r"Source Vs Encode:[\s\S]*", desc, flags=re.IGNORECASE)
@@ -261,7 +269,7 @@ class BBCODE:
         for url in excluded_urls:
             nocomp = nocomp.replace(url, '')
 
-        comp_placeholders = []
+        comp_placeholders: list[str] = []
 
         # Replace comparison/hide tags with placeholder because sometimes uploaders use comp images as loose images
         for i, comp in enumerate(comps):
@@ -270,18 +278,18 @@ class BBCODE:
             comp_placeholders.append(comp)
 
         # as the name implies, protect image links while doing regex things
-        def protect_links(desc):
-            links = re.findall(r'https?://\S+', desc)
+        def protect_links(desc: str) -> tuple[str, list[str]]:
+            links: list[str] = re.findall(r'https?://\S+', desc)
             for i, link in enumerate(links):
                 desc = desc.replace(link, f'__LINK_PLACEHOLDER_{i}__')
             return desc, links
 
-        def restore_links(desc, links):
+        def restore_links(desc: str, links: list[str]) -> str:
             for i, link in enumerate(links):
                 desc = desc.replace(f'__LINK_PLACEHOLDER_{i}__', link)
             return desc
 
-        links = []
+        links: list[str] = []
 
         if is_disc == "DVD":
             desc = re.sub(r"\[mediainfo\][\s\S]*?\[\/mediainfo\]", "", desc)
@@ -413,7 +421,7 @@ class BBCODE:
 
         return desc, imagelist
 
-    def clean_unit3d_description(self, desc, site):
+    def clean_unit3d_description(self, desc: str, site: str) -> tuple[str, list[dict[str, Any]]]:
         # Unescape HTML
         desc = html.unescape(desc)
         # Replace carriage returns with newlines
@@ -437,14 +445,14 @@ class BBCODE:
         # Temporarily hide spoiler tags
         spoilers = re.findall(r"\[spoiler[\s\S]*?\[\/spoiler\]", desc)
         nospoil = desc
-        spoiler_placeholders = []
+        spoiler_placeholders: list[str] = []
         for i in range(len(spoilers)):
             nospoil = nospoil.replace(spoilers[i], '')
             desc = desc.replace(spoilers[i], f"SPOILER_PLACEHOLDER-{i} ")
             spoiler_placeholders.append(spoilers[i])
 
         # Get Images from [img] tags, checking if they're wrapped in [url] tags
-        imagelist = []
+        imagelist: list[dict[str, Any]] = []
 
         # First, find images wrapped in URL tags: [url=web_url][img]img_url[/img][/url]
         url_img_pattern = r"\[url=(https?://[^\]]+)\]\[img[^\]]*\](.*?)\[/img\]\[/url\]"
@@ -501,10 +509,7 @@ class BBCODE:
                 cleaned_center = re.sub(r'\[center\]\s*\[\/center\]', '', center)
                 cleaned_center = re.sub(r'\[center\]\s+', '[center]', cleaned_center)
                 cleaned_center = re.sub(r'\s*\[\/center\]', '[/center]', cleaned_center)
-                if cleaned_center == '[center][/center]':
-                    desc = desc.replace(center, '')
-                else:
-                    desc = desc.replace(center, cleaned_center.strip())
+                desc = desc.replace(center, '') if cleaned_center == '[center][/center]' else desc.replace(center, cleaned_center.strip())
 
         # Remove bot signatures
         bot_signature_regex = r"""
@@ -538,7 +543,7 @@ class BBCODE:
             return "", imagelist
         return desc, imagelist
 
-    def is_only_bbcode(self, desc):
+    def is_only_bbcode(self, desc: str) -> bool:
         # Remove all BBCode tags
         text = re.sub(r"\[/?[a-zA-Z0-9]+(?:=[^\]]*)?\]", "", desc)
         # Remove whitespace and newlines
@@ -546,31 +551,31 @@ class BBCODE:
         # If nothing left, it's only BBCode
         return not text
 
-    def convert_pre_to_code(self, desc):
+    def convert_pre_to_code(self, desc: str) -> str:
         desc = desc.replace('[pre]', '[code]')
         desc = desc.replace('[/pre]', '[/code]')
         return desc
 
-    def convert_code_to_pre(self, desc):
+    def convert_code_to_pre(self, desc: str) -> str:
         desc = desc.replace('[code]', '[pre]')
         desc = desc.replace('[/code]', '[/pre]')
         return desc
 
-    def convert_hide_to_spoiler(self, desc):
+    def convert_hide_to_spoiler(self, desc: str) -> str:
         desc = desc.replace('[hide', '[spoiler')
         desc = desc.replace('[/hide]', '[/spoiler]')
         return desc
 
-    def convert_spoiler_to_hide(self, desc):
+    def convert_spoiler_to_hide(self, desc: str) -> str:
         desc = desc.replace('[spoiler', '[hide')
         desc = desc.replace('[/spoiler]', '[/hide]')
         return desc
 
-    def remove_hide(self, desc):
+    def remove_hide(self, desc: str) -> str:
         desc = desc.replace('[hide]', '').replace('[/hide]', '')
         return desc
 
-    def convert_named_spoiler_to_named_hide(self, desc):
+    def convert_named_spoiler_to_named_hide(self, desc: str) -> str:
         '''
         Converts [spoiler=Name] to [hide=Name]
         '''
@@ -578,39 +583,39 @@ class BBCODE:
         desc = desc.replace('[/spoiler]', '[/hide]')
         return desc
 
-    def remove_spoiler(self, desc):
+    def remove_spoiler(self, desc: str) -> str:
         desc = re.sub(r"\[\/?spoiler[\s\S]*?\]", "", desc, flags=re.IGNORECASE)
         return desc
 
-    def convert_named_spoiler_to_normal_spoiler(self, desc):
+    def convert_named_spoiler_to_normal_spoiler(self, desc: str) -> str:
         desc = re.sub(r'(\[spoiler=[^]]+])', '[spoiler]', desc, flags=re.IGNORECASE)
         return desc
 
-    def convert_spoiler_to_code(self, desc):
+    def convert_spoiler_to_code(self, desc: str) -> str:
         desc = desc.replace('[spoiler', '[code')
         desc = desc.replace('[/spoiler]', '[/code]')
         return desc
 
-    def convert_code_to_quote(self, desc):
+    def convert_code_to_quote(self, desc: str) -> str:
         desc = desc.replace('[code', '[quote')
         desc = desc.replace('[/code]', '[/quote]')
         return desc
 
-    def remove_img_resize(self, desc):
+    def remove_img_resize(self, desc: str) -> str:
         '''
         Converts [img=number] or any other parameters to just [img]
         '''
         desc = re.sub(r'\[img(?:[^\]]*)\]', '[img]', desc, flags=re.IGNORECASE)
         return desc
 
-    def remove_extra_lines(self, desc):
+    def remove_extra_lines(self, desc: str) -> str:
         '''
         Removes more than 2 consecutive newlines
         '''
         desc = re.sub(r'\n{3,}', '\n\n', desc)
         return desc
 
-    def convert_to_align(self, desc):
+    def convert_to_align(self, desc: str) -> str:
         '''
         Converts [right], [left], [center] to [align=right], [align=left], [align=center]
         '''
@@ -618,32 +623,32 @@ class BBCODE:
         desc = re.sub(r'\[/(right|center|left)\]', "[/align]", desc)
         return desc
 
-    def remove_sup(self, desc):
+    def remove_sup(self, desc: str) -> str:
         '''
         Removes [sup] tags
         '''
         desc = desc.replace('[sup]', '').replace('[/sup]', '')
         return desc
 
-    def remove_sub(self, desc):
+    def remove_sub(self, desc: str) -> str:
         '''
         Removes [sub] tags
         '''
         desc = desc.replace('[sub]', '').replace('[/sub]', '')
         return desc
 
-    def remove_list(self, desc):
+    def remove_list(self, desc: str) -> str:
         '''
         Removes [list] tags
         '''
         desc = desc.replace('[list]', '').replace('[/list]', '')
         return desc
 
-    def convert_comparison_to_collapse(self, desc, max_width):
+    def convert_comparison_to_collapse(self, desc: str, max_width: int) -> str:
         comparisons = re.findall(r"\[comparison=[\s\S]*?\[\/comparison\]", desc)
         for comp in comparisons:
-            line = []
-            output = []
+            line: list[str] = []
+            output: list[str] = []
             comp_sources = comp.split(']', 1)[0].replace('[comparison=', '').replace(' ', '').split(',')
             comp_images = comp.split(']', 1)[1].replace('[/comparison]', '').replace(',', '\n').replace(' ', '\n')
             comp_images = re.findall(r"(https?:\/\/.*\.(?:png|jpg))", comp_images, flags=re.IGNORECASE)
@@ -659,16 +664,16 @@ class BBCODE:
                     if len(line) == screens_per_line:
                         output.append(''.join(line))
                         line = []
-            output = '\n'.join(output)
-            new_bbcode = f"[spoiler={' vs '.join(comp_sources)}][center]{' | '.join(comp_sources)}[/center]\n{output}[/spoiler]"
+            output_str = '\n'.join(output)
+            new_bbcode = f"[spoiler={' vs '.join(comp_sources)}][center]{' | '.join(comp_sources)}[/center]\n{output_str}[/spoiler]"
             desc = desc.replace(comp, new_bbcode)
         return desc
 
-    def convert_comparison_to_centered(self, desc, max_width):
+    def convert_comparison_to_centered(self, desc: str, max_width: int) -> str:
         comparisons = re.findall(r"\[comparison=[\s\S]*?\[\/comparison\]", desc)
         for comp in comparisons:
-            line = []
-            output = []
+            line: list[str] = []
+            output: list[str] = []
             comp_sources = comp.split(']', 1)[0].replace('[comparison=', '').strip()
             comp_sources = re.split(r"\s*,\s*", comp_sources)
             comp_images = comp.split(']', 1)[1].replace('[/comparison]', '').replace(',', '\n').replace(' ', '\n')
@@ -685,36 +690,46 @@ class BBCODE:
                     if len(line) == screens_per_line:
                         output.append(''.join(line))
                         line = []
-            output = '\n'.join(output)
-            new_bbcode = f"[center]{' | '.join(comp_sources)}\n{output}[/center]"
+            output_str = '\n'.join(output)
+            new_bbcode = f"[center]{' | '.join(comp_sources)}\n{output_str}[/center]"
             desc = desc.replace(comp, new_bbcode)
         return desc
 
-    def convert_collapse_to_comparison(self, desc, spoiler_hide, collapses):
+    def convert_collapse_to_comparison(self, desc: str, spoiler_hide: str, collapses: list[str]) -> str:
         # Convert Comparison spoilers to [comparison=]
         if collapses != []:
             for i in range(len(collapses)):
                 tag = collapses[i]
                 images = re.findall(r"\[img[\s\S]*?\[\/img\]", tag, flags=re.IGNORECASE)
                 if len(images) >= 6:
-                    comp_images = []
-                    final_sources = []
+                    comp_images: list[str] = []
+                    final_sources: list[str] = []
                     for image in images:
                         image_url = re.sub(r"\[img[\s\S]*\]", "", image.replace('[/img]', ''), flags=re.IGNORECASE)
                         comp_images.append(image_url)
+                    sources = ""
                     if spoiler_hide == "spoiler":
-                        sources = re.match(r"\[spoiler[\s\S]*?\]", tag)[0].replace('[spoiler=', '')[:-1]
+                        spoiler_match = re.match(r"\[spoiler[\s\S]*?\]", tag)
+                        if spoiler_match:
+                            sources = spoiler_match[0].replace('[spoiler=', '')[:-1]
+                        else:
+                            continue
                     elif spoiler_hide == "hide":
-                        sources = re.match(r"\[hide[\s\S]*?\]", tag)[0].replace('[hide=', '')[:-1]
+                        hide_match = re.match(r"\[hide[\s\S]*?\]", tag)
+                        if hide_match:
+                            sources = hide_match[0].replace('[hide=', '')[:-1]
+                        else:
+                            continue
+                    if not sources:
+                        continue
                     sources = re.sub("comparison", "", sources, flags=re.IGNORECASE)
                     for each in ['vs', ',', '|']:
-                        sources = sources.split(each)
-                        sources = "$".join(sources)
-                    sources = sources.split("$")
-                    for source in sources:
-                        final_sources.append(source.strip())
-                    comp_images = '\n'.join(comp_images)
-                    final_sources = ', '.join(final_sources)
-                    spoil2comp = f"[comparison={final_sources}]{comp_images}[/comparison]"
+                        sources_list = sources.split(each)
+                        sources = "$".join(sources_list)
+                    sources_list = sources.split("$")
+                    final_sources = [source.strip() for source in sources_list]
+                    comp_images_str = '\n'.join(comp_images)
+                    final_sources_str = ', '.join(final_sources)
+                    spoil2comp = f"[comparison={final_sources_str}]{comp_images_str}[/comparison]"
                     desc = desc.replace(tag, spoil2comp)
         return desc

@@ -14,7 +14,7 @@ config = {
         "btn_api": "",
 
         # Order of image hosts. primary host as first with others as backup
-        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, onlyimage, dalexni, zipline, passtheimage, seedpool_cdn
+        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, onlyimage, dalexni, zipline, passtheimage, seedpool_cdn, sharex
         "img_host_1": "",
         "img_host_2": "",
         "img_host_3": "",
@@ -34,6 +34,9 @@ config = {
         "zipline_api_key": "",
         # Seedpool CDN API key
         "seedpool_cdn_api": "",
+        # ShareX-style image host (IMageHosting) token
+        "sharex_url": "https://img.digitalcore.club/api/upload",
+        "sharex_api_key": "",
 
         # Whether to add a logo for the show/movie from TMDB to the top of the description
         "add_logo": False,
@@ -50,6 +53,9 @@ config = {
 
         # Number of screenshots to capture
         "screens": "4",
+
+        # Minimum successful image uploads required to continue
+        "min_successful_image_uploads": "3",
 
         # Number of cutoff screenshots
         # If there are at least this many screenshots already, perhaps pulled from existing
@@ -298,6 +304,14 @@ config = {
         # regardless of whether the tracker was selected for upload or not (needs cross-seeding above to be True)
         "cross_seed_check_everything": False,
 
+        # Set true to suppress config warnings on startup
+        "suppress_warnings": False,
+
+        # Tracker based rehashing cooldown,set true to enable
+        # For trackers that might need specific piece size rehashing, using a value higher than 0 will add the specified cooldown
+        # in (seconds) before rehashing begins, to allow other tasks to complete quickly, before resources are consumed by rehashing
+        "rehash_cooldown": "0",
+
     },
 
     # these are used for DB links on AR
@@ -311,9 +325,18 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: ACM, AITHER, AL, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, IHD, IS, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TLZ, TTG, TTR, TVC, ULCX, UTP, YOINK, YUS
+        # Available tracker: A4K, ACM, AITHER, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, IHD, IS, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TLZ, TOS, TTG, TTR, TVC, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
+
+        "A4K": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            "api_key": "",
+            "anon": False,
+            # Send uploads to Aither modq for staff approval
+            "modq": False,
+        },
 
         "ACM": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -331,12 +354,6 @@ config = {
             "anon": False,
             # Send uploads to Aither modq for staff approval
             "modq": False,
-        },
-        "AL": {
-            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
-            "link_dir_name": "",
-            "api_key": "",
-            "anon": False,
         },
         "ANT": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -387,7 +404,7 @@ config = {
             "bhd_rss_key": "",
             "announce_url": "https://beyond-hd.me/announce/customannounceurl",
             # Send uploads to BHD drafts
-            "draft_default": "False",
+            "draft_default": False,
             "anon": False,
         },
         "BHDTV": {
@@ -819,6 +836,17 @@ config = {
             "link_dir_name": "",
             "api_key": "",
             "anon": False,
+        },
+        "TOS": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # Mon profil > Réglages > Clé API
+            "api_key": "",
+            # Mon profil > Réglages > Passkey
+            "announce_url": "https://theoldschool.cc/announce/PasskeyHere",
+            "anon": False,
+            # Upload with Exclusive flag (team of staff only)
+            "exclusive": False,
         },
         "TTG": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

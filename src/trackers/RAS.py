@@ -1,15 +1,19 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-from data.config import config
+from typing import Any
+
 from src.get_desc import DescriptionBuilder
-from src.tmdb import get_logo
+from src.tmdb import TmdbManager
 from src.trackers.UNIT3D import UNIT3D
+
+Meta = dict[str, Any]
+Config = dict[str, Any]
 
 
 class RAS(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='RAS')
-        self.config = config
+        self.config: Config = config
+        self.tmdb_manager = TmdbManager(config)
         self.tracker = 'RAS'
         self.base_url = 'https://rastastugan.org'
         self.id_url = f'{self.base_url}/api/torrents/'
@@ -20,7 +24,7 @@ class RAS(UNIT3D):
         self.banned_groups = ['YTS', 'YiFY', 'LAMA', 'MeGUSTA', 'NAHOM', 'GalaxyRG', 'RARBG', 'INFINITY']
         pass
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
 
         nordic_languages = ['danish', 'swedish', 'norwegian', 'icelandic', 'finnish', 'english']
@@ -31,16 +35,23 @@ class RAS(UNIT3D):
 
         return should_continue
 
-    async def get_description(self, meta):
+    async def get_description(self, meta: Meta) -> dict[str, str]:
         if meta.get('logo', "") == "":
-            TMDB_API_KEY = config['DEFAULT'].get('tmdb_api', False)
+            TMDB_API_KEY = str(self.config['DEFAULT'].get('tmdb_api', ''))
             TMDB_BASE_URL = "https://api.themoviedb.org/3"
-            tmdb_id = meta.get('tmdb')
-            category = meta.get('category')
-            debug = meta.get('debug')
+            tmdb_id = int(meta.get('tmdb', 0) or 0)
+            category = str(meta.get('category', ''))
+            debug = bool(meta.get('debug', False))
             logo_languages = ['da', 'sv', 'no', 'fi', 'is', 'en']
-            logo_path = await get_logo(tmdb_id, category, debug, logo_languages=logo_languages, TMDB_API_KEY=TMDB_API_KEY, TMDB_BASE_URL=TMDB_BASE_URL)
+            logo_path = await self.tmdb_manager.get_logo(
+                tmdb_id,
+                category,
+                debug,
+                logo_languages=logo_languages,
+                TMDB_API_KEY=TMDB_API_KEY,
+                TMDB_BASE_URL=TMDB_BASE_URL,
+            )
             if logo_path:
                 meta['logo'] = logo_path
 
-        return {'description': await DescriptionBuilder(self.config).unit3d_edit_desc(meta, self.tracker)}
+        return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta)}

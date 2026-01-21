@@ -1,14 +1,28 @@
 services:
   l4g-upload-assistant-cli:
-    image: ghcr.io/audionut/upload-assistant:master-webui #you can use the version number with -webui appended, for example :v6.3.1-webui
+    image: ghcr.io/audionut/upload-assistant:master-webui # It is preferred to use the version number with -webui appended, for example :v6.3.1-webui
     container_name: UA
     restart: unless-stopped
     networks:
       - yournetwork #change to the network with ur torrent instance
     ports: 
-      - "5000:5000" #change left side to your specific port.
+      # Change left side to your specific port. Use 0.0.0.0:5000:5000 to expose to ANY device.
+      # 127.0.0.1 means only accessible from the host machine. If you change to 0.0.0.0:5000:5000 it will be accessible from any device on the network
+      # including devices outside your network if your router/reverse proxy allows it.
+      - "127.0.0.1:5000:5000"
     environment:
       - ENABLE_WEB_UI=true
+      # Bind inside the container so the host port mapping works; host-side access is controlled by `ports`.
+      - UA_WEBUI_HOST=0.0.0.0
+      - UA_WEBUI_PORT=5000
+      # Required: allowlisted roots the Web UI is allowed to browse/execute within
+      # Using a specific subfolder is not working correctly, use the top folder as needed. for instance, /data, not /data/torrents
+      - UA_BROWSE_ROOTS=/data,/Upload-Assistant/tmp
+      # RECOMMENDED: enable HTTP Basic Auth for the Web UI/API (especially if exposed beyond localhost (ie: you used 0.0.0.0 at ports above))
+      # - UA_WEBUI_USERNAME=admin
+      # - UA_WEBUI_PASSWORD=change-me
+      # Optional: only needed if you serve the UI from a different origin/domain.
+      # - UA_WEBUI_CORS_ORIGINS=https://your-ui-host
     entrypoint: /bin/bash
     command: -c "source /venv/bin/activate && python /Upload-Assistant/web_ui/server.py & tail -f /dev/null"
     volumes:

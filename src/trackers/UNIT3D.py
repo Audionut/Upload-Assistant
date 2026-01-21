@@ -1,320 +1,396 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
-import aiofiles
 import asyncio
 import glob
-import httpx
+import json
 import os
 import platform
 import re
+from typing import Any, Optional, Union
+
+import aiofiles
+import httpx
+from typing_extensions import TypeAlias
+
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.trackers.COMMON import COMMON
 
+QueryValue: TypeAlias = Union[str, int, float, bool, None]
+ParamsList: TypeAlias = list[tuple[str, QueryValue]]
+
 
 class UNIT3D:
-    def __init__(self, config, tracker_name):
+    def __init__(self, config: dict[str, Any], tracker_name: str):
         self.config = config
         self.tracker = tracker_name
         self.common = COMMON(config)
-        tracker_config = self.config['TRACKERS'].get(self.tracker, {})
-        self.announce_url = tracker_config.get('announce_url', '')
-        self.api_key = tracker_config.get('api_key', '')
+        self.tracker_config: dict[str, Any] = self.config["TRACKERS"].get(self.tracker, {})
+
+        # Normalize announce_url: must be a non-empty string after stripping
+        raw_announce = self.tracker_config.get("announce_url")
+        self.announce_url = raw_announce.strip() if isinstance(raw_announce, str) else ""
+
+        # Normalize api_key: must be a non-empty string after stripping
+        raw_api_key = self.tracker_config.get("api_key")
+        self.api_key = raw_api_key.strip() if isinstance(raw_api_key, str) else ""
+
+        # Default URLs - should be overridden by subclasses
+        self.search_url = ""
+        self.upload_url = ""
         pass
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, _meta: dict[str, Any]) -> bool:
         should_continue = True
         return should_continue
 
-    async def search_existing(self, meta, disctype):
+    async def search_existing(self, meta: dict[str, Any], _: Any) -> list[dict[str, Any]]:
+        dupes: list[dict[str, Any]] = []
+
+        # Ensure tracker_status keys exist before any potential writes
+        meta.setdefault("tracker_status", {})
+        meta["tracker_status"].setdefault(self.tracker, {})
+
         if not self.api_key:
-            if not meta['debug']:
-                console.print(f'[bold red]{self.tracker}: Missing API key in config file. Skipping upload...[/bold red]')
-                meta['skipping'] = f'{self.tracker}'
-                return
+            if not meta["debug"]:
+                console.print(
+                    f"[bold red]{self.tracker}: Missing API key in config file. Skipping upload...[/bold red]"
+                )
+            meta["skipping"] = f"{self.tracker}"
+            return dupes
 
         should_continue = await self.get_additional_checks(meta)
         if not should_continue:
-            meta['skipping'] = f'{self.tracker}'
-            return
+            meta["skipping"] = f"{self.tracker}"
+            return dupes
 
-        dupes = []
-        params = {
-            'api_token': self.api_key,
-            'tmdbId': meta['tmdb'],
-            'categories[]': (await self.get_category_id(meta))['category_id'],
-            'name': '',
-            'perPage': '100'
+        headers = {
+            "authorization": f"Bearer {self.api_key}",
+            "accept": "application/json",
         }
+
+        category_id = str((await self.get_category_id(meta))['category_id'])
+        params_dict: dict[str, str] = {
+            "tmdbId": str(meta['tmdb']),
+            "categories[]": category_id,
+            "name": "",
+            "perPage": "100",
+        }
+        params_list: Optional[ParamsList] = None
         resolutions = await self.get_resolution_id(meta)
-        if resolutions['resolution_id'] in ['3', '4']:
+        resolution_id = str(resolutions["resolution_id"])
+        if resolution_id in ["3", "4"]:
             # Convert params to list of tuples to support duplicate keys
-            params_list = [(k, v) for k, v in params.items()]
-            params_list.append(('resolutions[]', '3'))
-            params_list.append(('resolutions[]', '4'))
-            params = params_list
+            params_list = list(params_dict.items())
+            params_list.append(("resolutions[]", "3"))
+            params_list.append(("resolutions[]", "4"))
         else:
-            params['resolutions[]'] = resolutions['resolution_id']
+            params_dict["resolutions[]"] = resolution_id
 
-        if self.tracker not in ['SP']:
-            type_id = (await self.get_type_id(meta))['type_id']
-            if isinstance(params, list):
-                params.append(('types[]', type_id))
+        if self.tracker not in ["SP", "STC"]:
+            type_id = str((await self.get_type_id(meta))["type_id"])
+            if params_list is not None:
+                params_list.append(("types[]", type_id))
             else:
-                params['types[]'] = type_id
+                params_dict["types[]"] = type_id
 
-        if meta['category'] == 'TV':
+        if meta["category"] == "TV":
             season_value = f" {meta.get('season', '')}"
-            if isinstance(params, list):
+            if params_list is not None:
                 # Update the 'name' parameter in the list
-                params = [(k, v + season_value if k == 'name' else v) for k, v in params]
+                params_list = [
+                    (k, (v + season_value if k == "name" and isinstance(v, str) else v))
+                    for k, v in params_list
+                ]
             else:
-                params['name'] = params['name'] + season_value
+                params_dict["name"] = params_dict["name"] + season_value
+
+        request_params: ParamsList
+        request_params = params_list if params_list is not None else list(params_dict.items())
 
         try:
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-                response = await client.get(url=self.search_url, params=params)
+                response = await client.get(url=self.search_url, headers=headers, params=request_params)
                 response.raise_for_status()
                 if response.status_code == 200:
                     data = response.json()
-                    for each in data['data']:
-                        attributes = each.get('attributes', {})
-                        if not meta['is_disc']:
+                    for each in data["data"]:
+                        torrent_id = each.get("id", None)
+                        attributes = each.get("attributes", {})
+                        name = attributes.get("name", "")
+                        size = attributes.get("size", 0)
+                        result: dict[str, Any]
+                        if not meta["is_disc"]:
                             result = {
-                                'name': attributes['name'],
-                                'size': attributes['size'],
-                                'files': [file['name'] for file in attributes.get('files', []) if isinstance(file, dict) and 'name' in file],
-                                'file_count': len(attributes.get('files', [])) if isinstance(attributes.get('files'), list) else 0,
-                                'trumpable': attributes.get('trumpable', False),
-                                'link': attributes.get('details_link', None),
-                                'download': attributes.get('download_link', None)
+                                "name": name,
+                                "size": size,
+                                "files": [
+                                    file["name"]
+                                    for file in attributes.get("files", [])
+                                    if isinstance(file, dict) and "name" in file
+                                ],
+                                "file_count": (
+                                    len(attributes.get("files", []))
+                                    if isinstance(attributes.get("files"), list)
+                                    else 0
+                                ),
+                                "trumpable": attributes.get("trumpable", False),
+                                "link": attributes.get("details_link", None),
+                                "download": attributes.get("download_link", None),
+                                "id": torrent_id,
+                                "type": attributes.get("type", None),
+                                "res": attributes.get("resolution", None),
+                                "internal": attributes.get("internal", False),
                             }
                         else:
                             result = {
-                                'name': attributes['name'],
-                                'size': attributes['size'],
-                                'files': [],
-                                'file_count': len(attributes.get('files', [])) if isinstance(attributes.get('files'), list) else 0,
-                                'trumpable': attributes.get('trumpable', False),
-                                'link': attributes.get('details_link', None),
-                                'download': attributes.get('download_link', None)
+                                "name": name,
+                                "size": size,
+                                "files": [],
+                                "file_count": (
+                                    len(attributes.get("files", []))
+                                    if isinstance(attributes.get("files"), list)
+                                    else 0
+                                ),
+                                "trumpable": attributes.get("trumpable", False),
+                                "link": attributes.get("details_link", None),
+                                "download": attributes.get("download_link", None),
+                                "id": torrent_id,
+                                "type": attributes.get("type", None),
+                                "res": attributes.get("resolution", None),
+                                "internal": attributes.get("internal", False),
+                                "bd_info": attributes.get("bd_info", ""),
+                                "description": attributes.get("description", ""),
                             }
                         dupes.append(result)
                 else:
-                    console.print(f'[bold red]Failed to search torrents. HTTP Status: {response.status_code}')
+                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 302:
-                meta['tracker_status'][self.tracker]['status_message'] = (
-                    "data error: Redirect (302). This may indicate a problem with authentication. Please verify that your API key is valid."
-                )
+                meta["tracker_status"][self.tracker][
+                    "status_message"
+                ] = "data error: Redirect (302). This may indicate a problem with authentication. Please verify that your API key is valid."
             else:
-                meta['tracker_status'][self.tracker]['status_message'] = f'data error: HTTP {e.response.status_code} - {e.response.text}'
+                meta["tracker_status"][self.tracker][
+                    "status_message"
+                ] = f"data error: HTTP {e.response.status_code} - {e.response.text}"
         except httpx.TimeoutException:
-            console.print('[bold red]Request timed out after 10 seconds')
+            console.print("[bold red]Request timed out after 10 seconds")
         except httpx.RequestError as e:
-            console.print(f'[bold red]Unable to search for existing torrents: {e}')
+            console.print(f"[bold red]Unable to search for existing torrents: {e}")
         except Exception as e:
-            console.print(f'[bold red]Unexpected error: {e}')
+            console.print(f"[bold red]Unexpected error: {e}")
             await asyncio.sleep(5)
 
         return dupes
 
-    async def get_name(self, meta):
-        return {'name': meta['name']}
+    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
+        return {"name": meta["name"]}
 
-    async def get_description(self, meta):
-        return {'description': await DescriptionBuilder(self.config).unit3d_edit_desc(meta, self.tracker, comparison=True)}
+    async def get_description(self, meta: dict[str, Any]) -> dict[str, str]:
+        return {
+            "description": await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(
+                meta, comparison=True
+            )
+        }
 
-    async def get_mediainfo(self, meta):
-        if meta['bdinfo'] is not None:
-            mediainfo = None
+    async def get_mediainfo(self, meta: dict[str, Any]) -> dict[str, str]:
+        if meta.get("bdinfo") is not None:
+            mediainfo = ""
         else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8') as f:
+            async with aiofiles.open(
+                f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding="utf-8"
+            ) as f:
                 mediainfo = await f.read()
-        return {'mediainfo': mediainfo}
+        return {"mediainfo": mediainfo}
 
-    async def get_bdinfo(self, meta):
-        if meta['bdinfo'] is not None:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
+    async def get_bdinfo(self, meta: dict[str, Any]) -> dict[str, str]:
+        if meta.get("bdinfo") is not None:
+            async with aiofiles.open(
+                f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding="utf-8"
+            ) as f:
                 bdinfo = await f.read()
         else:
-            bdinfo = None
-        return {'bdinfo': bdinfo}
+            bdinfo = ""
+        return {"bdinfo": bdinfo}
 
-    async def get_category_id(self, meta, category=None, reverse=False, mapping_only=False):
+    async def get_category_id(
+        self, meta: dict[str, Any], category: str = "", reverse: bool = False, mapping_only: bool = False
+    ) -> dict[str, str]:
         category_id = {
-            'MOVIE': '1',
-            'TV': '2',
+            "MOVIE": "1",
+            "TV": "2",
         }
         if mapping_only:
             return category_id
         elif reverse:
             return {v: k for k, v in category_id.items()}
-        elif category is not None:
-            return {'category_id': category_id.get(category, '0')}
+        elif category:
+            return {"category_id": category_id.get(category, "0")}
         else:
-            meta_category = meta.get('category', '')
-            resolved_id = category_id.get(meta_category, '0')
-            return {'category_id': resolved_id}
+            meta_category = meta.get("category", "")
+            resolved_id = category_id.get(meta_category, "0")
+            return {"category_id": resolved_id}
 
-    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
+    async def get_type_id(
+        self, meta: dict[str, Any], type: str = "", reverse: bool = False, mapping_only: bool = False
+    ) -> dict[str, str]:
         type_id = {
-            'DISC': '1',
-            'REMUX': '2',
-            'WEBDL': '4',
-            'WEBRIP': '5',
-            'HDTV': '6',
-            'ENCODE': '3',
-            'DVDRIP': '3',
+            "DISC": "1",
+            "REMUX": "2",
+            "WEBDL": "4",
+            "WEBRIP": "5",
+            "HDTV": "6",
+            "ENCODE": "3",
+            "DVDRIP": "3",
         }
         if mapping_only:
             return type_id
         elif reverse:
             return {v: k for k, v in type_id.items()}
-        elif type is not None:
-            return {'type_id': type_id.get(type, '0')}
+        elif type:
+            return {"type_id": type_id.get(type, "0")}
         else:
-            meta_type = meta.get('type', '')
-            resolved_id = type_id.get(meta_type, '0')
-            return {'type_id': resolved_id}
+            meta_type = meta.get("type", "")
+            resolved_id = type_id.get(meta_type, "0")
+            return {"type_id": resolved_id}
 
-    async def get_resolution_id(self, meta, resolution=None, reverse=False, mapping_only=False):
+    async def get_resolution_id(
+        self, meta: dict[str, Any], resolution: str = "", reverse: bool = False, mapping_only: bool = False
+    ) -> dict[str, str]:
         resolution_id = {
-            '8640p': '10',
-            '4320p': '1',
-            '2160p': '2',
-            '1440p': '3',
-            '1080p': '3',
-            '1080i': '4',
-            '720p': '5',
-            '576p': '6',
-            '576i': '7',
-            '480p': '8',
-            '480i': '9'
+            "8640p": "10",
+            "4320p": "1",
+            "2160p": "2",
+            "1440p": "3",
+            "1080p": "3",
+            "1080i": "4",
+            "720p": "5",
+            "576p": "6",
+            "576i": "7",
+            "480p": "8",
+            "480i": "9",
         }
         if mapping_only:
             return resolution_id
         elif reverse:
             return {v: k for k, v in resolution_id.items()}
-        elif resolution is not None:
-            return {'resolution_id': resolution_id.get(resolution, '10')}
+        elif resolution:
+            return {"resolution_id": resolution_id.get(resolution, "10")}
         else:
-            meta_resolution = meta.get('resolution', '')
-            resolved_id = resolution_id.get(meta_resolution, '10')
-            return {'resolution_id': resolved_id}
+            meta_resolution = meta.get("resolution", "")
+            resolved_id = resolution_id.get(meta_resolution, "10")
+            return {"resolution_id": resolved_id}
 
-    async def get_anonymous(self, meta):
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anonymous = 0
-        else:
-            anonymous = 1
-        return {'anonymous': anonymous}
+    async def get_anonymous(self, meta: dict[str, Any]) -> dict[str, str]:
+        anonymous = "0" if meta["anon"] == 0 and not self.tracker_config.get("anon", False) else "1"
+        return {"anonymous": anonymous}
 
-    async def get_additional_data(self, meta):
+    async def get_additional_data(self, _meta: dict[str, Any]) -> dict[str, str]:
         # Used to add additional data if needed
-        '''
+        """
         data = {
             'modq': await self.get_flag(meta, 'modq'),
             'draft': await self.get_flag(meta, 'draft'),
         }
-        '''
-        data = {}
+        """
+        data: dict[str, str] = {}
 
         return data
 
-    async def get_flag(self, meta, flag_name):
-        config_flag = self.config['TRACKERS'][self.tracker].get(flag_name)
+    async def get_flag(self, meta: dict[str, Any], flag_name: str) -> str:
+        config_flag = self.tracker_config.get(flag_name)
         if meta.get(flag_name, False):
-            return 1
+            return "1"
         else:
             if config_flag is not None:
-                return 1 if config_flag else 0
+                return "1" if config_flag else "0"
             else:
-                return 0
+                return "0"
 
-    async def get_distributor_id(self, meta):
-        distributor_id = await self.common.unit3d_distributor_ids(meta.get('distributor'))
-        if distributor_id != 0:
-            return {'distributor_id': distributor_id}
-
-        return {}
-
-    async def get_region_id(self, meta):
-        region_id = await self.common.unit3d_region_ids(meta.get('region'))
-        if region_id != 0:
-            return {'region_id': region_id}
+    async def get_distributor_id(self, meta: dict[str, Any]) -> dict[str, str]:
+        distributor_id = await self.common.unit3d_distributor_ids(meta.get("distributor", ""))
+        if distributor_id:
+            return {"distributor_id": distributor_id}
 
         return {}
 
-    async def get_tmdb(self, meta):
-        return {'tmdb': meta['tmdb']}
+    async def get_region_id(self, meta: dict[str, Any]) -> dict[str, str]:
+        region_id = await self.common.unit3d_region_ids(meta.get("region", ""))
+        if region_id:
+            return {"region_id": region_id}
 
-    async def get_imdb(self, meta):
-        return {'imdb': meta['imdb']}
+        return {}
 
-    async def get_tvdb(self, meta):
-        tvdb = meta.get('tvdb_id', 0) if meta['category'] == 'TV' else 0
-        return {'tvdb': tvdb}
+    async def get_tmdb(self, meta: dict[str, Any]) -> dict[str, str]:
+        return {"tmdb": f"{meta['tmdb']}"}
 
-    async def get_mal(self, meta):
-        return {'mal': meta['mal_id']}
+    async def get_imdb(self, meta: dict[str, Any]) -> dict[str, str]:
+        return {"imdb": f"{meta['imdb']}"}
 
-    async def get_igdb(self, meta):
-        return {'igdb': 0}
+    async def get_tvdb(self, meta: dict[str, Any]) -> dict[str, str]:
+        tvdb = meta.get("tvdb_id", 0) if meta["category"] == "TV" else 0
+        return {"tvdb": f"{tvdb}"}
 
-    async def get_stream(self, meta):
-        return {'stream': meta['stream']}
+    async def get_mal(self, meta: dict[str, Any]) -> dict[str, str]:
+        return {"mal": f"{meta['mal_id']}"}
 
-    async def get_sd(self, meta):
-        return {'sd': meta['sd']}
+    async def get_igdb(self, _meta: dict[str, Any]) -> dict[str, str]:
+        return {"igdb": "0"}
 
-    async def get_keywords(self, meta):
-        return {'keywords': meta.get('keywords', '')}
+    async def get_stream(self, meta: dict[str, Any]) -> dict[str, str]:
+        return {"stream": f"{meta['stream']}"}
 
-    async def get_personal_release(self, meta):
-        personal_release = int(meta.get('personalrelease', False))
-        return {'personal_release': personal_release}
+    async def get_sd(self, meta: dict[str, Any]) -> dict[str, str]:
+        return {"sd": f"{meta['sd']}"}
 
-    async def get_internal(self, meta):
-        internal = 0
-        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                internal = 1
+    async def get_keywords(self, meta: dict[str, Any]) -> dict[str, str]:
+        return {"keywords": meta.get("keywords", "")}
 
-        return {'internal': internal}
+    async def get_personal_release(self, meta: dict[str, Any]) -> dict[str, str]:
+        personal_release = "1" if meta.get("personalrelease", False) else "0"
+        return {"personal_release": personal_release}
 
-    async def get_season_number(self, meta):
+    async def get_internal(self, meta: dict[str, Any]) -> dict[str, str]:
+        internal = "0"
+        if self.tracker_config.get("internal", False) is True and meta["tag"] != "" and (
+            meta["tag"][1:] in self.tracker_config.get("internal_groups", [])
+        ):
+            internal = "1"
+
+        return {"internal": internal}
+
+    async def get_season_number(self, meta: dict[str, Any]) -> dict[str, str]:
         data = {}
-        if meta.get('category') == 'TV':
-            data = {'season_number': meta.get('season_int', '0')}
+        if meta.get("category") == "TV":
+            data = {"season_number": f"{meta.get('season_int', '0')}"}
 
         return data
 
-    async def get_episode_number(self, meta):
+    async def get_episode_number(self, meta: dict[str, Any]) -> dict[str, str]:
         data = {}
-        if meta.get('category') == 'TV':
-            data = {'episode_number': meta.get('episode_int', '0')}
+        if meta.get("category") == "TV":
+            data = {"episode_number": f"{meta.get('episode_int', '0')}"}
 
         return data
 
-    async def get_featured(self, meta):
-        return {'featured': 0}
+    async def get_featured(self, _meta: dict[str, Any]) -> dict[str, str]:
+        return {"featured": "0"}
 
-    async def get_free(self, meta):
-        free = 0
-        if meta.get('freeleech', 0) != 0:
-            free = meta.get('freeleech', 0)
+    async def get_free(self, meta: dict[str, Any]) -> dict[str, str]:
+        free = "0"
+        if meta.get("freeleech", 0) != 0:
+            free = f"{meta.get('freeleech', '0')}"
 
-        return {'free': free}
+        return {"free": free}
 
-    async def get_doubleup(self, meta):
-        return {'doubleup': 0}
+    async def get_doubleup(self, _meta: dict[str, Any]) -> dict[str, str]:
+        return {"doubleup": "0"}
 
-    async def get_sticky(self, meta):
-        return {'sticky': 0}
+    async def get_sticky(self, _meta: dict[str, Any]) -> dict[str, str]:
+        return {"sticky": "0"}
 
-    async def get_data(self, meta):
+    async def get_data(self, meta: dict[str, Any]) -> dict[str, str]:
         results = await asyncio.gather(
             self.get_name(meta),
             self.get_description(meta),
@@ -345,159 +421,183 @@ class UNIT3D:
             self.get_distributor_id(meta),
         )
 
-        merged = {}
+        merged: dict[str, str] = {}
         for r in results:
-            if not isinstance(r, dict):
-                raise TypeError(f'Expected dict, got {type(r)}: {r}')
             merged.update(r)
+
+        # Handle exclusive flag centrally for all UNIT3D trackers
+        # Priority: meta['exclusive'] > tracker config > default (not set)
+        exclusive_flag = None
+        if meta.get("exclusive", False) or self.tracker_config.get("exclusive", False):
+            exclusive_flag = "1"
+        if exclusive_flag:
+            merged["exclusive"] = exclusive_flag
 
         return merged
 
-    async def get_additional_files(self, meta):
-        files = {}
-        base_dir = meta['base_dir']
-        uuid = meta['uuid']
-        specified_dir_path = os.path.join(base_dir, 'tmp', uuid, '*.nfo')
+    async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, tuple[str, bytes, str]]:
+        files: dict[str, tuple[str, bytes, str]] = {}
+        base_dir = meta["base_dir"]
+        uuid = meta["uuid"]
+        specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
         nfo_files = glob.glob(specified_dir_path)
+        if not nfo_files and meta.get('keep_nfo', False) and (meta.get('keep_folder', False) or meta.get('isdir', False)):
+            search_dir = os.path.dirname(meta["path"])
+            nfo_files = glob.glob(os.path.join(search_dir, "*.nfo"))
 
         if nfo_files:
-            async with aiofiles.open(nfo_files[0], 'rb') as f:
+            async with aiofiles.open(nfo_files[0], "rb") as f:
                 nfo_bytes = await f.read()
-            files['nfo'] = ("nfo_file.nfo", nfo_bytes, "text/plain")
+            files["nfo"] = ("nfo_file.nfo", nfo_bytes, "text/plain")
 
         return files
 
-    async def upload(self, meta, disctype):
+    async def upload(self, meta: dict[str, Any], _: Any) -> bool:
         data = await self.get_data(meta)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
-        async with aiofiles.open(torrent_file_path, 'rb') as f:
+        async with aiofiles.open(torrent_file_path, "rb") as f:
             torrent_bytes = await f.read()
-        files = {'torrent': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
+        files = {"torrent": ("torrent.torrent", torrent_bytes, "application/x-bittorrent")}
         files.update(await self.get_additional_files(meta))
-        headers = {'User-Agent': f'{meta["ua_name"]} {meta.get("current_version", "")} ({platform.system()} {platform.release()})'}
-        params = {'api_token': self.api_key}
+        headers = {
+            "User-Agent": f'{meta["ua_name"]} {meta.get("current_version", "")} ({platform.system()} {platform.release()})',
+            "authorization": f"Bearer {self.api_key}",
+            "accept": "application/json",
+        }
 
-        if meta['debug'] is False:
+        if meta["debug"] is False:
             response_data = {}
             max_retries = 2
             retry_delay = 5
-            timeout = 10.0
+            timeout = 40.0
 
             for attempt in range(max_retries):
-                try:
+                try:  # noqa: PERF203
                     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-                        response = await client.post(url=self.upload_url, files=files, data=data, headers=headers, params=params)
+                        response = await client.post(
+                            url=self.upload_url, files=files, data=data, headers=headers
+                        )
                         response.raise_for_status()
 
                         response_data = response.json()
-                        meta['tracker_status'][self.tracker]['status_message'] = await self.process_response_data(response_data)
+
+                        # Verify API success before proceeding
+                        if not response_data.get("success"):
+                            error_msg = response_data.get("message", "Unknown error")
+                            meta["tracker_status"][self.tracker]["status_message"] = f"API error: {error_msg}"
+                            console.print(f"[yellow]Upload to {self.tracker} failed: {error_msg}[/yellow]")
+                            return False
+
+                        meta["tracker_status"][self.tracker]["status_message"] = (
+                            await self.process_response_data(response_data)
+                        )
                         torrent_id = await self.get_torrent_id(response_data)
 
-                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+                        meta["tracker_status"][self.tracker]["torrent_id"] = torrent_id
                         await self.common.download_tracker_torrent(
-                            meta,
-                            self.tracker,
-                            headers=headers,
-                            params=params,
-                            downurl=response_data['data']
+                            meta, self.tracker, headers=headers, downurl=response_data["data"]
                         )
-                        break  # Success, exit retry loop
+                        return True  # Success
 
-                except httpx.HTTPStatusError as e:
-                    # Check if upload already exists (can happen after timeout)
-                    if "The name has already been taken" in e.response.text or "The info hash has already been taken" in e.response.text:
-                        try:
-                            error_data = e.response.json()
-                            existing_torrent = error_data.get('data', {}).get('existing_torrent', {})
-                            torrent_id = str(existing_torrent.get('existing_id', ''))
-                            download_url = existing_torrent.get('download_url', '')
-
-                            if torrent_id and download_url:
-                                meta['tracker_status'][self.tracker]['status_message'] = (
-                                    "Found the uploaded torrent (it was already uploaded successfully)."
-                                )
-                                meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-                                await self.common.download_tracker_torrent(
-                                    meta,
-                                    self.tracker,
-                                    headers=headers,
-                                    params=params,
-                                    downurl=download_url
-                                )
-                                break  # Success, exit retry loop
-                            else:
-                                console.print(f'[yellow]{self.tracker}: Could not extract existing torrent info from error response[/yellow]')
-                        except Exception as parse_error:
-                            console.print(f'[yellow]{self.tracker}: Error parsing existing torrent response: {parse_error}[/yellow]')
-
+                except httpx.HTTPStatusError as e:  # noqa: PERF203
                     if e.response.status_code in [403, 302]:
                         # Don't retry auth/permission errors
                         if e.response.status_code == 403:
-                            meta['tracker_status'][self.tracker]['status_message'] = (
-                                "data error: Forbidden (403). This may indicate that you do not have upload permission."
-                            )
+                            meta["tracker_status"][self.tracker][
+                                "status_message"
+                            ] = f"data error: Forbidden (403). This may indicate that you do not have upload permission. {e.response.text}"
                         else:
-                            meta['tracker_status'][self.tracker]['status_message'] = (
-                                "data error: Redirect (302). This may indicate a problem with authentication. Please verify that your API key is valid."
-                            )
-                        break  # Don't retry
+                            meta["tracker_status"][self.tracker][
+                                "status_message"
+                            ] = f"data error: Redirect (302). This may indicate a problem with authentication. {e.response.text}"
+                        return False  # Auth/permission error
+                    elif e.response.status_code in [401, 404, 422]:
+                        meta["tracker_status"][self.tracker][
+                            "status_message"
+                        ] = f"data error: HTTP {e.response.status_code} - {e.response.text}"
                     else:
                         # Retry other HTTP errors
                         if attempt < max_retries - 1:
-                            console.print(f'[yellow]{self.tracker}: HTTP {e.response.status_code} error, retrying in {retry_delay} seconds... (attempt {attempt + 1}/{max_retries})[/yellow]')
+                            console.print(
+                                f"[yellow]{self.tracker}: HTTP {e.response.status_code} error, retrying in {retry_delay} seconds... (attempt {attempt + 1}/{max_retries})[/yellow]"
+                            )
                             await asyncio.sleep(retry_delay)
                             continue
                         else:
                             # Final attempt failed
                             if e.response.status_code == 520:
-                                meta['tracker_status'][self.tracker]['status_message'] = (
-                                    "data error: Error (520). This is probably a cloudflare issue on the tracker side."
-                                )
+                                meta["tracker_status"][self.tracker][
+                                    "status_message"
+                                ] = "data error: Error (520). This is probably a cloudflare issue on the tracker side."
                             else:
-                                meta['tracker_status'][self.tracker]['status_message'] = f'data error: HTTP {e.response.status_code} - {e.response.text}'
+                                meta["tracker_status"][self.tracker][
+                                    "status_message"
+                                ] = f"data error: HTTP {e.response.status_code} - {e.response.text}"
+                            return False  # HTTP error after all retries
                 except httpx.TimeoutException:
                     if attempt < max_retries - 1:
-                        timeout = timeout * 2.00  # Increase timeout by 100% for next retry
-                        console.print(f'[yellow]{self.tracker}: Request timed out, retrying in {retry_delay} seconds with {timeout}s timeout... (attempt {attempt + 1}/{max_retries})[/yellow]')
+                        timeout = timeout * 1.5  # Increase timeout by 50% for next retry
+                        console.print(
+                            f"[yellow]{self.tracker}: Request timed out, retrying in {retry_delay} seconds with {timeout}s timeout... (attempt {attempt + 1}/{max_retries})[/yellow]"
+                        )
                         await asyncio.sleep(retry_delay)
                         continue
                     else:
-                        meta['tracker_status'][self.tracker]['status_message'] = 'data error: Request timed out after multiple attempts'
+                        meta["tracker_status"][self.tracker][
+                            "status_message"
+                        ] = "data error: Request timed out after multiple attempts"
+                        return False  # Timeout after all retries
                 except httpx.RequestError as e:
                     if attempt < max_retries - 1:
-                        console.print(f'[yellow]{self.tracker}: Request error, retrying in {retry_delay} seconds... (attempt {attempt + 1}/{max_retries})[/yellow]')
+                        console.print(
+                            f"[yellow]{self.tracker}: Request error, retrying in {retry_delay} seconds... (attempt {attempt + 1}/{max_retries})[/yellow]"
+                        )
                         await asyncio.sleep(retry_delay)
                         continue
                     else:
-                        meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e}.\nResponse: {response_data}'
-                except Exception as e:
-                    meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response_data}'
-                    return
+                        meta["tracker_status"][self.tracker][
+                            "status_message"
+                        ] = f"data error: Unable to upload. Error: {e}.\nResponse: {response_data}"
+                        return False  # Request error after all retries
+                except json.JSONDecodeError as e:
+                    meta["tracker_status"][self.tracker][
+                        "status_message"
+                    ] = f"data error: Invalid JSON response from {self.tracker}. Error: {e}"
+                    return False  # JSON parsing error
         else:
-            console.print(f'[cyan]{self.tracker} Request Data:')
+            console.print(f"[cyan]{self.tracker} Request Data:")
             console.print(data)
-            meta['tracker_status'][self.tracker]['status_message'] = f'Debug mode enabled, not uploading: {self.tracker}.'
+            meta["tracker_status"][self.tracker][
+                "status_message"
+            ] = f"Debug mode enabled, not uploading: {self.tracker}."
+            await self.common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+            )
+            return True  # Debug mode - simulated success
 
-    async def get_torrent_id(self, response_data):
+        return False
+
+    async def get_torrent_id(self, response_data: dict[str, Any]) -> str:
         """Matches /12345.abcde and returns 12345"""
-        torrent_id = ''
+        torrent_id = ""
         try:
-            match = re.search(r'/(\d+)\.', response_data['data'])
+            match = re.search(r"/(\d+)\.", response_data["data"])
             if match:
                 torrent_id = match.group(1)
         except (IndexError, KeyError):
-            print('Could not parse torrent_id from response data.')
+            console.print("Could not parse torrent_id from response data.")
         return torrent_id
 
-    async def process_response_data(self, response_data):
-        """Returns only the success message from the response data if the upload is successful; otherwise, returns the complete response data."""
-        status_message = ''
-        try:
-            if response_data['success'] is True:
-                status_message = response_data['message']
-            else:
-                status_message = response_data
-        except Exception:
-            pass
+    async def process_response_data(self, response_data: dict[str, Any]) -> str:
+        """Returns the success message from the response data as a string."""
+        if response_data.get("success") is True:
+            return str(response_data.get("message", "Upload successful"))
 
-        return status_message
+        # For non-success responses, format as string
+        error_msg = response_data.get("message", "")
+        if error_msg:
+            return f"API response: {error_msg}"
+        return f"API response: {response_data}"

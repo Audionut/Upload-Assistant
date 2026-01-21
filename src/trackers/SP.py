@@ -1,18 +1,22 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import cli_ui
 import os
 import re
+from typing import Any, Optional, cast
+
+import cli_ui
 
 from src.console import console
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
+
 
 class SP(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='SP')
-        self.config = config
+        self.config: Config = config
         self.common = COMMON(config)
         self.tracker = 'SP'
         self.base_url = 'https://seedpool.org'
@@ -23,13 +27,17 @@ class SP(UNIT3D):
         self.banned_groups = []
         pass
 
-    async def get_category_id(self, meta):
-        if not isinstance(meta, dict):
-            raise TypeError('meta must be a dict when passed to Seedpool get_cat_id')
-
-        category_name = meta.get('category', '').upper()
-        release_title = meta.get('name', '')
-        mal_id = meta.get('mal_id', 0)
+    async def get_category_id(
+        self,
+        meta: Meta,
+        category: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
+        _ = (category, reverse, mapping_only)
+        category_name = str(meta.get('category', '')).upper()
+        release_title = str(meta.get('name', ''))
+        mal_id = int(meta.get('mal_id', 0) or 0)
 
         # Custom SEEDPOOL category logic
         # Anime TV go in the Anime category
@@ -48,7 +56,7 @@ class SP(UNIT3D):
         return {'category_id': category_id}
 
     # New function to check for sports releases in a title
-    def contains_sports_patterns(self, release_title):
+    def contains_sports_patterns(self, release_title: str) -> bool:
         patterns = [
             r'EFL.*', r'.*mlb.*', r'.*formula1.*', r'.*nascar.*', r'.*nfl.*', r'.*wrc.*', r'.*wwe.*',
             r'.*fifa.*', r'.*boxing.*', r'.*rally.*', r'.*ufc.*', r'.*ppv.*', r'.*uefa.*', r'.*nhl.*',
@@ -56,12 +64,17 @@ class SP(UNIT3D):
             r'.*overtake.*'
         ]
 
-        for pattern in patterns:
-            if re.search(pattern, release_title, re.IGNORECASE):
-                return True
-        return False
+        return any(re.search(pattern, release_title, re.IGNORECASE) for pattern in patterns)
 
-    async def get_type_id(self, meta):
+    async def get_type_id(
+        self,
+        meta: Meta,
+        type: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
+        type_value = str(meta.get('type', ''))
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -70,23 +83,20 @@ class SP(UNIT3D):
             'HDTV': '6',
             'ENCODE': '3',
             'DVDRIP': '3'
-        }.get(meta['type'], '0')
+        }.get(type_value, '0')
         return {'type_id': type_id}
 
-    async def get_name(self, meta):
+    async def get_name(self, meta: Meta) -> dict[str, str]:
         KNOWN_EXTENSIONS = {".mkv", ".mp4", ".avi", ".ts"}
-        if meta['scene'] is True:
-            if meta.get('scene_name') != "":
-                name = meta.get('scene_name')
-            else:
-                name = meta['uuid'].replace(" ", ".")
-        elif meta.get('is_disc') is True:
-            name = meta['name'].replace(" ", ".")
+        if bool(meta.get('scene')):
+            scene_name = str(meta.get('scene_name', ''))
+            name = scene_name if scene_name != "" else str(meta.get('uuid', '')).replace(" ", ".")
+        elif bool(meta.get('is_disc')):
+            name = str(meta.get('name', '')).replace(" ", ".")
         else:
-            if meta.get('mal_id', 0) != 0:
-                name = meta['name'].replace(" ", ".")
-            else:
-                name = meta['uuid'].replace(" ", ".")
+            base_name = str(meta.get('name', '')).replace(" ", ".")
+            uuid_name = str(meta.get('uuid', '')).replace(" ", ".")
+            name = base_name if int(meta.get('mal_id', 0) or 0) != 0 else uuid_name
         base, ext = os.path.splitext(name)
         if ext.lower() in KNOWN_EXTENSIONS:
             name = base.replace(" ", ".")
@@ -94,11 +104,14 @@ class SP(UNIT3D):
 
         return {'name': name}
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
-        if meta['resolution'] not in ['8640p', '4320p', '2160p', '1440p', '1080p', '1080i']:
+        resolution = str(meta.get('resolution', ''))
+        if resolution not in ['8640p', '4320p', '2160p', '1440p', '1080p', '1080i']:
             console.print(f'[bold red]Only 1080 or higher resolutions allowed at {self.tracker}.[/bold red]')
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+            if not bool(meta.get('unattended')) or (
+                bool(meta.get('unattended')) and meta.get('unattended_confirm', False)
+            ):
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass
                 else:
@@ -106,10 +119,18 @@ class SP(UNIT3D):
             else:
                 return False
 
-        disallowed_keywords = {'XXX', 'Erotic', 'Porn'}
-        disallowed_genres = {'Adult', 'Erotica'}
-        if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])) or any(genre.lower() in disallowed_genres for genre in map(str.lower, meta.get('combined_genres', []))):
-            if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
+        disallowed_keywords = {'xxx', 'erotic', 'porn'}
+        disallowed_genres = {'adult', 'erotica'}
+        keywords = [str(k) for k in cast(list[Any], meta.get('keywords', []))]
+        combined_genres = [
+            str(g) for g in cast(list[Any], meta.get('combined_genres', []))
+        ]
+        if any(keyword.lower() in disallowed_keywords for keyword in keywords) or any(
+            genre.lower() in disallowed_genres for genre in combined_genres
+        ):
+            if not bool(meta.get('unattended')) or (
+                bool(meta.get('unattended')) and meta.get('unattended_confirm', False)
+            ):
                 console.print(f'[bold red]Porn/xxx is not allowed at {self.tracker}.[/bold red]')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     pass

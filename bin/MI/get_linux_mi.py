@@ -2,11 +2,14 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
 import platform
-import requests
 import shutil
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Optional
+
+import requests
+
 from src.console import console
 
 MEDIAINFO_VERSION = "23.04"
@@ -25,7 +28,7 @@ def get_filename(system: str, arch: str, library_type: str = "cli") -> str:
         else:
             raise ValueError(f"Unknown library_type: {library_type}")
     else:
-        return
+        return ""
 
 
 def get_url(system: str, arch: str, library_type: str = "cli") -> str:
@@ -78,7 +81,7 @@ def extract_linux(cli_archive: Path, lib_archive: Path, output_dir: Path) -> Non
         lib_dir.rmdir()
 
 
-def download_dvd_mediainfo(base_dir, debug=False):
+def download_dvd_mediainfo(base_dir: str, debug: bool = False) -> Optional[str]:
     system = platform.system().lower()
     machine = platform.machine().lower()
 
@@ -125,8 +128,9 @@ def download_dvd_mediainfo(base_dir, debug=False):
         console.print(f"[blue]MediaInfo Library filename: {lib_filename}[/blue]")
 
     with TemporaryDirectory() as tmp_dir:
-        cli_archive = Path(tmp_dir) / cli_filename
-        lib_archive = Path(tmp_dir) / lib_filename
+        tmp_dir_path = Path(str(tmp_dir))
+        cli_archive = tmp_dir_path / cli_filename
+        lib_archive = tmp_dir_path / lib_filename
 
         # Download both archives
         download_file(cli_url, cli_archive)
@@ -147,7 +151,7 @@ def download_dvd_mediainfo(base_dir, debug=False):
 
         # Make CLI binary executable
         if cli_file.exists():
-            os.chmod(cli_file, 0o755)
+            os.chmod(cli_file, 0o700)  # rwx------ (owner only)
 
     if not cli_file.exists():
         raise Exception(f"Failed to extract CLI binary to {cli_file}")

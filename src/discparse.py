@@ -1,32 +1,38 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import os
-import sys
 import asyncio
-import shutil
-import traceback
-from glob import glob
-from pymediainfo import MediaInfo
-from collections import OrderedDict
 import json
-from pyparsebluray import mpls
-from xml.etree import ElementTree as ET
+import os
 import re
+import shutil
+import sys
+import traceback
+from collections import OrderedDict, defaultdict
+from glob import glob
+from pathlib import Path
+from typing import Any, Optional, cast
+
+import defusedxml.ElementTree as ET
 from langcodes import Language
-from collections import defaultdict
+from pymediainfo import MediaInfo
+from pyparsebluray import mpls
+
 from src.console import console
-from data.config import config
 from src.exportmi import setup_mediainfo_library
 
+PlaylistItem = dict[str, Any]
+PlaylistInfo = dict[str, Any]
 
-class DiscParse():
-    def __init__(self):
+
+class DiscParse:
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
-        self.mediainfo_config = None
-        pass
+        self.mediainfo_config: Optional[dict[str, Any]] = None
 
-    def setup_mediainfo_for_dvd(self, base_dir, debug=False):
+    def setup_mediainfo_for_dvd(self, base_dir: Optional[str], debug: bool = False) -> Optional[str]:
         """Setup MediaInfo binary for DVD processing using the complete setup from exportmi"""
         if self.mediainfo_config is None:
+            if base_dir is None:
+                return None
             self.mediainfo_config = setup_mediainfo_library(base_dir, debug)
 
         if self.mediainfo_config and self.mediainfo_config['cli']:
@@ -37,7 +43,14 @@ class DiscParse():
     Get and parse bdinfo
     """
 
-    async def get_bdinfo(self, meta, discs, folder_id, base_dir, meta_discs):
+    async def get_bdinfo(
+        self,
+        meta: dict[str, Any],
+        discs: list[dict[str, Any]],
+        folder_id: str,
+        base_dir: str,
+        meta_discs: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], Any]:
         use_largest = int(self.config['DEFAULT'].get('use_largest_playlist', False))
         save_dir = f"{base_dir}/tmp/{folder_id}"
         if not os.path.exists(save_dir):
@@ -60,86 +73,113 @@ class DiscParse():
                     console.print(f"[bold red]PLAYLIST directory not found for disc {path}")
                     continue
 
+                def _load_mpls(mpls_path: str) -> tuple[Any, Any]:
+                    with open(mpls_path, "rb") as mpls_file:
+                        header = mpls.load_movie_playlist(mpls_file)
+                        mpls_file.seek(header.playlist_start_address, os.SEEK_SET)
+                        playlist_data = mpls.load_playlist(mpls_file)
+                    return header, playlist_data
+
                 # Parse playlists
-                valid_playlists = []
+                valid_playlists: list[PlaylistInfo] = []
                 for file_name in os.listdir(playlists_path):
                     if file_name.endswith(".mpls"):
                         mpls_path = os.path.join(playlists_path, file_name)
                         try:
-                            with open(mpls_path, "rb") as mpls_file:
-                                header = mpls.load_movie_playlist(mpls_file)
-                                mpls_file.seek(header.playlist_start_address, os.SEEK_SET)
-                                playlist_data = mpls.load_playlist(mpls_file)
+                            _, playlist_data = await asyncio.to_thread(_load_mpls, mpls_path)
+                            duration: float = 0.0
+                            items: list[PlaylistItem] = []  # Collect .m2ts file paths and sizes
+                            stream_directory = os.path.join(path, "STREAM")
+                            file_counts: defaultdict[str, int] = defaultdict(int)  # Tracks the count of each .m2ts file
+                            file_sizes: dict[str, int] = {}  # Stores the size of each unique .m2ts file
 
-                                duration = 0
-                                items = []  # Collect .m2ts file paths and sizes
-                                stream_directory = os.path.join(path, "STREAM")
-                                file_counts = defaultdict(int)  # Tracks the count of each .m2ts file
-                                file_sizes = {}  # Stores the size of each unique .m2ts file
+                            play_items = getattr(playlist_data, "play_items", None)
+                            if not play_items:
+                                continue
 
-                                for item in playlist_data.play_items:
-                                    duration += (item.outtime - item.intime) / 45000
-                                    try:
-                                        m2ts_file = os.path.join(stream_directory, item.clip_information_filename.strip() + ".m2ts")
-                                        if os.path.exists(m2ts_file):
-                                            size = os.path.getsize(m2ts_file)
-                                            file_counts[m2ts_file] += 1  # Increment the count
-                                            file_sizes[m2ts_file] = size  # Store individual file size
-                                    except AttributeError as e:
-                                        console.print(f"[bold red]Error accessing clip information for item in {file_name}: {e}")
+                            for item in play_items:
+                                intime = getattr(item, "intime", None)
+                                outtime = getattr(item, "outtime", None)
+                                if intime is None or outtime is None:
+                                    continue
+                                duration += (outtime - intime) / 45000.0
+                                try:
+                                    clip_name = getattr(item, "clip_information_filename", None)
+                                    if not isinstance(clip_name, str):
+                                        continue
+                                    clip_name = clip_name.strip()
+                                    if not clip_name:
+                                        continue
+                                    m2ts_file = os.path.join(stream_directory, clip_name + ".m2ts")
+                                    if os.path.exists(m2ts_file):
+                                        size = os.path.getsize(m2ts_file)
+                                        file_counts[m2ts_file] += 1  # Increment the count
+                                        file_sizes[m2ts_file] = size  # Store individual file size
+                                except AttributeError as e:
+                                    console.print(f"[bold red]Error accessing clip information for item in {file_name}: {e}")
 
-                                # Process unique playlists with only one instance of each file
-                                if all(count == 1 for count in file_counts.values()):
-                                    items = [{"file": file, "size": file_sizes[file]} for file in file_counts]
+                            # Process unique playlists with only one instance of each file
+                            if all(count == 1 for count in file_counts.values()):
+                                items = [{"file": file, "size": file_sizes[file]} for file in file_counts]
 
-                                    # Save playlists with duration >= 10 minutes
-                                    if duration >= 600:
-                                        valid_playlists.append({
-                                            "file": file_name,
-                                            "duration": duration,
-                                            "path": mpls_path,
-                                            "items": items
-                                        })
+                                # Save playlists with duration >= 10 minutes
+                                if duration >= 600:
+                                    valid_playlists.append({
+                                        "file": file_name,
+                                        "duration": duration,
+                                        "path": mpls_path,
+                                        "items": items
+                                    })
                         except Exception as e:
                             console.print(f"[bold red]Error parsing playlist {mpls_path}: {e}")
 
                 if not valid_playlists:
                     # Find all playlists regardless of duration
-                    all_playlists = []
+                    all_playlists: list[PlaylistInfo] = []
                     for file_name in os.listdir(playlists_path):
                         if file_name.endswith(".mpls"):
                             mpls_path = os.path.join(playlists_path, file_name)
                             try:
-                                with open(mpls_path, "rb") as mpls_file:
-                                    header = mpls.load_movie_playlist(mpls_file)
-                                    mpls_file.seek(header.playlist_start_address, os.SEEK_SET)
-                                    playlist_data = mpls.load_playlist(mpls_file)
+                                _, playlist_data = await asyncio.to_thread(_load_mpls, mpls_path)
+                                duration_all: float = 0.0
+                                items_all: list[PlaylistItem] = []
+                                stream_directory = os.path.join(path, "STREAM")
+                                file_counts_all: defaultdict[str, int] = defaultdict(int)
+                                file_sizes_all: dict[str, int] = {}
 
-                                    duration = 0
-                                    items = []
-                                    stream_directory = os.path.join(path, "STREAM")
-                                    file_counts = defaultdict(int)
-                                    file_sizes = {}
+                                play_items = getattr(playlist_data, "play_items", None)
+                                if not play_items:
+                                    continue
 
-                                    for item in playlist_data.play_items:
-                                        duration += (item.outtime - item.intime) / 45000
-                                        try:
-                                            m2ts_file = os.path.join(stream_directory, item.clip_information_filename.strip() + ".m2ts")
-                                            if os.path.exists(m2ts_file):
-                                                size = os.path.getsize(m2ts_file)
-                                                file_counts[m2ts_file] += 1
-                                                file_sizes[m2ts_file] = size
-                                        except AttributeError as e:
-                                            console.print(f"[bold red]Error accessing clip info for item in {file_name}: {e}")
+                                for item in play_items:
+                                    intime = getattr(item, "intime", None)
+                                    outtime = getattr(item, "outtime", None)
+                                    if intime is None or outtime is None:
+                                        continue
+                                    duration_all += (outtime - intime) / 45000.0
+                                    try:
+                                        clip_name = getattr(item, "clip_information_filename", None)
+                                        if not isinstance(clip_name, str):
+                                            continue
+                                        clip_name = clip_name.strip()
+                                        if not clip_name:
+                                            continue
+                                        m2ts_file = os.path.join(stream_directory, clip_name + ".m2ts")
+                                        if os.path.exists(m2ts_file):
+                                            size = os.path.getsize(m2ts_file)
+                                            file_counts_all[m2ts_file] += 1
+                                            file_sizes_all[m2ts_file] = size
+                                    except AttributeError as e:
+                                        console.print(f"[bold red]Error accessing clip info for item in {file_name}: {e}")
 
-                                    if all(count == 1 for count in file_counts.values()):
-                                        items = [{"file": file, "size": file_sizes[file]} for file in file_counts]
-                                        all_playlists.append({
-                                            "file": file_name,
-                                            "duration": duration,
-                                            "path": mpls_path,
-                                            "items": items
-                                        })
+                                if all(count == 1 for count in file_counts_all.values()):
+                                    items_all = [{"file": file, "size": file_sizes_all[file]} for file in file_counts_all]
+                                    all_playlists.append({
+                                        "file": file_name,
+                                        "duration": duration_all,
+                                        "path": mpls_path,
+                                        "items": items_all
+                                    })
                             except Exception as e:
                                 console.print(f"[bold red]Error parsing playlist {mpls_path}: {e}")
 
@@ -254,20 +294,17 @@ class DiscParse():
                                 console.print(f"[bold red]No valid BDInfo file found for playlist {playlist_number}.")
                                 break
 
-                            with open(bdinfo_text, 'r', encoding="utf-8", errors="replace") as f:
-                                text = f.read()
-                                result = text.split("QUICK SUMMARY:", 2)
-                                files = result[0].split("FILES:", 2)[1].split("CHAPTERS:", 2)[0].split("-------------")
-                                result2 = result[1].rstrip(" \n")
-                                result = result2.split("********************", 1)
-                                bd_summary = result[0].rstrip(" \n")
+                            text = await asyncio.to_thread(Path(bdinfo_text).read_text, encoding="utf-8", errors="replace")
+                            result = text.split("QUICK SUMMARY:", 2)
+                            files = result[0].split("FILES:", 2)[1].split("CHAPTERS:", 2)[0].split("-------------")
+                            result2 = result[1].rstrip(" \n")
+                            result = result2.split("********************", 1)
+                            bd_summary = result[0].rstrip(" \n")
 
-                            with open(bdinfo_text, 'r', encoding="utf-8", errors="replace") as f:
-                                text = f.read()
-                                result = text.split("[code]", 3)
-                                result2 = result[2].rstrip(" \n")
-                                result = result2.split("FILES:", 1)
-                                ext_bd_summary = result[0].rstrip(" \n")
+                            result = text.split("[code]", 3)
+                            result2 = result[2].rstrip(" \n")
+                            result = result2.split("FILES:", 1)
+                            ext_bd_summary = result[0].rstrip(" \n")
 
                             # Save summaries and bdinfo for each playlist
                             if idx == 0:
@@ -281,10 +318,8 @@ class DiscParse():
                             bd_summary_cleaned = re.sub(r' +', ' ', bd_summary.strip())
                             ext_bd_summary_cleaned = re.sub(r' +', ' ', ext_bd_summary.strip())
 
-                            with open(summary_file, 'w', encoding="utf-8", errors="replace") as f:
-                                f.write(bd_summary_cleaned)
-                            with open(extended_summary_file, 'w', encoding="utf-8", errors="replace") as f:
-                                f.write(ext_bd_summary_cleaned)
+                            await asyncio.to_thread(Path(summary_file).write_text, bd_summary_cleaned, encoding="utf-8", errors="replace")
+                            await asyncio.to_thread(Path(extended_summary_file).write_text, ext_bd_summary_cleaned, encoding="utf-8", errors="replace")
 
                             bdinfo = self.parse_bdinfo(bd_summary_cleaned, files[1], path)
 
@@ -309,12 +344,12 @@ class DiscParse():
                                 discs[i]['bdinfo'] = bdinfo
                                 discs[i]['playlists'] = selected_playlists
                                 if valid_playlists and meta['unattended'] and not meta.get('unattended_confirm', False):
-                                    simplified_playlists = [{"file": p["file"], "duration": p["duration"]} for p in valid_playlists]
-                                    duration_map = {}
+                                    simplified_playlists: list[dict[str, Any]] = [{"file": p["file"], "duration": p["duration"]} for p in valid_playlists]
+                                    duration_map: dict[int, dict[str, Any]] = {}
 
                                     # Store simplified version with only file and duration, keeping only one per unique duration
                                     for playlist in valid_playlists:
-                                        rounded_duration = round(playlist["duration"])
+                                        rounded_duration = round(float(playlist["duration"]))
                                         if rounded_duration in duration_map:
                                             continue
 
@@ -324,7 +359,7 @@ class DiscParse():
                                         }
 
                                     simplified_playlists = list(duration_map.values())
-                                    simplified_playlists.sort(key=lambda x: x["duration"], reverse=True)
+                                    simplified_playlists.sort(key=lambda x: float(x["duration"]), reverse=True)
                                     discs[i]['all_valid_playlists'] = simplified_playlists
 
                                     if meta['debug']:
@@ -344,12 +379,12 @@ class DiscParse():
 
         return discs, discs[0]['bdinfo']
 
-    def parse_bdinfo_files(self, files):
+    def parse_bdinfo_files(self, files: str) -> list[dict[str, str]]:
         """
         Parse the FILES section of the BDInfo input.
         Handles filenames with markers like "(1)" and variable spacing.
         """
-        bdinfo_files = []
+        bdinfo_files: list[dict[str, str]] = []
         for line in files.splitlines():
             line = line.strip()  # Remove leading/trailing whitespace
             if not line:  # Skip empty lines
@@ -368,7 +403,7 @@ class DiscParse():
                 else:
                     file_name = parts[0]
 
-                m2ts = {
+                m2ts: dict[str, str] = {
                     "file": file_name,
                     "length": parts[2],  # Length is the 3rd column
                 }
@@ -379,12 +414,16 @@ class DiscParse():
 
         return bdinfo_files
 
-    def parse_bdinfo(self, bdinfo_input, files, path):
-        bdinfo = dict()
-        bdinfo['video'] = list()
-        bdinfo['audio'] = list()
-        bdinfo['subtitles'] = list()
-        bdinfo['path'] = path
+    def parse_bdinfo(self, bdinfo_input: str, files: str, path: str) -> dict[str, Any]:
+        video_tracks: list[dict[str, Any]] = []
+        audio_tracks: list[dict[str, Any]] = []
+        subtitles: list[str] = []
+        bdinfo: dict[str, Any] = {
+            'video': video_tracks,
+            'audio': audio_tracks,
+            'subtitles': subtitles,
+            'path': path,
+        }
         lines = bdinfo_input.splitlines()
         for l in lines:  # noqa E741
             line = l.strip().lower()
@@ -467,44 +506,32 @@ class DiscParse():
                 split1 = l.split(':', 1)[1]
                 split2 = split1.split('/')
                 bdinfo['subtitles'].append(split2[0].strip())
-        files = self.parse_bdinfo_files(files)
-        bdinfo['files'] = files
-        for line in files:
-            try:
-                stripped = line.split()
-                m2ts = {}
-                bd_file = stripped[0]
-                time_in = stripped[1]  # noqa F841
-                bd_length = stripped[2]
-                bd_size = stripped[3]  # noqa F841
-                bd_bitrate = stripped[4]  # noqa F841
-                m2ts['file'] = bd_file
-                m2ts['length'] = bd_length
-                bdinfo['files'].append(m2ts)
-            except Exception:
-                pass
+        parsed_files = self.parse_bdinfo_files(files)
+        bdinfo['files'] = parsed_files
         return bdinfo
 
     """
     Parse VIDEO_TS and get mediainfos
     """
 
-    async def get_dvdinfo(self, discs, base_dir=None, debug=False):
+    async def get_dvdinfo(self, discs: list[dict[str, Any]], base_dir: Optional[str] = None, debug: bool = False) -> list[dict[str, Any]]:
         mediainfo_binary = self.setup_mediainfo_for_dvd(base_dir, debug=debug)
 
         for each in discs:
             path = each.get('path')
+            if not isinstance(path, str) or not path:
+                continue
             os.chdir(path)
             files = glob("VTS_*.VOB")
             files.sort()
-            filesdict = OrderedDict()
-            main_set = []
+            filesdict: OrderedDict[str, list[str]] = OrderedDict()
+            main_set: list[str] = []
             for file in files:
                 trimmed = file[4:]
                 if trimmed[:2] not in filesdict:
                     filesdict[trimmed[:2]] = []
                 filesdict[trimmed[:2]].append(trimmed)
-            main_set_duration = 0
+            main_set_duration: float = 0.0
 
             for vob_set in filesdict.values():
                 try:
@@ -633,17 +660,18 @@ class DiscParse():
 
             size = sum(os.path.getsize(f) for f in os.listdir('.') if os.path.isfile(f)) / float(1 << 30)
             each['disc_size'] = round(size, 2)
-            if size <= 7.95:
-                dvd_size = "DVD9"
-                if size <= 4.37:
-                    dvd_size = "DVD5"
+            dvd_size = "DVD9"
+            if size <= 4.37:
+                dvd_size = "DVD5"
             each['size'] = dvd_size
         return discs
 
-    async def get_hddvd_info(self, discs, meta):
+    async def get_hddvd_info(self, discs: list[dict[str, Any]], meta: dict[str, Any]):
         use_largest = int(self.config['DEFAULT'].get('use_largest_playlist', False))
         for each in discs:
             path = each.get('path')
+            if not isinstance(path, str) or not path:
+                continue
             os.chdir(path)
 
             try:
@@ -661,20 +689,26 @@ class DiscParse():
                 playlist_info = self.parse_hddvd_playlist(playlist_file)
 
                 # Filter valid playlists (at least one clip with valid size)
-                valid_playlists = []
+                valid_playlists: list[dict[str, Any]] = []
                 for playlist in playlist_info:
-                    primary_clips = playlist.get("primaryClips", [])
-                    evo_files = [os.path.abspath(f"{path}/{os.path.basename(clip.get('src').replace('.MAP', '.EVO'))}")
-                                 for clip in primary_clips]
+                    playlist_dict = playlist
+                    primary_clips = cast(list[dict[str, Any]], playlist_dict.get("primaryClips", []))
+                    evo_files = [
+                        os.path.abspath(
+                            f"{path}/{os.path.basename(str(clip.get('src', '')).replace('.MAP', '.EVO'))}"
+                        )
+                        for clip in primary_clips
+                    ]
                     total_size = sum(os.path.getsize(evo) for evo in evo_files if os.path.exists(evo))
                     if total_size > 0:
-                        playlist["totalSize"] = total_size
-                        playlist["evoFiles"] = evo_files
-                        valid_playlists.append(playlist)
+                        playlist_dict["totalSize"] = total_size
+                        playlist_dict["evoFiles"] = evo_files
+                        valid_playlists.append(playlist_dict)
 
                 if not valid_playlists:
                     raise ValueError("No valid playlists found with accessible .EVO files.")
 
+                selected_playlists: list[dict[str, Any]] = []
                 if use_largest:
                     console.print("[yellow]Auto-selecting the largest playlist based on size.")
                     selected_playlists = [
@@ -701,7 +735,7 @@ class DiscParse():
                             playlist_id = playlist.get("id", "")
                             description = playlist.get("description", "")
                             total_size = playlist.get("totalSize", 0)
-                            additional_info = []
+                            additional_info: list[str] = []
                             if playlist_id:
                                 additional_info.append(f"[yellow]ID:[/yellow] {playlist_id}")
                             if description:
@@ -723,13 +757,13 @@ class DiscParse():
                             console.print("[red]Invalid input. Please try again.")
 
                 # Extract the .EVO files from the selected playlists
-                primary_clips = []
+                primary_clips: list[dict[str, Any]] = []
                 for playlist in selected_playlists:
-                    primary_clips.extend(playlist.get("primaryClips", []))
+                    primary_clips.extend(cast(list[dict[str, Any]], playlist.get("primaryClips", [])))
 
                 # Validate that the correct EVO files are being used
                 for playlist in selected_playlists:
-                    expected_evo_files = playlist.get("evoFiles", [])
+                    expected_evo_files = cast(list[str], playlist.get("evoFiles", []))
                     if not expected_evo_files or any(not os.path.exists(evo) for evo in expected_evo_files):
                         raise ValueError(f"Expected EVO files for playlist {playlist['id']} do not exist.")
 
@@ -743,23 +777,19 @@ class DiscParse():
                     raise ValueError("No primary clips found in the selected playlists.")
 
                 selected_playlist = selected_playlists[0]  # Assuming you're working with the largest or user-selected playlist
-                evo_files = selected_playlist["evoFiles"]
-                total_size = selected_playlist["totalSize"]
+                evo_files = cast(list[str], selected_playlist.get("evoFiles", []))
+                total_size = float(selected_playlist.get("totalSize", 0) or 0)
 
                 # Overwrite mediainfo File size and Duration
                 if evo_files:
                     # Filter out non-existent files
                     existing_evo_files = [evo for evo in evo_files if os.path.exists(evo)]
 
-                    if len(existing_evo_files) >= 2:
-                        # Select the second .EVO file
-                        selected_evo_path = existing_evo_files[1]
-                    else:
-                        # Fallback to the largest file
-                        selected_evo_path = max(
-                            existing_evo_files,
-                            key=os.path.getsize
-                        )
+                    selected_evo_path = (
+                        existing_evo_files[1]
+                        if len(existing_evo_files) >= 2
+                        else max(existing_evo_files, key=os.path.getsize)
+                    )
 
                     if not os.path.exists(selected_evo_path):
                         raise FileNotFoundError(f"Selected .EVO file {selected_evo_path} does not exist.")
@@ -774,7 +804,7 @@ class DiscParse():
                     )
                     modified_mediainfo = re.sub(
                         r"Duration\s+:\s+[^\r\n]+",
-                        f"Duration                                 : {self.format_duration(selected_playlist['titleDuration'])}",
+                        f"Duration                                 : {self.format_duration(str(selected_playlist.get('titleDuration', '')))}",
                         modified_mediainfo
                     )
 
@@ -913,12 +943,12 @@ class DiscParse():
 
         return discs
 
-    def format_duration(self, timecode):
+    def format_duration(self, timecode: str) -> str:
         parts = timecode.split(":")
         if len(parts) != 4:
             return "Unknown duration"
 
-        hours, minutes, seconds, _ = map(int, parts)
+        hours, minutes, _seconds, _ = map(int, parts)
         duration = ""
         if hours > 0:
             duration += f"{hours} h "
@@ -926,12 +956,14 @@ class DiscParse():
             duration += f"{minutes} min"
         return duration.strip()
 
-    def parse_hddvd_playlist(self, file_path):
-        titles = []
+    def parse_hddvd_playlist(self, file_path: str) -> list[dict[str, Any]]:
+        titles: list[dict[str, Any]] = []
         try:
             # Parse the XML structure
             tree = ET.parse(file_path)
             root = tree.getroot()
+            if root is None:
+                return titles
 
             # Extract namespace
             namespace = {'ns': 'http://www.dvdforum.org/2005/HDDVDVideo/Playlist'}
@@ -944,7 +976,7 @@ class DiscParse():
                 if duration_seconds <= 600:
                     continue
 
-                title_data = {
+                title_data: dict[str, Any] = {
                     "titleNumber": title.get("titleNumber"),
                     "id": title.get("id"),
                     "description": title.get("description"),
@@ -961,7 +993,7 @@ class DiscParse():
 
                 # Extract PrimaryAudioVideoClip details
                 for clip in title.findall(".//ns:PrimaryAudioVideoClip", namespaces=namespace):
-                    clip_data = {
+                    clip_data: dict[str, Any] = {
                         "src": clip.get("src"),
                         "titleTimeBegin": clip.get("titleTimeBegin"),
                         "titleTimeEnd": clip.get("titleTimeEnd"),
@@ -972,7 +1004,7 @@ class DiscParse():
 
                     # Extract Audio tracks within PrimaryAudioVideoClip
                     for audio in clip.findall(".//ns:Audio", namespaces=namespace):
-                        clip_data["audioTracks"].append({
+                        cast(list[dict[str, Any]], clip_data["audioTracks"]).append({
                             "track": audio.get("track"),
                             "streamNumber": audio.get("streamNumber"),
                             "mediaAttr": audio.get("mediaAttr"),
@@ -981,18 +1013,18 @@ class DiscParse():
 
                     # Extract Subtitle tracks within PrimaryAudioVideoClip
                     for subtitle in clip.findall(".//ns:Subtitle", namespaces=namespace):
-                        clip_data["subtitleTracks"].append({
+                        cast(list[dict[str, Any]], clip_data["subtitleTracks"]).append({
                             "track": subtitle.get("track"),
                             "streamNumber": subtitle.get("streamNumber"),
                             "mediaAttr": subtitle.get("mediaAttr"),
                             "description": subtitle.get("description"),
                         })
 
-                    title_data["primaryClips"].append(clip_data)
+                    cast(list[dict[str, Any]], title_data["primaryClips"]).append(clip_data)
 
                 # Extract ChapterList details
                 for chapter in title.findall(".//ns:ChapterList/ns:Chapter", namespaces=namespace):
-                    title_data["chapters"].append({
+                    cast(list[dict[str, Any]], title_data["chapters"]).append({
                         "displayName": chapter.get("displayName"),
                         "titleTimeBegin": chapter.get("titleTimeBegin"),
                     })
@@ -1005,7 +1037,7 @@ class DiscParse():
                     # Convert the short language code to the full language name
                     language_name = Language.get(langcode_short).display_name()
 
-                    title_data["audioTracks"].append({
+                    cast(list[dict[str, Any]], title_data["audioTracks"]).append({
                         "track": audio_track.get("track"),
                         "langcode": langcode_short,
                         "language": language_name,
@@ -1020,7 +1052,7 @@ class DiscParse():
                     # Convert the short language code to the full language name
                     language_name = Language.get(langcode_short).display_name()
 
-                    title_data["subtitleTracks"].append({
+                    cast(list[dict[str, Any]], title_data["subtitleTracks"]).append({
                         "track": subtitle_track.get("track"),
                         "langcode": langcode_short,
                         "language": language_name,
@@ -1029,7 +1061,7 @@ class DiscParse():
 
                 # Extract ApplicationSegment details
                 for app_segment in title.findall(".//ns:ApplicationSegment", namespaces=namespace):
-                    app_data = {
+                    app_data: dict[str, Any] = {
                         "src": app_segment.get("src"),
                         "titleTimeBegin": app_segment.get("titleTimeBegin"),
                         "titleTimeEnd": app_segment.get("titleTimeEnd"),
@@ -1040,14 +1072,14 @@ class DiscParse():
 
                     # Extract ApplicationResource details
                     for resource in app_segment.findall(".//ns:ApplicationResource", namespaces=namespace):
-                        app_data["resources"].append({
+                        cast(list[dict[str, Any]], app_data["resources"]).append({
                             "src": resource.get("src"),
                             "size": resource.get("size"),
                             "priority": resource.get("priority"),
                             "multiplexed": resource.get("multiplexed"),
                         })
 
-                    title_data["applicationSegments"].append(app_data)
+                    cast(list[dict[str, Any]], title_data["applicationSegments"]).append(app_data)
 
                 # Add the fully extracted title data to the list
                 titles.append(title_data)
@@ -1056,9 +1088,9 @@ class DiscParse():
             print(f"Error parsing XPL file: {e}")
         return titles
 
-    def timecode_to_seconds(self, timecode):
+    def timecode_to_seconds(self, timecode: str) -> int:
         parts = timecode.split(":")
         if len(parts) != 4:
             return 0
-        hours, minutes, seconds, frames = map(int, parts)
+        hours, minutes, seconds, _frames = map(int, parts)
         return hours * 3600 + minutes * 60 + seconds

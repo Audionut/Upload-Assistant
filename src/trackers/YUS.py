@@ -1,14 +1,19 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import cli_ui
 import re
+from typing import Any, Optional
+
+import cli_ui
+
 from src.console import console
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
+
 
 class YUS(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='YUS')
         self.config = config
         self.common = COMMON(config)
@@ -26,11 +31,11 @@ class YUS(UNIT3D):
             'YIFY', 'YOLAND', 'YTS', 'ZKBL', 'ZmN', 'ZMNT']
         pass
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
 
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
+        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy', 'hentai', 'adult animation', 'softcore']
         if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
                 console.print('[bold red]Porn/xxx is not allowed at YUS.')
@@ -43,7 +48,13 @@ class YUS(UNIT3D):
 
         return should_continue
 
-    async def get_type_id(self, meta, type=None, reverse=False, mapping_only=False):
+    async def get_type_id(
+        self,
+        meta: Meta,
+        type: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False,
+    ) -> dict[str, str]:
         type_id = {
             'DISC': '17',
             'REMUX': '2',

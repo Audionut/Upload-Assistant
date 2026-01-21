@@ -1,12 +1,16 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
+from typing import Any, Optional
+
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
+
 
 class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER NAME
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='UNIT3D_TEMPLATE')  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER NAME
         self.config = config
         self.common = COMMON(config)
@@ -25,7 +29,14 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
     # For example, if you need to modify the description, copy and paste the 'get_description' function and adjust it accordingly
 
     # If default UNIT3D categories, remove this function
-    async def get_category_id(self, meta):
+    async def get_category_id(
+        self,
+        meta: Meta,
+        category: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False,
+    ) -> dict[str, str]:
+        _ = (category, reverse, mapping_only)
         category_id = {
             'MOVIE': '1',
             'TV': '2',
@@ -33,7 +44,14 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
         return {'category_id': category_id}
 
     # If default UNIT3D types, remove this function
-    async def get_type_id(self, meta):
+    async def get_type_id(
+        self,
+        meta: Meta,
+        type: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False,
+    ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -45,7 +63,14 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
         return {'type_id': type_id}
 
     # If default UNIT3D resolutions, remove this function
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(
+        self,
+        meta: Meta,
+        resolution: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False,
+    ) -> dict[str, str]:
+        _ = (resolution, reverse, mapping_only)
         resolution_id = {
             '8640p': '10',
             '4320p': '1',
@@ -64,13 +89,13 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
     # If there are tracker specific checks to be done before upload, add them here
     # Is it a movie only tracker? Are concerts banned? Etc.
     # If no checks are necessary, remove this function
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, _meta: Meta) -> bool:
         should_continue = True
         return should_continue
 
     # If the tracker has modq in the api, otherwise remove this function
     # If no additional data is required, remove this function
-    async def get_additional_data(self, meta):
+    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
         data = {
             'modq': await self.get_flag(meta, 'modq'),
         }
@@ -78,6 +103,6 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
         return data
 
     # If the tracker has specific naming conventions, add them here; otherwise, remove this function
-    async def get_name(self, meta):
+    async def get_name(self, meta: Meta) -> dict[str, str]:
         UNIT3D_TEMPLATE_name = meta['name']
         return {'name': UNIT3D_TEMPLATE_name}

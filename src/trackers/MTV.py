@@ -1,26 +1,28 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import aiofiles
-import aiofiles.os
 import asyncio
-import cli_ui
-import httpx
+import json
 import os
-import pickle
-import pyotp
 import re
 import traceback
-import xml.etree.ElementTree as ET
+from typing import Any, Optional, cast
 
-from torf import Torrent
+import aiofiles
+import aiofiles.os
+import cli_ui
+import httpx
+import pyotp
+from defusedxml import ElementTree as ET
 
-from data.config import config
 from src.console import console
-from src.rehostimages import check_hosts
-from src.torrentcreate import create_torrent
+from src.rehostimages import RehostImagesManager
+from src.torrentcreate import TorrentCreator
 from src.trackers.COMMON import COMMON
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
 
-class MTV():
+
+class MTV:
     """
     Edit for Tracker:
         Edit BASE.torrent with announce and source
@@ -29,13 +31,15 @@ class MTV():
         Upload
     """
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, config: Config) -> None:
+        self.config: Config = config
+        self.rehost_images_manager = RehostImagesManager(config)
         self.tracker = 'MTV'
         self.source_flag = 'MTV'
         self.upload_url = 'https://www.morethantv.me/upload.php'
         self.forum_link = 'https://www.morethantv.me/wiki.php?action=article&id=73'
         self.search_url = 'https://www.morethantv.me/api/torznab'
+        self.approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb']
         self.banned_groups = [
             '3LTON', '[Oj]', 'aXXo', 'BDP', 'BRrip', 'CM8', 'CrEwSaDe', 'CMCT',
             'DeadFish', 'DNL', 'ELiTE', 'AFG', 'ZMNT',
@@ -49,48 +53,59 @@ class MTV():
         pass
 
     # For loading
-    async def async_pickle_loads(self, data):
+    async def async_json_loads(self, data_str: str) -> Any:
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, pickle.loads, data)
+        return await loop.run_in_executor(None, json.loads, data_str)
 
     # For dumping
-    async def async_pickle_dumps(self, obj):
+    async def async_json_dumps(self, obj: Any) -> str:
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, pickle.dumps, obj)
+        return await loop.run_in_executor(None, json.dumps, obj)
 
-    async def check_image_hosts(self, meta):
-        approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb']
+    async def check_image_hosts(self, meta: Meta) -> None:
         url_host_mapping = {
             "ibb.co": "imgbb",
             "ptpimg.me": "ptpimg",
             "imgbox.com": "imgbox",
         }
 
-        await check_hosts(meta, self.tracker, url_host_mapping=url_host_mapping, img_host_index=1, approved_image_hosts=approved_image_hosts)
+        await self.rehost_images_manager.check_hosts(
+            meta,
+            self.tracker,
+            url_host_mapping=url_host_mapping,
+            img_host_index=1,
+            approved_image_hosts=self.approved_image_hosts,
+        )
         return
 
-    async def upload(self, meta, disctype):
+    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
         common = COMMON(config=self.config)
-        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.pkl")
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.json")
+        base_piece_mb = int(meta.get('base_torrent_piece_mb', 0) or 0)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        loop = asyncio.get_running_loop()
-        torrent = await loop.run_in_executor(None, Torrent.read, torrent_file_path)
 
-        if torrent.piece_size > 8388608:
+        if base_piece_mb > 8 and not meta.get('nohash', False):
             tracker_config = self.config['TRACKERS'].get(self.tracker, {})
             if str(tracker_config.get('skip_if_rehash', 'false')).lower() == "false":
                 console.print("[red]Piece size is OVER 8M and does not work on MTV. Generating a new .torrent")
-                piece_size = '8'
-                tracker_url = config['TRACKERS']['MTV'].get('announce_url', "https://fake.tracker").strip()
+                piece_size = 8
+                tracker_url = str(tracker_config.get('announce_url', "https://fake.tracker")).strip()
                 torrent_create = f"[{self.tracker}]"
+                try:
+                    cooldown = int(self.config.get('DEFAULT', {}).get('rehash_cooldown', 0) or 0)
+                except (ValueError, TypeError):
+                    cooldown = 0
+                if cooldown > 0:
+                    await asyncio.sleep(cooldown)  # Small cooldown before rehashing
 
-                await create_torrent(meta, meta['path'], torrent_create, tracker_url=tracker_url, piece_size=piece_size)
+                await TorrentCreator.create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
                 await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
 
             else:
                 console.print("[red]Piece size is OVER 8M and skip_if_rehash enabled. Skipping upload.")
                 return
+        else:
+            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
         cat_id = await self.get_cat_id(meta)
         resolution_id = await self.get_res_id(meta['resolution'])
@@ -101,13 +116,10 @@ class MTV():
         group_desc = await self.edit_group_desc(meta)
         mtv_name = await self.edit_name(meta)
 
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
-        else:
-            anon = 1
+        anon = 0 if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False) else 1
 
         desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-        async with aiofiles.open(desc_path, 'r', encoding='utf-8') as f:
+        async with aiofiles.open(desc_path, encoding='utf-8') as f:
             desc = await f.read()
 
         async with aiofiles.open(torrent_file_path, 'rb') as f:
@@ -139,9 +151,9 @@ class MTV():
 
         if not meta['debug']:
             try:
-                async with aiofiles.open(cookiefile, 'rb') as cf:
+                async with aiofiles.open(cookiefile, encoding='utf-8') as cf:
                     cookie_data = await cf.read()
-                    cookies = await self.async_pickle_loads(cookie_data)
+                    cookies = await self.async_json_loads(cookie_data)
 
                 headers = {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -156,14 +168,21 @@ class MTV():
 
                     response = await client.post(url=self.upload_url, data=data, files=files)
 
+                    # This is not a header or cookie size issue, but MTV returns this status.
+                    if response.status_code == 400 and ("Request Header" in response.text or "Cookie Too Large" in response.text or "Header Too Large" in response.text):
+                        meta['tracker_status'][self.tracker]['status_message'] = "data error: Request Header or Cookie Too Large error from server"
+                        return False
+
                     try:
                         if "torrents.php" in str(response.url):
                             meta['tracker_status'][self.tracker]['status_message'] = response.url
                             await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), str(response.url))
+                            return True
                         elif 'https://www.morethantv.me/upload.php' in str(response.url):
                             meta['tracker_status'][self.tracker]['status_message'] = "data error - Still on upload page - upload may have failed"
                             if "error" in response.text.lower() or "failed" in response.text.lower():
                                 meta['tracker_status'][self.tracker]['status_message'] = "data error - Upload failed - check form data"
+                            return False
                         elif str(response.url) == "https://www.morethantv.me/" or str(response.url) == "https://www.morethantv.me/index.php":
                             if "Project Luminance" in response.text:
                                 meta['tracker_status'][self.tracker]['status_message'] = "data error - Not logged in - session may have expired"
@@ -171,38 +190,43 @@ class MTV():
                                 meta['tracker_status'][self.tracker]['status_message'] = "data error - You are hitting this site bug: https://www.morethantv.me/forum/thread/3338?"
                             elif "Integrity constraint violation" in response.text:
                                 meta['tracker_status'][self.tracker]['status_message'] = "data error - Proper site bug"
+                            return False
                         else:
                             if "authkey.php" in str(response.url):
                                 meta['tracker_status'][self.tracker]['status_message'] = "data error - No DL link in response, It may have uploaded, check manually."
                             else:
                                 console.print(f"response URL: {response.url}")
                                 console.print(f"response status: {response.status_code}")
+                            return False
                     except Exception:
                         meta['tracker_status'][self.tracker]['status_message'] = "data error -It may have uploaded, check manually."
-                        print(traceback.print_exc())
+                        traceback.print_exc()
+                        return False
             except (httpx.RequestError, Exception) as e:
                 meta['tracker_status'][self.tracker]['status_message'] = f"data error: {e}"
-                return
+                return False
         else:
             console.print("[cyan]MTV Request Data:")
             debug_data = data.copy()
             if 'auth' in debug_data:
-                debug_data['auth'] = debug_data['auth'][:3] + '...' if len(debug_data['auth']) > 3 else '***'
+                auth_value = str(debug_data.get('auth', ''))
+                debug_data['auth'] = f"{auth_value[:3]}..." if len(auth_value) > 3 else '***'
             console.print(debug_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-        return
+            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True  # Debug mode - simulated success
 
-    async def edit_desc(self, meta):
-        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8') as f:
+    async def edit_desc(self, meta: Meta) -> None:
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf-8') as f:
             base = await f.read()
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as desc:
             if meta['bdinfo'] is not None:
                 mi_dump = None
-                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8') as f:
+                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8') as f:
                     bd_dump = await f.read()
             else:
-                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", 'r', encoding='utf-8') as f:
+                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as f:
                     mi_dump = (await f.read()).strip()
                 bd_dump = None
 
@@ -220,16 +244,14 @@ class MTV():
                 await desc.write("[mediainfo]" + meta['discs'][0]['vob_mi'] + "[/mediainfo]\n\n")
             try:
                 if meta.get('tonemapped', False) and self.config['DEFAULT'].get('tonemapped_header', None):
-                    console.print("[green]Adding tonemapped header to description")
+                    if meta.get("debug", False):
+                        console.print("[green]Adding tonemapped header to description")
                     tonemapped_header = self.config['DEFAULT'].get('tonemapped_header')
                     await desc.write(tonemapped_header)
                     await desc.write("\n\n")
             except Exception as e:
                 console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
-            if f'{self.tracker}_images_key' in meta:
-                images = meta[f'{self.tracker}_images_key']
-            else:
-                images = meta['image_list']
+            images = meta[f'{self.tracker}_images_key'] if f'{self.tracker}_images_key' in meta else meta['image_list']
             if len(images) > 0:
                 for image in images:
                     raw_url = image['raw_url']
@@ -242,7 +264,7 @@ class MTV():
 
         return
 
-    async def edit_group_desc(self, meta):
+    async def edit_group_desc(self, meta: Meta) -> str:
         description = ""
         if meta['imdb_id'] != 0:
             description += str(meta.get('imdb_info', {}).get('imdb_url', ''))
@@ -257,18 +279,20 @@ class MTV():
 
         return description
 
-    async def edit_name(self, meta):
+    async def edit_name(self, meta: Meta) -> str:
         KNOWN_EXTENSIONS = {".mkv", ".mp4", ".avi", ".ts"}
+        prefix_index = -1
         if meta['scene'] is True:
-            if meta.get('scene_name') != "":
-                mtv_name = meta.get('scene_name')
+            scene_name = str(meta.get('scene_name', ''))
+            if scene_name:
+                mtv_name = scene_name
             else:
-                mtv_name = meta['uuid']
+                mtv_name = str(meta.get('uuid', ''))
                 base, ext = os.path.splitext(mtv_name)
                 if ext.lower() in KNOWN_EXTENSIONS:
                     mtv_name = base
         else:
-            mtv_name = meta['name']
+            mtv_name = str(meta.get('name', ''))
             prefix_removed = False
             replacement_prefix = ""
 
@@ -284,7 +308,7 @@ class MTV():
                 replacement_prefix = "DUBBED "
                 mtv_name = mtv_name[:prefix_index] + mtv_name[prefix_index + len("Dubbed "):]
 
-            audio_str = meta['audio']
+            audio_str = str(meta.get('audio', ''))
             if prefix_removed:
                 audio_str = audio_str.replace("Dual-Audio ", "").replace("Dubbed ", "")
 
@@ -296,15 +320,20 @@ class MTV():
             if 'DD+' in meta.get('audio', '') and 'DDP' in meta['uuid']:
                 mtv_name = mtv_name.replace('DD+', 'DDP')
 
-        if meta['source'].lower().replace('-', '') in mtv_name.replace('-', '').lower():
-            if not meta['isdir']:
-                # Check if there is a valid file extension, otherwise, skip the split
-                if '.' in mtv_name and mtv_name.split('.')[-1].isalpha() and len(mtv_name.split('.')[-1]) <= 4:
-                    mtv_name = os.path.splitext(mtv_name)[0]
+        source_value = str(meta.get('source', ''))
+        if (
+            source_value.lower().replace('-', '') in mtv_name.replace('-', '').lower()
+            and not meta['isdir']
+            and '.' in mtv_name
+            and mtv_name.split('.')[-1].isalpha()
+            and len(mtv_name.split('.')[-1]) <= 4
+        ):
+            mtv_name = os.path.splitext(mtv_name)[0]
 
-        tag_lower = meta['tag'].lower()
+        tag_value = str(meta.get('tag', ''))
+        tag_lower = tag_value.lower()
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-        if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
+        if tag_value == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
             for invalid_tag in invalid_tags:
                 mtv_name = re.sub(f"-{invalid_tag}", "", mtv_name, flags=re.IGNORECASE)
             mtv_name = f"{mtv_name}-NOGRP"
@@ -314,7 +343,7 @@ class MTV():
         mtv_name = mtv_name.replace(' ', '.').replace('..', '.')
         return mtv_name
 
-    async def get_res_id(self, resolution):
+    async def get_res_id(self, resolution: str) -> str:
         resolution_id = {
             '8640p': '0',
             '4320p': '4000',
@@ -330,7 +359,7 @@ class MTV():
         }.get(resolution, '10')
         return resolution_id
 
-    async def get_cat_id(self, meta):
+    async def get_cat_id(self, meta: Meta) -> Optional[int]:
         if meta['category'] == "MOVIE":
             if meta['sd'] == 1:
                 return 2
@@ -348,7 +377,7 @@ class MTV():
                 else:
                     return 3
 
-    async def get_source_id(self, meta):
+    async def get_source_id(self, meta: Meta) -> str:
         if meta['is_disc'] == 'DVD':
             return '1'
         elif meta['is_disc'] == 'BDMV' or meta['type'] == "REMUX":
@@ -371,7 +400,7 @@ class MTV():
             }.get(meta['type'], '0')
         return type_id
 
-    async def get_origin_id(self, meta):
+    async def get_origin_id(self, meta: Meta) -> str:
         if meta['personalrelease']:
             return '4'
         elif meta['scene']:
@@ -380,8 +409,8 @@ class MTV():
         else:
             return '3'
 
-    async def get_tags(self, meta):
-        tags = []
+    async def get_tags(self, meta: Meta) -> str:
+        tags: list[str] = []
         # Genres
         # MTV takes issue with some of the pulled TMDB tags, and I'm not hand checking and attempting
         # to regex however many tags need changing, so they're just getting skipped
@@ -402,9 +431,12 @@ class MTV():
             service_name = service_name.replace('+', 'plus')  # Replace '+' with 'plus'
             tags.append(f"{service_name}.source")
         # Release Type/Source
-        for each in ['remux', 'WEB.DL', 'WEBRip', 'HDTV', 'BluRay', 'DVD', 'HDDVD']:
-            if (each.lower().replace('.', '') in meta['type'].lower()) or (each.lower().replace('-', '') in meta['source']):
-                tags.append(each)
+        tags.extend(
+            each
+            for each in ['remux', 'WEB.DL', 'WEBRip', 'HDTV', 'BluRay', 'DVD', 'HDDVD']
+            if (each.lower().replace('.', '') in meta['type'].lower())
+            or (each.lower().replace('-', '') in meta['source'])
+        )
         # series tags
         if meta['category'] == "TV":
             if meta.get('tv_pack', 0) == 0:
@@ -437,7 +469,8 @@ class MTV():
             tags.append('atmos.audio')
 
         # Video tags
-        tags.append(meta.get('video_codec').replace('AVC', 'h264').replace('HEVC', 'h265').replace('-', ''))
+        video_codec = str(meta.get('video_codec', ''))
+        tags.append(video_codec.replace('AVC', 'h264').replace('HEVC', 'h265').replace('-', ''))
 
         # Group Tags
         if meta['tag'] != "":
@@ -459,11 +492,11 @@ class MTV():
             if len(meta['bdinfo']['subtitles']) >= 1:
                 tags.append('subtitles')
 
-        tags = ' '.join(tags)
-        return tags
+        tag_string = ' '.join(tag for tag in tags if tag)
+        return tag_string
 
-    async def validate_credentials(self, meta):
-        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.pkl")
+    async def validate_credentials(self, meta: Meta) -> bool:
+        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.json")
         if not await aiofiles.os.path.exists(cookiefile):
             await self.login(cookiefile)
         vcookie = await self.validate_cookies(meta, cookiefile)
@@ -487,14 +520,14 @@ class MTV():
 
         return True
 
-    async def validate_cookies(self, meta, cookiefile):
+    async def validate_cookies(self, meta: Meta, cookiefile: str) -> bool:
         url = "https://www.morethantv.me/index.php"
         if await aiofiles.os.path.exists(cookiefile):
             try:
 
-                async with aiofiles.open(cookiefile, 'rb') as cf:
+                async with aiofiles.open(cookiefile, encoding='utf-8') as cf:
                     data = await cf.read()
-                    cookies_dict = await self.async_pickle_loads(data)
+                    cookies_dict = await self.async_json_loads(data)
 
                 async with httpx.AsyncClient(cookies=cookies_dict, timeout=10) as client:
                     try:
@@ -526,13 +559,13 @@ class MTV():
             console.print("[yellow]Cookie file not found")
             return False
 
-    async def get_auth(self, cookiefile):
+    async def get_auth(self, cookiefile: str) -> str:
         url = "https://www.morethantv.me/index.php"
         try:
             if await aiofiles.os.path.exists(cookiefile):
-                async with aiofiles.open(cookiefile, 'rb') as cf:
+                async with aiofiles.open(cookiefile, encoding='utf-8') as cf:
                     data = await cf.read()
-                    cookies = await self.async_pickle_loads(data)
+                    cookies = await self.async_json_loads(data)
 
                 async with httpx.AsyncClient(cookies=cookies, timeout=10) as client:
                     try:
@@ -553,7 +586,7 @@ class MTV():
             console.print(f"[red]Unexpected error retrieving auth key: {str(e)}")
             return ""
 
-    async def login(self, cookiefile):
+    async def login(self, cookiefile: str) -> bool:
         try:
             async with httpx.AsyncClient(timeout=25, follow_redirects=True) as client:
                 url = 'https://www.morethantv.me/login'
@@ -582,7 +615,11 @@ class MTV():
 
                         otp_uri = self.config['TRACKERS'][self.tracker].get('otp_uri')
                         if otp_uri:
-                            mfa_code = pyotp.parse_uri(otp_uri).now()
+                            try:
+                                otp = pyotp.parse_uri(otp_uri)
+                                mfa_code = pyotp.TOTP(otp.secret).now()
+                            except (ValueError, TypeError):
+                                mfa_code = console.input('[yellow]MTV 2FA Code: ')
                         else:
                             mfa_code = console.input('[yellow]MTV 2FA Code: ')
 
@@ -598,8 +635,8 @@ class MTV():
                     if 'authkey=' in resp.text:
                         console.print('[green]Successfully logged in to MTV')
                         cookies_dict = dict(client.cookies)
-                        cookies_data = await self.async_pickle_dumps(cookies_dict)
-                        async with aiofiles.open(cookiefile, 'wb') as cf:
+                        cookies_data = await self.async_json_dumps(cookies_dict)
+                        async with aiofiles.open(cookiefile, 'w', encoding='utf-8') as cf:
                             await cf.write(cookies_data)
                         console.print(f"[green]Cookies saved to {cookiefile}")
                         return True
@@ -623,19 +660,18 @@ class MTV():
             console.print(f"[dim red]{traceback.format_exc()}[/dim red]")
         return False
 
-    async def search_existing(self, meta, disctype):
-        if meta['type'] not in ['WEBDL']:
-            if meta.get('tag', "") and any(x in meta['tag'] for x in ['EVO']):
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at {self.tracker}[/bold red]')
-                    if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                        pass
-                    else:
-                        meta['skipping'] = "MTV"
-                        return []
+    async def search_existing(self, meta: Meta, _disctype: str) -> list[dict[str, Any]]:
+        if meta['type'] not in ['WEBDL'] and meta.get('tag', "") and any(x in meta['tag'] for x in ['EVO']):
+            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at {self.tracker}[/bold red]')
+                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                    pass
                 else:
                     meta['skipping'] = "MTV"
                     return []
+            else:
+                meta['skipping'] = "MTV"
+                return []
 
         allowed_anime = ['Thighs', 'sam', 'Vanilla', 'OZR', 'Netaro', 'Datte13', 'UDF', 'Baws', 'ARC', 'Dae', 'MTBB',
                          'Okay-Subs', 'hchcsen', 'Noyr', 'TTGA', 'GJM', 'Kaleido-Subs', 'GJM-Kaleido', 'LostYears',
@@ -662,9 +698,23 @@ class MTV():
                     meta['skipping'] = "MTV"
                     return []
 
-        disallowed_keywords = {'XXX', 'Erotic', 'Porn'}
-        disallowed_genres = {'Adult', 'Erotica'}
-        if any(keyword.lower() in disallowed_keywords for keyword in map(str.lower, meta['keywords'])) or any(genre.lower() in disallowed_genres for genre in map(str.lower, meta.get('combined_genres', []))):
+        disallowed_keywords = {'xxx', 'erotic', 'porn'}
+        disallowed_genres = {'adult', 'erotica'}
+        keywords_value = meta.get('keywords', [])
+        keywords_list: list[str] = []
+        if isinstance(keywords_value, list):
+            keywords_list.extend([str(item) for item in cast(list[Any], keywords_value)])
+        else:
+            keywords_list.append(str(keywords_value))
+        genres_value = meta.get('combined_genres', [])
+        genres_list: list[str] = []
+        if isinstance(genres_value, list):
+            genres_list.extend([str(item) for item in cast(list[Any], genres_value)])
+        else:
+            genres_list.append(str(genres_value))
+        keywords_lower = {k.lower() for k in keywords_list if k}
+        genres_lower = {g.lower() for g in genres_list if g}
+        if any(keyword in keywords_lower for keyword in disallowed_keywords) or any(genre in genres_lower for genre in disallowed_genres):
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
                 console.print(f'[bold red]Porn/xxx is not allowed at {self.tracker}.[/bold red]')
                 if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
@@ -676,7 +726,7 @@ class MTV():
                 meta['skipping'] = "MTV"
                 return []
 
-        dupes = []
+        dupes: list[dict[str, Any]] = []
 
         # Build request parameters
         params = {
@@ -704,14 +754,22 @@ class MTV():
                     try:
                         loop = asyncio.get_running_loop()
                         response_xml = await loop.run_in_executor(None, ET.fromstring, response.text)
-                        for each in response_xml.find('channel').findall('item'):
+                        channel = cast(Optional[Any], response_xml.find('channel'))
+                        if channel is None:
+                            return dupes
+                        for each in channel.findall('item'):
+                            title = str(each.findtext('title') or '')
+                            files_text = str(each.findtext('files') or '0')
+                            size_text = str(each.findtext('size') or '0')
+                            guid = str(each.findtext('guid') or '')
+                            link = str(each.findtext('link') or '')
                             result = {
-                                'name': each.find('title').text,
-                                'files': each.find('title').text,
-                                'file_count': int(each.find('files').text),
-                                'size': int(each.find('size').text),
-                                'link': each.find('guid').text,
-                                'download': each.find('link').text
+                                'name': title,
+                                'files': title,
+                                'file_count': int(files_text),
+                                'size': int(size_text),
+                                'link': guid,
+                                'download': link
                             }
                             dupes.append(result)
                     except ET.ParseError:
@@ -731,8 +789,7 @@ class MTV():
             console.print(f"[red]Unable to search for existing torrents: {e}")
         except Exception:
             console.print("[red]Unable to search for existing torrents on site. Most likely the site is down.")
-            dupes.append("FAILED SEARCH")
-            print(traceback.print_exc())
+            traceback.print_exc()
             await asyncio.sleep(5)
 
         return dupes

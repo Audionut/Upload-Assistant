@@ -1,12 +1,13 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 import re
+from typing import Any
+
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
 
 class CBR(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]):
         super().__init__(config, tracker_name='CBR')
         self.config = config
         self.common = COMMON(config)
@@ -17,26 +18,42 @@ class CBR(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [
-            '3LTON', '4yEo', 'ADE', 'ASM', 'AFG', 'AROMA', 'AniHLS', 'AniURL', 'AnimeRG', 'BLUDV', 'CHD', 'CM8', 'Comando', 'CrEwSaDe', 'DNL', 'DeadFish',
-            'DragsterPS', 'DRENAN', 'ELiTE', 'FGT', 'FRDS', 'FUM', 'FaNGDiNG0', 'Flights', 'HAiKU', 'HD2DVD', 'HDS', 'HDTime', 'Hi10', 'Hiro360', 'ION10', 'JIVE', 'KiNGDOM',
-            'LEGi0N', 'LOAD', 'Lapumia', 'Leffe', 'MACCAULAY', 'MeGusta', 'NOIVTC', 'NhaNc3', 'OFT', 'Oj', 'PRODJi', 'PiRaTeS', 'PlaySD', 'RAPiDCOWS',
-            'RARBG', 'RDN', 'REsuRRecTioN', 'RMTeam', 'RetroPeeps', 'S74Ll10n', 'SANTi', 'SILVEIRATeam', 'SPASM', 'SPDVD', 'STUTTERSHIT', 'SicFoI', 'TGx', 'TM',
-            'TRiToN', 'Telly', 'UPiNSMOKE', 'URANiME', 'WAF', 'XS', 'YIFY', 'ZKBL', 'ZMNT', 'ZmN', 'aXXo', 'd3g', 'eSc', 'iPlanet', 'mHD', 'mSD', 'nHD',
-            'nSD', 'nikt0', 'playXD', 'x0r', 'xRed'
+            "4K4U", "afm72", "Alcaide_Kira", "AROMA", "ASM", "Bandi", "BiTOR", "BLUDV", "Bluespots",
+            "BOLS", "CaNNIBal", "Comando", "d3g", "DepraveD", "EMBER", "FGT", "FreetheFish", "Garshasp",
+            "Ghost", "Grym", "HDS", "Hi10", "HiQVE", "Hiro360", "ImE", "ION10", "iVy", "Judas", "LAMA",
+            "Langbard", "Lapumia", "LION", "MeGusta", "MONOLITH", "MRCS", "NaNi", "Natty", "nikt0",
+            "OEPlus", "OFT", "OsC", "Panda", "PANDEMONiUM", "PHOCiS", "PiRaTeS", "PYC", "QxR", "r00t",
+            "Ralphy", "RARBG", "RetroPeeps", "RZeroX", "S74Ll10n", "SAMPA", "Sicario", "SiCFoI", "Silence",
+            "SkipTT", "SM737", "SPDVD", "STUTTERSHIT", "SWTYBLZ", "t3nzin", "TAoE", "TEKNO3D", "Telly", "TGx",
+            "Tigole", "TSP", "TSPxL", "TWA", "UnKn0wn", "VXT", "Vyndros", "W32", "Will1869", "x0r", "YIFY", "YTS.MX", "YTS"
         ]
-        pass
 
-    async def get_category_id(self, meta):
-        category_id = {
-            'MOVIE': '1',
-            'TV': '2',
-            'ANIMES': '4'
-        }.get(meta['category'], '0')
-        if meta['anime'] is True and category_id == '2':
-            category_id = '4'
-        return {'category_id': category_id}
+    async def get_category_id(
+        self, meta: dict[str, Any], category: str = "", reverse: bool = False, mapping_only: bool = False
+    ) -> dict[str, str]:
+        category_id: dict[str, str] = {
+            "MOVIE": "1",
+            "TV": "2",
+            "ANIMES": "4"
+        }
 
-    async def get_type_id(self, meta):
+        if mapping_only:
+            return category_id
+        elif reverse:
+            return {v: k for k, v in category_id.items()}
+
+        resolved_category = category if category else meta.get("category", "")
+        if meta.get("anime", False) is True and resolved_category == "TV":
+            resolved_category = "ANIMES"
+
+        if resolved_category:
+            return {"category_id": category_id.get(resolved_category, "0")}
+
+        return {"category_id": "0"}
+
+    async def get_type_id(
+        self, meta: dict[str, Any], type: str = "", reverse: bool = False, mapping_only: bool = False
+    ) -> dict[str, str]:
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -45,10 +62,22 @@ class CBR(UNIT3D):
             'WEBDL': '4',
             'WEBRIP': '5',
             'HDTV': '6'
-        }.get(meta['type'], '0')
-        return {'type_id': type_id}
+        }
 
-    async def get_resolution_id(self, meta):
+        if mapping_only:
+            return type_id
+        elif reverse:
+            return {v: k for k, v in type_id.items()}
+        elif type:
+            return {"type_id": type_id.get(type, "0")}
+        else:
+            meta_type = meta.get("type", "")
+            resolved_id = type_id.get(meta_type, "0")
+            return {"type_id": resolved_id}
+
+    async def get_resolution_id(
+        self, meta: dict[str, Any], resolution: str = "", reverse: bool = False, mapping_only: bool = False
+    ) -> dict[str, str]:
         resolution_id = {
             '4320p': '1',
             '2160p': '2',
@@ -60,12 +89,22 @@ class CBR(UNIT3D):
             '480p': '8',
             '480i': '9',
             'Other': '10',
-        }.get(meta['resolution'], '10')
-        return {'resolution_id': resolution_id}
+        }
 
-    async def get_name(self, meta):
+        if mapping_only:
+            return resolution_id
+        elif reverse:
+            return {v: k for k, v in resolution_id.items()}
+        elif resolution:
+            return {"resolution_id": resolution_id.get(resolution, "10")}
+        else:
+            meta_resolution = meta.get("resolution", "")
+            resolved_id = resolution_id.get(meta_resolution, "10")
+            return {"resolution_id": resolved_id}
+
+    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         name = (
-            meta["name"]
+            str(meta["name"])
             .replace("DD+ ", "DDP")
             .replace("DD ", "DD")
             .replace("AAC ", "AAC")
@@ -82,22 +121,26 @@ class CBR(UNIT3D):
 
         # Remove the AKA title, unless it is Brazilian
         if meta.get("original_language") != "pt":
-            name = name.replace(meta["aka"], "")
+            name = name.replace(meta.get("aka", ""), "")
 
         # If it is Brazilian, use only the AKA title, deleting the foreign title
         if meta.get("original_language") == "pt" and meta.get("aka"):
-            aka_clean = meta["aka"].replace("AKA", "").strip()
-            title = meta.get("title")
-            name = name.replace(meta["aka"], "").replace(title, aka_clean).strip()
+            aka_clean = str(meta.get("aka", "")).replace("AKA", "").strip()
+            title = meta.get("title", "")
+            name = name.replace(meta.get("aka", ""), "").replace(title, aka_clean).strip()
 
         cbr_name = name
-        tag_lower = meta["tag"].lower()
+        tag_lower = str(meta.get("tag", "")).lower()
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
 
         if not meta.get('is_disc'):
             audio_tag = ""
-            if meta.get("audio_languages"):
-                audio_languages = set(meta["audio_languages"])
+            audio_langs = meta.get("audio_languages")
+            if audio_langs:
+                try:
+                    audio_languages: set[str] = set(audio_langs)
+                except TypeError:
+                    audio_languages = set()
 
                 if any(lang.lower() == "portuguese" or lang == "português" for lang in audio_languages):
                     if len(audio_languages) >= 3:
@@ -111,7 +154,9 @@ class CBR(UNIT3D):
                     if "-" in cbr_name:
                         parts = cbr_name.rsplit("-", 1)
 
-                        custom_tag = self.config.get("TRACKERS", {}).get(self.tracker, {}).get("tag_for_custom_release", "")
+                        custom_tag = dict(dict(self.config.get("TRACKERS", {})).get(self.tracker, {})).get(
+                            "tag_for_custom_release", ""
+                        )
                         if custom_tag and custom_tag in name:
                             match = re.search(r"-([^.-]+)\.(?:DUAL|MULTI)", meta["uuid"])
                             if match and match.group(1) != meta["tag"]:
@@ -133,14 +178,14 @@ class CBR(UNIT3D):
 
         return {"name": re.sub(r"\s{2,}", " ", cbr_name)}
 
-    async def get_additional_data(self, meta):
+    async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, str]:
         data = {
             'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
         }
 
         return data
 
-    async def get_additional_checks(self, meta):
+    async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         return await self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=["portuguese", "português"], check_audio=True, check_subtitle=True
         )

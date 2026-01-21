@@ -1,38 +1,44 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiofiles
 import asyncio
-import httpx
 import json
-import langcodes
 import os
 import platform
-import pycountry
 import re
 import unicodedata
-from bs4 import BeautifulSoup
-from datetime import datetime
-from langcodes.tag_parser import LanguageTagError
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Optional, cast
+from urllib.parse import urlparse
+
+import aiofiles
+import httpx
+import langcodes
+import pycountry
+from bs4 import BeautifulSoup, Tag
+from langcodes.tag_parser import LanguageTagError
+
 from src.bbcode import BBCODE
 from src.console import console
-from src.cookie_auth import CookieValidator, CookieAuthUploader
+from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
-from src.languages import process_desc_language
-from src.tmdb import get_tmdb_localized_data
+from src.languages import languages_manager
+from src.tmdb import TmdbManager
 from src.trackers.COMMON import COMMON
-from typing import Optional
-from urllib.parse import urlparse
 
 
 class BJS:
-    def __init__(self, config):
+    secret_token: str = ''
+    already_has_the_info: bool = False
+    database_title: str = ''
+
+    def __init__(self, config: dict[str, Any]):
         self.config = config
+        self.tmdb_manager = TmdbManager(config)
         self.common = COMMON(config)
         self.cookie_validator = CookieValidator(config)
         self.cookie_auth_uploader = CookieAuthUploader(config)
         self.tracker = 'BJS'
-        self.banned_groups = []
+        self.banned_groups: list[str] = []
         self.source_flag = 'BJ'
         self.base_url = 'https://bj-share.info'
         self.torrent_url = 'https://bj-share.info/torrents.php?torrentid='
@@ -41,13 +47,16 @@ class BJS:
         self.session = httpx.AsyncClient(headers={
             'User-Agent': f'Upload Assistant ({platform.system()} {platform.release()})'
         }, timeout=60.0)
+        self.main_tmdb_data: dict[str, Any] = {}
+        self.episode_tmdb_data: dict[str, Any] = {}
+        self.semaphore = asyncio.Semaphore(1)
 
-    async def get_additional_checks(self, meta):
+    def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         should_continue = True
 
         # Stops uploading when an external subtitle is detected
-        video_path = meta.get('path')
-        directory = video_path if os.path.isdir(video_path) else os.path.dirname(video_path)
+        video_path = meta.get('path', '')
+        directory: str = video_path if os.path.isdir(video_path) else os.path.dirname(video_path)
         subtitle_extensions = ('.srt', '.sub', '.ass', '.ssa', '.idx', '.smi', '.psb')
 
         if any(f.lower().endswith(subtitle_extensions) for f in os.listdir(directory)):
@@ -56,25 +65,30 @@ class BJS:
 
         return should_continue
 
-    async def validate_credentials(self, meta):
-        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
-        return await self.cookie_validator.cookie_validation(
-            meta=meta,
-            tracker=self.tracker,
-            test_url=f'{self.base_url}/upload.php',
-            error_text='login.php',
-            token_pattern=r'name="auth" value="([^"]+)"'
-        )
+    async def validate_credentials(self, meta: dict[str, Any]) -> bool:
+        cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        if cookie_jar:
+            self.session.cookies = cookie_jar
+            if await self.cookie_validator.cookie_validation(
+                meta=meta,
+                tracker=self.tracker,
+                test_url=f'{self.base_url}/upload.php',
+                error_text='login.php',
+                token_pattern=r'name="auth" value="([^"]+)"'  # nosec B106
+            ):
+                return True
 
-    async def load_localized_data(self, meta):
-        localized_data_file = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/tmdb_localized_data.json'
-        main_ptbr_data = {}
-        episode_ptbr_data = {}
-        data = {}
+        return False
+
+    async def load_localized_data(self, meta: dict[str, Any]) -> None:
+        localized_data_file: str = f'{meta["base_dir"]}/tmp/{meta["uuid"]}/tmdb_localized_data.json'
+        main_ptbr_data: dict[str, Any] = {}
+        episode_ptbr_data: dict[str, Any] = {}
+        data: dict[str, Any] = {}
 
         if os.path.isfile(localized_data_file):
             try:
-                async with aiofiles.open(localized_data_file, 'r', encoding='utf-8') as f:
+                async with aiofiles.open(localized_data_file, encoding='utf-8') as f:
                     content = await f.read()
                     data = json.loads(content)
             except json.JSONDecodeError:
@@ -84,40 +98,39 @@ class BJS:
                 print(f'Error reading file {localized_data_file}: {e}')
                 data = {}
 
-        main_ptbr_data = data.get('pt-BR', {}).get('main')
+        main_ptbr_data = dict(data.get('pt-BR', {})).get('main', {})
 
         if not main_ptbr_data:
-            main_ptbr_data = await get_tmdb_localized_data(
+            main_ptbr_data = await self.tmdb_manager.get_tmdb_localized_data(
                 meta,
                 data_type='main',
                 language='pt-BR',
                 append_to_response='credits,videos,content_ratings'
             )
 
-        if self.config['DEFAULT']['episode_overview']:
-            if meta['category'] == 'TV' and not meta.get('tv_pack'):
-                episode_ptbr_data = data.get('pt-BR', {}).get('episode')
-                if not episode_ptbr_data:
-                    episode_ptbr_data = await get_tmdb_localized_data(
-                        meta,
-                        data_type='episode',
-                        language='pt-BR',
-                        append_to_response=''
-                    )
+        if self.config['DEFAULT']['episode_overview'] and meta['category'] == 'TV' and not meta.get('tv_pack'):
+            episode_ptbr_data = data.get('pt-BR', {}).get('episode')
+            if not episode_ptbr_data:
+                episode_ptbr_data = await self.tmdb_manager.get_tmdb_localized_data(
+                    meta,
+                    data_type='episode',
+                    language='pt-BR',
+                    append_to_response=''
+                )
 
         self.main_tmdb_data = main_ptbr_data or {}
         self.episode_tmdb_data = episode_ptbr_data or {}
 
         return
 
-    def get_container(self, meta):
-        container = meta.get('container', '')
+    def get_container(self, meta: dict[str, Any]) -> str:
+        container: str = meta.get('container', '')
         if container in ['mkv', 'mp4', 'avi', 'vob', 'm2ts', 'ts']:
             return container.upper()
 
         return 'Outro'
 
-    def get_type(self, meta):
+    def get_type(self, meta: dict[str, Any]) -> str:
         if meta.get('anime'):
             return '13'
 
@@ -126,9 +139,9 @@ class BJS:
             'MOVIE': '0'
         }
 
-        return category_map.get(meta['category'])
+        return category_map.get(meta['category'], '0')
 
-    async def get_languages(self, meta):
+    def get_languages(self) -> str:
         possible_languages = {
             'Alemão', 'Árabe', 'Argelino', 'Búlgaro', 'Cantonês', 'Chinês',
             'Coreano', 'Croata', 'Dinamarquês', 'Egípcio', 'Espanhol', 'Estoniano',
@@ -148,10 +161,7 @@ class BJS:
         language_name = None
 
         if lang_code == 'pt':
-            if 'PT' in origin_countries:
-                language_name = 'Português (pt)'
-            else:
-                language_name = 'Português'
+            language_name = 'Português (pt)' if 'PT' in origin_countries else 'Português'
         else:
             try:
                 language_name = langcodes.Language.make(lang_code).display_name('pt').capitalize()
@@ -163,9 +173,9 @@ class BJS:
         else:
             return 'Outro'
 
-    async def get_audio(self, meta):
+    async def get_audio(self, meta: dict[str, Any]) -> str:
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
         audio_languages = set(meta.get('audio_languages', []))
 
@@ -173,7 +183,7 @@ class BJS:
 
         has_pt_audio = any(lang in portuguese_languages for lang in audio_languages)
 
-        original_lang = meta.get('original_language', '').lower()
+        original_lang = str(meta.get('original_language', '')).lower()
         is_original_pt = original_lang in portuguese_languages
 
         if has_pt_audio:
@@ -186,9 +196,9 @@ class BJS:
 
         return 'Legendado'
 
-    async def get_subtitle(self, meta):
+    async def get_subtitle(self, meta: dict[str, Any]) -> str:
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
         found_language_strings = meta.get('subtitle_languages', [])
 
         subtitle_type = 'Nenhuma'
@@ -198,9 +208,11 @@ class BJS:
 
         return subtitle_type
 
-    def get_resolution(self, meta):
+    def get_resolution(self, meta: dict[str, Any]) -> tuple[str, str]:
+        width, height = '0', '0'
+
         if meta.get('is_disc') == 'BDMV':
-            resolution_str = meta.get('resolution', '')
+            resolution_str = str(meta.get('resolution', ''))
             try:
                 height_num = int(resolution_str.lower().replace('p', '').replace('i', ''))
                 height = str(height_num)
@@ -215,13 +227,10 @@ class BJS:
             width = video_mi['Width']
             height = video_mi['Height']
 
-        return {
-            'width': width,
-            'height': height
-        }
+        return width, height
 
-    def get_video_codec(self, meta):
-        CODEC_MAP = {
+    def get_video_codec(self, meta: dict[str, Any]) -> str:
+        codec_map = {
             'x265': 'x265',
             'h.265': 'H.265',
             'x264': 'x264',
@@ -243,18 +252,18 @@ class BJS:
             'avc': 'H.264',
         }
 
-        video_encode = meta.get('video_encode', '').lower()
-        video_codec = meta.get('video_codec', '')
+        video_encode = str(meta.get('video_encode', '')).lower()
+        video_codec = str(meta.get('video_codec', ''))
 
         search_text = f'{video_encode} {video_codec.lower()}'
 
-        for key, value in CODEC_MAP.items():
+        for key, value in codec_map.items():
             if key in search_text:
                 return value
 
         return video_codec if video_codec else 'Outro'
 
-    def get_audio_codec(self, meta):
+    def get_audio_codec(self, meta: dict[str, Any]) -> str:
         priority_order = [
             'DTS-X', 'E-AC-3 JOC', 'TrueHD', 'DTS-HD', 'LPCM', 'PCM', 'FLAC',
             'DTS-ES', 'DTS', 'E-AC-3', 'AC3', 'AAC', 'Opus', 'Vorbis', 'MP3', 'MP2'
@@ -295,17 +304,25 @@ class BJS:
 
         return 'Outro'
 
-    async def get_title(self, meta):
-        title = self.main_tmdb_data.get('name') or self.main_tmdb_data.get('title') or ''
+    def get_title(self, meta: dict[str, Any]) -> tuple[str, str]:
+        original_title = meta['title']
+        brazilian_title = ""
 
-        return title if title and title != meta.get('title') else ''
+        if BJS.database_title:
+            original_title = BJS.database_title
 
-    async def build_description(self, meta):
-        builder = DescriptionBuilder(self.config)
-        desc_parts = []
+        tmdb_title = self.main_tmdb_data.get('name') or self.main_tmdb_data.get('title')
+        if tmdb_title and tmdb_title != meta.get('title'):
+            brazilian_title = tmdb_title
+
+        return original_title, brazilian_title
+
+    async def build_description(self, meta: dict[str, Any]) -> str:
+        builder = DescriptionBuilder(self.tracker, self.config)
+        desc_parts: list[str] = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(self.tracker))
+        desc_parts.append(await builder.get_custom_header())
 
         # Logo
         logo_resize_url = meta.get('tmdb_logo', '')
@@ -327,7 +344,7 @@ class BJS:
 
         # File information
         if meta.get('is_disc', '') == 'DVD':
-            desc_parts.append(f'[hide=DVD MediaInfo][pre]{await builder.get_mediainfo_section(meta, self.tracker)}[/pre][/hide]')
+            desc_parts.append(f'[hide=DVD MediaInfo][pre]{await builder.get_mediainfo_section(meta)}[/pre][/hide]')
 
         bd_info = await builder.get_bdinfo_section(meta)
         if bd_info:
@@ -337,7 +354,7 @@ class BJS:
         desc_parts.append(await builder.get_user_description(meta))
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         # Signature
         desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta['ua_name']} {meta['current_version']}[/url][/align]")
@@ -357,34 +374,28 @@ class BJS:
 
         return description
 
-    async def get_trailer(self, meta):
-        video_results = self.main_tmdb_data.get('videos', {}).get('results', [])
+    def get_trailer(self, meta: dict[str, Any]) -> str:
+        video_results: list[dict[str, Any]] = dict(self.main_tmdb_data.get('videos', {})).get('results', [])
         youtube_code = video_results[-1].get('key', '') if video_results else ''
-        if youtube_code:
-            youtube = f'http://www.youtube.com/watch?v={youtube_code}'
-        else:
-            youtube = meta.get('youtube') or ''
+        youtube = f'http://www.youtube.com/watch?v={youtube_code}' if youtube_code else meta.get('youtube') or ''
 
         return youtube
 
-    async def get_rating(self, meta):
-        ratings = self.main_tmdb_data.get('content_ratings', {}).get('results', [])
+    def get_rating(self) -> str:
+        ratings: list[dict[str, Any]] = dict(self.main_tmdb_data.get('content_ratings', {})).get('results', [])
 
         if not ratings:
             return ''
 
-        VALID_BR_RATINGS = {'L', '10', '12', '14', '16', '18'}
+        valid_br_ratings = {'L', '10', '12', '14', '16', '18'}
 
         br_rating = ''
         us_rating = ''
 
         for item in ratings:
-            if item.get('iso_3166_1') == 'BR' and item.get('rating') in VALID_BR_RATINGS:
+            if item.get('iso_3166_1') == 'BR' and item.get('rating') in valid_br_ratings:
                 br_rating = item['rating']
-                if br_rating == 'L':
-                    br_rating = 'Livre'
-                else:
-                    br_rating = f'{br_rating} anos'
+                br_rating = 'Livre' if br_rating == 'L' else f'{br_rating} anos'
                 break
 
             # Use US rating as fallback
@@ -393,14 +404,15 @@ class BJS:
 
         return br_rating or us_rating or ''
 
-    async def get_tags(self, meta):
+    async def get_tags(self) -> str:
         tags = ''
+        genres_data: list[dict[str, Any]] = self.main_tmdb_data.get('genres', [])
+        genre_names: list[str] = []
 
-        if self.main_tmdb_data and isinstance(self.main_tmdb_data.get('genres'), list):
-            genre_names = [
-                g.get('name', '') for g in self.main_tmdb_data['genres']
-                if isinstance(g.get('name'), str) and g.get('name').strip()
-            ]
+        for g in genres_data:
+            name: str = g.get('name', '')
+            if name.strip():
+                genre_names.append(name)
 
             if genre_names:
                 tags = ', '.join(
@@ -417,7 +429,7 @@ class BJS:
 
         return tags
 
-    def _extract_upload_params(self, meta):
+    def _extract_upload_params(self, meta: dict[str, Any]) -> dict[str, Any]:
         is_tv_pack = bool(meta.get('tv_pack'))
         upload_season_num = None
         upload_episode_num = None
@@ -440,28 +452,34 @@ class BJS:
             'upload_resolution': upload_resolution
         }
 
-    def _check_episode_on_page(self, torrent_table, upload_season_num, upload_episode_num):
-        if not upload_season_num or not upload_episode_num:
+    def _check_episode_on_page(self, torrent_table: Optional[Tag], upload_season_num: str, upload_episode_num: str) -> bool:
+        if not upload_season_num or not upload_episode_num or not torrent_table:
             return False
 
-        temp_season_on_page = None
+        temp_season_on_page: str = ""
         upload_episode_str = f'E{upload_episode_num}'
 
         for row in torrent_table.find_all('tr'):
-            if 'season_header' in row.get('class', []):
+            row_classes = row.get('class')
+            if isinstance(row_classes, list) and 'season_header' in row_classes:
                 s_match = re.search(r'Temporada (\d+)', row.get_text(strip=True))
                 if s_match:
                     temp_season_on_page = s_match.group(1)
                 continue
 
-            if (temp_season_on_page == upload_season_num and row.get('id', '').startswith('torrent')):
+            if (temp_season_on_page == upload_season_num and str(row.get('id', '')).startswith('torrent')):
                 link = row.find('a', onclick=re.compile(r'loadIfNeeded\('))
                 if (link and re.search(r'\b' + re.escape(upload_episode_str) + r'\b', link.get_text(strip=True))):
                     return True
         return False
 
-    def _should_process_torrent(self, row, current_season, current_resolution, params, episode_found_on_page, meta):
-        description_text = ' '.join(row.find('a', onclick=re.compile(r'loadIfNeeded\(')).get_text(strip=True).split())
+    def _should_process_torrent(self, row: Tag, current_season: str, current_resolution: str, params: dict[str, Any], episode_found_on_page: bool, meta: dict[str, Any]) -> tuple[bool, bool]:
+        link = row.find('a', onclick=re.compile(r'loadIfNeeded\('))
+
+        if not isinstance(link, Tag):
+            return False, False
+
+        description_text = ' '.join(link.get_text(strip=True).split())
 
         # TV Logic
         if meta['category'] == 'TV':
@@ -480,21 +498,20 @@ class BJS:
                         return is_current_row_a_pack, True
 
         # Movie Logic
-        elif meta['category'] == 'MOVIE':
-            if params['upload_resolution'] and current_resolution == params['upload_resolution']:
-                return True, False
+        elif meta['category'] == 'MOVIE' and params['upload_resolution'] and current_resolution == params['upload_resolution']:
+            return True, False
 
         return False, False
 
-    def _extract_torrent_ids(self, rows_to_process):
-        ajax_tasks = []
+    def _extract_torrent_ids(self, rows_to_process: list[tuple[Tag, bool]]) -> list[dict[str, Any]]:
+        ajax_tasks: list[dict[str, Any]] = []
 
         for row, process_folder_name in rows_to_process:
             id_link = row.find('a', onclick=re.compile(r'loadIfNeeded\('))
             if not id_link:
                 continue
 
-            onclick_attr = id_link['onclick']
+            onclick_attr = str(id_link['onclick'])
             id_match = re.search(r"loadIfNeeded\('(\d+)',\s*'(\d+)'", onclick_attr)
             if not id_match:
                 continue
@@ -518,31 +535,48 @@ class BJS:
 
         return ajax_tasks
 
-    async def _fetch_torrent_content(self, task_info):
+    async def _fetch_torrent_content(self, task_info: dict[str, Any]) -> dict[str, Any]:
         torrent_id = task_info['torrent_id']
         group_id = task_info['group_id']
         ajax_url = f'{self.base_url}/ajax.php?action=torrent_content&torrentid={torrent_id}&groupid={group_id}'
 
-        try:
-            ajax_response = await self.session.get(ajax_url)
-            ajax_response.raise_for_status()
-            ajax_soup = BeautifulSoup(ajax_response.text, 'html.parser')
+        max_retries = 3
+        base_delay = 5
+        last_error: Optional[Exception] = None
 
-            return {
-                'success': True,
-                'soup': ajax_soup,
-                'task_info': task_info
-            }
-        except Exception as e:
-            console.print(f'[yellow]Não foi possível buscar a lista de arquivos para o torrent {torrent_id}: {e}[/yellow]')
-            return {
-                'success': False,
-                'error': e,
-                'task_info': task_info
-            }
+        async def _attempt_fetch() -> tuple[Optional[BeautifulSoup], Optional[Exception]]:
+            try:
+                async with self.semaphore:
+                    ajax_response = await self.session.get(ajax_url)
+                    ajax_response.raise_for_status()
+                    ajax_soup = BeautifulSoup(ajax_response.text, "html.parser")
+                return ajax_soup, None
+            except Exception as e:
+                return None, e
 
-    def _extract_item_name(self, ajax_soup, description_text, is_tv_pack, process_folder_name):
-        item_name = None
+        for attempt in range(1, max_retries + 1):
+            ajax_soup, error = await _attempt_fetch()
+            if ajax_soup is not None:
+                return {
+                    'success': True,
+                    'soup': ajax_soup,
+                    'task_info': task_info
+                }
+
+            last_error = error
+            if attempt < max_retries:
+                await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
+
+        console.print(f'[yellow]Não foi possível buscar a lista de arquivos para o torrent {torrent_id}: {last_error}[/yellow]')
+        return {
+            'success': False,
+            'error': last_error,
+            'task_info': task_info
+        }
+
+    def _extract_item_name(self, ajax_soup: BeautifulSoup, description_text: str, is_tv_pack: bool, process_folder_name: bool) -> str:
+        item_name: str = ""
+
         is_existing_torrent_a_disc = any(
             keyword in description_text.lower()
             for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts']
@@ -550,59 +584,83 @@ class BJS:
 
         if is_existing_torrent_a_disc or is_tv_pack or process_folder_name:
             path_div = ajax_soup.find('div', class_='filelist_path')
-            if path_div and path_div.get_text(strip=True):
+            if isinstance(path_div, Tag) and path_div.get_text(strip=True):
                 item_name = path_div.get_text(strip=True).strip('/')
             else:
                 file_table = ajax_soup.find('table', class_='filelist_table')
-                if file_table:
+                if isinstance(file_table, Tag):
                     first_file_row = file_table.find('tr', class_=lambda x: x != 'colhead_dark')
-                    if first_file_row and first_file_row.find('td'):
-                        item_name = first_file_row.find('td').get_text(strip=True)
+                    if isinstance(first_file_row, Tag):
+                        first_td = first_file_row.find('td')
+                        if isinstance(first_td, Tag):
+                            item_name = first_td.get_text(strip=True)
         else:
             file_table = ajax_soup.find('table', class_='filelist_table')
-            if file_table:
+            if isinstance(file_table, Tag):
                 first_row = file_table.find('tr', class_=lambda x: x != 'colhead_dark')
-                if first_row and first_row.find('td'):
-                    item_name = first_row.find('td').get_text(strip=True)
+                if isinstance(first_row, Tag):
+                    first_td = first_row.find('td')
+                    if isinstance(first_td, Tag):
+                        item_name = first_td.get_text(strip=True)
 
         return item_name
 
-    async def _process_ajax_responses(self, ajax_tasks, params):
+    async def _process_ajax_responses(self, ajax_tasks: list[dict[str, Any]], params: dict[str, Any]) -> list[dict[str, str]]:
+        found_items: list[dict[str, str]] = []
+
         if not ajax_tasks:
-            return []
+            return found_items
 
         ajax_results = await asyncio.gather(
             *[self._fetch_torrent_content(task) for task in ajax_tasks],
             return_exceptions=True
         )
 
-        found_items = []
         for result in ajax_results:
             if isinstance(result, Exception):
-                console.print(f'[yellow]Erro na chamada AJAX: {result}[/yellow]')
+                console.print(f'[yellow]Error in AJAX call: {result}[/yellow]')
                 continue
 
-            if not result['success']:
+            fetch_result = cast(dict[str, Any], result)
+            if not fetch_result.get('success'):
                 continue
 
-            task_info = result['task_info']
+            task_info = fetch_result.get('task_info', {})
+            soup_obj = fetch_result.get('soup')
+
+            if not isinstance(task_info, dict) or not isinstance(soup_obj, BeautifulSoup):
+                continue
+
+            task_info = cast(dict[str, Any], task_info)
+            description_text = str(task_info.get('description_text', ''))
+            process_folder_name = bool(task_info.get('process_folder_name'))
+
             item_name = self._extract_item_name(
-                result['soup'],
-                task_info['description_text'],
+                soup_obj,
+                description_text,
                 params['is_tv_pack'],
-                task_info['process_folder_name']
+                process_folder_name
             )
+
+            torrent_description = ""
+            desc_block = soup_obj.find(
+                lambda tag: tag.name == "blockquote" and "Informações Adicionais:" in tag.get_text()
+            )
+
+            if desc_block:
+                torrent_description = desc_block.get_text("\n", strip=True)
 
             if item_name:
                 found_items.append({
                     'name': item_name,
-                    'size': task_info.get('size', ''),
-                    'link': task_info.get('link', '')
+                    'size': str(task_info.get('size') or ''),
+                    'link': str(task_info.get('link') or ''),
+                    'description': torrent_description,
                 })
 
         return found_items
 
-    async def _fetch_search_page(self, meta):
+    async def _fetch_search_page(self, meta: dict[str, Any]) -> BeautifulSoup:
         search_url = f"{self.base_url}/torrents.php?searchstr={meta['imdb_info']['imdbID']}"
 
         response = await self.session.get(search_url)
@@ -612,23 +670,62 @@ class BJS:
 
         return BeautifulSoup(response.text, 'html.parser')
 
-    async def search_existing(self, meta, disctype):
-        should_continue = await self.get_additional_checks(meta)
+    def get_database_title(self, soup: BeautifulSoup) -> str:
+        """
+        Extracts the original title to ensure consistency with the BJS database.
+        Since BJS treats different titles as unique entries regardless of IMDb parity,
+        this value is used to match existing records.
+        """
+        original_title = ''
+        info_boxes = soup.find_all('div', class_='box')
+        target_box = None
+
+        for box in info_boxes:
+            header_div = box.find('div', class_='head')
+            if header_div and 'Informações' in header_div.get_text():
+                target_box = box
+                break
+
+        if target_box:
+            rows = target_box.find_all('tr')
+            for row in rows:
+                cells = row.find_all('td')
+                if len(cells) >= 2:
+                    label_text = cells[0].get_text(strip=True)
+                    if 'Título Original:' in label_text or 'Título:' in label_text:
+                        original_title = cells[1].get_text(strip=True)
+                        break
+
+        return original_title
+
+    async def search_existing(self, meta: dict[str, Any], _) -> list[dict[str, str]]:
+        dupes: list[dict[str, str]] = []
+        should_continue = self.get_additional_checks(meta)
         if not should_continue:
             meta['skipping'] = f'{self.tracker}'
-            return
+            return dupes
+
+        if not dict(meta.get('imdb_info', {})).get('imdbID'):
+            console.print(f"{self.tracker}: [bold red]IMDb ID not found in metadata. Skipping duplicate check.[/bold red]")
+            return dupes
 
         try:
-            self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+            cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+            if cookie_jar:
+                self.session.cookies = cookie_jar
 
             BJS.already_has_the_info = False
-            params = self._extract_upload_params(meta)
+            BJS.database_title = ''
+            params: dict[str, Any] = self._extract_upload_params(meta)
 
             soup = await self._fetch_search_page(meta)
-            torrent_details_table = soup.find('div', class_='main_column')
+            torrent_details_table: Optional[Tag] = soup.find('div', class_='main_column')
 
-            if not torrent_details_table:
-                return []
+            if torrent_details_table:
+                BJS.already_has_the_info = True
+                BJS.database_title = self.get_database_title(soup)
+            else:
+                return dupes
 
             episode_found_on_page = False
             if (meta['category'] == 'TV' and not params['is_tv_pack'] and params['upload_season_num'] and params['upload_episode_num']):
@@ -638,54 +735,56 @@ class BJS:
                     params['upload_episode_num']
                 )
 
-            rows_to_process = []
-            current_season_on_page = None
-            current_resolution_on_page = None
+            rows_to_process: list[tuple[Tag, bool]] = []
+            current_season_on_page = ""
+            current_resolution_on_page = ""
 
             for row in torrent_details_table.find_all('tr'):
-                if 'resolution_header' in row.get('class', []):
-                    header_text = row.get_text(strip=True)
-                    resolution_match = re.search(r'(\d{3,4}p)', header_text)
-                    if resolution_match:
-                        current_resolution_on_page = resolution_match.group(1)
-                    continue
+                row_classes = row.get('class')
+                if isinstance(row_classes, list):
+                    if 'resolution_header' in row_classes:
+                        header_text = row.get_text(strip=True)
+                        resolution_match = re.search(r'(\d{3,4}p)', header_text)
+                        if resolution_match:
+                            current_resolution_on_page = resolution_match.group(1)
+                        continue
 
-                if 'season_header' in row.get('class', []):
-                    season_header_text = row.get_text(strip=True)
-                    season_match = re.search(r'Temporada (\d+)', season_header_text)
-                    if season_match:
-                        current_season_on_page = season_match.group(1)
-                    continue
+                    if 'season_header' in row_classes:
+                        season_header_text = row.get_text(strip=True)
+                        season_match = re.search(r'Temporada (\d+)', season_header_text)
+                        if season_match:
+                            current_season_on_page = season_match.group(1)
+                        continue
 
-                if not row.get('id', '').startswith('torrent'):
-                    continue
+                    row_id = row.get('id')
+                    if isinstance(row_id, str) and not row_id.startswith('torrent'):
+                        continue
 
-                id_link = row.find('a', onclick=re.compile(r'loadIfNeeded\('))
-                if not id_link:
-                    continue
+                    id_link = row.find('a', onclick=re.compile(r'loadIfNeeded\('))
+                    if not id_link:
+                        continue
 
-                should_process, process_folder_name = self._should_process_torrent(
-                    row, current_season_on_page, current_resolution_on_page,
-                    params, episode_found_on_page, meta
-                )
+                    should_process, process_folder_name = self._should_process_torrent(
+                        row, current_season_on_page, current_resolution_on_page,
+                        params, episode_found_on_page, meta
+                    )
 
-                if should_process:
-                    rows_to_process.append((row, process_folder_name))
+                    if should_process:
+                        rows_to_process.append((row, process_folder_name))
 
             ajax_tasks = self._extract_torrent_ids(rows_to_process)
-            found_items = await self._process_ajax_responses(ajax_tasks, params)
-            BJS.already_has_the_info = bool(found_items)
+            dupes = await self._process_ajax_responses(ajax_tasks, params)
 
-            return found_items
+            return dupes
 
         except Exception as e:
             console.print(f'[bold red]Ocorreu um erro inesperado ao processar a busca: {e}[/bold red]')
             import traceback
             traceback.print_exc()
-            return []
+            return dupes
 
-    def get_edition(self, meta):
-        edition_str = meta.get('edition', '').lower()
+    def get_edition(self, meta: dict[str, Any]) -> str:
+        edition_str = str(meta.get('edition', '')).lower()
         if not edition_str:
             return ''
 
@@ -707,12 +806,12 @@ class BJS:
 
         return ''
 
-    def get_bitrate(self, meta):
+    def get_bitrate(self, meta: dict[str, Any]) -> str:
         if meta.get('type') == 'DISC':
             is_disc_type = meta.get('is_disc')
 
             if is_disc_type == 'BDMV':
-                disctype = meta.get('disctype')
+                disctype = str(meta.get('disctype', ''))
                 if disctype in ['BD100', 'BD66', 'BD50', 'BD25']:
                     return disctype
 
@@ -731,7 +830,7 @@ class BJS:
                     return 'BD25'
 
             elif is_disc_type == 'DVD':
-                dvd_size = meta.get('dvd_size')
+                dvd_size = str(meta.get('dvd_size', ''))
                 if dvd_size in ['DVD9', 'DVD5']:
                     return dvd_size
                 return 'DVD9'
@@ -756,9 +855,7 @@ class BJS:
             'dvdscr': 'DVDScr',
             'hdrip': 'HDRip',
             'hdtc': 'HDTC',
-            'hdtv': 'HDTV',
             'pdtv': 'PDTV',
-            'sdtv': 'SDTV',
             'tc': 'TC',
             'uhdtv': 'UHDTV',
             'vhsrip': 'VHSRip',
@@ -781,11 +878,11 @@ class BJS:
                 upload_url, headers=headers, files=files, timeout=120
             )
             response.raise_for_status()
-            data = response.json()
+            data: dict[str, Any] = response.json()
 
             img_url = None
-            if data.get('url') and data.get('url').startswith('http'):
-                img_url = data.get('url').replace('\\/', '/')
+            if data.get('url') and str(data.get('url', '')).startswith('http'):
+                img_url = str(data.get('url', '')).replace('\\/', '/')
             else:
                 console.print(f'{self.tracker}: [bold red]The image host appears to be down.[/bold red]')
 
@@ -794,7 +891,7 @@ class BJS:
             print(f'Exceção no upload de {filename}: {e}')
             return None
 
-    async def get_cover(self, meta):
+    async def get_cover(self, meta: dict[str, Any]):
         cover_path = self.main_tmdb_data.get('poster_path') or meta.get('tmdb_poster')
         if not cover_path:
             print('Nenhum poster_path encontrado nos dados do TMDB.')
@@ -815,7 +912,7 @@ class BJS:
             print(f'Falha ao processar pôster da URL {cover_tmdb_url}: {e}')
             return None
 
-    async def get_screenshots(self, meta):
+    async def get_screenshots(self, meta: dict[str, Any]) -> list[str]:
         screenshot_dir = Path(meta["base_dir"]) / "tmp" / meta["uuid"]
         local_files = sorted(screenshot_dir.glob("*.png"))
 
@@ -823,12 +920,12 @@ class BJS:
             :3
         ]
 
-        async def upload_local_file(path):
-            with open(path, "rb") as f:
-                image_bytes = f.read()
+        async def upload_local_file(path: Path):
+            async with aiofiles.open(path, "rb") as f:
+                image_bytes = await f.read()
             return await self.img_host(image_bytes, os.path.basename(path))
 
-        async def upload_remote_file(url):
+        async def upload_remote_file(url: str):
             try:
                 response = await self.session.get(url, timeout=120)
                 response.raise_for_status()
@@ -839,7 +936,7 @@ class BJS:
                 print(f"Failed to process screenshot from URL {url}: {e}")
                 return None
 
-        results = []
+        results: list[str] = []
 
         # Upload menu images
         for url in disc_menu_links:
@@ -849,7 +946,7 @@ class BJS:
 
         # Use existing files
         if local_files:
-            paths = local_files[: 6 - len(results)]
+            paths: list[Path] = local_files[: 6 - len(results)]
 
             for coro in asyncio.as_completed([upload_local_file(p) for p in paths]):
                 result = await coro
@@ -868,28 +965,32 @@ class BJS:
 
         return results
 
-    def get_runtime(self, meta):
-        try:
-            minutes_in_total = int(meta.get('runtime'))
-            if minutes_in_total < 0:
-                return 0, 0
-        except (ValueError, TypeError):
-            return 0, 0
+    def get_runtime(self, meta: dict[str, Any]) -> dict[str, int]:
+        """
+        Extracts runtime from metadata and converts total minutes into hours and minutes.
+        """
+        raw_runtime = meta.get('runtime', 0)
 
-        hours, minutes = divmod(minutes_in_total, 60)
+        try:
+            total_minutes = max(0, int(raw_runtime))
+        except (ValueError, TypeError):
+            total_minutes = 0
+
+        hours, minutes = divmod(total_minutes, 60)
+
         return {
             'hours': hours,
             'minutes': minutes
         }
 
-    def get_release_date(self, tmdb_data):
-        raw_date_string = tmdb_data.get('first_air_date') or tmdb_data.get('release_date')
+    def get_release_date(self) -> str:
+        raw_date_string = self.main_tmdb_data.get('first_air_date') or self.main_tmdb_data.get('release_date')
 
         if not raw_date_string:
             return ''
 
         try:
-            date_object = datetime.strptime(raw_date_string, '%Y-%m-%d')
+            date_object = datetime.strptime(raw_date_string, '%Y-%m-%d').replace(tzinfo=timezone.utc)
             formatted_date = date_object.strftime('%d %b %Y')
 
             return formatted_date
@@ -897,8 +998,8 @@ class BJS:
         except ValueError:
             return ''
 
-    def find_remaster_tags(self, meta):
-        found_tags = set()
+    def find_remaster_tags(self, meta: dict[str, Any]) -> set[str]:
+        found_tags: set[str] = set()
 
         edition = self.get_edition(meta)
         if edition:
@@ -923,7 +1024,7 @@ class BJS:
         if is_10_bit:
             found_tags.add('10-bit')
 
-        hdr_string = meta.get('hdr', '').upper()
+        hdr_string = str(meta.get('hdr', '')).upper()
         if 'DV' in hdr_string:
             found_tags.add('Dolby Vision')
         if 'HDR10+' in hdr_string:
@@ -940,7 +1041,7 @@ class BJS:
 
         return found_tags
 
-    def build_remaster_title(self, meta):
+    def build_remaster_title(self, meta: dict[str, Any]) -> str:
         tag_priority = [
             'Dolby Atmos',
             'Remux',
@@ -962,14 +1063,11 @@ class BJS:
         ]
         available_tags = self.find_remaster_tags(meta)
 
-        ordered_tags = []
-        for tag in tag_priority:
-            if tag in available_tags:
-                ordered_tags.append(tag)
+        ordered_tags = [tag for tag in tag_priority if tag in available_tags]
 
         return ' / '.join(ordered_tags)
 
-    async def get_credits(self, meta, role):
+    async def get_credits(self, meta: dict[str, Any], role: str) -> str:
         if BJS.already_has_the_info:
             return 'N/A'
 
@@ -979,40 +1077,57 @@ class BJS:
             'cast': ('stars', 'tmdb_cast'),
         }
 
-        prompt_name_map = {
+        prompt_labels = {
             'director': 'Diretor(es)',
             'creator': 'Criador(es)',
             'cast': 'Elenco',
         }
 
-        if role in role_map:
-            imdb_key, tmdb_key = role_map[role]
+        if role not in role_map:
+            return 'N/A'
 
-            names = (meta.get('imdb_info', {}).get(imdb_key) or []) + (meta.get(tmdb_key) or [])
+        imdb_key, tmdb_key = role_map[role]
 
-            unique_names = list(dict.fromkeys(names))[:5]
-            if unique_names:
-                return ', '.join(unique_names)
+        imdb_data: dict[str, Any] = meta.get('imdb_info', {})
+        imdb_names = imdb_data.get(imdb_key, [])
+        tmdb_names = meta.get(tmdb_key, [])
+        names = imdb_names + tmdb_names
 
-            else:
-                role_display_name = prompt_name_map.get(role, role.capitalize())
-                prompt_message = (
-                    f'{role_display_name} não encontrado(s).\n'
-                    'Por favor, insira manualmente (separados por vírgula): '
-                )
-                user_input = await self.common.async_input(prompt=prompt_message)
+        unique_names = list(dict.fromkeys(names))[:5]
 
-                if user_input.strip():
-                    return user_input.strip()
-                else:
-                    return 'skipped'
+        if unique_names:
+            return ', '.join(unique_names)
 
-    async def get_requests(self, meta):
+        display_name = prompt_labels.get(role, role.capitalize())
+        prompt_message = (
+            f'{display_name} não encontrado(s).\n'
+            'Por favor, insira manualmente (separados por vírgula): '
+        )
+
+        user_input = await self.common.async_input(prompt=prompt_message)
+        if user_input:
+            return user_input
+
+        return 'skipped'
+
+    def get_imdb_rating(self, meta: dict[str, Any]):
+        imdb_info = dict(meta.get('imdb_info', {}))
+        rating = imdb_info.get('rating')
+
+        if not rating:
+            return "N/A"
+
+        return str(rating)
+
+    async def get_requests(self, meta: dict[str, Any]) -> list[dict[str, str]]:
+        results: list[dict[str, str]] = []
         if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
-            return False
+            return results
         else:
             try:
-                self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+                cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+                if cookie_jar:
+                    self.session.cookies = cookie_jar
                 cat = meta['category']
                 if cat == 'TV':
                     cat = 2
@@ -1033,7 +1148,6 @@ class BJS:
 
                 request_rows = soup.select('#torrent_table tr.torrent')
 
-                results = []
                 for row in request_rows:
                     all_tds = row.find_all('td')
                     if not all_tds or len(all_tds) < 5:
@@ -1044,12 +1158,16 @@ class BJS:
                     link_element = info_cell.select_one('a[href*="requests.php?action=view"]')
                     quality_element = info_cell.select_one('b')
 
-                    if not link_element or not quality_element:
+                    if not isinstance(link_element, Tag) or not isinstance(quality_element, Tag):
                         continue
 
-                    name = link_element.text.strip()
-                    quality = quality_element.text.strip()
-                    link = link_element.get('href')
+                    name: str = str(link_element.text).strip()
+                    quality: str = str(quality_element.text).strip()
+                    url = link_element.get('href')
+                    if isinstance(url, str):
+                        link: str = url
+                    else:
+                        link = ''
 
                     reward_td = all_tds[3]
                     reward_parts = [td.text.replace('\xa0', ' ').strip() for td in reward_td.select('tr > td:first-child')]
@@ -1077,14 +1195,18 @@ class BJS:
                 console.print(f'[bold red]Ocorreu um erro ao buscar pedido(s) no {self.tracker}: {e}[/bold red]')
                 import traceback
                 console.print(traceback.format_exc())
-                return []
+                return results
 
-    async def get_data(self, meta):
-        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+    async def get_data(self, meta: dict[str, Any]) -> dict[str, Any]:
+        cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        if cookie_jar:
+            self.session.cookies = cookie_jar
         await self.load_localized_data(meta)
         category = meta['category']
+        original_title, brazilian_title = self.get_title(meta)
+        width, height = self.get_resolution(meta)
 
-        data = {}
+        data: dict[str, Any] = {}
 
         # These fields are common across all upload types
         data.update({
@@ -1097,28 +1219,28 @@ class BJS:
             'duracaotipo': 'selectbox',
             'fichatecnica': await self.build_description(meta),
             'formato': self.get_container(meta),
-            'idioma': await self.get_languages(meta),
-            'imdblink': meta['imdb_info']['imdbID'],
+            'idioma': self.get_languages(),
+            'imdblink': self.get_imdblink(meta),
             'qualidade': self.get_bitrate(meta),
             'release': meta.get('service_longname', ''),
             'remaster_title': self.build_remaster_title(meta),
-            'resolucaoh': self.get_resolution(meta).get('height'),
-            'resolucaow': self.get_resolution(meta).get('width'),
+            'resolucaoh': height,
+            'resolucaow': width,
             'sinopse': await self.get_overview(),
             'submit': 'true',
-            'tags': await self.get_tags(meta),
+            'tags': await self.get_tags(),
             'tipolegenda': await self.get_subtitle(meta),
-            'title': meta['title'],
-            'titulobrasileiro': await self.get_title(meta),
-            'traileryoutube': await self.get_trailer(meta),
+            'title': original_title,
+            'titulobrasileiro': brazilian_title,
+            'traileryoutube': self.get_trailer(meta),
             'type': self.get_type(meta),
-            'year': f"{meta['year']}-{meta['imdb_info']['end_year']}" if meta.get('imdb_info').get('end_year') else meta['year'],
+            'year': self.get_year(meta),
         })
 
         # These fields are common in movies and TV shows, even if it's anime
         if category == 'MOVIE':
             data.update({
-                'adulto': '2',
+                'adulto': self.get_adulto(meta),
                 'diretor': await self.get_credits(meta, 'director'),
             })
 
@@ -1134,12 +1256,12 @@ class BJS:
         if not meta.get('anime'):
             data.update({
                 'validimdb': 'yes',
-                'imdbrating': str(meta.get('imdb_info', {}).get('rating', '')),
+                'imdbrating': self.get_imdb_rating(meta),
                 'elenco': await self.get_credits(meta, 'cast'),
             })
             if category == 'MOVIE':
                 data.update({
-                    'datalancamento': self.get_release_date(self.main_tmdb_data),
+                    'datalancamento': self.get_release_date(),
                 })
 
             if category == 'TV':
@@ -1152,10 +1274,10 @@ class BJS:
                 data.update({
                     'network': ', '.join([p.get('name', '') for p in self.main_tmdb_data.get('networks', [])]) or '',  # Optional
                     'numtemporadas': self.main_tmdb_data.get('number_of_seasons', ''),  # Optional
-                    'datalancamento': self.get_release_date(self.main_tmdb_data),
+                    'datalancamento': self.get_release_date(),
                     'pais': ', '.join(country_list),  # Optional
                     'diretorserie': ', '.join(set(meta.get('tmdb_directors', []) or meta.get('imdb_info', {}).get('directors', [])[:5])),  # Optional
-                    'avaliacao': await self.get_rating(meta),  # Optional
+                    'avaliacao': self.get_rating(),  # Optional
                 })
 
         # Anime-specific data
@@ -1166,7 +1288,7 @@ class BJS:
                 })
             if category == 'TV':
                 data.update({
-                    'adulto': '2',
+                    'adulto': self.get_adulto(meta),
                 })
 
         # Anon
@@ -1181,11 +1303,14 @@ class BJS:
                 })
 
         # Internal
-        if self.config['TRACKERS'][self.tracker].get('internal', False) is True:
-            if meta['tag'] != '' and (meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])):
-                data.update({
-                    'internalrel': 1,
-                })
+        if (
+            self.config['TRACKERS'][self.tracker].get('internal', False) is True
+            and meta['tag'] != ''
+            and meta['tag'][1:] in self.config['TRACKERS'][self.tracker].get('internal_groups', [])
+        ):
+            data.update({
+                'internalrel': 1,
+            })
 
         # Only upload images if not debugging
         if not meta.get('debug', False):
@@ -1196,40 +1321,103 @@ class BJS:
 
         return data
 
-    async def get_overview(self):
+    def get_year(self, meta: dict[str, Any]) -> str:
+        start_year = meta.get("year", "N/A")
+        imdb_info = dict(meta.get("imdb_info", {}))
+        end_year = imdb_info.get("end_year")
+
+        year_label = f"{start_year}-{end_year}" if end_year else f"{start_year}-"
+
+        return year_label
+
+    def get_adulto(self, meta: dict[str, Any]) -> str:
+        """
+        Check for adult classification eligibility.
+
+        Adheres to upload guidelines where:
+        - Movies: Classified as adult only if pornographic.
+        - Anime TV Shows: Classified as adult only if hentai.
+        """
+        adult_yes = "1"
+        adult_no = "2"
+
+        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
+        adult_keywords = ["xxx", "erotic", "porn", "adult", "orgy"]
+
+        if meta.get("anime", False) and "hentai" in genres.lower():
+            return adult_yes
+
+        if any(
+            re.search(rf"(^|,\s*){re.escape(keyword)}(\s*,|$)", genres, re.IGNORECASE)
+            for keyword in adult_keywords
+        ):
+            return adult_yes
+
+        return adult_no
+
+    def get_imdblink(self, meta: dict[str, Any]) -> str:
+        """
+        Get the media identifier for the upload.
+        Uses IMDb ID as primary source, falling back to TMDb ID if unavailable.
+
+        Accepted formats:
+            IMDb: tt12345
+            TMDb: movie12345 or tv12345
+        """
+        imdb_info = dict(meta.get("imdb_info", {}))
+        imdbid = str(imdb_info.get("imdbID", ""))
+        if imdbid:
+            return imdbid
+
+        category = str(meta.get("category", "")).upper()
+        tmdb_id = meta.get("tmdb_id")
+
+        if category in ["MOVIE", "TV"] and tmdb_id:
+            return f"{category}{tmdb_id}".lower()
+
+        return ""
+
+    async def get_overview(self) -> str:
         overview = self.main_tmdb_data.get('overview', '')
-        if not overview:
-            if not BJS.already_has_the_info:
-                console.print(
-                    "[bold red]Sinopse não encontrada no TMDB. Por favor, insira manualmente.[/bold red]"
-                )
-                overview = await self.common.async_input(
-                    prompt='[green]Digite a sinopse:[/green]'
-                )
-            else:
-                return 'N/A'
-        return overview
+        if isinstance(overview, str) and overview.strip():
+            return overview
 
-    async def check_data(self, meta, data):
-        if not meta.get('debug', False):
-            if len(data['screenshots[]']) < 2:
-                return 'The number of successful screenshots uploaded is less than 2.'
-        if any(value == 'skipped' for value in (
-            data.get('diretor'),
-            data.get('elenco'),
-            data.get('creators')
-        )):
-            return 'Missing required credits information (director/cast/creator).'
-        return False
+        if not BJS.already_has_the_info:
+            console.print(
+                f"{self.tracker}: [bold red]Sinopse não encontrada no TMDb. Por favor, insira manualmente.[/bold red]"
+            )
+            user_input = await self.common.async_input(
+                prompt=f"{self.tracker}: [green]Digite a sinopse:[/green]"
+            )
+            if user_input:
+                return user_input
+            return 'N/A'
 
-    async def upload(self, meta, disctype):
+        return 'N/A'
+
+    def check_data(self, meta: dict[str, Any], data: dict[str, Any]) -> str:
+        if not meta.get("debug", False) and len(data["screenshots[]"]) < 2:
+            return "The number of successful screenshots uploaded is less than 2."
+
+        if any(
+            value == "skipped" for value in (data.get("diretor"), data.get("elenco"), data.get("creators"))
+        ):
+            return "Missing required credits information (director/cast/creator)."
+
+        if not data.get("imdblink"):
+            return "Missing IMDb or TMDb identifier."
+
+        return ""
+
+    async def upload(self, meta: dict[str, Any], _):
         data = await self.get_data(meta)
 
-        issue = await self.check_data(meta, data)
+        issue = self.check_data(meta, data)
         if issue:
             meta["tracker_status"][self.tracker]["status_message"] = f'data error - {issue}'
+            return False
         else:
-            await self.cookie_auth_uploader.handle_upload(
+            is_uploaded = await self.cookie_auth_uploader.handle_upload(
                 meta=meta,
                 tracker=self.tracker,
                 source_flag=self.source_flag,
@@ -1242,4 +1430,4 @@ class BJS:
                 success_text="action=download&id=",
             )
 
-        return
+        return is_uploaded

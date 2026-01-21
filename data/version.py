@@ -4,9 +4,9 @@ __version__ = "v6.3.2"
 Release Notes for version v6.3.2 (2025-12-31):
 
 # ## What's Changed
-# 
+#
 # * fix: docker tagging by @Audionut in cda7a2c
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.3.1...v6.3.2
 """
 
@@ -14,7 +14,7 @@ Release Notes for version v6.3.2 (2025-12-31):
 """
 Release Notes for version v6.3.1 (2025-12-30):
 
-# 
+#
 # ## RELEASE NOTES
 #  - Updated the docker builds to have standard latest tag, and latest-webui specifically for the webui builds. This should assist those who were experiencing issues with the last release that defaulted to have the webui changes.
 #  - Added cross-seeding support. If you attempt to upload to site XYZ, and the exact filename is found at that site during the dupe checking, UA can now download and add that torrent to the client (follows any hard/symlinking).
@@ -22,16 +22,16 @@ Release Notes for version v6.3.1 (2025-12-30):
 #  - wastaken added an option to log the time it takes each individual tracker to upload.
 #  - I refactored the major async blockers in the upload and inject process, which allows each individual site upload/injection into client, to process immediately as it's finished, regardless of what any other tracker upload is doing.
 #  - For example, you can upload to 10 x unit3d based sites, and be uploaded and injected into client, and seeding, whilst MTV might still be rehashing to satisfy their 8 MiB piece size constraint.
-# 
+#
 # ## New config options - see example.py
 #  - cross-seeding related options.
 #  - Seedpool added their imagehost as an option.
-#  
-# 
+#
+#
 # ---
-# 
+#
 # ## What's Changed
-# 
+#
 # * TVC: fix python f-string by @Audionut in 603ccb4
 # * ACM: fix name return by @Audionut in df3a9d3
 # * ACM: fix description by @Audionut in 0064917
@@ -107,7 +107,7 @@ Release Notes for version v6.3.1 (2025-12-30):
 # * PTP: add plaintext url warnings by @Audionut in 49448fd
 # * Implement bloated audio track check with tracker-specific language allowances (#1084) by @wastaken7 in 181e248
 # * release notes by @Audionut in 9c84fa4
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.3.0...v6.3.1
 """
 
@@ -115,7 +115,7 @@ Release Notes for version v6.3.1 (2025-12-30):
 """
 Release Notes for version v6.3.0 (2025-12-15):
 
-# 
+#
 # ## RELEASE NOTES
 #  - This release was slower than usual. Some notable changes....
 #  - Added TLZ, IHD, TTR
@@ -130,19 +130,19 @@ Release Notes for version v6.3.0 (2025-12-15):
 #  - Fixed auto torrent searching to only search valid trackers in config.
 #  - Added a webui for docker.
 #  - wastaken7 done a bunch of further refactoring.
-# 
+#
 # ## New config options - see example.py
 #  - Multiple injecion clients can be added.
 #  - Removed the need for passkey from SPD and DC.
 #  - Added modq support for LT.
-# 
+#
 # ## Special shout out
 # - blueberry, who is banned from UA github, and from a bunch of sites, due to invite begging/trading, and begging for internal status. It takes a special kind of stupid to modify a handful of lines and claim something as your own.
-# 
+#
 # ---
-# 
+#
 # ## What's Changed
-# 
+#
 # * docker pr building by @Audionut in 4a56b81
 # * build from fork by @Audionut in d10bff9
 # * fix some args parse quirks by @Audionut in fa05ca5
@@ -250,7 +250,7 @@ Release Notes for version v6.3.0 (2025-12-15):
 # * TL: fix NFO upload with cookie method (#1049) by @wastaken7 in 9faaf47
 # * Refactor TVC tracker with enhanced metadata handling and description generation (#1025) by @Lusephur in e2ba3a7
 # * 6.3 release notes by @Audionut in 65f2f55
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.2.3...v6.3.0
 """
 
@@ -260,12 +260,12 @@ __version__ = "v6.2.3"
 Release Notes for version v6.2.3 (2025-10-27):
 
 # ## What's Changed
-# 
+#
 # * set torrent_properties by @Audionut in 96d41b8
 # * discparse.py - Use BDInfo on PATH if available (Linux) (#952) by @noobiangodd in bd52996
 # * tvdb improvements by @Audionut in 5891db5
 # * BT: add internal upload support (#953) by @wastaken7 in daeadbe
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.2.2...v6.2.3
 """
 
@@ -274,11 +274,11 @@ Release Notes for version v6.2.3 (2025-10-27):
 Release Notes for version v6.2.2 (2025-10-26):
 
 # ## What's Changed
-# 
+#
 # * fix tvdb pagination by @Audionut in 1c4f9b6
 # * S/E overrides by @Audionut in 84787af
 # * tvdb safe settings by @Audionut in d4de654
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.2.1...v6.2.2
 """
 
@@ -287,9 +287,9 @@ Release Notes for version v6.2.2 (2025-10-26):
 Release Notes for version v6.2.1 (2025-10-26):
 
 # ## What's Changed
-# 
+#
 # * fix: prevent error with missing config by @Audionut in 1398458
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.2.0...v6.2.1
 """
 
@@ -297,7 +297,7 @@ Release Notes for version v6.2.1 (2025-10-26):
 """
 Release Notes for version v6.2.0 (2025-10-26):
 
-# 
+#
 # ## RELEASE NOTES
 #  - New site support - ImmortalSeed, Emuwarez.
 #  - New modules required, update with requirements.txt.
@@ -307,16 +307,16 @@ Release Notes for version v6.2.0 (2025-10-26):
 #  - Refactored cookie/site validation processing, to speed processing.
 #  - New feature, site checking. Use as 'python3 upload.py path_to_movie_folder --queue a_queue_name -sc -ua'. Append trackers as needed. You can also append '-req' (or config option). This will find all matching content from the input directory, that can be uploaded to each tracker (and list any request). Log files for each tracker will be created in the UA tmp directory.
 #  - Alternatively, you can remove '-sc' from the above example, and let UA just upload content from the input directory instead of logging. You may wish to append '-lq' with a numeric value to limit the amount of successful uploads processed.
-# 
+#
 # ## New config options - see example.py
 #  - Multiple client searching for existing torrent files.
 #  - Specific injection client.
 #  - ffmpeg based compression option.
-# 
+#
 # ---
-# 
+#
 # ## What's Changed
-# 
+#
 # * Add banned groups to CBR tracker: DragsterPS, DRENAN, S74Ll10n (#885) by @franzopl in 5c7db2b
 # * linux specific mi binaries (#886) by @Audionut in f838eff
 # * force mediainfo by @Audionut in 01fc6c9
@@ -402,7 +402,7 @@ Release Notes for version v6.2.0 (2025-10-26):
 # * fix missing key set by @Audionut in ed0f1c4
 # * fix(SHRI): web and remux handling (#947) by @TheDarkMan in 194e4ab
 # * unit3d follow redirects by @Audionut in 8ef665c
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.1.1...v6.2.0
 """
 
@@ -411,7 +411,7 @@ Release Notes for version v6.2.0 (2025-10-26):
 Release Notes for version v6.1.1 (2025-10-11):
 
 # ## What's Changed
-# 
+#
 # * fix(BJS): NoneType error (#880) by @wastaken7 in 88e7f40
 # * fix: ASC IMDb link, signatures (#884) by @wastaken7 in f555acf
 # * fix: anime tagging by @Audionut in 1ebb00c
@@ -422,7 +422,7 @@ Release Notes for version v6.1.1 (2025-10-11):
 # * unit3d bbcode parser, white space handling by @Audionut in 55f636c
 # * BHD fix empty returns by @Audionut in 63d49d1
 # * Revert "unit3d bbcode parser, white space handling" by @Audionut in b22b12d
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.1.0...v6.1.1
 """
 
@@ -430,20 +430,20 @@ Release Notes for version v6.1.1 (2025-10-11):
 """
 Release Notes for version v6.1.0 (2025-10-10):
 
-# 
+#
 # ## RELEASE NOTES
 #  - Some large refactoring of description type handling for some sites, to speed the upload process.
 #  - The actual ffmpeg process now respects process_limit set via config.py.
 #  - The author has seen some issues with latest ffmpeg versions. August based releases work fine here.
-# 
+#
 # ## New config options - see example.py
 #  - prefer_max_16_torrent which will choose an 16 MiB torrent or lower when finding a suitable existing torrent file to use.
 #  - full_mediainfo in some tracker sections, to choose whether to use the full mediainfo or not.
-# 
+#
 # ---
-# 
+#
 # ## What's Changed
-# 
+#
 # * fix(BLU): derived handling not needed any longer by @Audionut in ca2f507
 # * fix: frame overlay by @Audionut in b40094f
 # * remove tags from arrs by @Audionut in 9c90277
@@ -489,7 +489,7 @@ Release Notes for version v6.1.0 (2025-10-10):
 # * Enhance metadata handling, description building, and refactor tracker integrations (#860) by @wastaken7 in ee1885b
 # * fix versioning by @Audionut in 00eae1c
 # * release notes by @Audionut in 1e59d0d
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.0.1...v6.1.0
 """
 
@@ -498,14 +498,14 @@ Release Notes for version v6.1.0 (2025-10-10):
 Release Notes for version v6.0.1 (2025-10-04):
 
 # ## What's Changed
-# 
+#
 # * fix version file by @Audionut in c8ccf5a
 # * erroneous v in version file by @Audionut in 5428927
 # * Fix YUS get_type_id (#850) by @oxidize9779 in 25591e0
 # * fix: LCD and UNIT3D upload (#852) by @wastaken7 in f5d11b8
 # * Update banned release groups of various trackers (#848) by @flowerey in 9311996
 # * Other minor updates and improvements
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v6.0.0...v6.0.1
 """
 
@@ -538,7 +538,7 @@ Changelog for version v6.0.0 (2025-10-03):
 # - NoGrp type tags are not removed by default. Use "--no-tag" if desired, and/or report trackers as needed.
 
 # ## What's Changed
-# 
+#
 # * fix(GPW) - do not print empty descriptions (#805) by @wastaken7 in 07e8334
 # * SHRI - Check group tag and Italian title handling (#803) by @Tiberio in 054ce4f
 # * fix(HDS) - use [pre] for mediainfo to correctly use monospaced fonts (#810) by @wastaken7 in aa62941
@@ -596,7 +596,7 @@ Changelog for version v6.0.0 (2025-10-03):
 # * improvement: avoid re-executing validate_credentials by temporarily saving tokens in meta (#834) by @wastaken7 in ff99d08
 # * release notes by @Audionut in a924df4
 # * Other minor updates and improvements
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.4.3...v6.0.0
 """
 
@@ -606,7 +606,7 @@ __version__ = "5.4.3"
 Release Notes for version v5.4.3 (2025-09-19):
 
 # ## What's Changed
-# 
+#
 # * category regex tweak by @Audionut in f7c02d1
 # * Fix HUNO UHD remux (#767) by @oxidize9779 in 1bb0ae8
 # * Update to banned groups ULCX.py (#770) by @Zips-sipZ in dd0fdd9
@@ -650,7 +650,7 @@ Release Notes for version v5.4.3 (2025-09-19):
 # * conform to GPW description image rules (#804) by @GuillaumedeVolpiano in 24c625e
 # * add(get_name.py) - year for DVD's, audio for DVDRip's (#799) by @wastaken7 in adfb263
 # * Other minor updates and improvements
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.4.2...v5.4.3
 """
 
@@ -659,7 +659,7 @@ Release Notes for version v5.4.3 (2025-09-19):
 Release Notes for version v5.4.2 (2025-09-03):
 
 # ## What's Changed
-# 
+#
 # * enhance(PHD): add search requests option, tags and other changes (#749) by @wastaken7 in 1c970ce
 # * enhance(BT): use tmdb cache file and other changes (#750) by @wastaken7 in a793060
 # * enhance(HDS): add search requests option and other changes (#751) by @wastaken7 in b0f88e3
@@ -678,7 +678,7 @@ Release Notes for version v5.4.2 (2025-09-03):
 # * add(client.py): skip more trackers (#763) by @wastaken7 in 61dfd4a
 # * HUNO - unit3d torrent download by @Audionut in 637a145
 # * Other minor updates and improvements
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.4.1...v5.4.2
 """
 
@@ -687,11 +687,11 @@ Release Notes for version v5.4.2 (2025-09-03):
 Release Notes for version v5.4.1 (2025-09-02):
 
 # ## What's Changed
-# 
+#
 # * fix missing trackers for language processing (#747) by @wastaken7 in 34d0b4b
 # * add missing function to common by @Audionut in 33d5aec
 # * Other minor updates and improvements
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.4.0...v5.4.1
 """
 
@@ -699,24 +699,24 @@ Release Notes for version v5.4.1 (2025-09-02):
 """
 Release Notes for version v5.4.0 (2025-09-02):
 
-# 
+#
 # ## RELEASE NOTES
 #  - Blutopia has a peer scraping issue that resulted in UNIT3D codebase being updated, requiring torrent files to be created site side. See https://github.com/HDInnovations/UNIT3D/pull/4910
 #  - With the infohash being randomized site side, UA can no longer create valid torrent files for client injection, and instead the torrent file needs to be downloaded for client injection.
 #  - All UNIT3D based sites have been updated to prevent any issues moving forward as other sites update their UNIT3D codebase.
 #  - This will cause small slowdown in the upload process, as each torrent file is downloaded from corresponding sites.
 #  - Announce URLS for the supported sites are no longer needed in config, check example-config.py for the removed announce urls.
-# 
+#
 # ## WHAT'S NEW
 #  - UA can now search for related requests for the uploaded content, allowing you to quickly and easily see which requests can be filled by your upload.
 #  - Request checking via config option (see example-config) or new arg (see --help)
 #  - Only ASC, BJS and ULCX supported currently
 #  - Added a new arg to skip auto torrent searching
-# 
+#
 # ---
-# 
+#
 # ## What's Changed
-# 
+#
 # * Added support for PTSKIT (#730) by @wastaken7 in 19ccbe5
 # * add missing site details (#731) by @wastaken7 in e96cd15
 # * LCD - fix region, mediainfo, naming (#732) by @wastaken7 in de38dba
@@ -747,7 +747,7 @@ Release Notes for version v5.4.0 (2025-09-02):
 # * clarify request usage by @Audionut in 5afafc0
 # * BJS also does request searching by @Audionut in d87f060
 # * Other minor updates and improvements
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.6...v5.4.0
 """
 
@@ -756,10 +756,10 @@ Release Notes for version v5.4.0 (2025-09-02):
 Release Notes for version v5.3.6 (2025-08-22):
 
 # ## What's Changed
-# 
+#
 # * fix docker mkbrr version by @Audionut in 69a1384
 # * Other minor updates and improvements
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.5...v5.3.6
 """
 
@@ -768,7 +768,7 @@ Release Notes for version v5.3.6 (2025-08-22):
 Release Notes for version v5.3.5 (2025-08-22):
 
 # ## What's Changed
-# 
+#
 # * TL - cleanup torrent file handling (#714) by @wastaken7 in 011d588
 # * ANT tag reminder by @Audionut in fbb8c2f
 # * Added support for FunFile (#717) by @wastaken7 in 6436d34
@@ -778,7 +778,7 @@ Release Notes for version v5.3.5 (2025-08-22):
 # * Revert "Dockerfile Improvements (#710)" by @Audionut in c85e83d
 # * fix release script by @Audionut in d86999d
 # * Other minor updates and improvements
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.4...v5.3.5
 """
 
@@ -786,16 +786,16 @@ Release Notes for version v5.3.5 (2025-08-22):
 """
 Release Notes for version v5.3.4 (2025-08-18):
 
-# 
+#
 # ## RELEASE NOTES
 #  - UA can now tonemap Dolby Vision profile 5 and HLG files.
 #  - Requires a compatible ffmpeg (get latest), see https://github.com/Audionut/Upload-Assistant/pull/706
 #  - Adjust the related ffmpeg option in config, if you have a suitable ffmpeg installed, in order to skip the automated check
-# 
+#
 # ---
-# 
+#
 # ## What's Changed
-# 
+#
 # * RF - now needs 2fa enabled to upload by @Audionut in e731e27
 # * TL - fix outdated attribute (#701) by @wastaken7 in ebabb5d
 # * Fix typo in source flag when uploading to SHRI (#703) by @backstab5983 in 0e5bb28
@@ -813,7 +813,7 @@ Release Notes for version v5.3.4 (2025-08-18):
 # * PHD - fix region logic (#709) by @wastaken7 in 5e1c541
 # * fix unit3d trackers not accept valid tvdb by @Audionut in 309c54e
 # * Other minor updates and improvements
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.3...v5.3.4
 """
 
@@ -821,14 +821,14 @@ Release Notes for version v5.3.4 (2025-08-18):
 """
 Release Notes for version v5.3.3 (2025-08-14):
 
-# 
+#
 # ## RELEASE NOTES
 #  - New module added requiring update via requirements.txt. See README for instructions.
-# 
+#
 # ---
-# 
+#
 # ## What's Changed
-# 
+#
 # * use all of result when specific is NoneType by @Audionut in 15faaad
 # * don't print guessit error in imdb by @Audionut in 3b21998
 # * add support for multiple announce links (#691) by @wastaken7 in 4a623d7
@@ -840,7 +840,7 @@ Release Notes for version v5.3.3 (2025-08-14):
 # * fix docker mediainfo install (#699) by @Audionut in aa84c07
 # * Option - send upload urls to discord (#694) by @Audionut in 29fbcf5
 # * Other minor updates and improvements
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.2...v5.3.3
 """
 
@@ -849,12 +849,12 @@ Release Notes for version v5.3.3 (2025-08-14):
 Release Notes for version v5.3.2 (2025-08-11):
 
 # ## What's Changed
-# 
+#
 # * AR - catch multiple dots in name by @Audionut in 5d5164b
 # * correct meta object before inputting data by @Audionut in 166a1a5
 # * guessit fallback by @Audionut in eccef19
 # * Other minor updates and improvements
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.1...v5.3.2
 """
 
@@ -863,7 +863,7 @@ Release Notes for version v5.3.2 (2025-08-11):
 Release Notes for version v5.3.1 (2025-08-10):
 
 # ## What's Changed
-# 
+#
 # * TVDB series name not nonetype by @Audionut in 1def355
 # * remove compatibility tracks from dupe/dubbed checking by @Audionut in 48e922e
 # * fix onlyID (#677) by @Audionut in 29b8caf
@@ -873,7 +873,7 @@ Release Notes for version v5.3.1 (2025-08-10):
 # * add tv support for emby (#681) by @Audionut in 0de649b
 # * add service XUMO by @Audionut in 633f151
 # * Other minor updates and improvements
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.3.0...v5.3.1
 """
 
@@ -881,11 +881,11 @@ Release Notes for version v5.3.1 (2025-08-10):
 """
 Release Notes for version v5.3.0 (2025-08-08):
 
-# 
+#
 # ## NOTES
 #  - From the previous release, screenshots in description were modified. Check the options in the example-config to handle to taste, particularly https://github.com/Audionut/Upload-Assistant/blob/f45e4dd87472ab31b79569f97e3bea62e27940e0/data/example-config.py#L70
-# 
-# 
+#
+#
 # ## RELEASE NOTES
 #  - UA will no longer, 'just pick the top result suggested by TMDb'.
 #  - Instead, title parsing has been significantly improved. Now UA will use a weight based system that relies on the title name, AKA name  and year .
@@ -895,7 +895,7 @@ Release Notes for version v5.3.0 (2025-08-08):
 #  - Given that UA would have just selected the first result previously, which could have been incorrect, some percentage of time, the net result should be a better overall user experience, since the wrong return previously required manual intervention in any event, and may have been missed previously, leading to lack luster results.
 #  - As always, feeding the correct ID's into UA always leads to a better experience. There are many options to accomplish this task automatically, and users should familiarize themselves with the options outlined in the example.config, and/or user-args.json
 #  - Overall SubsPlease handling should be greatly increased......if you have TVDB login details.
-# 
+#
 #  ## NOTEWORTHY UPDATES
 #   - Two new trackers, BT and BJS have been added thanks to @wastaken7
 #   - PSS was removed as offline
@@ -903,11 +903,11 @@ Release Notes for version v5.3.0 (2025-08-08):
 #   - Some additional context has been added regarding ffmpeg screen capture issues, particularly on seedboxes, also see https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues
 #   - Additional trackers have been added for getting existing ids, but they are currently only available via auto torrent searching
 #   - Getting data from trackers now has a cool off period. This should not be noticed under normal circumstances. PTP has a 60 second cool off period, which was chosen to minimize interference with other tools.
-# 
+#
 # ---
-# 
+#
 # ## What's Changed
-# 
+#
 # * update install/update instructions by @Audionut in 6793709
 # * TMDB retry (#646) by @Audionut in 84554d8
 # * fix missing tvdb credential checks by @Audionut in 28b0561
@@ -951,7 +951,7 @@ Release Notes for version v5.3.0 (2025-08-08):
 # * Get language from track title (#676) by @Audionut in 013aed1
 # * TMDB/IMDB searching refactor and EMBY handling (#637) by @Audionut in f68625d
 # * Other minor updates and improvements
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.2.1...v5.3.0
 """
 
@@ -960,11 +960,11 @@ Release Notes for version v5.3.0 (2025-08-08):
 Release Notes for version v5.2.1 (2025-07-30):
 
 # ## What's Changed
-# 
+#
 # * fix no_subs meta by @Audionut in 86f2bcf
 # * Robust id from mediainfo (#645) by @Audionut in 9c43584
 # * Other minor updates and improvements
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v5.2.0...v5.2.1
 """
 
@@ -973,7 +973,7 @@ Release Notes for version v5.2.1 (2025-07-30):
 Release Notes for version v5.2.0 (2025-07-29):
 
 # ## What's Changed
-# 
+#
 # * hc subs language handling by @Audionut in 762eed8
 # * pack check also being cat by @Audionut in 9279b8e
 # * CBR - bdmv language check by @Audionut in de461fb
@@ -1021,7 +1021,7 @@ Release Notes for version v5.2.0 (2025-07-29):
 # * correct base_dir by @Audionut in 9bb68fd
 # * fix docker do not tag manual as latest by @Audionut in f373286
 # * Other minor updates and improvements
-# 
+#
 # **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.1.5.2...v5.2.0
 """
 
@@ -1164,7 +1164,7 @@ Changelog for version 5.1.2.3 (2025-07-07):
 * Fix linux dvd handling. maybe......
 * Updated auto torrent matching to catch more matches
 * Run an auto config updater for edge's image host change
-* Added a catch for incorrect tmdb id from BHD. Instead of allowing only an int for tmdb id, BHD changed to a string movie or tv/id arrangement, which means all manner of *plainly incorrect* ids can be returned from their API. 
+* Added a catch for incorrect tmdb id from BHD. Instead of allowing only an int for tmdb id, BHD changed to a string movie or tv/id arrangement, which means all manner of *plainly incorrect* ids can be returned from their API.
 * Added language printing handling in descriptions using common.py, when language is not in mediainfo
 * Added non-en dub warning, and skips for BHD/ULCX
 * Changed -fl to be set at 100% by default
@@ -1293,7 +1293,7 @@ Changelog for version 5.0.4.1 (2025-05-30):
 * DP - added modq option
 * Better handling of REPACK detection
 * Console cleaning
-* Add Hybrid to filename detection 
+* Add Hybrid to filename detection
 
 **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/5.0.4...5.0.4.1
 """
@@ -1788,7 +1788,7 @@ Changelog for version 4.1.1 (2025-03-30):
 * fixed linking on linux when volumes have the same mount
 * fixed torf torrent regeneration in MTV
 * added null language check for tmdb logo (mostly useful for movies)
-* fixed 
+* fixed
 * fixed ssrdb release matching print
 * fixed tvdb season matching under some conditions (wasn't serious)
 
@@ -2075,15 +2075,15 @@ Changelog for version 4.0.0.3 (2025-03-13):
 * When using trackers argument,  or , you must now use a comma separated list.
 
 ## Linking support in qBitTorrent
-### This is not fully tested. 
+### This is not fully tested.
 It seems to be working fine on this windows box, but you absolutely should test with the  argument to make sure it works on your system before putting it into production.
 * You can specify to use symbolic or hard links
-* 
+*
 * Add one or many (local) paths which you want to contain the links, and UA will map the correct drive/volume for hardlinks.
 
 ## Reminder
-* UA has mkbrr support 
-* You can specify an argument  or set the config 
+* UA has mkbrr support
+* You can specify an argument  or set the config
 * UA loads binary files for the supported mkbrr OS. If you find mkbrr slower than the original torf implementation when hashing torrents, the mkbrr devs are likely to be appreciative of any reports.
 """
 
@@ -2103,15 +2103,15 @@ Changelog for version 4.0.0.2 (2025-03-13):
 * When using trackers argument,  or , you must now use a comma separated list.
 
 ## Linking support in qBitTorrent
-### This is not fully tested. 
+### This is not fully tested.
 It seems to be working fine on this windows box, but you absolutely should test with the  argument to make sure it works on your system before putting it into production.
 * You can specify to use symbolic or hard links
-* 
+*
 * Add one or many (local) paths which you want to contain the links, and UA will map the correct drive/volume for hardlinks.
 
 ## Reminder
-* UA has mkbrr support 
-* You can specify an argument  or set the config 
+* UA has mkbrr support
+* You can specify an argument  or set the config
 * UA loads binary files for the supported mkbrr OS. If you find mkbrr slower than the original torf implementation when hashing torrents, the mkbrr devs are likely to be appreciative of any reports.
 """
 
@@ -2130,15 +2130,15 @@ Changelog for version 4.0.0.1 (2025-03-13):
 * When using trackers argument,  or , you must now use a comma separated list.
 
 ## Linking support in qBitTorrent
-### This is not fully tested. 
+### This is not fully tested.
 It seems to be working fine on this windows box, but you absolutely should test with the  argument to make sure it works on your system before putting it into production.
 * You can specify to use symbolic or hard links
-* 
+*
 * Add one or many (local) paths which you want to contain the links, and UA will map the correct drive/volume for hardlinks.
 
 ## Reminder
-* UA has mkbrr support 
-* You can specify an argument  or set the config 
+* UA has mkbrr support
+* You can specify an argument  or set the config
 * UA loads binary files for the supported mkbrr OS. If you find mkbrr slower than the original torf implementation when hashing torrents, the mkbrr devs are likely to be appreciative of any reports.
 """
 
@@ -2153,15 +2153,15 @@ Pushing this as v4 given some significant code changes.
 * When using trackers argument,  or , you must now use a comma separated list.
 
 ## Linking support in qBitTorrent
-### This is not fully tested. 
+### This is not fully tested.
 It seems to be working fine on this windows box, but you absolutely should test with the  argument to make sure it works on your system before putting it into production.
 * You can specify to use symbolic or hard links
-* 
+*
 * Add one or many (local) paths which you want to contain the links, and UA will map the correct drive/volume for hardlinks.
 
 ## Reminder
-* UA has mkbrr support 
-* You can specify an argument  or set the config 
+* UA has mkbrr support
+* You can specify an argument  or set the config
 * UA loads binary files for the supported mkbrr OS. If you find mkbrr slower than the original torf implementation when hashing torrents, the mkbrr devs are likely to be appreciative of any reports.
 
 ## What's Changed

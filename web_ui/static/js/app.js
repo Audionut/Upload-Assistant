@@ -70,6 +70,20 @@ function AudionutsUAGUI() {
   const fitAddonRef = useRef(null);
   const inputRef = useRef(null);
 
+  const loadBrowseRoots = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/browse_roots`);
+      const data = await response.json();
+
+      if (data.success && data.items) {
+        setDirectories(data.items);
+        setExpandedFolders(new Set());
+      }
+    } catch (error) {
+      console.error('Failed to load browse roots:', error);
+    }
+  };
+
   // Initialize xterm.js terminal
   useEffect(() => {
     if (terminalContainerRef.current && !xtermRef.current) {
@@ -231,6 +245,10 @@ function AudionutsUAGUI() {
       xtermRef.current.options.theme = getTerminalTheme();
     }
   }, [isDarkMode]);
+
+  useEffect(() => {
+    loadBrowseRoots();
+  }, []);
 
   // Focus input when executing
   useEffect(() => {

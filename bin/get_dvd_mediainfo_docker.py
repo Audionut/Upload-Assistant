@@ -7,11 +7,13 @@ support DVD IFO/VOB file parsing with language information.
 """
 import os
 import platform
-import requests
 import shutil
+import stat
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+import requests
 
 MEDIAINFO_VERSION = "23.04"
 MEDIAINFO_CLI_BASE_URL = "https://mediaarea.net/download/binary/mediainfo"
@@ -69,6 +71,23 @@ def extract_linux_binaries(cli_archive: Path, lib_archive: Path, output_dir: Pat
 
         # Look for the mediainfo binary in the archive
         for member in file_list:
+            # Check for symlinks in ZIP files
+            info = zip_ref.getinfo(member)
+            perm = (info.external_attr >> 16)
+            if stat.S_ISLNK(perm):
+                print(f"Warning: Skipping symlink: {member}")
+                continue
+
+            # Check for absolute paths
+            if os.path.isabs(member):
+                print(f"Warning: Skipping absolute path: {member}")
+                continue
+
+            # Check for directory traversal patterns
+            if ".." in member or member.startswith("/"):
+                print(f"Warning: Skipping dangerous path: {member}")
+                continue
+
             if member.endswith('/mediainfo') or member == 'mediainfo':
                 zip_ref.extract(member, output_dir.parent)
                 extracted_path = output_dir.parent / member
@@ -96,6 +115,23 @@ def extract_linux_binaries(cli_archive: Path, lib_archive: Path, output_dir: Pat
 
         for candidate in lib_candidates:
             if candidate in file_list:
+                # Check for symlinks in ZIP files
+                info = zip_ref.getinfo(candidate)
+                perm = (info.external_attr >> 16)
+                if stat.S_ISLNK(perm):
+                    print(f"Warning: Skipping symlink: {candidate}")
+                    continue
+
+                # Check for absolute paths
+                if os.path.isabs(candidate):
+                    print(f"Warning: Skipping absolute path: {candidate}")
+                    continue
+
+                # Check for directory traversal patterns
+                if ".." in candidate or candidate.startswith("/"):
+                    print(f"Warning: Skipping dangerous path: {candidate}")
+                    continue
+
                 zip_ref.extract(candidate, output_dir.parent)
                 extracted_path = output_dir.parent / candidate
                 # Move to final location
@@ -177,13 +213,13 @@ def download_dvd_mediainfo_docker():
 
         # Make CLI binary executable and verify permissions
         if cli_file.exists():
-            # Set full executable permissions (owner: rwx, group: rx, other: rx)
-            os.chmod(cli_file, 0o755)
+            # Set secure executable permissions (owner only)
+            os.chmod(cli_file, 0o700)
             # Verify permissions were set correctly
             file_stat = cli_file.stat()
-            is_executable = bool(file_stat.st_mode & 0o111)  # Check if any execute bit is set
+            is_executable = bool(file_stat.st_mode & 0o100)  # Check if owner execute bit is set
             if is_executable:
-                print(f"✓ Set executable permissions on: {cli_file} (mode: {oct(file_stat.st_mode)})")
+                print(f"✓ Set secure executable permissions on: {cli_file} (mode: {oct(file_stat.st_mode)})")
             else:
                 raise Exception(f"Failed to set executable permissions on: {cli_file}")
         else:

@@ -1,51 +1,65 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
-import aiofiles
 import base64
 import glob
-import httpx
 import os
 import re
 import unicodedata
-from .COMMON import COMMON
+from typing import Any, Optional, cast
+
+import aiofiles
+import httpx
+
+from cogs.redaction import Redaction
 from src.bbcode import BBCODE
 from src.console import console
 from src.get_desc import DescriptionBuilder
-from src.languages import process_desc_language
+from src.languages import languages_manager
+
+from .COMMON import COMMON
+
+Meta = dict[str, Any]
+Config = dict[str, Any]
 
 
 class SPD:
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         self.url = "https://speedapp.io"
-        self.config = config
+        self.config: Config = config
         self.common = COMMON(config)
         self.tracker = 'SPD'
         self.upload_url = 'https://speedapp.io/api/upload'
         self.torrent_url = 'https://speedapp.io/browse/'
         self.banned_groups = []
         self.banned_url = 'https://speedapp.io/api/torrent/release-group/blacklist'
+        api_key = str(self.config['TRACKERS'][self.tracker]['api_key'])
         self.session = httpx.AsyncClient(headers={
             'User-Agent': "Upload Assistant",
             'accept': 'application/json',
-            'Authorization': self.config['TRACKERS'][self.tracker]['api_key'],
+            'Authorization': api_key,
         }, timeout=30.0)
 
-    async def get_cat_id(self, meta):
+    async def get_cat_id(self, meta: Meta) -> Optional[str]:
         if not meta.get('language_checked', False):
-            await process_desc_language(meta, desc=None, tracker=self.tracker)
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
-        langs = [lang.lower() for lang in meta.get('subtitle_languages', []) + meta.get('audio_languages', [])]
+        subtitle_langs = cast(list[Any], meta.get('subtitle_languages', []))
+        audio_langs = cast(list[Any], meta.get('audio_languages', []))
+        langs = [str(lang).lower() for lang in subtitle_langs + audio_langs]
         romanian = 'romanian' in langs
 
-        if 'RO' in meta.get('origin_country', []):
-            if meta.get('category') == 'TV':
+        origin_countries = cast(list[Any], meta.get('origin_country', []))
+        category = str(meta.get('category', ''))
+        if 'RO' in origin_countries:
+            if category == 'TV':
                 return '60'
-            elif meta.get('category') == 'MOVIE':
+            elif category == 'MOVIE':
                 return '59'
 
         # documentary
-        if 'documentary' in meta.get("genres", "").lower() or 'documentary' in meta.get("keywords", "").lower():
+        genres = str(meta.get("genres", ""))
+        keywords = str(meta.get("keywords", ""))
+        if 'documentary' in genres.lower() or 'documentary' in keywords.lower():
             return '63' if romanian else '9'
 
         # anime
@@ -53,7 +67,7 @@ class SPD:
             return '3'
 
         # TV
-        if meta.get('category') == 'TV':
+        if category == 'TV':
             if meta.get('tv_pack'):
                 return '66' if romanian else '41'
             elif meta.get('sd'):
@@ -61,52 +75,61 @@ class SPD:
             return '44' if romanian else '43'
 
         # MOVIE
-        if meta.get('category') == 'MOVIE':
-            if meta.get('resolution') == '2160p' and meta.get('type') != 'DISC':
+        if category == 'MOVIE':
+            resolution = str(meta.get('resolution', ''))
+            media_type = str(meta.get('type', ''))
+            if resolution == '2160p' and media_type != 'DISC':
                 return '57' if romanian else '61'
-            if meta.get('type') in ('REMUX', 'WEBDL', 'WEBRIP', 'HDTV', 'ENCODE'):
+            if media_type in ('REMUX', 'WEBDL', 'WEBRIP', 'HDTV', 'ENCODE'):
                 return '29' if romanian else '8'
-            if meta.get('type') == 'DISC':
+            if media_type == 'DISC':
                 return '24' if romanian else '17'
-            if meta.get('type') == 'SD':
+            if media_type == 'SD':
                 return '35' if romanian else '10'
 
         return None
 
-    async def get_file_info(self, meta):
+    async def get_file_info(self, meta: Meta) -> tuple[Optional[str], Optional[str]]:
         base_path = f"{meta['base_dir']}/tmp/{meta['uuid']}"
 
         if meta.get('bdinfo'):
-            bd_info = open(f"{base_path}/BD_SUMMARY_00.txt", encoding='utf-8').read()
+            async with aiofiles.open(
+                f"{base_path}/BD_SUMMARY_00.txt",
+                encoding='utf-8',
+            ) as bd_file:
+                bd_info = await bd_file.read()
             return None, bd_info
         else:
-            media_info = open(f"{base_path}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8').read()
+            async with aiofiles.open(
+                f"{base_path}/MEDIAINFO_CLEANPATH.txt",
+                encoding='utf-8',
+            ) as mi_file:
+                media_info = await mi_file.read()
             return media_info, None
 
-    async def get_screenshots(self, meta):
-        urls = []
-        for image in meta.get('menu_images', []) + meta.get('image_list', []):
-            if image.get('raw_url'):
-                urls.append(image['raw_url'])
+    async def get_screenshots(self, meta: Meta) -> list[str]:
+        images = cast(list[dict[str, Any]], meta.get('menu_images', [])) + cast(
+            list[dict[str, Any]], meta.get('image_list', [])
+        )
+        return [image['raw_url'] for image in images if image.get('raw_url')]
 
-        return urls
-
-    async def search_existing(self, meta, disctype):
-        results = []
+    async def search_existing(self, meta: Meta, _disctype: str) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
         search_url = 'https://speedapp.io/api/torrent'
 
-        params = {}
-        if meta.get('imdb_id', 0) != 0:
-            params['imdbId'] = f"{meta.get('imdb_info', {}).get('imdbID', '')}"
+        params: dict[str, str] = {}
+        if int(meta.get('imdb_id', 0) or 0) != 0:
+            imdb_info = cast(dict[str, Any], meta.get('imdb_info', {}))
+            params['imdbId'] = str(imdb_info.get('imdbID', ''))
         else:
-            search_title = meta['title'].replace(':', '').replace("'", '').replace(',', '')
+            search_title = str(meta.get('title', '')).replace(':', '').replace("'", '').replace(',', '')
             params['search'] = search_title
 
         try:
             response = await self.session.get(url=search_url, params=params, headers=self.session.headers)
 
             if response.status_code == 200:
-                data = response.json()
+                data = cast(list[dict[str, Any]], response.json())
                 for each in data:
                     name = each.get('name')
                     size = each.get('size')
@@ -114,7 +137,7 @@ class SPD:
 
                     if name:
                         results.append({
-                            'name': name,
+                            'name': str(name),
                             'size': size,
                             'link': link
                         })
@@ -128,7 +151,7 @@ class SPD:
 
         return results
 
-    async def search_channel(self, meta):
+    async def search_channel(self, meta: Meta) -> Optional[int]:
         spd_channel = meta.get('spd_channel', '') or self.config['TRACKERS'][self.tracker].get('channel', '')
 
         # if no channel is specified, use the default
@@ -147,25 +170,25 @@ class SPD:
             else:
                 pass
 
-        params = {
-            'search': spd_channel
+        params: dict[str, str] = {
+            'search': str(spd_channel)
         }
 
         try:
             response = await self.session.get(url=self.url + '/api/channel', params=params, headers=self.session.headers)
 
             if response.status_code == 200:
-                data = response.json()
+                data = cast(list[dict[str, Any]], response.json())
                 for entry in data:
-                    id = entry['id']
-                    tag = entry['tag']
+                    channel_id = entry.get('id')
+                    tag = entry.get('tag')
 
-                    if id and tag:
+                    if channel_id and tag:
                         if tag != spd_channel:
                             console.print(f'[{self.tracker}]: Unable to find a matching channel based on your input. Please check if you entered it correctly.')
                             return
                         else:
-                            return id
+                            return int(channel_id)
                     else:
                         console.print(f'[{self.tracker}]: Could not find the channel ID. Please check if you entered it correctly.')
 
@@ -176,18 +199,18 @@ class SPD:
             console.print(f"[bold red]Unexpected error: {e}")
             console.print_exception()
 
-    async def edit_desc(self, meta):
-        builder = DescriptionBuilder(self.config)
-        desc_parts = []
+    async def edit_desc(self, meta: Meta) -> str:
+        builder = DescriptionBuilder(self.tracker, self.config)
+        desc_parts: list[str] = []
 
         user_description = await builder.get_user_description(meta)
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker, resize=True)
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, resize=True)
         if user_description or episode_overview:  # Avoid unnecessary descriptions
             # Custom Header
-            desc_parts.append(await builder.get_custom_header(self.tracker))
+            desc_parts.append(await builder.get_custom_header())
 
             # Logo
-            logo_resize_url = meta.get('tmdb_logo', '')
+            logo_resize_url = str(meta.get('tmdb_logo', ''))
             if logo_resize_url:
                 desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/center]")
 
@@ -204,10 +227,12 @@ class SPD:
             desc_parts.append(user_description)
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         # Signature
-        desc_parts.append(f"[url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url]")
+        desc_parts.append(
+            f"[url=https://github.com/Audionut/Upload-Assistant]{meta.get('ua_signature', '')}[/url]"
+        )
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 
@@ -221,8 +246,8 @@ class SPD:
 
         return description
 
-    async def edit_name(self, meta):
-        torrent_name = meta['name']
+    async def edit_name(self, meta: Meta) -> str:
+        torrent_name = str(meta.get('name', ''))
 
         name = torrent_name.replace(':', ' -')
         name = unicodedata.normalize("NFKD", name)
@@ -231,13 +256,13 @@ class SPD:
 
         return re.sub(r"\s{2,}", " ", name)
 
-    async def encode_to_base64(self, file_path):
-        with open(file_path, 'rb') as binary_file:
-            binary_file_data = binary_file.read()
+    async def encode_to_base64(self, file_path: str) -> str:
+        async with aiofiles.open(file_path, 'rb') as binary_file:
+            binary_file_data = await binary_file.read()
             base64_encoded_data = base64.b64encode(binary_file_data)
             return base64_encoded_data.decode('utf-8')
 
-    async def get_nfo(self, meta):
+    async def get_nfo(self, meta: Meta) -> Optional[str]:
         nfo_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
         nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
 
@@ -247,33 +272,36 @@ class SPD:
 
         return None
 
-    async def fetch_data(self, meta):
+    async def fetch_data(self, meta: Meta) -> dict[str, Any]:
         media_info, bd_info = await self.get_file_info(meta)
 
-        data = {
+        data: dict[str, Any] = {
             'bdInfo': bd_info,
-            'coverPhotoUrl': meta.get('backdrop', ''),
-            'description': meta.get('genres', ''),
+            'coverPhotoUrl': str(meta.get('backdrop', '')),
+            'description': str(meta.get('genres', '')),
             'media_info': media_info,
             'name': await self.edit_name(meta),
             'nfo': await self.get_nfo(meta),
-            'plot': meta.get('overview_meta', '') or meta.get('overview', ''),
-            'poster': meta.get('poster', ''),
+            'plot': str(meta.get('overview_meta', '') or meta.get('overview', '')),
+            'poster': str(meta.get('poster', '')),
             'technicalDetails': await self.edit_desc(meta),
             'screenshots': await self.get_screenshots(meta),
             'type': await self.get_cat_id(meta),
-            'url': str(meta.get('imdb_info', {}).get('imdb_url', '')),
+            'url': str(cast(dict[str, Any], meta.get('imdb_info', {})).get('imdb_url', '')),
         }
 
         data['file'] = await self.encode_to_base64(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
-        if meta['debug'] is True:
-            data['file'] = data['file'][:50] + '...[DEBUG MODE]'
-            data['nfo'] = data['nfo'][:50] + '...[DEBUG MODE]'
+        if meta.get('debug') is True:
+            data['file'] = str(data['file'])[:50] + '...[DEBUG MODE]'
+            if data.get('nfo'):
+                data['nfo'] = str(data['nfo'])[:50] + '...[DEBUG MODE]'
 
         return data
 
-    async def upload(self, meta, disctype):
+    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
         data = await self.fetch_data(meta)
+        tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
+        tracker_status.setdefault(self.tracker, {})
 
         channel = await self.search_channel(meta)
         if channel is None:
@@ -282,50 +310,64 @@ class SPD:
         channel = str(channel)
         data['channel'] = channel
 
-        status_message = ''
         torrent_id = ''
 
-        if meta['debug'] is False:
+        if not bool(meta.get('debug')):
+            response = None
             try:
                 response = await self.session.post(url=self.upload_url, json=data, headers=self.session.headers)
                 response.raise_for_status()
                 response = response.json()
                 if response.get('status') is True and response.get('error') is False:
-                    status_message = "Torrent uploaded successfully."
+                    tracker_status[self.tracker]['status_message'] = "Torrent uploaded successfully."
 
                     if 'downloadUrl' in response:
                         torrent_id = str(response.get('torrent', {}).get('id', ''))
                         if torrent_id:
-                            meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+                            tracker_status[self.tracker]['torrent_id'] = torrent_id
 
                         download_url = f"{self.url}/api/torrent/{torrent_id}/download"
                         await self.common.download_tracker_torrent(
                             meta,
                             tracker=self.tracker,
-                            headers={'Authorization': self.config['TRACKERS'][self.tracker]['api_key']},
+                            headers={'Authorization': str(self.config['TRACKERS'][self.tracker]['api_key'])},
                             downurl=download_url
                         )
+                        return True
 
                     else:
-                        console.print("[bold red]No downloadUrl in response.")
-                        console.print("[bold red]Confirm it uploaded correctly and try to download manually")
-                        console.print(response)
+                        tracker_status[self.tracker]['status_message'] = (
+                            'data error: No downloadUrl in response, check manually if it uploaded. '
+                            f'Response: \n{response}'
+                        )
+                        return False
 
                 else:
-                    status_message = f'data error: {response}'
+                    tracker_status[self.tracker]['status_message'] = f'data error: {response}'
+                    return False
 
             except httpx.HTTPStatusError as e:
-                status_message = f'data error: HTTP {e.response.status_code} - {e.response.text}'
+                tracker_status[self.tracker]['status_message'] = f'data error: HTTP {e.response.status_code} - {e.response.text}'
+                return False
             except httpx.TimeoutException:
-                status_message = f'data error: Request timed out after {self.session.timeout.write} seconds'
+                tracker_status[self.tracker]['status_message'] = f'data error: Request timed out after {self.session.timeout.write} seconds'
+                return False
             except httpx.RequestError as e:
-                status_message = f'data error: Unable to upload. Error: {e}.\nResponse: {response}'
+                response_info = "no response"
+                if response is not None:
+                    response_info = getattr(response, 'text', str(response))
+                tracker_status[self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e!r}.\nResponse: {response_info}'
+                return False
             except Exception as e:
-                status_message = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response}'
-                return
+                response_info = "no response"
+                if response is not None:
+                    response_info = getattr(response, 'text', str(response))
+                tracker_status[self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e!r}.\nResponse: {response_info}'
+                return False
 
         else:
-            console.print(data)
-            status_message = "Debug mode enabled, not uploading."
-
-        meta['tracker_status'][self.tracker]['status_message'] = status_message
+            console.print("[cyan]SPD Request Data:")
+            console.print(Redaction.redact_private_info(data))
+            tracker_status[self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            return True  # Debug mode - simulated success

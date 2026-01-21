@@ -1,16 +1,18 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-# import discord
-import requests
-from src.console import console
-from pprint import pprint
 import os
 import traceback
-from src.trackers.COMMON import COMMON
+from typing import Any, Optional, Union, cast
+
+import aiofiles
+import httpx
 from pymediainfo import MediaInfo
 
+from cogs.redaction import Redaction
+from src.console import console
+from src.trackers.COMMON import COMMON
 
-class BHDTV():
+
+class BHDTV:
     """
     Edit for Tracker:
         Edit BASE.torrent with announce and source
@@ -19,7 +21,7 @@ class BHDTV():
         Upload
     """
 
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.tracker = 'BHDTV'
         self.source_flag = 'BIT-HDTV'
@@ -30,7 +32,7 @@ class BHDTV():
         self.banned_groups = []
         pass
 
-    async def upload(self, meta, disctype):
+    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         await self.edit_desc(meta)
@@ -47,32 +49,30 @@ class BHDTV():
         resolution_id = await self.get_res_id(meta['resolution'])
         # region_id = await common.unit3d_region_ids(meta.get('region'))
         # distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
-        if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False):
-            anon = 0
-        else:
-            anon = 1  # noqa F841
 
         if meta['bdinfo'] is not None:
             mi_dump = None
-            bd_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", 'r', encoding='utf-8').read()
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8') as bd_file:
+                bd_dump = await bd_file.read()
         else:
-            mi_dump = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", 'r', encoding='utf-8').read()
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8') as mi_file:
+                mi_dump = await mi_file.read()
             bd_dump = None
-        desc = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        open_torrent = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent", 'rb')
-        files = {'file': open_torrent}
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", encoding='utf-8') as desc_file:
+            desc = await desc_file.read()
 
+        media_info = ""
         if meta['is_disc'] != 'BDMV':
-            # Beautify MediaInfo for HDT using custom template
-            video = meta['filelist'][0]
+            filelist = cast(list[str], meta.get('filelist') or [])
+            video = filelist[0] if filelist else str(meta.get('path') or "")
             mi_template = os.path.abspath(f"{meta['base_dir']}/data/templates/MEDIAINFO.txt")
             if os.path.exists(mi_template):
-                media_info = MediaInfo.parse(video, output="STRING", full=False,
-                                             mediainfo_options={"inform": f"file://{mi_template}"})
+                media_info = str(MediaInfo.parse(video, output="STRING", full=False,
+                                                mediainfo_options={"inform": f"file://{mi_template}"}))
 
-        data = {
-            'api_key': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
-            'name': meta['name'].replace(' ', '.').replace(':.', '.').replace(':', '.').replace('DD+', 'DDP'),
+        data: dict[str, Any] = {
+            'api_key': str(self.config['TRACKERS'][self.tracker]['api_key']).strip(),
+            'name': str(meta['name']).replace(' ', '.').replace(':.', '.').replace(':', '.').replace('DD+', 'DDP'),
             'mediainfo': mi_dump if bd_dump is None else bd_dump,
             'cat': cat_id,
             'subcat': sub_cat_id,
@@ -86,30 +86,46 @@ class BHDTV():
             'format': 'json'
         }
 
-        if meta['debug'] is False:
-            response = requests.post(url=self.upload_url, data=data, files=files)
-            try:
-                # pprint(data)
-                meta['tracker_status'][self.tracker]['status_message'] = response.json()
-            except Exception:
-                console.print("[cyan]It may have uploaded, go check")
-                # cprint(f"Request Data:", 'cyan')
-                pprint(data)
-                console.print(traceback.print_exc())
-        else:
-            console.print("[cyan]Request Data:")
-            pprint(data)
-            meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-        # # adding my anounce url to torrent.
-        if 'view' in response.json()['data']:
-            await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.config['TRACKERS']['BHDTV'].get('my_announce_url'), response.json()['data']['view'])
-        else:
-            await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag,
-                                                      self.config['TRACKERS']['BHDTV'].get('my_announce_url'),
-                                                      "Torrent Did not upload")
-        open_torrent.close()
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        async with aiofiles.open(torrent_path, 'rb') as open_torrent:
+            torrent_bytes = await open_torrent.read()
+        files = {'file': (os.path.basename(torrent_path), torrent_bytes, 'application/x-bittorrent')}
 
-    async def get_cat_id(self, meta):
+        if meta['debug'] is False:
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                response = await client.post(url=self.upload_url, data=data, files=files)
+            parsed: Union[Any, None] = None
+            if response:
+                try:
+                    parsed = response.json()
+                    meta['tracker_status'][self.tracker]['status_message'] = parsed
+                except Exception:
+                    console.print("[cyan]It may have uploaded, go check")
+                    console.print(Redaction.redact_private_info(data))
+                    traceback.print_exc()
+
+            parsed_data: Optional[dict[str, Any]] = cast(Optional[dict[str, Any]], parsed) if isinstance(parsed, dict) else None
+            data_block: Optional[dict[str, Any]] = parsed_data.get('data') if parsed_data else None
+            if isinstance(data_block, dict) and 'view' in data_block:
+                my_announce_url = self.config['TRACKERS']['BHDTV'].get('my_announce_url')
+                if my_announce_url:
+                    await common.create_torrent_ready_to_seed(
+                        meta,
+                        self.tracker,
+                        self.source_flag,
+                        my_announce_url,
+                        str(data_block['view'])
+                    )
+                    return True
+            return False
+
+        console.print("[cyan]BHDTV Request Data:")
+        console.print(Redaction.redact_private_info(data))
+        meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
+        await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+        return True
+
+    async def get_cat_id(self, meta: dict[str, Any]) -> str:
         category_id = '0'
         if meta['category'] == 'MOVIE':
             category_id = '7'
@@ -120,14 +136,10 @@ class BHDTV():
             category_id = '10'
         return category_id
 
-    async def get_type_movie_id(self, meta):
+    async def get_type_movie_id(self, meta: dict[str, Any]) -> str:
         type_id = '0'
-        test = meta['type']  # noqa F841
         if meta['type'] == 'DISC':
-            if meta['3D']:
-                type_id = '46'
-            else:
-                type_id = '2'
+            type_id = '46' if meta['3D'] else '2'
         elif meta['type'] == 'REMUX':
             if str(meta['name']).__contains__('265'):
                 type_id = '48'
@@ -149,7 +161,7 @@ class BHDTV():
 
         return type_id
 
-    async def get_type_tv_id(self, type):
+    async def get_type_tv_id(self, type: str) -> str:
         type_id = {
             'HDTV': '7',
             'WEBDL': '8',
@@ -162,7 +174,7 @@ class BHDTV():
         }.get(type, '0')
         return type_id
 
-    async def get_type_tv_pack_id(self, type):
+    async def get_type_tv_pack_id(self, type: str) -> str:
         type_id = {
             'HDTV': '13',
             'WEBDL': '14',
@@ -175,7 +187,7 @@ class BHDTV():
         }.get(type, '0')
         return type_id
 
-    async def get_res_id(self, resolution):
+    async def get_res_id(self, resolution: str) -> str:
         resolution_id = {
             '2160p': '4',
             '1080p': '3',
@@ -184,21 +196,21 @@ class BHDTV():
         }.get(resolution, '10')
         return resolution_id
 
-    async def edit_desc(self, meta):
-        base = open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", 'r', encoding='utf-8').read()
-        with open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as desc:
-            desc.write(base.replace("[img=250]", "[img=250x250]"))
-            images = meta['image_list']
-            if len(images) > 0:
-                for each in range(len(images)):
-                    web_url = images[each]['web_url']
-                    img_url = images[each]['img_url']
-                    desc.write(f"[url={web_url}][img]{img_url}[/img][/url] ")
-            # desc.write(common.get_links(meta, "[COLOR=red][size=4]", "[/size][/color]"))
-            desc.close()
-        return
+    async def edit_desc(self, meta: dict[str, Any]) -> None:
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf-8') as base_file:
+            base = await base_file.read()
+        parts: list[str] = [base.replace("[img=250]", "[img=250x250]")]
+        images = cast(list[dict[str, Any]], meta.get('image_list') or [])
+        if len(images) > 0:
+            for each in range(len(images)):
+                web_url = images[each]['web_url']
+                img_url = images[each]['img_url']
+                parts.append(f"[url={web_url}][img]{img_url}[/img][/url] ")
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as desc:
+            await desc.write("".join(parts))
+        return None
 
-    async def search_existing(self, meta, disctype):
+    async def search_existing(self, _meta: dict[str, Any], _disctype: str) -> list[str]:
         console.print("[red]Dupes must be checked Manually")
         return ['Dupes must be checked Manually']
         # hopefully someone else has the time to implement this.

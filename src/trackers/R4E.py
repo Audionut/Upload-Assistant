@@ -1,17 +1,22 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
 # import discord
 import asyncio
+from typing import Any, Optional, cast
+
 import httpx
+
 from src.console import console
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
+Meta = dict[str, Any]
+Config = dict[str, Any]
+
 
 class R4E(UNIT3D):
-    def __init__(self, config):
+    def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='R4E')
-        self.config = config
+        self.config: Config = config
         self.common = COMMON(config)
         self.tracker = 'R4E'
         self.base_url = 'https://racing4everyone.eu'
@@ -20,12 +25,19 @@ class R4E(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
-        pass
 
-    async def get_category_id(self, meta):
+    async def get_category_id(
+        self,
+        meta: Meta,
+        category: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
+        _ = (category, reverse, mapping_only)
+        category_id = '24'
         # Use stored genre IDs if available
         if meta and meta.get('genre_ids'):
-            genre_ids = meta['genre_ids'].split(',')
+            genre_ids = str(meta['genre_ids']).split(',')
             is_docu = '99' in genre_ids
 
             if meta['category'] == 'MOVIE':
@@ -41,7 +53,14 @@ class R4E(UNIT3D):
 
         return {'category_id': category_id}
 
-    async def get_type_id(self, meta):
+    async def get_type_id(
+        self,
+        meta: Meta,
+        type: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
+        _ = (type, reverse, mapping_only)
         type_id = {
             '8640p': '2160p',
             '4320p': '2160p',
@@ -54,52 +73,71 @@ class R4E(UNIT3D):
             '576i': 'SD',
             '480p': 'SD',
             '480i': 'SD'
-        }.get(meta['type'], '10')
+        }.get(str(meta.get('type', '')), '10')
         return {'type_id': type_id}
 
-    async def get_personal_release(self, meta):
+    async def get_personal_release(self, meta: Meta) -> dict[str, str]:
+        _ = meta
         return {}
 
-    async def get_internal(self, meta):
+    async def get_internal(self, meta: Meta) -> dict[str, str]:
+        _ = meta
         return {}
 
-    async def get_featured(self, meta):
+    async def get_featured(self, _meta: Meta) -> dict[str, str]:
         return {}
 
-    async def get_free(self, meta):
+    async def get_free(self, meta: Meta) -> dict[str, str]:
+        _ = meta
         return {}
 
-    async def get_doubleup(self, meta):
+    async def get_doubleup(self, _meta: Meta) -> dict[str, str]:
         return {}
 
-    async def get_sticky(self, meta):
+    async def get_sticky(self, _meta: Meta) -> dict[str, str]:
         return {}
 
-    async def get_resolution_id(self, meta):
+    async def get_resolution_id(
+        self,
+        meta: Meta,
+        resolution: Optional[str] = None,
+        reverse: bool = False,
+        mapping_only: bool = False
+    ) -> dict[str, str]:
+        _ = (meta, resolution, reverse, mapping_only)
         return {}
 
-    async def search_existing(self, meta, disctype):
-        dupes = []
+    async def search_existing(self, meta: Meta, _: str) -> list[dict[str, Any]]:
+        dupes: list[dict[str, Any]] = []
         url = "https://racing4everyone.eu/api/torrents/filter"
-        params = {
-            'api_token': self.config['TRACKERS']['R4E']['api_key'].strip(),
-            'tmdb': meta['tmdb'],
+        params: dict[str, Any] = {
+            'api_token': str(self.config['TRACKERS']['R4E']['api_key']).strip(),
+            'tmdb': meta.get('tmdb'),
             'categories[]': (await self.get_category_id(meta))['category_id'],
-            'types[]': await self.get_type_id(meta),
+            'types[]': (await self.get_type_id(meta))['type_id'],
             'name': ""
         }
         if meta['category'] == 'TV':
             params['name'] = f"{meta.get('season', '')}"
         if meta.get('edition', "") != "":
-            params['name'] = params['name'] + meta['edition']
+            params['name'] = str(params['name']) + str(meta['edition'])
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(url=url, params=params)
                 if response.status_code == 200:
-                    data = response.json()
-                    for each in data['data']:
-                        result = [each][0]['attributes']['name']
-                        dupes.append(result)
+                    data = cast(dict[str, Any], response.json())
+                    items = cast(list[dict[str, Any]], data.get('data', []))
+                    for each in items:
+                        attributes = cast(dict[str, Any], each.get('attributes', {}))
+                        result_name = str(attributes.get('name', ''))
+                        dupes.append({
+                            'name': result_name,
+                            'files': result_name,
+                            'size': 0,
+                            'link': '',
+                            'file_count': 0,
+                            'download': ''
+                        })
                 else:
                     console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
         except httpx.TimeoutException:

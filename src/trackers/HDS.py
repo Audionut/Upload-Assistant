@@ -1,20 +1,26 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# -*- coding: utf-8 -*-
-import aiofiles
 import glob
-import httpx
 import os
 import platform
-from bs4 import BeautifulSoup
+import re
+from typing import Any, Optional, Union, cast
+
+import aiofiles
+import httpx
+from bs4 import BeautifulSoup, Tag
+
 from src.bbcode import BBCODE
 from src.console import console
-from src.cookie_auth import CookieValidator, CookieAuthUploader
+from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
+
+Meta = dict[str, Any]
+Config = dict[str, Any]
 
 
 class HDS:
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, config: Config) -> None:
+        self.config: Config = config
         self.cookie_validator = CookieValidator(config)
         self.cookie_auth_uploader = CookieAuthUploader(config)
         self.tracker = 'HDS'
@@ -27,8 +33,11 @@ class HDS:
             'User-Agent': f"Upload Assistant/2.3 ({platform.system()} {platform.release()})"
         }, timeout=30)
 
-    async def validate_credentials(self, meta):
-        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+    async def validate_credentials(self, meta: Meta) -> bool:
+        cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        self.session.cookies.clear()
+        if cookies is not None:
+            self.session.cookies.update(cookies)
         return await self.cookie_validator.cookie_validation(
             meta=meta,
             tracker=self.tracker,
@@ -36,20 +45,20 @@ class HDS:
             error_text='Recover password',
         )
 
-    async def generate_description(self, meta):
-        builder = DescriptionBuilder(self.config)
-        desc_parts = []
+    async def generate_description(self, meta: Meta) -> str:
+        builder = DescriptionBuilder(self.tracker, self.config)
+        desc_parts: list[str] = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header(self.tracker))
+        desc_parts.append(await builder.get_custom_header())
 
         # Logo
-        logo_resize_url = meta.get('tmdb_logo', '')
+        logo_resize_url = str(meta.get('tmdb_logo', ''))
         if logo_resize_url:
             desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/center]")
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, self.tracker, resize=True)
+        title, episode_image, episode_overview = await builder.get_tv_info(meta, resize=True)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
 
@@ -59,7 +68,7 @@ class HDS:
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # File information
-        mediainfo = await builder.get_mediainfo_section(meta, self.tracker)
+        mediainfo = await builder.get_mediainfo_section(meta)
         if mediainfo:
             desc_parts.append(f'[pre]{mediainfo}[/pre]')
 
@@ -71,15 +80,25 @@ class HDS:
         desc_parts.append(await builder.get_user_description(meta))
 
         # Disc menus screenshots header
-        menu_images = meta.get("menu_images", [])
+        menu_images_value = meta.get("menu_images", [])
+        menu_images: list[dict[str, Any]] = []
+        if isinstance(menu_images_value, list):
+            menu_images_list = cast(list[Any], menu_images_value)
+            menu_images.extend(
+                [
+                    cast(dict[str, Any], item)
+                    for item in menu_images_list
+                    if isinstance(item, dict)
+                ]
+            )
         if menu_images:
-            desc_parts.append(await builder.menu_screenshot_header(meta, self.tracker))
+            desc_parts.append(await builder.menu_screenshot_header(meta))
 
             # Disc menus screenshots
             menu_screenshots_block = ""
             for image in menu_images:
-                menu_web_url = image.get("web_url")
-                menu_img_url = image.get("img_url")
+                menu_web_url = str(image.get("web_url", ""))
+                menu_img_url = str(image.get("img_url", ""))
                 if menu_web_url and menu_img_url:
                     menu_screenshots_block += f"[url={menu_web_url}][img]{menu_img_url}[/img][/url]"
                     # HDS cannot resize images. If the image host does not provide small thumbnails(<400px), place only one image per line
@@ -89,19 +108,29 @@ class HDS:
                 desc_parts.append(f"[center]\n{menu_screenshots_block}\n[/center]")
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta, self.tracker))
+        desc_parts.append(await builder.get_tonemapped_header(meta))
 
         # Screenshot Header
-        images = meta.get("image_list", [])
+        images_value = meta.get("image_list", [])
+        images: list[dict[str, Any]] = []
+        if isinstance(images_value, list):
+            images_list = cast(list[Any], images_value)
+            images.extend(
+                [
+                    cast(dict[str, Any], item)
+                    for item in images_list
+                    if isinstance(item, dict)
+                ]
+            )
         if images:
-            desc_parts.append(await builder.screenshot_header(self.tracker))
+            desc_parts.append(await builder.screenshot_header())
 
             # Screenshots
             if images:
                 screenshots_block = ""
                 for image in images:
-                    web_url = image.get("web_url")
-                    img_url = image.get("img_url")
+                    web_url = str(image.get("web_url", ""))
+                    img_url = str(image.get("img_url", ""))
                     if web_url and img_url:
                         screenshots_block += f"[url={web_url}][img]{img_url}[/img][/url]"
                         # HDS cannot resize images. If the image host does not provide small thumbnails(<400px), place only one image per line
@@ -111,7 +140,9 @@ class HDS:
                     desc_parts.append(f"[center]\n{screenshots_block}\n[/center]")
 
         # Signature
-        desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant][size=2]{meta['ua_signature']}[/size][/url][/center]")
+        desc_parts.append(
+            f"[center][url=https://github.com/Audionut/Upload-Assistant][size=2]{meta.get('ua_signature', '')}[/size][/url][/center]"
+        )
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 
@@ -141,18 +172,21 @@ class HDS:
 
         return description
 
-    async def search_existing(self, meta, disctype):
-        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+    async def search_existing(self, meta: Meta, _disctype: str) -> list[dict[str, Union[str, None]]]:
+        cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        self.session.cookies.clear()
+        if cookies is not None:
+            self.session.cookies.update(cookies)
 
-        dupes = []
-        imdb_id = meta.get('imdb', '')
+        dupes: list[dict[str, Union[str, None]]] = []
+        imdb_id = str(meta.get('imdb', ''))
         if imdb_id == '0':
             console.print(f'IMDb ID not found, cannot search for duplicates on {self.tracker}.')
             return dupes
 
         search_url = f'{self.base_url}/index.php?'
 
-        params = {
+        params: dict[str, str] = {
             'page': 'torrents',
             'search': imdb_id,
             'active': '0',
@@ -166,10 +200,10 @@ class HDS:
 
             all_tables = soup.find_all('table', class_='lista')
 
-            torrent_rows = []
+            torrent_rows: list[Tag] = []
 
             for table in all_tables:
-                recommend_header = table.find('td', class_='block', string='Our Team Recommend')
+                recommend_header = table.find('td', attrs={'class': 'block'}, string=re.compile(r'Our Team Recommend'))  # type: ignore
                 if recommend_header:
                     continue
 
@@ -197,14 +231,14 @@ class HDS:
 
         return dupes
 
-    async def get_category_id(self, meta):
-        resolution = meta.get('resolution')
-        category = meta.get('category')
-        type_ = meta.get('type')
-        is_disc = meta.get('is_disc')
-        genres = meta.get('genres', '').lower()
-        keywords = meta.get('keywords', '').lower()
-        is_anime = meta.get('anime')
+    async def get_category_id(self, meta: Meta) -> int:
+        resolution = str(meta.get('resolution', ''))
+        category = str(meta.get('category', ''))
+        type_ = str(meta.get('type', ''))
+        is_disc = str(meta.get('is_disc', ''))
+        genres = str(meta.get('genres', '')).lower()
+        keywords = str(meta.get('keywords', '')).lower()
+        is_anime = bool(meta.get('anime'))
 
         if is_disc == 'BDMV':
             return 15  # Blu-Ray
@@ -244,16 +278,19 @@ class HDS:
 
         return 38
 
-    async def get_requests(self, meta):
+    async def get_requests(self, meta: Meta) -> Union[list[dict[str, Optional[str]]], bool]:
         if not self.config['DEFAULT'].get('search_requests', False) and not meta.get('search_requests', False):
             return False
         else:
             try:
-                self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
-                query = meta['title']
+                cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+                self.session.cookies.clear()
+                if cookies is not None:
+                    self.session.cookies.update(cookies)
+                query = str(meta.get('title', ''))
                 search_url = f'{self.base_url}/index.php?'
 
-                params = {
+                params: dict[str, str] = {
                     'page': 'viewrequests',
                     'search': query,
                     'filter': 'true'
@@ -266,7 +303,7 @@ class HDS:
                 soup = BeautifulSoup(response_results_text, 'html.parser')
                 request_rows = soup.select('form[action="index.php?page=takedelreq"] table.lista tr')
 
-                results = []
+                results: list[dict[str, Optional[str]]] = []
                 for row in request_rows:
                     if row.find('td', class_='header'):
                         continue
@@ -277,7 +314,8 @@ class HDS:
 
                     name = name_element.text.strip()
                     link_element = name_element.find_parent('a')
-                    link = link_element['href'] if link_element else None
+                    raw_link = link_element.get('href') if link_element else None
+                    link = str(raw_link) if raw_link else None
 
                     results.append({
                         'Name': name,
@@ -297,24 +335,24 @@ class HDS:
                 print(f'An error occurred while fetching requests: {e}')
                 return []
 
-    async def get_data(self, meta):
-        data = {
+    async def get_data(self, meta: Meta) -> dict[str, Any]:
+        data: dict[str, Any] = {
             'category': await self.get_category_id(meta),
-            'filename': meta['name'],
-            'genre': meta.get('genres', ''),
-            'imdb': meta.get('imdb', ''),
+            'filename': str(meta.get('name', '')),
+            'genre': str(meta.get('genres', '')),
+            'imdb': str(meta.get('imdb', '')),
             'info': await self.generate_description(meta),
             'nuk_rea': '',
             'nuk': 'false',
             'req': 'false',
             'submit': 'Send',
-            't3d': 'true' if '3D' in meta.get('3d', '') else 'false',
+            't3d': 'true' if '3D' in str(meta.get('3d', '')) else 'false',
             'user_id': '',
-            'youtube_video': meta.get('youtube', ''),
+            'youtube_video': str(meta.get('youtube', '')),
         }
 
         # Anon
-        anon = not (meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
+        anon = not (int(meta.get('anon', 0) or 0) == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False))
         if anon:
             data.update({
                 'anonymous': 'true'
@@ -326,21 +364,26 @@ class HDS:
 
         return data
 
-    async def get_nfo(self, meta):
-        nfo_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
+    async def get_nfo(self, meta: Meta) -> dict[str, tuple[str, bytes, str]]:
+        nfo_dir = os.path.join(str(meta.get('base_dir', '')), "tmp", str(meta.get('uuid', '')))
         nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
 
         if nfo_files:
             nfo_path = nfo_files[0]
-            return {'nfo': (os.path.basename(nfo_path), open(nfo_path, "rb"), "application/octet-stream")}
+            async with aiofiles.open(nfo_path, "rb") as nfo_file:
+                nfo_bytes = await nfo_file.read()
+            return {'nfo': (os.path.basename(nfo_path), nfo_bytes, "application/octet-stream")}
         return {}
 
-    async def upload(self, meta, disctype):
-        self.session.cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+    async def upload(self, meta: Meta, _disctype: str) -> bool:
+        cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
+        self.session.cookies.clear()
+        if cookies is not None:
+            self.session.cookies.update(cookies)
         data = await self.get_data(meta)
         files = await self.get_nfo(meta)
 
-        await self.cookie_auth_uploader.handle_upload(
+        is_uploaded = await self.cookie_auth_uploader.handle_upload(
             meta=meta,
             tracker=self.tracker,
             source_flag=self.source_flag,
@@ -354,4 +397,4 @@ class HDS:
             additional_files=files,
         )
 
-        return
+        return is_uploaded
