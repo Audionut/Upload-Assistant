@@ -71,7 +71,7 @@ class TOS(UNIT3D):
         return {"type_id": type_id}
 
     async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
-        is_scene = bool(meta.get("scene_name"))
+        is_scene = meta.get("scene", False)
         base_name: str = str(meta.get("scene_name") if is_scene else meta.get("uuid"))
 
         if is_scene is False:
@@ -117,7 +117,7 @@ class TOS(UNIT3D):
             return False
 
         # Check if it's a Scene release without NFO - TOS requires NFO for Scene releases
-        is_scene = bool(meta.get("scene_name"))
+        is_scene = meta.get("scene", False)
         has_nfo = meta.get("nfo", False) or meta.get("auto_nfo", False)
 
         if is_scene and not has_nfo:
