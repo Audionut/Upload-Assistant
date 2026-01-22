@@ -1,5 +1,21 @@
 const { useEffect, useMemo, useRef, useState } = React;
 
+// Helper to lazily load a QR code library (UMD build) and return the module
+function loadQRCodeLib() {
+  return new Promise((resolve, reject) => {
+    // If already present, resolve immediately
+    if (window.qrcode || window.QRCode || window.qrcodeModule) {
+      return resolve(window.qrcode || window.QRCode || window.qrcodeModule);
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js';
+    script.async = true;
+    script.onload = () => resolve(window.qrcode || window.QRCode || window.qrcodeModule);
+    script.onerror = () => reject(new Error('Failed to load qrcode library'));
+    document.head.appendChild(script);
+  });
+}
+
 // Info icon component (similar to lucide-react Info icon)
 const InfoIcon = ({ className = "" }) => {
   return React.createElement('svg', {
@@ -1640,6 +1656,39 @@ function SecurityTab({ isDarkMode }) {
     setLoading(false);
   };
 
+  // QR code data URL for setup (generated client-side to avoid leaking the TOTP secret
+  // to third-party QR services). We lazily load a small QR library and generate a
+  // data URL from the provided `setupData.uri`.
+  const [qrDataUrl, setQrDataUrl] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function gen() {
+      if (!setupData || !setupData.uri) {
+        setQrDataUrl(null);
+        return;
+      }
+      try {
+        const lib = await loadQRCodeLib();
+        // The UMD exposes either `qrcode` or `QRCode`; both provide `toDataURL`
+        const toDataURL = (lib && lib.toDataURL) || (lib && lib.QRCode && lib.QRCode.toDataURL) || (window.qrcode && window.qrcode.toDataURL) || (window.QRCode && window.QRCode.toDataURL);
+        if (!toDataURL) {
+          setQrDataUrl(null);
+          return;
+        }
+        const dataUrl = await toDataURL(setupData.uri, { width: 200, margin: 1 });
+        if (!cancelled) setQrDataUrl(dataUrl);
+      } catch (err) {
+        // Fail silently; optional fallback could request a backend-provided image
+        setQrDataUrl(null);
+      }
+    }
+    gen();
+    return () => {
+      cancelled = true;
+    };
+  }, [setupData && setupData.uri]);
+
   return (
     <div className={`rounded-lg border p-6 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
       <h2 className={`text-xl font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Two-Factor Authentication (2FA)</h2>
@@ -1685,9 +1734,11 @@ function SecurityTab({ isDarkMode }) {
               Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.):
             </p>
             <div className="mb-4">
-              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setupData.uri)}`} 
-                   alt="2FA QR Code" 
-                   className="mx-auto border rounded" />
+              {qrDataUrl ? (
+                React.createElement('img', { src: qrDataUrl, alt: '2FA QR Code', className: 'mx-auto border rounded' })
+              ) : (
+                React.createElement('div', { className: 'mx-auto border rounded w-48 h-48 flex items-center justify-center text-sm text-gray-500', role: 'status' }, 'QR unavailable — please copy the secret manually')
+              )}
             </div>
             <p className={`text-xs mb-4 text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
               Or manually enter: <code className={`px-2 py-1 rounded ${isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>{setupData.secret}</code>
