@@ -1591,6 +1591,7 @@ function SecurityTab({ isDarkMode }) {
       const data = await response.json();
       if (data.success) {
         setSetupData(data);
+        setRecoveryCodes(data.recovery_codes || null);
         setMessage('Scan the QR code with your authenticator app, then enter the 6-digit code below.');
       } else {
         setMessage(data.error || 'Failed to setup 2FA');
@@ -1620,6 +1621,7 @@ function SecurityTab({ isDarkMode }) {
         setTwofaStatus(true);
         setSetupData(null);
         setVerificationCode('');
+        setRecoveryCodes(data.recovery_codes || null);
         setMessage('2FA has been enabled successfully!');
       } else {
         setMessage(data.error || 'Failed to enable 2FA');
@@ -1661,6 +1663,7 @@ function SecurityTab({ isDarkMode }) {
   // to third-party QR services). We lazily load a small QR library and generate a
   // data URL from the provided `setupData.uri`.
   const [qrDataUrl, setQrDataUrl] = useState(null);
+  const [recoveryCodes, setRecoveryCodes] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1761,6 +1764,16 @@ function SecurityTab({ isDarkMode }) {
                 Verify & Enable
               </button>
             </div>
+            {recoveryCodes && (
+              <div className={`mt-4 p-3 rounded text-sm ${isDarkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
+                <div className="font-medium mb-2">One-time recovery codes (store these safely)</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {recoveryCodes.map((c, idx) => (
+                    React.createElement('div', { key: idx, className: `${isDarkMode ? 'px-2 py-1 bg-gray-700 text-white rounded text-xs' : 'px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs'}` }, c)
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

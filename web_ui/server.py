@@ -1034,7 +1034,10 @@ def login_page():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
-        totp_code = request.form.get("totp_code", "").strip()
+        # Accept either the legacy 'totp_code' or a common 'otp' field so
+        # password managers that target 'otp'/'one-time-code' will be
+        # recognized while preserving backward compatibility.
+        totp_code = (request.form.get("totp_code") or request.form.get("otp") or "").strip()
         remember = request.form.get("remember") == "1"
 
         if _webui_auth_configured():
@@ -1050,14 +1053,15 @@ def login_page():
                         if totp_code and _consume_recovery_code(totp_code):
                             console.print(f"Recovery code used for user {username}", markup=False)
                         else:
-                            return render_template("login.html", error="Invalid 2FA code or recovery code", show_2fa=True)
+                            # Do not reveal why login failed; present a generic message.
+                            return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
 
                 session["authenticated"] = True
                 if remember:
                     session.permanent = True
                 return redirect(url_for("config_page"))
             else:
-                return render_template("login.html", error="Invalid credentials")
+                return render_template("login.html", error="Credentials did not match")
         else:
             # No env, accept any non-empty
             if username and password:
@@ -1069,7 +1073,8 @@ def login_page():
                         if totp_code and _consume_recovery_code(totp_code):
                             console.print(f"Recovery code used for user {username}", markup=False)
                         else:
-                            return render_template("login.html", error="Invalid 2FA code or recovery code", show_2fa=True)
+                            # Generic error only; avoid revealing whether TOTP or recovery code failed.
+                            return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
 
                 session["authenticated"] = True
                 if remember:
@@ -1086,7 +1091,7 @@ def login_page():
                     console.print("Running in Docker: skipping persistent save of credentials. Provide credentials via Docker secrets.", markup=False)
                 return redirect(url_for("config_page"))
             else:
-                return render_template("login.html", error="Invalid credentials")
+                return render_template("login.html", error="Credentials did not match")
 
     # Show 2FA field if enabled
     show_2fa = _totp_enabled()
