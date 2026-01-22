@@ -2,6 +2,7 @@
 # pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownParameterType=false
 import ast
 import contextlib
+import hashlib
 import hmac
 import json
 import os
@@ -17,15 +18,6 @@ from pathlib import Path
 from typing import Any, Literal, Optional, TypedDict, Union, cast
 
 import keyring
-
-# Set keyring backend for Docker environments
-try:
-    import keyrings.alt
-    if os.environ.get('DOCKER_CONTAINER') or os.path.exists('/.dockerenv'):
-        keyring.set_keyring(keyrings.alt.file.PlaintextKeyring())
-except ImportError:
-    pass
-
 import pyotp
 from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for  # pyright: ignore[reportMissingImports]
 from flask_cors import CORS  # pyright: ignore[reportMissingModuleSource]
@@ -61,21 +53,119 @@ inproc_lock = threading.Lock()
 # Runtime browse roots (set by upload.py when starting web UI)
 _runtime_browse_roots: Optional[str] = None
 
-# Load saved auth from keyring
-saved_auth = None
-saved_totp_secret = None
+# Runtime flags and stored auth/totp
+saved_auth: Optional[tuple[str, str]] = None
+saved_totp_secret: Optional[str] = None
 
-# Try keyring
-with contextlib.suppress(Exception):
-    auth_data = keyring.get_password("upload-assistant", "auth")
-    if auth_data:
-        username, password = auth_data.split(":", 1)
-        saved_auth = (username, password)
+# Detect docker mode (allow operator to set DOCKER_CONTAINER env explicitly)
+DOCKER_MODE = bool(os.environ.get("DOCKER_CONTAINER") or os.path.exists("/.dockerenv"))
 
-    # Load TOTP secret
-    totp_secret = keyring.get_password("upload-assistant", "totp_secret")
-    if totp_secret:
-        saved_totp_secret = totp_secret
+
+def _read_docker_secret_file(*names: str) -> Optional[str]:
+    """Return the first secret file content found for any of the provided names.
+    Docker secrets are usually mounted at /run/secrets/<name>.
+    """
+    base = "/run/secrets"
+    for name in names:
+        path = os.path.join(base, name)
+        try:
+            if os.path.exists(path):
+                with open(path, encoding="utf-8") as f:
+                    return f.read().strip()
+        except Exception:
+            continue
+    return None
+
+
+# Load credentials: prefer Docker secrets when running in Docker; otherwise use OS keyring
+if DOCKER_MODE:
+    # Try separate username/password secrets first, then combined auth secret
+    docker_user = _read_docker_secret_file("UA_WEBUI_USERNAME", "ua_webui_username")
+    docker_pass = _read_docker_secret_file("UA_WEBUI_PASSWORD", "ua_webui_password")
+    if docker_user and docker_pass:
+        saved_auth = (docker_user, docker_pass)
+    else:
+        combined = _read_docker_secret_file("upload-assistant-auth", "upload_assistant_auth", "ua_webui_auth")
+        if combined and ":" in combined:
+            u, p = combined.split(":", 1)
+            saved_auth = (u, p)
+
+    # TOTP secret via Docker secret
+    docker_totp = _read_docker_secret_file("UA_TOTP_SECRET", "ua_totp_secret", "upload-assistant-totp")
+    if docker_totp:
+        saved_totp_secret = docker_totp
+else:
+    # Try keyring for persisted credentials when not in Docker
+    with contextlib.suppress(Exception):
+        auth_data = keyring.get_password("upload-assistant", "auth")
+        if auth_data:
+            username, password = auth_data.split(":", 1)
+            saved_auth = (username, password)
+
+        totp_secret = keyring.get_password("upload-assistant", "totp_secret")
+        if totp_secret:
+            saved_totp_secret = totp_secret
+
+
+def _hash_code(code: str) -> str:
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+
+def _generate_recovery_codes(n: int = 10, length: int = 10) -> list[str]:
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # Crockford-like, avoid ambiguous chars
+    return ["".join(secrets.choice(alphabet) for _ in range(length)) for _ in range(n)]
+
+
+def _load_recovery_hashes() -> list[str]:
+    # Prefer Docker secret file if in Docker
+    if DOCKER_MODE:
+        raw = _read_docker_secret_file("UA_2FA_RECOVERY", "ua_2fa_recovery", "upload-assistant-2fa-recovery")
+        if not raw:
+            return []
+        lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+        # If lines look like hex hashes, return as-is; otherwise hash them
+        if all(re.fullmatch(r"[0-9a-fA-F]{64}", ln) for ln in lines):
+            return [ln.lower() for ln in lines]
+        return [_hash_code(ln) for ln in lines]
+
+    # Non-docker: load from keyring
+    with contextlib.suppress(Exception):
+        raw = keyring.get_password("upload-assistant", "2fa_recovery")
+        if raw:
+            try:
+                data = json.loads(raw)
+                if isinstance(data, list):
+                    return [str(x) for x in data]
+            except Exception:
+                # Fallback: treat as single-line code
+                return [_hash_code(raw)]
+    return []
+
+
+def _persist_recovery_hashes(hashes: list[str]) -> None:
+    if DOCKER_MODE:
+        # Not allowed to persist from inside container
+        return
+    with contextlib.suppress(Exception):
+        keyring.set_password("upload-assistant", "2fa_recovery", json.dumps(hashes))
+
+
+def _consume_recovery_code(code: str) -> bool:
+    """Return True if code matches an unused recovery code and mark it used (persist)."""
+    if not code:
+        return False
+    if DOCKER_MODE:
+        # Cannot reliably consume codes in Docker mode (secrets immutable)
+        return False
+    hashes = _load_recovery_hashes()
+    if not hashes:
+        return False
+    h = _hash_code(code.strip())
+    if h in hashes:
+        hashes.remove(h)
+        _persist_recovery_hashes(hashes)
+        return True
+    return False
 
 
 def _parse_cors_origins() -> list[str]:
@@ -866,8 +956,14 @@ def login_page():
             expected_password = os.environ.get("UA_WEBUI_PASSWORD") or (saved_auth[1] if saved_auth else "")
             if username == expected_username and password == expected_password:
                 # Check 2FA if enabled
-                if _totp_enabled() and (not totp_code or not _verify_totp_code(totp_code)):
-                    return render_template("login.html", error="Invalid 2FA code", show_2fa=True)
+                if _totp_enabled():
+                    totp_ok = bool(totp_code and _verify_totp_code(totp_code))
+                    if not totp_ok:
+                        # Try one-time recovery codes (consumes code when used)
+                        if totp_code and _consume_recovery_code(totp_code):
+                            console.print(f"Recovery code used for user {username}", markup=False)
+                        else:
+                            return render_template("login.html", error="Invalid 2FA code or recovery code", show_2fa=True)
 
                 session["authenticated"] = True
                 if remember:
@@ -879,17 +975,27 @@ def login_page():
             # No env, accept any non-empty
             if username and password:
                 # Check 2FA if enabled
-                if _totp_enabled() and (not totp_code or not _verify_totp_code(totp_code)):
-                    return render_template("login.html", error="Invalid 2FA code", show_2fa=True)
+                if _totp_enabled():
+                    totp_ok = bool(totp_code and _verify_totp_code(totp_code))
+                    if not totp_ok:
+                        # Try one-time recovery codes (consumes code when used)
+                        if totp_code and _consume_recovery_code(totp_code):
+                            console.print(f"Recovery code used for user {username}", markup=False)
+                        else:
+                            return render_template("login.html", error="Invalid 2FA code or recovery code", show_2fa=True)
 
                 session["authenticated"] = True
                 if remember:
                     session.permanent = True
-                # Save auth to keyring
-                with contextlib.suppress(Exception):
-                    keyring.set_password("upload-assistant", "auth", f"{username}:{password}")
-                # Update saved_auth
-                saved_auth = (username, password)
+                # Save auth to keyring (only when not running in Docker)
+                if not DOCKER_MODE:
+                    with contextlib.suppress(Exception):
+                        keyring.set_password("upload-assistant", "auth", f"{username}:{password}")
+                    # Update saved_auth
+                    saved_auth = (username, password)
+                else:
+                    # In Docker, persistent secrets must be provided via Docker secrets
+                    console.print("Running in Docker: skipping persistent save of credentials. Provide credentials via Docker secrets.", markup=False)
                 return redirect(url_for("config_page"))
             else:
                 return render_template("login.html", error="Invalid credentials")
@@ -939,11 +1045,12 @@ def twofa_setup():
 
     secret = _generate_totp_secret()
     uri = _get_totp_uri(username, secret)
-
-    # Store temporarily in session for verification
+    # Generate one-time recovery codes and store temporarily in session
+    recovery_codes = _generate_recovery_codes()
     session["temp_totp_secret"] = secret
+    session["temp_recovery_codes"] = recovery_codes
 
-    return jsonify({"secret": secret, "uri": uri, "success": True})
+    return jsonify({"secret": secret, "uri": uri, "recovery_codes": recovery_codes, "success": True})
 
 
 @app.route("/api/2fa/enable", methods=["POST"])
@@ -964,9 +1071,17 @@ def twofa_enable():
     if not totp.verify(code):
         return jsonify({"error": "Invalid code", "success": False}), 400
 
-    # Save the secret permanently
+    # Save the secret permanently (only when not running in Docker)
+    if DOCKER_MODE:
+        return jsonify({"error": "Cannot persist 2FA secret when running in Docker. Provide the TOTP secret via Docker secrets (e.g. /run/secrets/UA_TOTP_SECRET).", "success": False}), 400
+
     with contextlib.suppress(Exception):
         keyring.set_password("upload-assistant", "totp_secret", temp_secret)
+
+    # Persist recovery codes (hashes) if provided
+    temp_codes = session.get("temp_recovery_codes") or []
+    hashes = [_hash_code(c) for c in temp_codes]
+    _persist_recovery_hashes(hashes)
 
     # Update global variable
     global saved_totp_secret
@@ -974,8 +1089,9 @@ def twofa_enable():
 
     # Clear temp session
     session.pop("temp_totp_secret", None)
+    session.pop("temp_recovery_codes", None)
 
-    return jsonify({"success": True})
+    return jsonify({"success": True, "recovery_codes": temp_codes})
 
 
 @app.route("/api/2fa/disable", methods=["POST"])
@@ -984,9 +1100,15 @@ def twofa_disable():
     if not _totp_enabled():
         return jsonify({"error": "2FA not enabled", "success": False}), 400
 
-    # Remove from keyring
+    # Remove from keyring (only when not running in Docker)
+    if DOCKER_MODE:
+        return jsonify({"error": "Cannot remove TOTP secret when running in Docker. Remove the secret from your Docker secrets on the host.", "success": False}), 400
+
     with contextlib.suppress(Exception):
         keyring.delete_password("upload-assistant", "totp_secret")
+        # Also remove recovery hashes
+        with contextlib.suppress(Exception):
+            keyring.delete_password("upload-assistant", "2fa_recovery")
 
     # Update global variable
     global saved_totp_secret
