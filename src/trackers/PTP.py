@@ -1172,7 +1172,7 @@ class PTP:
                 else:
                     mi_dump = MediaInfo.parse(file, output="STRING", full=False)
                     temp_mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/TEMP_PTP_MEDIAINFO.txt"
-                    async with aiofiles.open(temp_mi_path, "w", encoding="utf-8") as f:
+                    async with aiofiles.open(temp_mi_path, "w", newline="", encoding="utf-8") as f:
                         await f.write(mi_dump.replace(file, os.path.basename(file)))
                     async with aiofiles.open(temp_mi_path, encoding="utf-8") as mi_file:
                         mi_dump = await mi_file.read()
