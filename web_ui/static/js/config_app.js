@@ -1478,6 +1478,182 @@ function ItemList({
   );
 }
 
+function SecurityTab({ isDarkMode }) {
+  const [twofaStatus, setTwofaStatus] = useState(null);
+  const [setupData, setSetupData] = useState(null);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    loadTwofaStatus();
+  }, []);
+
+  const loadTwofaStatus = async () => {
+    try {
+      const response = await apiFetch(`${API_BASE}/2fa/status`);
+      const data = await response.json();
+      setTwofaStatus(data.enabled);
+    } catch (error) {
+      console.error('Failed to load 2FA status:', error);
+    }
+  };
+
+  const handleSetup2FA = async () => {
+    setLoading(true);
+    setMessage('');
+    try {
+      const response = await apiFetch(`${API_BASE}/2fa/setup`, {
+        method: 'POST'
+      });
+      const data = await response.json();
+      if (data.success) {
+        setSetupData(data);
+        setMessage('Scan the QR code with your authenticator app, then enter the 6-digit code below.');
+      } else {
+        setMessage(data.error || 'Failed to setup 2FA');
+      }
+    } catch (error) {
+      setMessage('Failed to setup 2FA');
+    }
+    setLoading(false);
+  };
+
+  const handleVerifyAndEnable = async () => {
+    if (!verificationCode || verificationCode.length !== 6) {
+      setMessage('Please enter a valid 6-digit code');
+      return;
+    }
+
+    setLoading(true);
+    setMessage('');
+    try {
+      const response = await apiFetch(`${API_BASE}/2fa/enable`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: verificationCode })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setTwofaStatus(true);
+        setSetupData(null);
+        setVerificationCode('');
+        setMessage('2FA has been enabled successfully!');
+      } else {
+        setMessage(data.error || 'Failed to enable 2FA');
+      }
+    } catch (error) {
+      setMessage('Failed to enable 2FA');
+    }
+    setLoading(false);
+  };
+
+  const handleDisable2FA = async () => {
+    if (!confirm('Are you sure you want to disable 2FA? This will make your account less secure.')) {
+      return;
+    }
+
+    setLoading(true);
+    setMessage('');
+    try {
+      const response = await apiFetch(`${API_BASE}/2fa/disable`, {
+        method: 'POST'
+      });
+      const data = await response.json();
+      if (data.success) {
+        setTwofaStatus(false);
+        setMessage('2FA has been disabled.');
+      } else {
+        setMessage(data.error || 'Failed to disable 2FA');
+      }
+    } catch (error) {
+      setMessage('Failed to disable 2FA');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className={`rounded-lg border p-6 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+      <h2 className={`text-xl font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Two-Factor Authentication (2FA)</h2>
+      
+      <div className="space-y-4">
+        <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                2FA Status: {twofaStatus === null ? 'Loading...' : twofaStatus ? 'Enabled' : 'Disabled'}
+              </h3>
+              <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                {twofaStatus ? 'Your account is protected with time-based one-time passwords.' : 'Enable 2FA to add an extra layer of security to your account.'}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              {!twofaStatus && (
+                <button
+                  onClick={handleSetup2FA}
+                  disabled={loading}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {loading ? 'Setting up...' : 'Enable 2FA'}
+                </button>
+              )}
+              {twofaStatus && (
+                <button
+                  onClick={handleDisable2FA}
+                  disabled={loading}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                >
+                  {loading ? 'Disabling...' : 'Disable 2FA'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {setupData && (
+          <div className={`p-4 rounded-lg border ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-yellow-50 border-yellow-200'}`}>
+            <h4 className={`font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Setup 2FA</h4>
+            <p className={`text-sm mb-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+              Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.):
+            </p>
+            <div className="mb-4">
+              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setupData.uri)}`} 
+                   alt="2FA QR Code" 
+                   className="mx-auto border rounded" />
+            </div>
+            <p className={`text-xs mb-4 text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              Or manually enter: <code className={`px-2 py-1 rounded ${isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>{setupData.secret}</code>
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={verificationCode}
+                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000"
+                className={`flex-1 px-3 py-2 border rounded-lg ${isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-300'}`}
+                maxLength="6"
+              />
+              <button
+                onClick={handleVerifyAndEnable}
+                disabled={loading || verificationCode.length !== 6}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              >
+                Verify & Enable
+              </button>
+            </div>
+          </div>
+        )}
+
+        {message && (
+          <div className={`p-3 rounded-lg ${message.includes('success') || message.includes('enabled') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+            {message}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ConfigApp() {
   const [sections, setSections] = useState([]);
   const [status, setStatus] = useState({ text: 'Loading config options...', type: 'info' });
@@ -1867,6 +2043,20 @@ function ConfigApp() {
             <div className="space-y-6">
               {/* Tab Navigation */}
               <div className={`flex space-x-1 rounded-lg p-1 ${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'}`}>
+                <button
+                  onClick={() => setActiveTab('security')}
+                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                    activeTab === 'security'
+                      ? isDarkMode
+                        ? 'bg-gray-700 text-white'
+                        : 'bg-white text-gray-900 shadow-sm'
+                      : isDarkMode
+                        ? 'text-gray-400 hover:text-white hover:bg-gray-700'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+                  }`}
+                >
+                  Security
+                </button>
                 {sections.map((section) => {
                   const sectionId = section.section.toLowerCase();
                   const isActive = activeTab === sectionId;
@@ -1898,6 +2088,7 @@ function ConfigApp() {
 
               {/* Tab Content */}
               <div className="space-y-4">
+                {activeTab === 'security' && <SecurityTab isDarkMode={isDarkMode} />}
                 {sections.map((section) => {
                   const sectionId = section.section.toLowerCase();
                   if (activeTab !== sectionId) return null;

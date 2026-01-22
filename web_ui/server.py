@@ -26,6 +26,7 @@ try:
 except ImportError:
     pass
 
+import pyotp
 from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for  # pyright: ignore[reportMissingImports]
 from flask_cors import CORS  # pyright: ignore[reportMissingModuleSource]
 from werkzeug.security import safe_join  # pyright: ignore[reportMissingImports]
@@ -62,6 +63,7 @@ _runtime_browse_roots: Optional[str] = None
 
 # Load saved auth from keyring
 saved_auth = None
+saved_totp_secret = None
 
 # Try keyring
 with contextlib.suppress(Exception):
@@ -69,6 +71,11 @@ with contextlib.suppress(Exception):
     if auth_data:
         username, password = auth_data.split(":", 1)
         saved_auth = (username, password)
+
+    # Load TOTP secret
+    totp_secret = keyring.get_password("upload-assistant", "totp_secret")
+    if totp_secret:
+        saved_totp_secret = totp_secret
 
 
 def _parse_cors_origins() -> list[str]:
@@ -188,6 +195,29 @@ def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
         return redirect(url_for("login_page"))
 
     return None
+
+
+def _totp_enabled() -> bool:
+    """Check if TOTP 2FA is enabled"""
+    return saved_totp_secret is not None
+
+
+def _verify_totp_code(code: str) -> bool:
+    """Verify a TOTP code against the stored secret"""
+    if not saved_totp_secret:
+        return False
+    totp = pyotp.TOTP(saved_totp_secret)
+    return totp.verify(code)
+
+
+def _generate_totp_secret() -> str:
+    """Generate a new TOTP secret"""
+    return pyotp.random_base32()
+
+
+def _get_totp_uri(username: str, secret: str) -> str:
+    """Generate TOTP URI for QR code"""
+    return pyotp.totp.TOTP(secret).provisioning_uri(name=username, issuer_name="Upload Assistant")
 
 
 def _validate_upload_assistant_args(tokens: Sequence[Any]) -> list[str]:
@@ -827,12 +857,18 @@ def login_page():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
+        totp_code = request.form.get("totp_code", "").strip()
         remember = request.form.get("remember") == "1"
+
         if _webui_auth_configured():
             # Validate against env vars or saved_auth
             expected_username = os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else "")
             expected_password = os.environ.get("UA_WEBUI_PASSWORD") or (saved_auth[1] if saved_auth else "")
             if username == expected_username and password == expected_password:
+                # Check 2FA if enabled
+                if _totp_enabled() and (not totp_code or not _verify_totp_code(totp_code)):
+                    return render_template("login.html", error="Invalid 2FA code", show_2fa=True)
+
                 session["authenticated"] = True
                 if remember:
                     session.permanent = True
@@ -842,6 +878,10 @@ def login_page():
         else:
             # No env, accept any non-empty
             if username and password:
+                # Check 2FA if enabled
+                if _totp_enabled() and (not totp_code or not _verify_totp_code(totp_code)):
+                    return render_template("login.html", error="Invalid 2FA code", show_2fa=True)
+
                 session["authenticated"] = True
                 if remember:
                     session.permanent = True
@@ -853,7 +893,10 @@ def login_page():
                 return redirect(url_for("config_page"))
             else:
                 return render_template("login.html", error="Invalid credentials")
-    return render_template("login.html")
+
+    # Show 2FA field if enabled
+    show_2fa = _totp_enabled()
+    return render_template("login.html", show_2fa=show_2fa)
 
 
 @app.route("/logout")
@@ -877,6 +920,79 @@ def config_page():
 def health():
     """Health check endpoint"""
     return jsonify({"status": "healthy", "success": True, "message": "Upload Assistant Web UI is running"})
+
+
+@app.route("/api/2fa/status")
+def twofa_status():
+    """Check 2FA status"""
+    return jsonify({"enabled": _totp_enabled(), "success": True})
+
+
+@app.route("/api/2fa/setup", methods=["POST"])
+def twofa_setup():
+    """Setup 2FA - generate secret and return QR code URI"""
+    if _totp_enabled():
+        return jsonify({"error": "2FA already enabled", "success": False}), 400
+
+    # Get username for QR code
+    username = os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else "user")
+
+    secret = _generate_totp_secret()
+    uri = _get_totp_uri(username, secret)
+
+    # Store temporarily in session for verification
+    session["temp_totp_secret"] = secret
+
+    return jsonify({"secret": secret, "uri": uri, "success": True})
+
+
+@app.route("/api/2fa/enable", methods=["POST"])
+def twofa_enable():
+    """Enable 2FA after verification"""
+    data = request.json or {}
+    code = data.get("code", "").strip()
+
+    if not code:
+        return jsonify({"error": "Code required", "success": False}), 400
+
+    temp_secret = session.get("temp_totp_secret")
+    if not temp_secret:
+        return jsonify({"error": "No setup in progress", "success": False}), 400
+
+    # Verify the code with the temporary secret
+    totp = pyotp.TOTP(temp_secret)
+    if not totp.verify(code):
+        return jsonify({"error": "Invalid code", "success": False}), 400
+
+    # Save the secret permanently
+    with contextlib.suppress(Exception):
+        keyring.set_password("upload-assistant", "totp_secret", temp_secret)
+
+    # Update global variable
+    global saved_totp_secret
+    saved_totp_secret = temp_secret
+
+    # Clear temp session
+    session.pop("temp_totp_secret", None)
+
+    return jsonify({"success": True})
+
+
+@app.route("/api/2fa/disable", methods=["POST"])
+def twofa_disable():
+    """Disable 2FA"""
+    if not _totp_enabled():
+        return jsonify({"error": "2FA not enabled", "success": False}), 400
+
+    # Remove from keyring
+    with contextlib.suppress(Exception):
+        keyring.delete_password("upload-assistant", "totp_secret")
+
+    # Update global variable
+    global saved_totp_secret
+    saved_totp_secret = None
+
+    return jsonify({"success": True})
 
 
 @app.route("/api/browse_roots")
