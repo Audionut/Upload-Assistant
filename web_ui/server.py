@@ -4,11 +4,11 @@ import ast
 import base64
 import contextlib
 import hmac
-import importlib.util
 import json
 import os
 import queue
 import re
+import secrets
 import subprocess
 import sys
 import threading
@@ -41,7 +41,10 @@ CORS_fn = cast(Any, CORS)
 safe_join = cast(Any, safe_join)
 
 app: Any = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "some-default-secret-key-change-this")
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+
+# Lock to prevent concurrent in-process uploads (avoids cross-session interference)
+inproc_lock = threading.Lock()
 
 # Runtime browse roots (set by upload.py when starting web UI)
 _runtime_browse_roots: Optional[str] = None
@@ -180,7 +183,8 @@ def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
     # For web routes
     if _webui_auth_configured():
         # Use basic auth for web too if configured
-        pass  # but since /config doesn't require, but to be consistent, perhaps require for /config too
+        if (request.path == "/config" or request.path in ("/", "/index.html")) and not _webui_auth_ok():
+            return redirect(url_for("login_page"))
     else:
         # Use session auth for web
         if (request.path == "/config" or request.path in ("/", "/index.html")) and not session.get("authenticated"):
@@ -233,17 +237,40 @@ def _load_config_from_file(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
 
-    module_name = f"ua_config_{path.stem}_{abs(hash(str(path)))}"
-    spec = importlib.util.spec_from_file_location(module_name, str(path))
-    if spec is None or spec.loader is None:
+    # Restrict to safe directory and extension
+    safe_dir = Path.cwd() / "data"
+    if not path.is_relative_to(safe_dir) or path.suffix != ".py":
         return {}
 
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    config_value = getattr(module, "config", {})
-    if isinstance(config_value, dict):
-        return config_value
-    return {}
+    # Basic permissions check: ensure file is readable and not world-writable (on Unix-like; on Windows, minimal check)
+    try:
+        stat_info = path.stat()
+        # On Windows, check if file is not hidden and readable
+        if os.name == 'nt':
+            # Windows: check if not hidden (FILE_ATTRIBUTE_HIDDEN = 2)
+            if stat_info.st_file_attributes & 2:  # Hidden
+                return {}
+        else:
+            # Unix-like: check ownership and permissions
+            if stat_info.st_uid != os.getuid() or (stat_info.st_mode & 0o022):
+                return {}
+    except Exception:
+        return {}
+
+    try:
+        with open(path, encoding='utf-8') as f:
+            content = f.read()
+        tree = ast.parse(content)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == 'config':
+                        config_value = ast.literal_eval(node.value)
+                        if isinstance(config_value, dict):
+                            return config_value
+        return {}
+    except Exception:
+        return {}
 
 
 def _json_safe(value: Any) -> Any:
@@ -938,7 +965,7 @@ def config_options():
                     client_type_item = next((c for c in item["children"] if c.get("key") == "torrent_client"), None)
                     if client_type_item:
                         client_types.add(client_type_item.get("value", "unknown"))
-            sections[-1]["client_types"] = sorted(client_types, key=lambda x: (x != 'qbit', x))
+            sections[-1]["client_types"] = sorted(client_types, key=lambda x: (x != "qbit", x))
 
     return jsonify({"success": True, "sections": sections})
 
@@ -1133,7 +1160,6 @@ def execute_command():
 
                 yield f"data: {json.dumps({'type': 'system', 'data': f'Executing: {command_str}'})}\n\n"
 
-
                 # Decide whether to run as a subprocess or in-process. In-process
                 # preserves Rich output and allows capturing console.input / cli_ui prompts.
                 use_subprocess = bool(os.environ.get("UA_WEBUI_USE_SUBPROCESS", "").strip())
@@ -1148,6 +1174,17 @@ def execute_command():
 
                     # Prepare input queue for prompts
                     input_queue: queue.Queue[str] = queue.Queue()
+
+                    # Import upload.main on the main thread to avoid thread-unsafe imports
+                    # inside the worker thread. Importing here ensures any module-level
+                    # side-effects run on the request/main thread rather than inside
+                    # the worker thread.
+                    try:
+                        import upload as _upload
+
+                        upload_main = _upload.main
+                    except Exception as _e:
+                        upload_main = None
 
                     # Prepare a recording Console to capture rich output
                     import io
@@ -1267,21 +1304,43 @@ def execute_command():
                                 # Run the async main() entry point of upload.py
                                 import asyncio
 
-                                from upload import main as upload_main
+                                # Use the pre-imported upload_main from the outer scope.
+                                # If it wasn't available, attempt a safe import here as fallback.
+                                nonlocal_upload = upload_main
+                                if nonlocal_upload is None:
+                                    try:
+                                        import upload as _upload_fallback
+
+                                        nonlocal_upload = _upload_fallback.main
+                                    except Exception:
+                                        nonlocal_upload = None
 
                                 # Ensure Windows event loop policy when needed
                                 if sys.platform == "win32":
                                     with contextlib.suppress(Exception):
                                         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-                                asyncio.run(upload_main())
+                                if nonlocal_upload is None:
+                                    raise RuntimeError("upload.main not available for in-process execution")
+                                asyncio.run(nonlocal_upload())
                             except Exception as e:
                                 console.print(f"In-process execution error: {e}", markup=False)
                                 console.print(traceback.format_exc(), markup=False)
                             finally:
                                 # Restore sys.argv in finally block
-                                pass
+                                # Restore patched console
+                                console_key = id(src_console.console)
+                                if console_key in _ua_console_store:
+                                    origs = _ua_console_store[console_key]
+                                    src_console.console.print = origs["orig_print"]
+                                    if "orig_input" in origs and origs["orig_input"] is not None:
+                                        src_console.console.input = origs["orig_input"]
+                                    del _ua_console_store[console_key]
+                                # Release lock to allow next inproc run
+                                inproc_lock.release()
 
                         worker = threading.Thread(target=run_upload, daemon=True)
+                        # Acquire lock to prevent concurrent inproc runs (avoids cross-session interference)
+                        inproc_lock.acquire()
                         worker.start()
 
                         # Stream full HTML snapshots from the recorder while the worker runs.
@@ -1538,7 +1597,6 @@ def send_input():
         user_input = data.get("input", "")
 
         console.print(f"Received input for session {session_id}: '{user_input}'", markup=False)
-
 
         if session_id not in active_processes:
             return jsonify({"error": "No active process", "success": False}), 404
