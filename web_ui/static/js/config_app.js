@@ -389,14 +389,121 @@ function ConfigLeaf({
     ? 'w-full px-3 py-2 border border-gray-700 bg-gray-900 text-gray-100 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent'
     : 'w-full px-3 py-2 border border-gray-300 bg-white text-gray-800 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent';
 
+  // Check if this is a numeric field that should use NumberInput
+  const isNumericField = (key, pathParts) => {
+    // Define which fields should be treated as numeric
+    const numericFields = [
+      'tracker_pass_checks',
+      'mkbrr_threads',
+      'ffmpeg_compression',
+      'screens',
+      'cutoff_screens',
+      'thumbnail_size',
+      'process_limit',
+      'threads',
+      'multiScreens',
+      'pack_thumb_size',
+      'charLimit',
+      'fileLimit',
+      'processLimit',
+      'min_successful_image_uploads',
+      'overlay_text_size',
+      'logo_size',
+      'bluray_image_size',
+      'rehash_cooldown',
+      'custom_layout'
+    ];
+    return numericFields.includes(key);
+  };
+
+  // Check if this is a linking field that should use SelectDropdown
+  const isLinkingField = (key, pathParts) => {
+    return key === 'linking' && pathParts.includes('TORRENT_CLIENTS');
+  };
+
+  // Hooks for boolean values
+  const [checked, setChecked] = useState(Boolean(item.value));
+
+  useEffect(() => {
+    if (typeof item.value === 'boolean') setChecked(Boolean(item.value));
+  }, [item.value]);
+
+  // Hooks for numeric values
+  const getDefaultValue = (key) => {
+    switch (key) {
+      case 'mkbrr_threads':
+      case 'rehash_cooldown':
+        return 0;
+      case 'multiScreens':
+        return 2;
+      case 'tracker_pass_checks':
+      case 'screens':
+      case 'cutoff_screens':
+      case 'process_limit':
+      case 'threads':
+      case 'min_successful_image_uploads':
+      case 'overlay_text_size':
+      case 'logo_size':
+      case 'thumbnail_size':
+      case 'pack_thumb_size':
+      case 'charLimit':
+      case 'fileLimit':
+      case 'processLimit':
+      case 'bluray_image_size':
+      case 'custom_layout':
+        return 1;
+      case 'ffmpeg_compression':
+        return 6;
+      default:
+        return 1;
+    }
+  };
+
+  const [numericValue, setNumericValue] = useState(() => {
+    if (isNumericField(item.key, pathParts)) {
+      const val = item.value;
+      if (val === null || val === undefined || val === '') return getDefaultValue(item.key);
+      const num = Number(val);
+      return isNaN(num) ? getDefaultValue(item.key) : num;
+    }
+    return 1;
+  });
+
+  useEffect(() => {
+    if (isNumericField(item.key, pathParts)) {
+      const val = item.value;
+      if (val === null || val === undefined || val === '') {
+        setNumericValue(getDefaultValue(item.key));
+      } else {
+        const num = Number(val);
+        setNumericValue(isNaN(num) ? getDefaultValue(item.key) : num);
+      }
+    }
+  }, [item.value, item.key, pathParts]);
+
+  // Hooks for select values
+  const [selectedValue, setSelectedValue] = useState(() => {
+    if (isLinkingField(item.key, pathParts)) {
+      const val = item.value;
+      if (val === null || val === undefined) return '';
+      return String(val);
+    }
+    return '';
+  });
+
+  useEffect(() => {
+    if (isLinkingField(item.key, pathParts)) {
+      const val = item.value;
+      if (val === null || val === undefined) {
+        setSelectedValue('');
+      } else {
+        setSelectedValue(String(val));
+      }
+    }
+  }, [item.value, item.key, pathParts]);
+
 
   if (typeof item.value === 'boolean') {
-    const [checked, setChecked] = useState(Boolean(item.value));
-
-    useEffect(() => {
-      setChecked(Boolean(item.value));
-    }, [item.value]);
-
     const originalValue = Boolean(item.value);
 
     return (
@@ -440,86 +547,7 @@ function ConfigLeaf({
     );
   }
 
-  // Check if this is a numeric field that should use NumberInput
-  const isNumericField = (key, pathParts) => {
-    // Define which fields should be treated as numeric
-    const numericFields = [
-      'tracker_pass_checks',
-      'mkbrr_threads',
-      'ffmpeg_compression',
-      'screens',
-      'cutoff_screens',
-      'thumbnail_size',
-      'process_limit',
-      'threads',
-      'multiScreens',
-      'pack_thumb_size',
-      'charLimit',
-      'fileLimit',
-      'processLimit',
-      'min_successful_image_uploads',
-      'overlay_text_size',
-      'logo_size',
-      'bluray_image_size',
-      'rehash_cooldown',
-      'custom_layout'
-    ];
-    return numericFields.includes(key);
-  };
-
-  // Check if this is a linking field that should use SelectDropdown
-  const isLinkingField = (key, pathParts) => {
-    return key === 'linking' && pathParts.includes('TORRENT_CLIENTS');
-  };
-
   if (isNumericField(item.key, pathParts)) {
-    const getDefaultValue = (key) => {
-      switch (key) {
-        case 'mkbrr_threads':
-        case 'rehash_cooldown':
-          return 0;
-        case 'multiScreens':
-          return 2;
-        case 'tracker_pass_checks':
-        case 'screens':
-        case 'cutoff_screens':
-        case 'process_limit':
-        case 'threads':
-        case 'min_successful_image_uploads':
-        case 'overlay_text_size':
-        case 'logo_size':
-        case 'thumbnail_size':
-        case 'pack_thumb_size':
-        case 'charLimit':
-        case 'fileLimit':
-        case 'processLimit':
-        case 'bluray_image_size':
-        case 'custom_layout':
-          return 1;
-        case 'ffmpeg_compression':
-          return 6;
-        default:
-          return 1;
-      }
-    };
-
-    const [numericValue, setNumericValue] = useState(() => {
-      const val = item.value;
-      if (val === null || val === undefined || val === '') return getDefaultValue(item.key);
-      const num = Number(val);
-      return isNaN(num) ? getDefaultValue(item.key) : num;
-    });
-
-    useEffect(() => {
-      const val = item.value;
-      if (val === null || val === undefined || val === '') {
-        setNumericValue(1);
-      } else {
-        const num = Number(val);
-        setNumericValue(isNaN(num) ? 1 : num);
-      }
-    }, [item.value]);
-
     const originalValue = String(item.value);
 
     // Define min/max for different fields
@@ -615,21 +643,6 @@ function ConfigLeaf({
       { value: 'hardlink', label: 'Hard Link' }
     ];
 
-    const [selectedValue, setSelectedValue] = useState(() => {
-      const val = item.value;
-      if (val === null || val === undefined) return '';
-      return String(val);
-    });
-
-    useEffect(() => {
-      const val = item.value;
-      if (val === null || val === undefined) {
-        setSelectedValue('');
-      } else {
-        setSelectedValue(String(val));
-      }
-    }, [item.value]);
-
     const originalValue = String(item.value || '');
 
     return (
@@ -685,6 +698,12 @@ function ConfigLeaf({
 
     // Observer: whenever the selected set changes, persist the default_trackers value
     useEffect(() => {
+      const normalizeTrackers = (value) => (
+        String(value || '')
+          .split(',')
+          .map((t) => t.trim().toUpperCase())
+          .filter(Boolean)
+      );
       const nextValue = Array.from(selected).map((t) => String(t).toUpperCase()).join(', ');
       const originalValue = normalizeTrackers(item.value).join(', ');
       onValueChange(path, nextValue, {
@@ -693,8 +712,7 @@ function ConfigLeaf({
         isRedacted: false,
         readOnly: false
       });
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selected]);
+    }, [selected, onValueChange, path, item.value]);
 
     const originalValue = normalizeTrackers(item.value).join(', ');
 
