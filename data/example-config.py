@@ -14,7 +14,7 @@ config = {
         "btn_api": "",
 
         # Order of image hosts. primary host as first with others as backup
-        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, onlyimage, dalexni, zipline, passtheimage, seedpool_cdn, sharex
+        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, onlyimage, dalexni, zipline, passtheimage, seedpool_cdn, sharex, utppm
         "img_host_1": "",
         "img_host_2": "",
         "img_host_3": "",
@@ -37,6 +37,8 @@ config = {
         # ShareX-style image host (IMageHosting) token
         "sharex_url": "https://img.digitalcore.club/api/upload",
         "sharex_api_key": "",
+        # utp.pm API key
+        "utppm_api": "",
 
         # Whether to add a logo for the show/movie from TMDB to the top of the description
         "add_logo": False,
