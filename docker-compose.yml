@@ -18,13 +18,13 @@ services:
       # Required: allowlisted roots the Web UI is allowed to browse/execute within
       # Using a specific subfolder is not working correctly, use the top folder as needed. for instance, /data, not /data/torrents
       - UA_BROWSE_ROOTS=/data,/Upload-Assistant/tmp
-      # RECOMMENDED: enable HTTP Basic Auth for the Web UI/API (especially if exposed beyond localhost (ie: you used 0.0.0.0 at ports above))
+      # RECOMMENDED: Set web UI authentication credentials via environment variables, else OS keyring will be used if available.
       # - UA_WEBUI_USERNAME=admin
       # - UA_WEBUI_PASSWORD=change-me
       # Optional: only needed if you serve the UI from a different origin/domain.
       # - UA_WEBUI_CORS_ORIGINS=https://your-ui-host
     entrypoint: /bin/bash
-    command: -c "source /venv/bin/activate && python /Upload-Assistant/web_ui/server.py"
+    command: -c "source /venv/bin/activate && python /Upload-Assistant/web_ui/server.py & tail -f /dev/null"
     volumes:
       - /path/to/torrents/:/data/torrents/:rw #map this to qbit download location, map exactly as qbittorent template on both sides.
       - /mnt/user/appdata/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw # Optional: will be created automatically if missing

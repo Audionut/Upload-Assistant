@@ -136,7 +136,7 @@ services:
       - UA_WEBUI_HOST=0.0.0.0
       - UA_WEBUI_PORT=5000
       - UA_BROWSE_ROOTS=/data,/Upload-Assistant/tmp
-      # Strongly recommended if you allow access from other devices:
+      # RECOMMENDED: Set web UI authentication credentials via environment variables, else OS keyring will be used if available.
       # - UA_WEBUI_USERNAME=admin
       # - UA_WEBUI_PASSWORD=change-me
     volumes:
@@ -202,8 +202,6 @@ docker run --rm -it --network=host \
   -v /path/to/Upload-Assistant/tmp:/Upload-Assistant/tmp:rw \
   -v /path/to/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw \
   ghcr.io/audionut/upload-assistant:latest path/to/content
-```
-```
 ```
 
 For more details (auth, CORS, troubleshooting), see [docs/web-ui.md](web-ui.md).

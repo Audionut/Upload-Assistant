@@ -192,11 +192,11 @@ services:
       - UA_WEBUI_HOST=0.0.0.0
       - UA_WEBUI_PORT=5000
       - UA_BROWSE_ROOTS=/data/torrents,/Upload-Assistant/tmp
-      # Recommended: Enable authentication if accessible beyond localhost
+      # RECOMMENDED: Set web UI authentication credentials via environment variables, else OS keyring will be used if available.
       # - UA_WEBUI_USERNAME=admin
       # - UA_WEBUI_PASSWORD=change-me
     entrypoint: /bin/bash
-    command: -c "source /venv/bin/activate && python /Upload-Assistant/web_ui/server.py"
+    command: -c "source /venv/bin/activate && python /Upload-Assistant/web_ui/server.py & tail -f /dev/null"
     volumes:
       - /mnt/user/Data/torrents/:/data/torrents/:rw
       - /mnt/user/appdata/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw # Optional: will be created automatically if missing

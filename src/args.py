@@ -202,7 +202,7 @@ class Args:
 
         # Validation: require either path, site_upload, or webui
         if not parsed_args.get('path') and not parsed_args.get('site_upload') and not parsed_args.get('webui'):
-            console.print("[red]Error: Either a path must be provided or --site-upload must be specified.[/red]")
+            console.print("[red]Error: Either a path must be provided, --site-upload must be specified, or --webui must be specified.[/red]")
             parser.print_help()
             sys.exit(1)
 
