@@ -374,9 +374,12 @@ def _load_config_from_file(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
 
-    # Restrict to safe directory and extension
-    safe_dir = Path.cwd() / "data"
-    if not path.is_relative_to(safe_dir) or path.suffix != ".py":
+    # Restrict to the repository `data` directory and ensure .py extension.
+    repo_data_dir = Path(__file__).resolve().parent.parent / "data"
+    try:
+        if not path.resolve().is_relative_to(repo_data_dir.resolve()) or path.suffix != ".py":
+            return {}
+    except Exception:
         return {}
 
     # Basic permissions check: ensure file is readable and not world-writable (on Unix-like; on Windows, minimal check)
