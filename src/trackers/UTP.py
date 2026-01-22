@@ -112,13 +112,14 @@ class UTP(UNIT3D):
         # Temporarily replace image_list
         meta['image_list'] = transformed_image_list
 
-        builder = DescriptionBuilder(self.tracker, self.config)
-        description = await builder.unit3d_edit_desc(meta, comparison=True)
-
-        # Restore original values
-        meta['image_list'] = original_image_list
-        for key, value in original_new_images.items():
-            meta[key] = value
+        try:
+            builder = DescriptionBuilder(self.tracker, self.config)
+            description = await builder.unit3d_edit_desc(meta, comparison=True)
+        finally:
+            # Restore original values even if an error occurs
+            meta['image_list'] = original_image_list
+            for key, value in original_new_images.items():
+                meta[key] = value
 
         return {"description": description}
 
