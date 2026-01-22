@@ -1765,112 +1765,130 @@ def execute_command():
                     # Store process for input handling (no queue needed)
                     active_processes[session_id] = {"process": process}
 
-                # Thread to read stdout - stream raw output with ANSI codes
-                def read_stdout():
+                    # Wrap subprocess handling in try/finally to guarantee cleanup
                     try:
-                        if process.stdout is None:
-                            return
-                        while True:
-                            # Read in small chunks for real-time streaming
-                            chunk = process.stdout.read(1)
-                            if not chunk:
-                                break
-                            output_queue.put(("stdout", chunk))
-                    except Exception as e:
-                        console.print(f"stdout read error: {e}", markup=False)
-
-                # Thread to read stderr - stream raw output
-                def read_stderr():
-                    try:
-                        if process.stderr is None:
-                            return
-                        while True:
-                            chunk = process.stderr.read(1)
-                            if not chunk:
-                                break
-                            output_queue.put(("stderr", chunk))
-                    except Exception as e:
-                        console.print(f"stderr read error: {e}", markup=False)
-
-                output_queue: queue.Queue[tuple[str, str]] = queue.Queue()
-
-                # Start threads (no input thread needed - we write directly)
-                stdout_thread = threading.Thread(target=read_stdout, daemon=True)
-                stderr_thread = threading.Thread(target=read_stderr, daemon=True)
-
-                stdout_thread.start()
-                stderr_thread.start()
-
-                def _read_output(q: queue.Queue[tuple[str, str]]) -> tuple[bool, Union[tuple[str, str], None]]:
-                    try:
-                        return True, q.get(timeout=0.1)
-                    except queue.Empty:
-                        return False, None
-
-                # Stream output as buffered chunks and always emit HTML fragments
-                # If we are running the upload as a subprocess, stream ANSI->HTML as before.
-                buffers: dict[str, str] = {"stdout": "", "stderr": ""}
-
-                while process.poll() is None or not output_queue.empty():
-                    has_output, output = _read_output(output_queue)
-                    if has_output and output is not None:
-                        output_type, char = output
-                        if output_type not in buffers:
-                            buffers[output_type] = ""
-                        buffers[output_type] += char
-
-                        # Flush on newline or when buffer grows large
-                        if char == "\n" or len(buffers[output_type]) > 512:
-                            chunk = buffers[output_type]
-                            buffers[output_type] = ""
-
-                            # Convert to HTML fragment. If helper missing, escape and wrap in <pre>
+                        # Thread to read stdout - stream raw output with ANSI codes
+                        def read_stdout():
                             try:
-                                if ansi_to_html:
-                                    html_fragment = ansi_to_html(chunk)
-                                else:
+                                if process.stdout is None:
+                                    return
+                                while True:
+                                    # Read in small chunks for real-time streaming
+                                    chunk = process.stdout.read(1)
+                                    if not chunk:
+                                        break
+                                    output_queue.put(("stdout", chunk))
+                            except Exception as e:
+                                console.print(f"stdout read error: {e}", markup=False)
+
+                        # Thread to read stderr - stream raw output
+                        def read_stderr():
+                            try:
+                                if process.stderr is None:
+                                    return
+                                while True:
+                                    chunk = process.stderr.read(1)
+                                    if not chunk:
+                                        break
+                                    output_queue.put(("stderr", chunk))
+                            except Exception as e:
+                                console.print(f"stderr read error: {e}", markup=False)
+
+                        output_queue: queue.Queue[tuple[str, str]] = queue.Queue()
+
+                        # Start threads (no input thread needed - we write directly)
+                        stdout_thread = threading.Thread(target=read_stdout, daemon=True)
+                        stderr_thread = threading.Thread(target=read_stderr, daemon=True)
+
+                        stdout_thread.start()
+                        stderr_thread.start()
+
+                        def _read_output(q: queue.Queue[tuple[str, str]]) -> tuple[bool, Union[tuple[str, str], None]]:
+                            try:
+                                return True, q.get(timeout=0.1)
+                            except queue.Empty:
+                                return False, None
+
+                        # Stream output as buffered chunks and always emit HTML fragments
+                        # If we are running the upload as a subprocess, stream ANSI->HTML as before.
+                        buffers: dict[str, str] = {"stdout": "", "stderr": ""}
+
+                        while process.poll() is None or not output_queue.empty():
+                            has_output, output = _read_output(output_queue)
+                            if has_output and output is not None:
+                                output_type, char = output
+                                if output_type not in buffers:
+                                    buffers[output_type] = ""
+                                buffers[output_type] += char
+
+                                # Flush on newline or when buffer grows large
+                                if char == "\n" or len(buffers[output_type]) > 512:
+                                    chunk = buffers[output_type]
+                                    buffers[output_type] = ""
+
+                                    # Convert to HTML fragment. If helper missing, escape and wrap in <pre>
+                                    try:
+                                        if ansi_to_html:
+                                            html_fragment = ansi_to_html(chunk)
+                                        else:
+                                            import html as _html
+
+                                            html_fragment = f"<pre>{_html.escape(chunk)}</pre>"
+
+                                        yield f"data: {json.dumps({'type': 'html', 'data': html_fragment, 'origin': output_type})}\n\n"
+                                    except Exception as e:
+                                        console.print(f"HTML conversion error: {e}", markup=False)
+                                        import html as _html
+
+                                        html_fragment = f"<pre>{_html.escape(chunk)}</pre>"
+                                        yield f"data: {json.dumps({'type': 'html', 'data': html_fragment, 'origin': output_type})}\n\n"
+                            else:
+                                # keepalive to keep the SSE connection alive
+                                yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
+
+                        # Flush remaining buffers as HTML
+                        for t, remaining in list(buffers.items()):
+                            if remaining:
+                                try:
+                                    if ansi_to_html:
+                                        html_fragment = ansi_to_html(remaining)
+                                    else:
+                                        import html as _html
+
+                                        html_fragment = f"<pre>{_html.escape(remaining)}</pre>"
+
+                                    yield f"data: {json.dumps({'type': 'html', 'data': html_fragment, 'origin': t})}\n\n"
+
+                                except Exception as e:
+                                    console.print(f"HTML flush error: {e}", markup=False)
                                     import html as _html
 
-                                    html_fragment = f"<pre>{_html.escape(chunk)}</pre>"
+                                    html_fragment = f"<pre>{_html.escape(remaining)}</pre>"
+                                    yield f"data: {json.dumps({'type': 'html', 'data': html_fragment, 'origin': t})}\n\n"
 
-                                yield f"data: {json.dumps({'type': 'html', 'data': html_fragment, 'origin': output_type})}\n\n"
-                            except Exception as e:
-                                console.print(f"HTML conversion error: {e}", markup=False)
-                                import html as _html
+                        # Wait for process to finish
+                        process.wait()
 
-                                html_fragment = f"<pre>{_html.escape(chunk)}</pre>"
-                                yield f"data: {json.dumps({'type': 'html', 'data': html_fragment, 'origin': output_type})}\n\n"
-                    else:
-                        # keepalive to keep SSE connection alive
-                        yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
+                        # Clean up (normal path)
+                        if session_id in active_processes:
+                            del active_processes[session_id]
 
-                # Flush remaining buffers as HTML
-                for t, remaining in list(buffers.items()):
-                    if remaining:
-                        try:
-                            if ansi_to_html:
-                                html_fragment = ansi_to_html(remaining)
-                            else:
-                                import html as _html
-
-                                html_fragment = f"<pre>{_html.escape(remaining)}</pre>"
-
-                            yield f"data: {json.dumps({'type': 'html', 'data': html_fragment, 'origin': t})}\n\n"
-                        except Exception as e:
-                            console.print(f"HTML flush error: {e}", markup=False)
-                            import html as _html
-
-                            html_fragment = f"<pre>{_html.escape(remaining)}</pre>"
-                            yield f"data: {json.dumps({'type': 'html', 'data': html_fragment, 'origin': t})}\n\n"
-
-                # Wait for process to finish
-                process.wait()
-
-                # Clean up
-                if session_id in active_processes:
-                    del active_processes[session_id]
-
-                yield f"data: {json.dumps({'type': 'exit', 'code': process.returncode})}\n\n"
+                        yield f"data: {json.dumps({'type': 'exit', 'code': process.returncode})}\n\n"
+                    finally:
+                        # Ensure subprocess pipes are closed to avoid leaking file handles
+                        with contextlib.suppress(Exception):
+                            if process.stdin is not None:
+                                process.stdin.close()
+                        with contextlib.suppress(Exception):
+                            if process.stdout is not None:
+                                process.stdout.close()
+                        with contextlib.suppress(Exception):
+                            if process.stderr is not None:
+                                process.stderr.close()
+                        # Ensure we remove tracking entry if still present
+                        with contextlib.suppress(Exception):
+                            if session_id in active_processes:
+                                del active_processes[session_id]
 
             except Exception as e:
                 console.print(f"Execution error for session {session_id}: {e}", markup=False)
