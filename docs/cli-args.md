@@ -193,6 +193,7 @@ Thise will use the specified hash to get tracker ids from qBitTorrent or rTorren
 - `-debug`, `--debug`: Debug mode; runs through motions without uploading.
 - `-ffdebug`, `--ffdebug`: Show debugging info from ffmpeg while taking screenshots.
 - `-uptimer`, `--upload-timer`: Print time to upload to each site.
+- `-stn`, `--show-tracker-names`: Show tracker-specific release names before confirmation prompt. Useful to preview how your release name will appear on each target tracker.
 
 ## VapourSynth screenshots
 

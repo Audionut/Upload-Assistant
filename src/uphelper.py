@@ -384,6 +384,11 @@ class UploadHelper:
 
             if not meta.get('emby', False):
                 console.print(f"[bold]Name:[/bold] {meta['name']}")
+
+                # Show tracker-specific names if requested
+                if meta.get('show_tracker_names', False):
+                    await self._display_tracker_names(meta)
+
                 confirm = console.input("[bold green]Is this correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
             elif not meta.get('emby_debug', False):
                 confirm = console.input("[bold green]Is this correct?[/bold green] [yellow]y/N[/yellow]: ").strip().lower() == 'y'
@@ -508,3 +513,46 @@ class UploadHelper:
             console.print("[bold yellow]Potentially missing information:[/bold yellow]")
             for each in missing:
                 cli_ui.info(each)
+
+    async def _display_tracker_names(self, meta: Meta) -> None:
+        """Display tracker-specific release names for each target tracker."""
+        trackers = meta.get('trackers', [])
+        if not trackers:
+            return
+
+        tracker_names: list[tuple[str, str]] = []
+
+        for tracker in trackers:
+            if tracker not in self.tracker_class_map:
+                continue
+
+            tracker_class_factory = cast(Callable[..., Any], self.tracker_class_map[tracker])
+            tracker_class = tracker_class_factory(config=self.config)
+
+            # Get tracker-specific name using get_name or edit_name
+            display_name: Optional[str] = None
+            try:
+                tracker_rename = await tracker_class.get_name(meta)
+                if isinstance(tracker_rename, dict) and 'name' in tracker_rename:
+                    display_name = str(cast(dict[str, Any], tracker_rename)['name'])
+                elif isinstance(tracker_rename, str):
+                    display_name = tracker_rename
+            except Exception:
+                try:
+                    tracker_rename = await tracker_class.edit_name(meta)
+                    if isinstance(tracker_rename, str):
+                        display_name = tracker_rename
+                except Exception:
+                    pass
+
+            # Fall back to base name if no tracker-specific name found
+            if not display_name:
+                display_name = str(meta.get('name', ''))
+
+            tracker_names.append((tracker, display_name))
+
+        if tracker_names:
+            console.print()
+            console.print("[bold]Tracker-specific release names:[/bold]")
+            for tracker, name in tracker_names:
+                console.print(f"  [cyan]{tracker}:[/cyan] {name}")
