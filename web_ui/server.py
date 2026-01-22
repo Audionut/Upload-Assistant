@@ -203,6 +203,26 @@ active_processes: dict[str, ProcessInfo] = {}
 _ua_console_store: dict[int, dict[str, Any]] = {}
 
 
+def _debug_process_snapshot(session_id: Optional[str] = None) -> dict[str, Any]:
+    try:
+        snapshot: dict[str, Any] = {
+            "active_sessions": list(active_processes.keys()),
+            "console_store_keys": list(_ua_console_store.keys()),
+            "inproc_lock_locked": inproc_lock.locked(),
+        }
+        if session_id and session_id in active_processes:
+            info = active_processes.get(session_id, {})
+            snapshot["session"] = {
+                "mode": info.get("mode"),
+                "has_worker": isinstance(info.get("worker"), threading.Thread),
+                "has_stdout_thread": isinstance(info.get("stdout_thread"), threading.Thread),
+                "has_stderr_thread": isinstance(info.get("stderr_thread"), threading.Thread),
+            }
+        return snapshot
+    except Exception:
+        return {"error": "failed to build snapshot"}
+
+
 class BrowseItem(TypedDict):
     """Serialized representation of an entry returned by the browse API."""
 
@@ -1499,6 +1519,9 @@ def execute_command():
                     # Queue to serialize print actions from the worker thread
                     render_queue: queue.Queue[tuple[Any, dict[str, Any]]] = queue.Queue()
 
+                    # Cancellation event for cooperative shutdown
+                    cancel_event = threading.Event()
+
                     # Monkeypatch the existing shared console to record prints and intercept input
                     orig_console = src_console.console
 
@@ -1509,6 +1532,8 @@ def execute_command():
                         _ua_console_store[console_key] = {
                             "orig_print": orig_console.print,
                             "orig_input": getattr(orig_console, "input", None),
+                            "orig_ask_yes_no": None,
+                            "orig_ask_string": None,
                         }
 
                         # Wrap print to duplicate into the recorder
@@ -1529,11 +1554,16 @@ def execute_command():
                             # Print the prompt so it appears in the recorded output
                             with contextlib.suppress(Exception):
                                 wrapped_print(prompt)
-                            # Block until input is provided via /api/input
-                            try:
-                                return input_queue.get(block=True)
-                            except Exception:
-                                return ""
+                            # Wait for input while respecting cancellation
+                            while True:
+                                if cancel_event.is_set():
+                                    raise EOFError()
+                                try:
+                                    return input_queue.get(timeout=0.5)
+                                except queue.Empty:
+                                    continue
+                                except Exception:
+                                    raise
 
                         orig_console.input = cast(Any, wrapped_input)
                     else:
@@ -1551,34 +1581,58 @@ def execute_command():
                         def wrapped_ask_yes_no(question: str, default: bool = False) -> bool:
                             with contextlib.suppress(Exception):
                                 wrapped_print(question)
-                            resp = ""
-                            try:
-                                resp = input_queue.get(block=True)
-                            except Exception:
+                            # Wait for a response or cancellation
+                            while True:
+                                if cancel_event.is_set():
+                                    raise EOFError()
+                                try:
+                                    resp = input_queue.get(timeout=0.5)
+                                except queue.Empty:
+                                    continue
+                                except Exception:
+                                    raise
+                                resp = (resp or "").strip().lower()
+                                if resp in ("y", "yes"):
+                                    return True
+                                if resp in ("n", "no"):
+                                    return False
                                 return default
-                            resp = resp.strip().lower()
-                            if resp in ("y", "yes"):
-                                return True
-                            if resp in ("n", "no"):
-                                return False
-                            return default
 
                         _cli_ui.ask_yes_no = wrapped_ask_yes_no
+                        # Save original ask_yes_no so external cleaners (eg. /api/kill)
+                        # can restore it if the inproc run is terminated early.
+                        try:
+                            if console_key in _ua_console_store:
+                                _ua_console_store[console_key]["orig_ask_yes_no"] = orig_ask_yes_no
+                        except Exception:
+                            pass
 
                         # ask_string: prompt user for an arbitrary string
                         try:
                             orig_ask_string = _cli_ui.ask_string
 
-                            def wrapped_ask_string(prompt: str, default: Optional[str] = None) -> str:
+                            def wrapped_ask_string(prompt: str, _default: Optional[str] = None) -> str:
                                 with contextlib.suppress(Exception):
                                     wrapped_print(prompt)
-                                try:
-                                    resp = input_queue.get(block=True)
-                                    return resp
-                                except Exception:
-                                    return default or ""
+                                # Wait for input or cancellation
+                                while True:
+                                    if cancel_event.is_set():
+                                        raise EOFError()
+                                    try:
+                                        resp = input_queue.get(timeout=0.5)
+                                        return resp
+                                    except queue.Empty:
+                                        continue
+                                    except Exception:
+                                        raise
 
                             _cli_ui.ask_string = wrapped_ask_string
+                            # Save original ask_string for external cleanup
+                            try:
+                                if console_key in _ua_console_store:
+                                    _ua_console_store[console_key]["orig_ask_string"] = orig_ask_string
+                            except Exception:
+                                pass
                         except Exception:
                             orig_ask_string = None
                     except Exception:
@@ -1597,7 +1651,12 @@ def execute_command():
                         sys.argv = [str(upload_script), validated_path] + parsed_args
 
                         # Store in active_processes so /api/input can post into the queue
-                        active_processes[session_id] = {"mode": "inproc", "input_queue": input_queue, "record_console": record_console}
+                        cast(Any, active_processes)[session_id] = {
+                            "mode": "inproc",
+                            "input_queue": input_queue,
+                            "record_console": record_console,
+                            "cancel_event": cancel_event,
+                        }
 
                         # Run the upload main loop in a separate thread to avoid blocking SSE generator
                         def run_upload():
@@ -1624,8 +1683,18 @@ def execute_command():
                                     raise RuntimeError("upload.main not available for in-process execution")
                                 asyncio.run(nonlocal_upload())
                             except Exception as e:
-                                console.print(f"In-process execution error: {e}", markup=False)
-                                console.print(traceback.format_exc(), markup=False)
+                                # If the exception is the cooperative cancellation marker,
+                                # print a short, non-alarming message and avoid printing
+                                # the full traceback which can confuse the operator.
+                                try:
+                                    if isinstance(e, EOFError):
+                                        console.print("In-process run cancelled (Ctrl+C)", markup=False)
+                                    else:
+                                        console.print(f"In-process execution error: {e}", markup=False)
+                                        console.print(traceback.format_exc(), markup=False)
+                                except Exception:
+                                    with contextlib.suppress(Exception):
+                                        console.print("In-process run ended", markup=False)
                             finally:
                                 # Restore sys.argv in finally block
                                 # Restore patched console
@@ -1635,6 +1704,17 @@ def execute_command():
                                     src_console.console.print = origs["orig_print"]
                                     if "orig_input" in origs and origs["orig_input"] is not None:
                                         src_console.console.input = origs["orig_input"]
+                                    # Restore cli_ui patched functions if present
+                                    try:
+                                        if "orig_ask_yes_no" in origs and origs["orig_ask_yes_no"] is not None:
+                                            _cli_ui.ask_yes_no = origs["orig_ask_yes_no"]
+                                    except Exception:
+                                        pass
+                                    try:
+                                        if "orig_ask_string" in origs and origs["orig_ask_string"] is not None:
+                                            _cli_ui.ask_string = origs["orig_ask_string"]
+                                    except Exception:
+                                        pass
                                     del _ua_console_store[console_key]
                                 # Release lock to allow next inproc run
                                 inproc_lock.release()
@@ -1643,6 +1723,15 @@ def execute_command():
                         # Acquire lock to prevent concurrent inproc runs (avoids cross-session interference)
                         inproc_lock.acquire()
                         worker.start()
+
+                        # Record worker thread for debugging/cleanup
+                        try:
+                            if session_id in active_processes:
+                                cast(Any, active_processes[session_id])["worker"] = worker
+                        except Exception:
+                            pass
+
+                        console.print(f"Started inproc worker for session {session_id}: {worker.name}", markup=False)
 
                         # Stream full HTML snapshots from the recorder while the worker runs.
                         # To avoid spinning the SSE thread and growing the server task queue
@@ -1803,6 +1892,18 @@ def execute_command():
                         stdout_thread.start()
                         stderr_thread.start()
 
+                        # Record threads and output queue for debugging/cleanup
+                        try:
+                            if session_id in active_processes:
+                                info = cast(Any, active_processes[session_id])
+                                info["stdout_thread"] = stdout_thread
+                                info["stderr_thread"] = stderr_thread
+                                info["output_queue"] = output_queue
+                        except Exception:
+                            pass
+
+                        console.print(f"Started subprocess reader threads for session {session_id}: stdout={stdout_thread.name}, stderr={stderr_thread.name}", markup=False)
+
                         def _read_output(q: queue.Queue[tuple[str, str]]) -> tuple[bool, Union[tuple[str, str], None]]:
                             try:
                                 return True, q.get(timeout=0.1)
@@ -1915,7 +2016,7 @@ def send_input():
         session_id = data.get("session_id", "default")
         user_input = data.get("input", "")
 
-        console.print(f"Received input for session {session_id}: '{user_input}'", markup=False)
+        # Received input for session (logged at debug level previously) - keep minimal output
 
         if session_id not in active_processes:
             return jsonify({"error": "No active process", "success": False}), 404
@@ -1929,7 +2030,6 @@ def send_input():
                     return jsonify({"error": "No input queue", "success": False}), 500
                 q = raw_q
                 q.put(user_input)
-                console.print(f"Queued input for inproc session {session_id}: '{user_input}'", markup=False)
                 return jsonify({"success": True})
 
             # Otherwise write to subprocess stdin
@@ -1974,27 +2074,136 @@ def kill_process():
         if session_id not in active_processes:
             return jsonify({"error": "No active process", "success": False}), 404
 
-        # Get the process
         process_info = active_processes[session_id]
-        process = process_info.get("process")
+        mode = process_info.get('mode')
 
+        # If this is an in-process run, perform best-effort cleanup of patched
+        # console state and release the inproc lock so future inproc runs can start.
+        if mode == 'inproc':
+            # Signal cancellation to the inproc worker and attempt to join it
+            try:
+                cancel_event = process_info.get("cancel_event")
+                if isinstance(cancel_event, threading.Event):
+                    cancel_event.set()
+                worker = process_info.get("worker")
+                if isinstance(worker, threading.Thread):
+                    worker.join(timeout=2)
+            except Exception:
+                pass
+
+            # Attempt to restore any patched console/cli state from the
+            # module-level store so future runs have working print/input.
+            try:
+                with contextlib.suppress(Exception):
+                    # Prefer restoring originals tied to the current src.console
+                    try:
+                        from src import console as _src_console
+                        ck = id(_src_console.console)
+                        if ck in _ua_console_store:
+                            origs = _ua_console_store.pop(ck)
+                            with contextlib.suppress(Exception):
+                                _src_console.console.print = origs.get("orig_print", _src_console.console.print)
+                            with contextlib.suppress(Exception):
+                                orig_in = origs.get("orig_input", None)
+                                if orig_in is not None:
+                                    _src_console.console.input = orig_in
+                            # Restore any cli_ui wrappers if we have originals
+                            try:
+                                import cli_ui as _cli_ui
+                                with contextlib.suppress(Exception):
+                                    if "orig_ask_yes_no" in origs and origs["orig_ask_yes_no"] is not None:
+                                        _cli_ui.ask_yes_no = origs["orig_ask_yes_no"]
+                                with contextlib.suppress(Exception):
+                                    if "orig_ask_string" in origs and origs["orig_ask_string"] is not None:
+                                        _cli_ui.ask_string = origs["orig_ask_string"]
+                            except Exception:
+                                pass
+                    except Exception:
+                        # Best-effort: if we can't import src.console, fall back to
+                        # restoring any stored callables into the module-level
+                        # `console` we imported at module import time.
+                        try:
+                            ck = id(console)
+                            if ck in _ua_console_store:
+                                origs = _ua_console_store.pop(ck)
+                                with contextlib.suppress(Exception):
+                                    console.print = origs.get("orig_print", console.print)
+                                with contextlib.suppress(Exception):
+                                    orig_in = origs.get("orig_input", None)
+                                    if orig_in is not None:
+                                        console.input = orig_in
+                        except Exception:
+                            pass
+
+                    # If any other entries remain in the store, drop them to avoid
+                    # leaking references — they are unlikely to be useful now.
+                    _ua_console_store.clear()
+            except Exception:
+                pass
+
+            # Release inproc lock if held; best-effort only.
+            with contextlib.suppress(Exception):
+                if inproc_lock.locked():
+                    inproc_lock.release()
+
+            # Remove tracking entry
+            with contextlib.suppress(Exception):
+                if session_id in active_processes:
+                    del active_processes[session_id]
+
+            console.print(f"In-process run terminated for session {session_id}", markup=False)
+            return jsonify({"success": True, "message": "In-process run terminated and console state wiped"})
+
+        # Otherwise assume subprocess.Popen case
+        # Retrieve subprocess handle
+        process = process_info.get("process")
         if process is None:
             return jsonify({"error": "No process found", "success": False}), 500
 
-        # Terminate the process
-        process.terminate()
-
-        # Give it a moment to terminate gracefully
         try:
-            process.wait(timeout=2)
-        except Exception:
-            # Force kill if it doesn't terminate
-            process.kill()
+            # Terminate the process
+            process.terminate()
 
-        # Clean up
-        del active_processes[session_id]
+            # Give it a moment to terminate gracefully
+            try:
+                process.wait(timeout=2)
+            except Exception:
+                # Force kill if it doesn't terminate
+                process.kill()
+
+            # Close any pipes to avoid leaking handles
+            with contextlib.suppress(Exception):
+                if process.stdin is not None:
+                    process.stdin.close()
+            with contextlib.suppress(Exception):
+                if process.stdout is not None:
+                    process.stdout.close()
+            with contextlib.suppress(Exception):
+                if process.stderr is not None:
+                    process.stderr.close()
+
+        finally:
+            # Clean up tracking entry regardless
+            # Attempt to join reader threads if present
+            try:
+                info = active_processes.get(session_id, {})
+                stdout_t = info.get("stdout_thread")
+                stderr_t = info.get("stderr_thread")
+                if isinstance(stdout_t, threading.Thread):
+                    console.print(f"Joining stdout thread for session {session_id}", markup=False)
+                    stdout_t.join(timeout=1)
+                if isinstance(stderr_t, threading.Thread):
+                    console.print(f"Joining stderr thread for session {session_id}", markup=False)
+                    stderr_t.join(timeout=1)
+            except Exception:
+                pass
+
+            with contextlib.suppress(Exception):
+                if session_id in active_processes:
+                    del active_processes[session_id]
 
         console.print(f"Process killed for session {session_id}", markup=False)
+        console.print(f"Post-kill snapshot: {_debug_process_snapshot(session_id)}", markup=False)
         return jsonify({"success": True, "message": "Process terminated"})
 
     except Exception as e:
