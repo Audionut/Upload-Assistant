@@ -953,7 +953,7 @@ if __name__ == "__main__":
 
                 # Ask about updating each main section separately
                 console.print("\n\n[i] Lets work on one section at a time.", markup=False)
-                console.print(, markup=False)
+                console.print("", markup=False)
 
                 # DEFAULT section
                 update_default = input("Do you want to update something in the DEFAULT section? (y/n): ").lower() == "y"
@@ -965,7 +965,7 @@ if __name__ == "__main__":
                     config_data["DEFAULT"]["default_torrent_client"] = config_data["DEFAULT"].get("default_torrent_client", "qbittorrent")
                 else:
                     console.print("[i] Keeping existing DEFAULT section", markup=False)
-                    console.print(, markup=False)
+                    console.print("", markup=False)
 
                 # TRACKERS section
                 update_trackers = input("Do you want to update something in the TRACKERS section? (y/n): ").lower() == "y"
@@ -975,7 +975,7 @@ if __name__ == "__main__":
                     config_data["TRACKERS"] = configure_trackers(existing_trackers, example_trackers, config_comments)
                 else:
                     console.print("[i] Keeping existing TRACKERS section", markup=False)
-                    console.print(, markup=False)
+                    console.print("", markup=False)
 
                 # TORRENT_CLIENTS section
                 update_clients = input("\nDo you want to update something in the TORRENT_CLIENTS section? (y/n): ").lower() == "y"
@@ -995,7 +995,7 @@ if __name__ == "__main__":
                     config_data["DEFAULT"]["default_torrent_client"] = default_client
                 else:
                     console.print("[i] Keeping existing TORRENT_CLIENTS section", markup=False)
-                    console.print(, markup=False)
+                    console.print("", markup=False)
 
                 # DISCORD section update
                 update_discord = input("Do you want to update something in the DISCORD section? (y/n): ").lower() == "y"
@@ -1005,7 +1005,7 @@ if __name__ == "__main__":
                     config_data["DISCORD"] = configure_discord(existing_discord, example_discord, config_comments)
                 else:
                     console.print("[i] Keeping existing DISCORD section", markup=False)
-                    console.print(, markup=False)
+                    console.print("", markup=False)
 
                 missing_discord_keys: list[str] = []
                 missing_default_keys: list[str] = []

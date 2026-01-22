@@ -268,10 +268,10 @@ class Wait:
                     state_str = str(state) if state is not None else 'unknown'
                     progress_float = float(progress or 0)
 
-                console.print(f"\r[INFO] Torrent is at {progress_float * 100:.2f}% progress of {state_str}...", end='', flush=True, markup=False)
+                console.print(f"\r[INFO] Torrent is at {progress_float * 100:.2f}% progress of {state_str}...", end='', markup=False)
 
                 if state_str not in ('checkingUP', 'checkingDL', 'checkingResumeData'):
-                    console.print(, markup=False)
+                    console.print("", markup=False)
                     break
 
                 await asyncio.sleep(check_interval)

@@ -115,6 +115,18 @@ if os.path.exists(_config_path):
     try:
         from data.config import config as _imported_config  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
         config = cast(dict[str, Any], _imported_config)
+        parser = Args(config)
+        client = Clients(config)
+        name_manager = NameManager(config)
+        tracker_data_manager = TrackerDataManager(config)
+        nfo_link_manager = NfoLinkManager(config)
+        takescreens_manager = TakeScreensManager(config)
+        uploadscreens_manager = UploadScreensManager(config)
+        use_discord = False
+        discord_cfg_obj = config.get('DISCORD')
+        discord_config: Optional[dict[str, Any]] = cast(dict[str, Any], discord_cfg_obj) if isinstance(discord_cfg_obj, dict) else None
+        if discord_config is not None:
+            use_discord = bool(discord_config.get('use_discord', False))
     except SyntaxError as e:
         _print_config_error(
             "Syntax error",
@@ -193,17 +205,7 @@ else:
     console.print(f"{_RED}Configuration file 'config.py' not found.{_RESET}", markup=False)
     console.print(f"{_RED}Please ensure the file is located at: {_YELLOW}{_config_path}{_RESET}", markup=False)
     console.print(f"{_RED}Follow the setup instructions: https://github.com/Audionut/Upload-Assistant{_RESET}", markup=False)
-parser = Args(config)
-name_manager = NameManager(config)
-tracker_data_manager = TrackerDataManager(config)
-nfo_link_manager = NfoLinkManager(config)
-takescreens_manager = TakeScreensManager(config)
-uploadscreens_manager = UploadScreensManager(config)
-use_discord = False
-discord_cfg_obj = config.get('DISCORD')
-discord_config: Optional[dict[str, Any]] = cast(dict[str, Any], discord_cfg_obj) if isinstance(discord_cfg_obj, dict) else None
-if discord_config is not None:
-    use_discord = bool(discord_config.get('use_discord', False))
+    sys.exit(1)
 
 
 async def merge_meta(meta: Meta, saved_meta: Meta) -> dict[str, Any]:

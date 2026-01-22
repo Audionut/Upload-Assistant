@@ -915,7 +915,7 @@ function AudionutsUAGUI() {
                   <div className={`text-sm mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-500'}`}>{cat.subtitle}</div>
                 )}
               </div>
-              <div className="space-y-2">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-2">
                 {cat.args.map((a) => (
                   <div
                     key={a.label}
