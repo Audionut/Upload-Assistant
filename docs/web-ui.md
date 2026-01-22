@@ -104,6 +104,36 @@ When `UA_WEBUI_USERNAME` and `UA_WEBUI_PASSWORD` are not set, the Web UI uses se
     - /host/path/to/webui-config:/root/.config/UploadAssistant
   ```
 
+### Two-Factor Authentication (2FA)
+The Web UI supports optional TOTP (Time-based One-Time Password) 2FA for enhanced security.
+
+#### Environment Variables
+- `UA_WEBUI_TOTP_SECRET`: Set a base32-encoded TOTP secret directly via environment variable. When set, this takes priority over other storage methods and will clean up any existing secrets from keyring or Docker secrets.
+
+#### Setup Process
+1. Access the Web UI configuration page (gear icon in the top-right).
+2. Navigate to the "2FA Setup" section.
+3. Scan the QR code with your authenticator app (recommended: password managers like Bitwarden, 1Password, or dedicated apps like Google Authenticator).
+4. Enter the 6-digit code to verify setup.
+5. Save recovery codes in a secure location - these can be used if you lose access to your authenticator.
+
+#### Storage Priority
+Secrets are stored in the following priority order:
+1. `UA_WEBUI_TOTP_SECRET` environment variable (highest priority)
+2. Docker secrets (`/run/secrets/ua_webui_totp_secret`)
+3. OS keyring (non-Docker environments)
+
+When an environment variable is set, any existing secrets in keyring or Docker secrets are automatically cleaned up.
+
+#### Login Process
+- Enter your username and password as usual.
+- If 2FA is enabled, you'll be prompted for a 6-digit TOTP code or recovery code.
+- Recovery codes are single-use and should be stored securely.
+- The 2FA input accepts both TOTP codes (6 digits) and recovery codes (16 characters).
+
+#### Password Manager Compatibility
+The setup process generates standard TOTP secrets compatible with most password managers. The QR code contains all necessary information for automatic setup in apps like Bitwarden, 1Password, LastPass, etc.
+
 ### `UA_WEBUI_CORS_ORIGINS`
 Optional comma-separated allowlist of origins for `/api/*` routes.
 

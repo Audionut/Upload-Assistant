@@ -139,6 +139,8 @@ services:
       # RECOMMENDED: Set web UI authentication credentials via environment variables, else OS keyring will be used if available.
       # - UA_WEBUI_USERNAME=admin
       # - UA_WEBUI_PASSWORD=change-me
+      # Optional: Two-Factor Authentication (2FA) settings
+      # - UA_WEBUI_TOTP_SECRET=JBSWY3DPEHPK3PXP  # Base32-encoded TOTP secret (takes priority over other storage)
     volumes:
       - /path/to/torrents:/data:rw
       - /path/to/Upload-Assistant/tmp:/Upload-Assistant/tmp:rw

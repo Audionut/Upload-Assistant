@@ -289,6 +289,7 @@ services:
 | `UA_BROWSE_ROOTS` | Yes | - | Comma-separated list of allowed browse directories |
 | `UA_WEBUI_USERNAME` | No | - | Username for HTTP Basic Auth |
 | `UA_WEBUI_PASSWORD` | No | - | Password for HTTP Basic Auth |
+| `UA_WEBUI_TOTP_SECRET` | No | - | Base32-encoded TOTP secret for 2FA (takes priority over other storage methods) |
 | `UA_WEBUI_CORS_ORIGINS` | No | - | Allowed CORS origins (comma-separated) |
 
 ---
