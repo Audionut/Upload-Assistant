@@ -1263,10 +1263,13 @@ async def do_the_thing(base_dir: str) -> None:
 
             # Set browse roots for web UI
             browse_roots = os.environ.get('UA_BROWSE_ROOTS', '').strip()
-            if not browse_roots and meta.get('path'):
+            if not browse_roots and paths:
+                # Use the paths from command line as browse roots
+                browse_roots = ','.join(paths)
+            elif not browse_roots and meta.get('path'):
                 # Use the path from command line as browse roots
                 path_value = meta['path']
-                browse_roots = ' '.join(str(p) for p in cast(list[Any], path_value)) if isinstance(path_value, list) else str(path_value)
+                browse_roots = ','.join(str(p) for p in cast(list[Any], path_value)) if isinstance(path_value, list) else str(path_value)
             if not browse_roots:
                 browse_roots = '.'  # Fallback to current directory
 
