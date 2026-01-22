@@ -5,6 +5,7 @@ Docker-specific script to download DVD-capable MediaInfo binaries for Linux.
 This script downloads specialized MediaInfo CLI and library binaries that
 support DVD IFO/VOB file parsing with language information.
 """
+
 import os
 import platform
 import shutil
@@ -15,7 +16,15 @@ from tempfile import TemporaryDirectory
 
 import requests
 
-from src.console import console
+try:
+    from src.console import console
+except ImportError:
+    # Fallback for Docker builds where rich is not yet installed
+    class SimpleConsole:
+        def print(self, message: str, markup: bool = False) -> None:  # noqa: ARG002
+            print(message)
+
+    console = SimpleConsole()
 
 MEDIAINFO_VERSION = "23.04"
 MEDIAINFO_CLI_BASE_URL = "https://mediaarea.net/download/binary/mediainfo"
@@ -65,7 +74,7 @@ def extract_linux_binaries(cli_archive: Path, lib_archive: Path, output_dir: Pat
     console.print("Extracting MediaInfo binaries...", markup=False)
 
     # Extract MediaInfo CLI from zip file
-    with zipfile.ZipFile(cli_archive, 'r') as zip_ref:
+    with zipfile.ZipFile(cli_archive, "r") as zip_ref:
         file_list = zip_ref.namelist()
         mediainfo_file = output_dir / "mediainfo"
 
@@ -75,7 +84,7 @@ def extract_linux_binaries(cli_archive: Path, lib_archive: Path, output_dir: Pat
         for member in file_list:
             # Check for symlinks in ZIP files
             info = zip_ref.getinfo(member)
-            perm = (info.external_attr >> 16)
+            perm = info.external_attr >> 16
             if stat.S_ISLNK(perm):
                 console.print(f"Warning: Skipping symlink: {member}", markup=False)
                 continue
@@ -90,7 +99,7 @@ def extract_linux_binaries(cli_archive: Path, lib_archive: Path, output_dir: Pat
                 console.print(f"Warning: Skipping dangerous path: {member}", markup=False)
                 continue
 
-            if member.endswith('/mediainfo') or member == 'mediainfo':
+            if member.endswith("/mediainfo") or member == "mediainfo":
                 zip_ref.extract(member, output_dir.parent)
                 extracted_path = output_dir.parent / member
                 shutil.move(str(extracted_path), str(mediainfo_file))
@@ -100,26 +109,20 @@ def extract_linux_binaries(cli_archive: Path, lib_archive: Path, output_dir: Pat
             raise Exception("MediaInfo CLI binary not found in archive")
 
     # Extract MediaInfo library
-    with zipfile.ZipFile(lib_archive, 'r') as zip_ref:
+    with zipfile.ZipFile(lib_archive, "r") as zip_ref:
         file_list = zip_ref.namelist()
         lib_file = output_dir / "libmediainfo.so.0"
 
         console.print(f"Library archive contents: {file_list}", markup=False)
 
         # Look for the library file in the archive
-        lib_candidates = [
-            "lib/libmediainfo.so.0.0.0",
-            "libmediainfo.so.0.0.0",
-            "libmediainfo.so.0",
-            "MediaInfo/libmediainfo.so.0.0.0",
-            "MediaInfo/lib/libmediainfo.so.0.0.0"
-        ]
+        lib_candidates = ["lib/libmediainfo.so.0.0.0", "libmediainfo.so.0.0.0", "libmediainfo.so.0", "MediaInfo/libmediainfo.so.0.0.0", "MediaInfo/lib/libmediainfo.so.0.0.0"]
 
         for candidate in lib_candidates:
             if candidate in file_list:
                 # Check for symlinks in ZIP files
                 info = zip_ref.getinfo(candidate)
-                perm = (info.external_attr >> 16)
+                perm = info.external_attr >> 16
                 if stat.S_ISLNK(perm):
                     console.print(f"Warning: Skipping symlink: {candidate}", markup=False)
                     continue
@@ -210,7 +213,7 @@ def download_dvd_mediainfo_docker():
         extract_linux_binaries(cli_archive, lib_archive, output_dir)
 
         # Create version marker
-        with open(version_file, 'w') as f:
+        with open(version_file, "w") as f:
             f.write(f"MediaInfo {MEDIAINFO_VERSION} - DVD Support")
 
         # Make CLI binary executable and verify permissions

@@ -10,7 +10,15 @@ from typing import Union
 import aiofiles
 import httpx
 
-from src.console import console
+try:
+    from src.console import console
+except ImportError:
+    # Fallback for Docker builds where rich is not yet installed
+    class SimpleConsole:
+        def print(self, message: str, markup: bool = False) -> None:  # noqa: ARG002
+            print(message)
+
+    console = SimpleConsole()
 
 
 class MkbrrBinaryManager:
@@ -22,27 +30,27 @@ class MkbrrBinaryManager:
             console.print(f"[blue]Detected system: {system}, architecture: {machine}[/blue]")
 
         platform_map: dict[str, dict[str, dict[str, str]]] = {
-            'windows': {
-                'x86_64': {'file': 'windows_x86_64.zip', 'folder': 'windows/x86_64'},
-                'amd64': {'file': 'windows_x86_64.zip', 'folder': 'windows/x86_64'},
+            "windows": {
+                "x86_64": {"file": "windows_x86_64.zip", "folder": "windows/x86_64"},
+                "amd64": {"file": "windows_x86_64.zip", "folder": "windows/x86_64"},
             },
-            'darwin': {
-                'arm64': {'file': 'darwin_arm64.tar.gz', 'folder': 'macos/arm64'},
-                'x86_64': {'file': 'darwin_x86_64.tar.gz', 'folder': 'macos/x86_64'},
-                'amd64': {'file': 'darwin_x86_64.tar.gz', 'folder': 'macos/x86_64'},
+            "darwin": {
+                "arm64": {"file": "darwin_arm64.tar.gz", "folder": "macos/arm64"},
+                "x86_64": {"file": "darwin_x86_64.tar.gz", "folder": "macos/x86_64"},
+                "amd64": {"file": "darwin_x86_64.tar.gz", "folder": "macos/x86_64"},
             },
-            'linux': {
-                'x86_64': {'file': 'linux_x86_64.tar.gz', 'folder': 'linux/amd64'},
-                'amd64': {'file': 'linux_x86_64.tar.gz', 'folder': 'linux/amd64'},
-                'arm64': {'file': 'linux_arm64.tar.gz', 'folder': 'linux/arm64'},
-                'aarch64': {'file': 'linux_arm64.tar.gz', 'folder': 'linux/arm64'},
-                'armv7l': {'file': 'linux_arm.tar.gz', 'folder': 'linux/arm'},
-                'armv6l': {'file': 'linux_arm.tar.gz', 'folder': 'linux/armv6'},
-                'arm': {'file': 'linux_arm.tar.gz', 'folder': 'linux/arm'},
+            "linux": {
+                "x86_64": {"file": "linux_x86_64.tar.gz", "folder": "linux/amd64"},
+                "amd64": {"file": "linux_x86_64.tar.gz", "folder": "linux/amd64"},
+                "arm64": {"file": "linux_arm64.tar.gz", "folder": "linux/arm64"},
+                "aarch64": {"file": "linux_arm64.tar.gz", "folder": "linux/arm64"},
+                "armv7l": {"file": "linux_arm.tar.gz", "folder": "linux/arm"},
+                "armv6l": {"file": "linux_arm.tar.gz", "folder": "linux/armv6"},
+                "arm": {"file": "linux_arm.tar.gz", "folder": "linux/arm"},
             },
-            'freebsd': {
-                'x86_64': {'file': 'freebsd_x86_64.tar.gz', 'folder': 'freebsd/x86_64'},
-                'amd64': {'file': 'freebsd_x86_64.tar.gz', 'folder': 'freebsd/x86_64'},
+            "freebsd": {
+                "x86_64": {"file": "freebsd_x86_64.tar.gz", "folder": "freebsd/x86_64"},
+                "amd64": {"file": "freebsd_x86_64.tar.gz", "folder": "freebsd/x86_64"},
             },
         }
 
@@ -50,8 +58,8 @@ class MkbrrBinaryManager:
             raise Exception(f"Unsupported platform: {system} {machine}")
 
         platform_info = platform_map[system][machine]
-        file_pattern = platform_info['file']
-        folder_path = platform_info['folder']
+        file_pattern = platform_info["file"]
+        folder_path = platform_info["folder"]
         if debug:
             console.print(f"[blue]Using file pattern: {file_pattern}[/blue]")
             console.print(f"[blue]Target folder: {folder_path}[/blue]")
@@ -104,14 +112,14 @@ class MkbrrBinaryManager:
             ):
                 response.raise_for_status()
                 temp_archive = bin_dir / f"temp_{file_pattern}"
-                async with aiofiles.open(temp_archive, 'wb') as f:
+                async with aiofiles.open(temp_archive, "wb") as f:
                     async for chunk in response.aiter_bytes(chunk_size=8192):
                         await f.write(chunk)
             if debug:
                 console.print(f"[green]Downloaded {file_pattern}[/green]")
 
-            if file_pattern.endswith('.zip'):
-                with zipfile.ZipFile(temp_archive, 'r') as zip_ref:
+            if file_pattern.endswith(".zip"):
+                with zipfile.ZipFile(temp_archive, "r") as zip_ref:
                     # Safely extract zip file with validation to prevent directory traversal attacks
                     def safe_extract_zip(zip_file: zipfile.ZipFile, path: str = ".") -> None:
                         """Safely extract zip members, checking for directory traversal attacks"""
@@ -141,9 +149,7 @@ class MkbrrBinaryManager:
                             base_path = os.path.realpath(path)
                             if not full_path.startswith(base_path + os.sep) and full_path != base_path:
                                 if debug:
-                                    console.print(
-                                        f"[yellow]Warning: Skipping path outside target directory: {member}[/yellow]"
-                                    )
+                                    console.print(f"[yellow]Warning: Skipping path outside target directory: {member}[/yellow]")
                                 continue
 
                             # Extract the safe member
@@ -153,8 +159,8 @@ class MkbrrBinaryManager:
 
                     safe_extract_zip(zip_ref, str(bin_dir))
 
-            elif file_pattern.endswith('.tar.gz'):
-                with tarfile.open(temp_archive, 'r:gz') as tar_ref:
+            elif file_pattern.endswith(".tar.gz"):
+                with tarfile.open(temp_archive, "r:gz") as tar_ref:
                     # Safely extract tar file with validation to prevent directory traversal attacks
                     def safe_extract_tar(tar_file: tarfile.TarFile, path: str = ".") -> None:
                         """Safely extract tar members, checking for directory traversal attacks"""
@@ -182,17 +188,13 @@ class MkbrrBinaryManager:
                             base_path = os.path.realpath(path)
                             if not full_path.startswith(base_path + os.sep) and full_path != base_path:
                                 if debug:
-                                    console.print(
-                                        f"[yellow]Warning: Skipping path outside target directory: {member.name}[/yellow]"
-                                    )
+                                    console.print(f"[yellow]Warning: Skipping path outside target directory: {member.name}[/yellow]")
                                 continue
 
                             # Check for reasonable file sizes (prevent tar bombs)
                             if member.size > 100 * 1024 * 1024:  # 100MB limit
                                 if debug:
-                                    console.print(
-                                        f"[yellow]Warning: Skipping oversized file: {member.name} ({member.size} bytes)[/yellow]"
-                                    )
+                                    console.print(f"[yellow]Warning: Skipping oversized file: {member.name} ({member.size} bytes)[/yellow]")
                                 continue
 
                             # Extract the safe member
@@ -210,7 +212,7 @@ class MkbrrBinaryManager:
             if not binary_path.exists():
                 raise Exception(f"Failed to extract mkbrr binary to {binary_path}")
 
-            async with aiofiles.open(version_path, 'w', encoding='utf-8') as version_file:
+            async with aiofiles.open(version_path, "w", encoding="utf-8") as version_file:
                 await version_file.write(f"mkbrr version {version} installed successfully.")
             return str(binary_path)
 
@@ -230,20 +232,20 @@ class MkbrrBinaryManager:
             raise Exception(f"This script is for Docker/Linux only, detected: {system}")
 
         platform_map = {
-            'x86_64': {'file': 'linux_x86_64.tar.gz', 'folder': 'linux/amd64'},
-            'amd64': {'file': 'linux_x86_64.tar.gz', 'folder': 'linux/amd64'},
-            'arm64': {'file': 'linux_arm64.tar.gz', 'folder': 'linux/arm64'},
-            'aarch64': {'file': 'linux_arm64.tar.gz', 'folder': 'linux/arm64'},
-            'armv7l': {'file': 'linux_arm.tar.gz', 'folder': 'linux/arm'},
-            'arm': {'file': 'linux_arm.tar.gz', 'folder': 'linux/arm'},
+            "x86_64": {"file": "linux_x86_64.tar.gz", "folder": "linux/amd64"},
+            "amd64": {"file": "linux_x86_64.tar.gz", "folder": "linux/amd64"},
+            "arm64": {"file": "linux_arm64.tar.gz", "folder": "linux/arm64"},
+            "aarch64": {"file": "linux_arm64.tar.gz", "folder": "linux/arm64"},
+            "armv7l": {"file": "linux_arm.tar.gz", "folder": "linux/arm"},
+            "arm": {"file": "linux_arm.tar.gz", "folder": "linux/arm"},
         }
 
         if machine not in platform_map:
             raise Exception(f"Unsupported architecture: {machine}")
 
         platform_info = platform_map[machine]
-        file_pattern = platform_info['file']
-        folder_path = platform_info['folder']
+        file_pattern = platform_info["file"]
+        folder_path = platform_info["folder"]
 
         console.print(f"Using file pattern: {file_pattern}", markup=False)
         console.print(f"Target folder: {folder_path}", markup=False)
@@ -273,13 +275,14 @@ class MkbrrBinaryManager:
             ):
                 response.raise_for_status()
                 temp_archive = bin_dir / f"temp_{file_pattern}"
-                with open(temp_archive, 'wb') as f:
+                with open(temp_archive, "wb") as f:
                     for chunk in response.iter_bytes(chunk_size=8192):
                         f.write(chunk)
 
             console.print(f"Downloaded {file_pattern}", markup=False)
 
-            with tarfile.open(temp_archive, 'r:gz') as tar_ref:
+            with tarfile.open(temp_archive, "r:gz") as tar_ref:
+
                 def secure_extract(tar: tarfile.TarFile, extract_path: str = ".") -> None:
                     """Securely extract tar members with comprehensive security checks."""
                     base_path = Path(extract_path).resolve()
@@ -329,7 +332,7 @@ class MkbrrBinaryManager:
 
                             source = tar.extractfile(member)
                             if source is not None:
-                                with source, open(final_path, 'wb') as target:
+                                with source, open(final_path, "wb") as target:
                                     target.write(source.read())
 
                             final_path.chmod(0o600)
@@ -348,7 +351,7 @@ class MkbrrBinaryManager:
                 os.chmod(binary_path, 0o700)
                 console.print(f"mkbrr binary ready at: {binary_path}", markup=False)
 
-                with open(version_path, 'w', encoding='utf-8') as version_file:
+                with open(version_path, "w", encoding="utf-8") as version_file:
                     version_file.write(f"mkbrr version {version} installed successfully.")
 
                 return str(binary_path)
