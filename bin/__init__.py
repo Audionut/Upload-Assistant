@@ -1,1 +1,0 @@
-# Upload Assistant bin package

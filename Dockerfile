@@ -31,7 +31,7 @@ WORKDIR /Upload-Assistant
 # Copy DVD MediaInfo download script and run it
 COPY bin/get_dvd_mediainfo_docker.py bin/
 COPY src/ src/
-RUN python3 bin/get_dvd_mediainfo_docker.py
+RUN PYTHONPATH=/Upload-Assistant python3 bin/get_dvd_mediainfo_docker.py
 
 # Copy the Python requirements file and install Python dependencies
 COPY requirements.txt .
@@ -41,7 +41,7 @@ RUN pip install -r requirements.txt
 COPY . .
 
 # Download only the required mkbrr binary (requires full repo for src imports)
-RUN python3 -c "from bin.get_mkbrr import MkbrrBinaryManager; MkbrrBinaryManager.download_mkbrr_for_docker()"
+RUN PYTHONPATH=/Upload-Assistant python3 -c "from bin.get_mkbrr import MkbrrBinaryManager; MkbrrBinaryManager.download_mkbrr_for_docker()"
 
 # Ensure mkbrr is executable
 RUN find bin/mkbrr -type f -name "mkbrr" -exec chmod +x {} \;
