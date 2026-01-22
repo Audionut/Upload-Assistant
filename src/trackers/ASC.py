@@ -395,9 +395,7 @@ class ASC:
         if not overview:
             console.print(f"{self.tracker}: [bold red]Sinopse não encontrada no TMDb. Por favor, insira manualmente.[/bold red]")
             user_input = await self.common.async_input(prompt=f"{self.tracker}: [green]Digite a sinopse:[/green]")
-            if user_input:
-                overview = user_input
-            overview = "Sinopse não encontrada."
+            overview = user_input or "Sinopse não encontrada."
         await append_section('BARRINHA_SINOPSE', overview)
 
         # Episode
@@ -735,8 +733,8 @@ class ASC:
             if os.path.exists(cache_path):
                 try:
                     async with aiofiles.open(cache_path, encoding="utf-8") as f:
-                        response = await f.read()
-                        layout_dict = json.loads(response)
+                        cache = await f.read()
+                        layout_dict = json.loads(cache)
                         return layout_dict
                 except (OSError, json.JSONDecodeError):
                     console.print(f"{self.tracker}: [yellow]Failed to read cached layout data.[/yellow]")
