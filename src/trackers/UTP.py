@@ -72,6 +72,56 @@ class UTP(UNIT3D):
         }.get(str(meta.get('type', '')).upper(), '3')  # Default to ENCODE
         return {'type_id': type_id}
 
+    async def get_description(self, meta: Meta) -> dict[str, str]:
+        """
+        Override UNIT3D description to use img_url (medium) for display
+        and raw_url (full image) as link target for utppm compatibility.
+
+        Expected format: [url=FULL_IMAGE][img]MEDIUM_IMAGE[/img][/url]
+        """
+        from src.get_desc import DescriptionBuilder
+
+        # Transform image URLs in meta directly so all packed content logic works
+        # unit3d_edit_desc uses: web_url for [url=], raw_url for [img]
+        # We want: raw_url (full) for [url=], img_url (medium) for [img]
+
+        # Save original values and transform
+        original_image_list = meta.get('image_list', [])
+        transformed_image_list: list[dict[str, Any]] = []
+        for img in original_image_list:
+            transformed_image_list.append({
+                'web_url': img.get('raw_url', ''),   # Link goes to full image
+                'raw_url': img.get('img_url', ''),   # Display shows medium image
+                'img_url': img.get('img_url', ''),
+            })
+
+        # Also transform any new_images_* keys for packed content
+        new_images_keys = [k for k in meta.keys() if k.startswith('new_images_')]
+        original_new_images: dict[str, Any] = {}
+        for key in new_images_keys:
+            original_new_images[key] = meta[key]
+            transformed: list[dict[str, Any]] = []
+            for img in meta[key]:
+                transformed.append({
+                    'web_url': img.get('raw_url', ''),
+                    'raw_url': img.get('img_url', ''),
+                    'img_url': img.get('img_url', ''),
+                })
+            meta[key] = transformed
+
+        # Temporarily replace image_list
+        meta['image_list'] = transformed_image_list
+
+        builder = DescriptionBuilder(self.tracker, self.config)
+        description = await builder.unit3d_edit_desc(meta, comparison=True)
+
+        # Restore original values
+        meta['image_list'] = original_image_list
+        for key, value in original_new_images.items():
+            meta[key] = value
+
+        return {"description": description}
+
     async def get_name(self, meta: Meta) -> dict[str, str]:
         """
         Build UTOPIA-compliant torrent name from meta components.
