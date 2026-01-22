@@ -49,15 +49,15 @@ const apiFetch = async (url, options = {}) => {
 // sanitizer and ultimately escapes on failure.
 const sanitizeHtml = (html) => {
   const rawHtml = String(html || '');
-  if (window.DOMPurify) {
-    // Enforce the same restrictions as the fallback sanitizer: forbid
-    // dangerous tags and attributes, and only allow a small set of safe
-    // attributes. This prevents attributes like `style` (with url()) and
-    // event handlers from slipping through when DOMPurify is present.
+    if (window.DOMPurify) {
+    // Allow inline `style` attributes here because Rich exports inline
+    // styles for colors. DOMPurify will still sanitize CSS and remove
+    // dangerous constructs like `url(...)`. Other dangerous tags and
+    // event-handler attributes remain forbidden.
     const dangerousTags = ['script', 'style', 'img', 'svg', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'meta', 'link'];
-    const forbiddenAttrs = ['style', 'srcset', 'onerror', 'onload', 'onclick', 'onmouseover', 'onmouseenter', 'onmouseleave', 'onkeydown', 'onkeypress', 'onkeyup'];
+    const forbiddenAttrs = ['srcset', 'onerror', 'onload', 'onclick', 'onmouseover', 'onmouseenter', 'onmouseleave', 'onkeydown', 'onkeypress', 'onkeyup'];
     return DOMPurify.sanitize(rawHtml, {
-      ALLOWED_ATTR: ['class', 'href', 'src', 'title', 'alt', 'rel'],
+      ALLOWED_ATTR: ['class', 'href', 'src', 'title', 'alt', 'rel', 'style'],
       FORBID_TAGS: dangerousTags,
       FORBID_ATTR: forbiddenAttrs,
     });
