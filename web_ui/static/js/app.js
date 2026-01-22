@@ -115,24 +115,48 @@ function AudionutsUAGUI() {
   const inputRef = useRef(null);
 
   const appendHtmlFragment = (rawHtml) => {
-    const sanitizeHtml = (html) => {
-      if (window.DOMPurify) {
-        return DOMPurify.sanitize(html, { ALLOWED_ATTR: ['style', 'class', 'href', 'src'] });
-      }
-      try {
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        doc.querySelectorAll('script,style').forEach((el) => el.remove());
-        doc.querySelectorAll('*').forEach((el) => {
-          [...el.attributes].forEach((attr) => {
-            if (attr.name && attr.name.toLowerCase().startsWith('on')) el.removeAttribute(attr.name);
-            if ((attr.name === 'href' || attr.name === 'src') && String(attr.value).trim().toLowerCase().startsWith('javascript:')) el.removeAttribute(attr.name);
-          });
+  const sanitizeHtml = (html) => {
+    if (window.DOMPurify) {
+      return DOMPurify.sanitize(html, { ALLOWED_ATTR: ['style', 'class', 'href', 'src'] });
+    }
+    // Hardened fallback when DOMPurify is not available
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+
+      // Remove dangerous elements
+      const dangerousTags = ['script', 'style', 'img', 'svg', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'meta', 'link'];
+      dangerousTags.forEach(tag => {
+        doc.querySelectorAll(tag).forEach(el => el.remove());
+      });
+
+      // Remove dangerous attributes
+      doc.querySelectorAll('*').forEach((el) => {
+        [...el.attributes].forEach((attr) => {
+          const attrName = attr.name.toLowerCase();
+          const attrValue = String(attr.value).toLowerCase().trim();
+
+          // Remove event handlers
+          if (attrName.startsWith('on')) {
+            el.removeAttribute(attr.name);
+          }
+          // Remove dangerous href/src
+          else if ((attrName === 'href' || attrName === 'src') &&
+                   (attrValue.startsWith('javascript:') || attrValue.startsWith('data:') || attrValue.startsWith('vbscript:'))) {
+            el.removeAttribute(attr.name);
+          }
+          // Remove srcset and style with url()
+          else if (attrName === 'srcset' || (attrName === 'style' && attrValue.includes('url('))) {
+            el.removeAttribute(attr.name);
+          }
         });
-        return doc.body.innerHTML;
-      } catch (e) {
-        return rawHtml.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      }
-    };
+      });
+
+      return doc.body.innerHTML;
+    } catch (e) {
+      // Fail closed: escape all HTML
+      return rawHtml.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+  };
 
     const container = richOutputRef.current;
     if (container) {
@@ -205,16 +229,6 @@ function AudionutsUAGUI() {
   useEffect(() => {
     storage.set(THEME_KEY, isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
-
-  useEffect(() => {
-    const handleStorage = (event) => {
-      if (event.key === THEME_KEY) {
-        setIsDarkMode(event.newValue === 'dark');
-      }
-    };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
 
   useEffect(() => {
     const handleStorage = (event) => {

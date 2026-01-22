@@ -35,9 +35,18 @@
     }
   };
 
+  const getAuthHeader = () => {
+    // Authentication is handled via session cookies, no auth header needed
+    return null;
+  };
+
   const apiFetch = async (url, options = {}) => {
     const headers = { ...(options.headers || {}) };
-    const response = await fetch(url, { ...options, headers });
+    const authHeader = getAuthHeader();
+    if (authHeader) {
+      headers['Authorization'] = authHeader;
+    }
+    const response = await fetch(url, { ...options, headers, credentials: 'include' });
     return response;
   };
 
@@ -626,6 +635,10 @@
   const loadConfigOptions = async () => {
     try {
       const response = await apiFetch(`${API_BASE}/config_options`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText || 'Request failed'}`);
+      }
       const data = await response.json();
 
       if (!data.success) {
