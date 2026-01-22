@@ -99,7 +99,7 @@ class MkbrrBinaryManager:
 
         try:
             async with (
-                httpx.AsyncClient(timeout=60.0) as client,
+                httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client,
                 client.stream("GET", download_url, timeout=60.0) as response,
             ):
                 response.raise_for_status()
