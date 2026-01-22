@@ -1,5 +1,4 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import re
 from typing import Any, Optional
 
 from src.trackers.COMMON import COMMON
@@ -126,80 +125,66 @@ class UTP(UNIT3D):
     async def get_name(self, meta: Meta) -> dict[str, str]:
         """
         Build UTOPIA-compliant torrent name from meta components.
-        Follows naming.json templates from UTOPIA fork.
+        https://utp.to/pages/33 - rules used for naming.
+        https://github.com/maksii/UTOPIA-Upload-Assistant/blob/main/data/naming.json
+
+        Expected naming as per rules
+        Movie: Name AKA Original LOCALE Year Cut Ratio Hybrid REPACK PROPER RERip Edition Region 3D SOURCE TYPE Resolution HDR VCodec ACodec Channels Object-Tag
+        TV:    Name AKA Original LOCALE S##E## Year Cut Ratio Hybrid REPACK PROPER RERip Edition Region 3D SOURCE TYPE Resolution HDR VCodec ACodec Channels Object-Tag
+
         """
         category = str(meta.get('category', ''))
         release_type = str(meta.get('type', '')).upper()
-        source = str(meta.get('source', ''))
-        is_disc = meta.get('is_disc', '')
 
         # Common components
         title = str(meta.get('title', ''))
         aka = str(meta.get('aka', '')).strip()
         year = str(meta.get('year', ''))
         three_d = str(meta.get('3D', ''))
+        uhd = str(meta.get('uhd', ''))
         edition = str(meta.get('edition', ''))
         repack = str(meta.get('repack', ''))
         resolution = str(meta.get('resolution', ''))
         hdr = str(meta.get('hdr', ''))
         service = str(meta.get('service', ''))
-        audio = str(meta.get('audio', ''))
+        audio_raw = str(meta.get('audio', ''))
+        # Only include audio for Atmos or lossless codecs
+        lossless_indicators = ['Atmos', 'TrueHD', 'DTS-HD MA', 'DTS:X', 'LPCM', 'FLAC', 'PCM']
+        if any(indicator in audio_raw for indicator in lossless_indicators):
+            audio = audio_raw.replace('Dual-Audio', '').replace('Dubbed', '').strip()
+            audio = ' '.join(audio.split())
+        else:
+            audio = ""  # Don't include lossy audio (AAC, DD, DD+, etc.) in name
         video_codec = str(meta.get('video_codec', ''))
         video_encode = str(meta.get('video_encode', ''))
         tag = str(meta.get('tag', ''))
-
-        # TV-specific
+        region = str(meta.get('region', '')) if meta.get('region') else ''
         season = str(meta.get('season', ''))
         episode = str(meta.get('episode', ''))
 
-        name = ""
+        source_tag = str(meta.get('source', ''))
+        type_tag = ""
+        vcodec = video_codec  # Default for DISC/REMUX (AVC, HEVC)
 
+        if release_type in ("REMUX", "ENCODE"):
+            source_tag = ""  # BDRemux/BDRip replaces source
+            type_tag = "BDRemux" if release_type == "REMUX" else "BDRip"
+            if release_type == "ENCODE":
+                vcodec = video_encode
+        elif release_type in ("WEBDL", "WEBRIP"):
+            source_tag = service  # Service (NF, AMZN, etc.) as source
+            type_tag = "WEB-DL" if release_type == "WEBDL" else "WEBRip"
+            vcodec = video_encode
+        elif release_type == "HDTV":
+            vcodec = video_encode
+        # DISC: source_tag stays as meta['source'] (Blu-ray), three_d/uhd handled in template
+
+        # Build name using single template per category
         if category == "MOVIE":
-            if release_type == "DISC":
-                if is_disc == 'BDMV':
-                    name = f"{title} {aka} {year} {three_d} {edition} {repack} BluRay {resolution} {hdr} {video_codec} {audio}"
-                elif is_disc == 'DVD':
-                    name = f"{title} {aka} {year} {edition} {repack} {source} {audio}"
-                elif is_disc == 'HDDVD':
-                    name = f"{title} {aka} {year} {edition} {repack} HD-DVD {resolution} {video_codec} {audio}"
-            elif release_type == "REMUX":
-                if source in ("BluRay", "Blu-ray", "HDDVD"):
-                    name = f"{title} {aka} {year} {three_d} {edition} {repack} BDRemux {resolution} {hdr}"
-                else:  # DVD variants
-                    name = f"{title} {aka} {year} {edition} {repack} DVDRemux {audio}"
-            elif release_type == "ENCODE":
-                name = f"{title} {aka} {year} {edition} {repack} BDRip {resolution} {hdr}"
-            elif release_type == "WEBDL":
-                name = f"{title} {aka} {year} {edition} {repack} {service} WEB-DL {resolution} {hdr}"
-            elif release_type == "WEBRIP":
-                name = f"{title} {aka} {year} {edition} {repack} {service} WEBRip {resolution} {hdr}"
-            elif release_type == "HDTV":
-                name = f"{title} {aka} {year} {edition} {repack} HDTV {resolution} {video_encode}"
-
+            name = f"{title} {aka} {year} {repack} {edition} {region} {three_d} {uhd} {source_tag} {type_tag} {resolution} {hdr} {vcodec} {audio}"
         elif category == "TV":
-            if release_type == "DISC":
-                if is_disc == 'BDMV':
-                    name = f"{title} {aka} {year} {season}{episode} {three_d} {edition} {repack} BluRay {resolution} {hdr} {video_codec} {audio}"
-                elif is_disc == 'DVD':
-                    name = f"{title} {aka} {year} {season}{episode} {edition} {repack} {source} {audio}"
-                elif is_disc == 'HDDVD':
-                    name = f"{title} {aka} {year} {season}{episode} {edition} {repack} HD-DVD {resolution} {video_codec} {audio}"
-            elif release_type == "REMUX":
-                if source in ("BluRay", "Blu-ray", "HDDVD"):
-                    name = f"{title} {aka} {year} {season}{episode} {three_d} {edition} {repack} BDRemux {resolution} {hdr}"
-                else:  # DVD variants
-                    name = f"{title} {aka} {year} {season}{episode} {edition} {repack} DVDRemux {audio}"
-            elif release_type == "ENCODE":
-                name = f"{title} {aka} {year} {season}{episode} {edition} {repack} BDRip {resolution} {hdr}"
-            elif release_type == "WEBDL":
-                name = f"{title} {aka} {year} {season}{episode} {edition} {repack} {service} WEB-DL {resolution} {hdr}"
-            elif release_type == "WEBRIP":
-                name = f"{title} {aka} {year} {season}{episode} {edition} {repack} {service} WEBRip {resolution} {hdr}"
-            elif release_type == "HDTV":
-                name = f"{title} {aka} {year} {season}{episode} {edition} {repack} HDTV {resolution} {video_encode}"
-
-        # Fallback if no pattern matched
-        if not name:
+            name = f"{title} {aka} {season}{episode} {year} {edition} {repack} {region} {three_d} {uhd} {source_tag} {type_tag} {resolution} {hdr} {vcodec} {audio}"
+        else:
             name = str(meta.get('name', ''))
 
         # Clean up multiple spaces and add tag
@@ -207,7 +192,5 @@ class UTP(UNIT3D):
         if tag:
             name = f"{name}{tag}"
 
-        # Final cleanup
-        name = re.sub(r'\s{2,}', ' ', name).strip()
 
         return {'name': name}
