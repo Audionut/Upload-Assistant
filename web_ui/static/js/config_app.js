@@ -486,37 +486,22 @@ function ConfigLeaf({
   });
 
   useEffect(() => {
-    if (isNumericField(item.key, pathParts)) {
-      const val = item.value;
-      if (val === null || val === undefined || val === '') {
-        setNumericValue(getDefaultValue(item.key));
-      } else {
-        const num = Number(val);
-        setNumericValue(isNaN(num) ? getDefaultValue(item.key) : num);
-      }
+    if (!isNumericField(item.key, pathParts)) return;
+    const val = item.value;
+    if (val === null || val === undefined || val === '') {
+      setNumericValue(getDefaultValue(item.key));
+    } else {
+      const num = Number(val);
+      setNumericValue(isNaN(num) ? getDefaultValue(item.key) : num);
     }
   }, [item.value, item.key, pathParts]);
 
-  // Hooks for select values
-  const [selectedValue, setSelectedValue] = useState(() => {
-    if (isLinkingField(item.key, pathParts)) {
-      const val = item.value;
-      if (val === null || val === undefined) return '';
-      return String(val);
-    }
-    return '';
-  });
+  // Hooks for select values (always declared to follow Rules of Hooks)
+  const [selectedValue, setSelectedValue] = useState(() => (item == null || item.value == null ? '' : String(item.value)));
 
   useEffect(() => {
-    if (isLinkingField(item.key, pathParts)) {
-      const val = item.value;
-      if (val === null || val === undefined) {
-        setSelectedValue('');
-      } else {
-        setSelectedValue(String(val));
-      }
-    }
-  }, [item.value, item.key, pathParts]);
+    setSelectedValue(item == null || item.value == null ? '' : String(item.value));
+  }, [item.value]);
 
 
   if (typeof item.value === 'boolean') {
@@ -714,12 +699,6 @@ function ConfigLeaf({
 
     // Observer: whenever the selected set changes, persist the default_trackers value
     useEffect(() => {
-      const normalizeTrackers = (value) => (
-        String(value || '')
-          .split(',')
-          .map((t) => t.trim().toUpperCase())
-          .filter(Boolean)
-      );
       const nextValue = Array.from(selected).map((t) => String(t).toUpperCase()).join(', ');
       const originalValue = normalizeTrackers(item.value).join(', ');
       onValueChange(path, nextValue, {
@@ -1501,7 +1480,9 @@ function ItemList({
 
 // Promise-based confirmation modal to avoid blocking `confirm()`.
 // Returns a Promise that resolves to true (confirmed) or false (cancelled).
-function showConfirmModal(message) {
+function showConfirmModal(opts) {
+  // Accept either a string (message) or an options object { title, message, confirmLabel }
+  const options = typeof opts === 'string' ? { message: opts } : (opts || {});
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'ua-confirm-overlay fixed inset-0 z-50 flex items-center justify-center';
@@ -1513,7 +1494,14 @@ function showConfirmModal(message) {
 
     const msg = document.createElement('div');
     msg.className = 'mb-4 text-sm';
-    msg.textContent = message;
+    msg.textContent = options.message || '';
+
+    if (options.title) {
+      const titleEl = document.createElement('div');
+      titleEl.className = 'mb-2 font-semibold';
+      titleEl.textContent = options.title;
+      dlg.appendChild(titleEl);
+    }
 
     const btnRow = document.createElement('div');
     btnRow.className = 'flex justify-end gap-2';
@@ -1526,7 +1514,7 @@ function showConfirmModal(message) {
     const okBtn = document.createElement('button');
     okBtn.type = 'button';
     okBtn.className = 'px-3 py-1 rounded bg-red-600 text-white';
-    okBtn.textContent = 'Remove';
+    okBtn.textContent = options.confirmLabel || 'Remove';
 
     btnRow.appendChild(cancelBtn);
     btnRow.appendChild(okBtn);
@@ -1540,6 +1528,7 @@ function showConfirmModal(message) {
 
     function cleanup(result) {
       try { document.body.removeChild(overlay); } catch (e) {}
+      try { window.removeEventListener('keydown', keyHandler); } catch (e) {}
       resolve(result);
     }
 
@@ -1633,9 +1622,12 @@ function SecurityTab({ isDarkMode }) {
   };
 
   const handleDisable2FA = async () => {
-    if (!confirm('Are you sure you want to disable 2FA? This will make your account less secure.')) {
-      return;
-    }
+    const confirmed = await showConfirmModal({
+      title: 'Disable Two-Factor Authentication',
+      message: 'Are you sure you want to disable 2FA? This will make your account less secure.',
+      confirmLabel: 'Disable'
+    });
+    if (!confirmed) return;
 
     setLoading(true);
     setMessage('');
