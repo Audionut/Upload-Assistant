@@ -683,6 +683,19 @@ function ConfigLeaf({
       setSelected(new Set(normalizeTrackers(item.value)));
     }, [item.value]);
 
+    // Observer: whenever the selected set changes, persist the default_trackers value
+    useEffect(() => {
+      const nextValue = Array.from(selected).map((t) => String(t).toUpperCase()).join(', ');
+      const originalValue = normalizeTrackers(item.value).join(', ');
+      onValueChange(path, nextValue, {
+        originalValue,
+        isSensitive: false,
+        isRedacted: false,
+        readOnly: false
+      });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selected]);
+
     const originalValue = normalizeTrackers(item.value).join(', ');
 
     const toggleTracker = (tracker, checked) => {
@@ -693,13 +706,6 @@ function ConfigLeaf({
         selections.delete(tracker.toUpperCase());
       }
       setSelected(selections);
-      const nextValue = Array.from(selections).map((t) => String(t).toUpperCase()).join(', ');
-      onValueChange(path, nextValue, {
-        originalValue,
-        isSensitive: false,
-        isRedacted: false,
-        readOnly: false
-      });
     };
 
     return (
@@ -712,11 +718,8 @@ function ConfigLeaf({
             </Tooltip>
           )}
         </div>
-        <details className={isDarkMode ? 'rounded-lg border border-gray-700 bg-gray-900/30' : 'rounded-lg border border-gray-200 bg-gray-50'}>
-          <summary className={`cursor-pointer select-none px-3 py-2 text-xs font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
-            Show trackers
-          </summary>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 p-3">
+        <div className={`rounded-lg border p-3 ${isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'}`}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
             {availableTrackers.map((tracker) => (
               <label key={tracker} className={`flex items-center gap-2 text-xs ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
                 <input
@@ -729,7 +732,7 @@ function ConfigLeaf({
               </label>
             ))}
           </div>
-        </details>
+        </div>
       </div>
     );
   }
@@ -1016,8 +1019,350 @@ function ItemList({
     }
   }
 
+  const isTrackerConfig = pathParts.includes('TRACKERS') && depth === 0;
+  // If we're in the top-level TRACKERS section, extract the default_trackers item
+  let defaultTrackersItem = null;
+  if (isTrackerConfig) {
+    const idx = regularItems.findIndex((it) => it.key === 'default_trackers');
+    if (idx >= 0) {
+      defaultTrackersItem = regularItems.splice(idx, 1)[0];
+    }
+  }
+  // Track user choices to add available-only trackers into default_trackers
+  const [pendingDefaultAdds, setPendingDefaultAdds] = useState(() => new Set());
+  const [trackerTab, setTrackerTab] = useState(() => {
+    try {
+      return sessionStorage.getItem('ua_tracker_tab') || 'default';
+    } catch (e) {
+      return 'default';
+    }
+  });
+
+  const normalizeTrackers = (value) => (
+    String(value || '')
+      .split(',')
+      .map((t) => t.trim().toUpperCase())
+      .filter(Boolean)
+  );
+
+  let availableFromExample = [];
+  let selectedFromDefault = new Set();
+  let configuredFromSubsections = new Set();
+  let configuredSet = new Set();
+  let availableRemaining = [];
+  if (isTrackerConfig && defaultTrackersItem) {
+    availableFromExample = getAvailableTrackers(defaultTrackersItem).map((t) => String(t).toUpperCase());
+    selectedFromDefault = new Set(normalizeTrackers(defaultTrackersItem.value));
+    configuredFromSubsections = new Set((subsections || [])
+      .filter(s => Array.isArray(s.children) && s.children.some(c => c.source === 'config'))
+      .map(s => String(s.key).toUpperCase())
+    );
+    configuredSet = new Set([...selectedFromDefault, ...configuredFromSubsections]);
+    availableRemaining = availableFromExample.filter((t) => !configuredSet.has(t));
+    // Present configured and available lists in alphabetical order by display name
+    var configuredArray = Array.from(configuredSet).sort((a, b) => getTrackerDisplayName(a).localeCompare(getTrackerDisplayName(b)));
+    var availableArray = (availableRemaining || []).slice().sort((a, b) => getTrackerDisplayName(a).localeCompare(getTrackerDisplayName(b)));
+  }
+
   return (
     <div className="space-y-6">
+      {/* TRACKERS tabbed subsections: Default / Configured / Available */}
+      {isTrackerConfig && defaultTrackersItem && (
+        <div>
+          <div className="flex space-x-1 rounded-lg p-1 bg-gray-700 mb-3">
+            <button
+              type="button"
+              onClick={() => setTrackerTab('default')}
+              className={trackerTab === 'default'
+                ? 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors bg-gray-600 text-white'
+                : 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-white hover:bg-gray-600'}
+            >
+              Default trackers
+            </button>
+            <button
+              type="button"
+              onClick={() => setTrackerTab('configured')}
+              className={trackerTab === 'configured'
+                ? 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors bg-gray-600 text-white'
+                : 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-white hover:bg-gray-600'}
+            >
+              Configured trackers
+            </button>
+            <button
+              type="button"
+              onClick={() => setTrackerTab('available')}
+              className={trackerTab === 'available'
+                ? 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors bg-gray-600 text-white'
+                : 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-white hover:bg-gray-600'}
+            >
+              Available trackers
+            </button>
+          </div>
+
+          <div>
+            <div className={trackerTab === 'default' ? '' : 'hidden'}>
+              <ConfigLeaf
+                key={[...pathParts, defaultTrackersItem.key].join('/')}
+                item={defaultTrackersItem}
+                pathParts={pathParts}
+                depth={depth}
+                isDarkMode={isDarkMode}
+                fullWidth={true}
+                allImageHosts={allImageHosts}
+                usedImageHosts={usedImageHosts}
+                torrentClients={torrentClients}
+                onValueChange={onValueChange}
+              />
+            </div>
+
+            <div className={trackerTab === 'configured' ? 'space-y-4' : 'hidden'}>
+              {/* configured tab content */}
+              <div className="space-y-4">
+                <div className={isDarkMode ? 'text-sm font-medium text-gray-200 mb-2' : 'text-sm font-medium text-gray-700 mb-2'}>Configured trackers</div>
+                <div className={`rounded-lg border p-3 ${isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'}`}>
+                  <div className="space-y-2">
+                    {configuredArray.length === 0 && (
+                      <div className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>No configured trackers</div>
+                    )}
+                    {configuredArray.map((tr) => {
+                      const subsection = subsections.find(s => String(s.key).toUpperCase() === tr);
+                      if (subsection) {
+                        const groupKey = [...pathParts, subsection.key].join('/');
+                        const isOpen = expandedGroups.has(groupKey);
+                        return (
+                          <div key={tr} className="mb-2">
+                            <div className="flex items-center justify-between">
+                              <button
+                              type="button"
+                              onClick={() => toggleGroup(groupKey)}
+                              aria-expanded={isOpen}
+                              className={`flex items-center justify-between w-full px-3 py-2 text-sm font-medium rounded ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}
+                            >
+                              <span className={isDarkMode ? 'text-xs font-mono text-purple-300' : 'text-xs font-mono text-purple-700'}>{getTrackerDisplayName(tr)}</span>
+                              <span className="transition-transform" style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>&gt;</span>
+                            </button>
+                            </div>
+                            {isOpen && (
+                              <div className={`rounded-lg border p-3 mt-2 ${isDarkMode ? 'border-gray-700 bg-gray-900/20' : 'border-gray-200 bg-white'}`}>
+                                <ItemList
+                                  items={subsection.children}
+                                  pathParts={[...pathParts, subsection.key]}
+                                  depth={depth + 1}
+                                  isDarkMode={isDarkMode}
+                                  allImageHosts={allImageHosts}
+                                  usedImageHosts={usedImageHosts}
+                                  fullWidth={true}
+                                  expandedGroups={expandedGroups}
+                                  toggleGroup={toggleGroup}
+                                  torrentClients={torrentClients}
+                                  onValueChange={onValueChange}
+                                />
+                                <div className="mt-2 flex items-center justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      if (!confirm(`Remove configured tracker ${tr}? This will remove the user's overrides for this tracker.`)) return;
+                                      try {
+                                        const resp = await apiFetch(`${API_BASE}/config_remove_subsection`, {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ path: [...pathParts, subsection.key] })
+                                        });
+                                        const data = await resp.json();
+                                        if (!data.success) throw new Error(data.error || 'Failed');
+
+                                        // If this tracker is also in default_trackers, remove it there as well
+                                        try {
+                                          if (selectedFromDefault && selectedFromDefault.has(tr)) {
+                                            const nextDefault = Array.from(selectedFromDefault).filter(x => x !== tr).join(', ');
+                                            const resp2 = await apiFetch(`${API_BASE}/config_update`, {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ path: [...pathParts, 'default_trackers'], value: nextDefault })
+                                            });
+                                            const data2 = await resp2.json();
+                                            if (!data2.success) throw new Error(data2.error || 'Failed to update default_trackers');
+                                          }
+                                        } catch (err) {
+                                          console.warn('Failed to update default_trackers after removing subsection', err);
+                                        }
+
+                                        try {
+                                          sessionStorage.setItem('ua_active_tab', String(pathParts[0] || '').toLowerCase());
+                                          sessionStorage.setItem('ua_tracker_tab', trackerTab || 'configured');
+                                        } catch (e) {}
+                                        window.location.reload();
+                                      } catch (err) {
+                                        alert(err.message || 'Failed to remove subsection');
+                                      }
+                                    }}
+                                    className="ml-2 px-2 py-1 text-xs rounded bg-red-600 text-white"
+                                  >Remove</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      // Tracker selected in default but not configured in file - allow removing from default
+                      return (
+                        <div key={tr} className="inline-flex items-center mr-2 mb-2 px-2 py-1 rounded text-xs">
+                          <div className={isDarkMode ? 'bg-purple-700 text-white px-2 py-1 rounded' : 'bg-purple-100 text-purple-800 px-2 py-1 rounded'}>{getTrackerDisplayName(tr)}</div>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!confirm(`Remove ${tr} from default trackers?`)) return;
+                              try {
+                                const next = Array.from(selectedFromDefault).filter(x => x !== tr).join(', ');
+                                const resp = await apiFetch(`${API_BASE}/config_update`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ path: [...pathParts, 'default_trackers'], value: next })
+                                });
+                                const data = await resp.json();
+                                if (!data.success) throw new Error(data.error || 'Failed');
+                                try {
+                                  sessionStorage.setItem('ua_active_tab', String(pathParts[0] || '').toLowerCase());
+                                  sessionStorage.setItem('ua_tracker_tab', trackerTab || 'default');
+                                } catch (e) {}
+                                window.location.reload();
+                              } catch (err) {
+                                alert(err.message || 'Failed to update default trackers');
+                              }
+                            }}
+                            className="ml-2 px-2 py-1 text-xs rounded bg-red-600 text-white"
+                          >Remove</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className={trackerTab === 'available' ? '' : 'hidden'}>
+              <div>
+                <div className={isDarkMode ? 'text-sm font-medium text-gray-200 mb-2' : 'text-sm font-medium text-gray-700 mb-2'}>Available trackers</div>
+                <div className={`rounded-lg border p-3 ${isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'}`}>
+                  {availableArray.length === 0 && (
+                    <div className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>No additional available trackers</div>
+                  )}
+                  <div className="space-y-2">
+                    {availableArray.map((t) => {
+                      const subsection = subsections.find(s => String(s.key).toUpperCase() === t);
+                      const isInDefault = selectedFromDefault && selectedFromDefault.has(t);
+                      const isPending = pendingDefaultAdds.has(t);
+                      if (subsection) {
+                        const groupKey = [...pathParts, subsection.key].join('/');
+                        const isOpen = expandedGroups.has(groupKey);
+                        return (
+                          <div key={t} className="mb-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleGroup(groupKey)}
+                              aria-expanded={isOpen}
+                              className={`flex items-center justify-between w-full px-3 py-2 text-sm font-medium rounded ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}
+                            >
+                              <span className={isDarkMode ? 'text-xs font-mono text-gray-200' : 'text-xs font-mono text-gray-700'}>{getTrackerDisplayName(t)}</span>
+                              <span className="transition-transform" style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>&gt;</span>
+                            </button>
+                              {isOpen && (
+                                <div className={`rounded-lg border p-3 mt-2 ${isDarkMode ? 'border-gray-700 bg-gray-900/20' : 'border-gray-200 bg-white'}`}>
+                                  <ItemList
+                                    items={subsection.children}
+                                    pathParts={[...pathParts, subsection.key]}
+                                    depth={depth + 1}
+                                    isDarkMode={isDarkMode}
+                                    allImageHosts={allImageHosts}
+                                    usedImageHosts={usedImageHosts}
+                                    fullWidth={true}
+                                    expandedGroups={expandedGroups}
+                                    toggleGroup={toggleGroup}
+                                    torrentClients={torrentClients}
+                                    onValueChange={onValueChange}
+                                  />
+                                  <div className="mt-2">
+                                    <label className="inline-flex items-center text-xs mr-2">
+                                      <input
+                                        type="checkbox"
+                                        checked={isInDefault || isPending}
+                                        onChange={async (e) => {
+                                          const checked = e.target.checked;
+                                          const nextPending = new Set(pendingDefaultAdds);
+                                          if (checked) {
+                                            nextPending.add(t);
+                                          } else {
+                                            nextPending.delete(t);
+                                          }
+                                          setPendingDefaultAdds(nextPending);
+                                          // Compute next default trackers value and queue change
+                                          const nextDefaultSet = new Set(selectedFromDefault || []);
+                                          for (const x of nextPending) nextDefaultSet.add(x);
+                                          // If user unchecked an already-selected default, remove it
+                                          if (!checked && selectedFromDefault && selectedFromDefault.has(t)) {
+                                            nextDefaultSet.delete(t);
+                                          }
+                                          const nextDefault = Array.from(nextDefaultSet).join(', ');
+                                          const originalDefault = normalizeTrackers(defaultTrackersItem.value).join(', ');
+                                          onValueChange([...pathParts, 'default_trackers'], nextDefault, {
+                                            originalValue: originalDefault,
+                                            isSensitive: false,
+                                            isRedacted: false,
+                                            readOnly: false
+                                          });
+                                        }}
+                                        className="h-4 w-4 mr-2"
+                                      />
+                                      <span className={isDarkMode ? 'text-gray-300' : 'text-gray-700'}>Add to default trackers</span>
+                                    </label>
+                                  </div>
+                                </div>
+                              )}
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={t} className={isDarkMode ? 'inline-block px-2 py-1 bg-gray-800 text-gray-200 rounded text-xs' : 'inline-block px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs'}>
+                          <div className="flex items-center gap-2">
+                            <div>{getTrackerDisplayName(t)}</div>
+                            <label className="inline-flex items-center text-xs">
+                              <input
+                                type="checkbox"
+                                checked={(selectedFromDefault && selectedFromDefault.has(t)) || pendingDefaultAdds.has(t)}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  const nextPending = new Set(pendingDefaultAdds);
+                                  if (checked) nextPending.add(t); else nextPending.delete(t);
+                                  setPendingDefaultAdds(nextPending);
+                                  const nextDefaultSet = new Set(selectedFromDefault || []);
+                                  for (const x of nextPending) nextDefaultSet.add(x);
+                                  if (!checked && selectedFromDefault && selectedFromDefault.has(t)) {
+                                    nextDefaultSet.delete(t);
+                                  }
+                                  const nextDefault = Array.from(nextDefaultSet).join(', ');
+                                  const originalDefault = normalizeTrackers(defaultTrackersItem.value).join(', ');
+                                  onValueChange([...pathParts, 'default_trackers'], nextDefault, {
+                                    originalValue: originalDefault,
+                                    isSensitive: false,
+                                    isRedacted: false,
+                                    readOnly: false
+                                  });
+                                }}
+                                className="h-4 w-4"
+                              />
+                              <span className="ml-1">Add to defaults</span>
+                            </label>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Regular form fields in a grid */}
       {regularItems.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1041,8 +1386,16 @@ function ItemList({
         </div>
       )}
 
+      
+
       {/* Subsections */}
       {subsections.map((item) => {
+        // When rendering the top-level TRACKERS section we handle tracker subsections
+        // inside the tabbed UI above, so skip the generic subsections rendering
+        // to avoid duplicate lists.
+        if (pathParts.includes('TRACKERS') && depth === 0) {
+          return null;
+        }
         const isTrackerConfig = pathParts.includes('TRACKERS') && depth === 0;
         const isTorrentClientConfig = pathParts.includes('TORRENT_CLIENTS') && depth === 0;
         const isCollapsible = item.subsection === true || isTrackerConfig || isTorrentClientConfig;
@@ -1114,8 +1467,20 @@ function ConfigApp() {
   const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [pendingChanges, setPendingChanges] = useState(new Map());
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('general');
-  const [activeSubTab, setActiveSubTab] = useState('');
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      return sessionStorage.getItem('ua_active_tab') || 'general';
+    } catch (e) {
+      return 'general';
+    }
+  });
+  const [activeSubTab, setActiveSubTab] = useState(() => {
+    try {
+      return sessionStorage.getItem('ua_active_subtab') || '';
+    } catch (e) {
+      return '';
+    }
+  });
   const [torrentClients, setTorrentClients] = useState([]);
   const getSubTabsForSection = (section) => {
     if (section.client_types) {
@@ -1185,6 +1550,31 @@ function ConfigApp() {
       setPendingChanges(new Map());
       setStatus({ text: '', type: 'info' });
 
+      // Restore tab state after operations (preserve which section/tab the user was on)
+      let didRestoreTab = false;
+      try {
+        const storedActive = sessionStorage.getItem('ua_active_tab');
+        const storedSub = sessionStorage.getItem('ua_active_subtab');
+        if (storedActive && newSections.length > 0) {
+          setActiveTab(storedActive);
+          const activeSection = newSections.find(section => section.section.toLowerCase() === storedActive);
+          const subTabs = activeSection ? getSubTabsForSection(activeSection) : [];
+          if (storedSub && subTabs.some(s => s.id === storedSub)) {
+            setActiveSubTab(storedSub);
+          } else if (subTabs.length > 0) {
+            setActiveSubTab(subTabs[0].id);
+          } else {
+            setActiveSubTab('');
+          }
+          sessionStorage.removeItem('ua_active_tab');
+          sessionStorage.removeItem('ua_active_subtab');
+          // keep ua_tracker_tab; ItemList reads it directly on mount
+          didRestoreTab = true;
+        }
+      } catch (e) {
+        // ignore storage errors
+      }
+
       // Load torrent clients
       try {
         const clientsResponse = await apiFetch(`${API_BASE}/torrent_clients`);
@@ -1199,12 +1589,15 @@ function ConfigApp() {
       
       // Only set default tabs if we don't have any sections loaded yet
       if (sections.length === 0 && newSections.length > 0) {
-        setActiveTab(newSections[0].section.toLowerCase());
-        // Set first sub-tab if available
-        const firstSection = newSections[0];
-        const subTabs = getSubTabsForSection(firstSection);
-        if (subTabs.length > 0) {
-          setActiveSubTab(subTabs[0].id);
+        // If we restored a tab from sessionStorage above, don't override it.
+        if (!didRestoreTab) {
+          setActiveTab(newSections[0].section.toLowerCase());
+          // Set first sub-tab if available
+          const firstSection = newSections[0];
+          const subTabs = getSubTabsForSection(firstSection);
+          if (subTabs.length > 0) {
+            setActiveSubTab(subTabs[0].id);
+          }
         }
       } else if (newSections.length > 0) {
         // Validate that current active tab still exists
@@ -1270,7 +1663,46 @@ function ConfigApp() {
     setIsSaving(true);
     setStatusWithClear(`Saving ${pendingChanges.size} change${pendingChanges.size === 1 ? '' : 's'}...`, 'info');
     try {
-      for (const update of pendingChanges.values()) {
+      // Some updates may target keys inside subsections that only exist in the example-config.
+      // Ensure we create an empty subsection object in the user's config first so subsequent
+      // nested updates succeed. Collect unique subsection creations needed.
+      const pending = Array.from(pendingChanges.values());
+      const toCreate = [];
+      const createdKeys = new Set();
+      for (const update of pending) {
+        if (Array.isArray(update.path) && update.path.length >= 2) {
+          const sectionName = String(update.path[0]);
+          const subsectionName = String(update.path[1]);
+          const section = sections.find(s => s.section && String(s.section).toLowerCase() === sectionName.toLowerCase());
+          if (section && Array.isArray(section.items)) {
+            const subsectionItem = section.items.find(it => it.key && String(it.key).toUpperCase() === subsectionName.toUpperCase());
+            if (subsectionItem && subsectionItem.children && subsectionItem.source === 'example') {
+              const keyId = `${sectionName}/${subsectionName}`;
+              if (!createdKeys.has(keyId)) {
+                toCreate.push([sectionName, subsectionName]);
+                createdKeys.add(keyId);
+              }
+            }
+          }
+        }
+      }
+
+      // Create missing subsections in the user's config (as empty dicts)
+      for (const createPath of toCreate) {
+        const respCreate = await apiFetch(`${API_BASE}/config_update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: createPath, value: '{}'
+          })
+        });
+        const dataCreate = await respCreate.json();
+        if (!dataCreate.success) {
+          throw new Error(dataCreate.error || 'Failed to create subsection');
+        }
+      }
+
+      // Now save the actual pending updates
+      for (const update of pending) {
         const response = await apiFetch(`${API_BASE}/config_update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

@@ -1010,6 +1010,30 @@ def config_update():
     return jsonify({"success": True, "value": _json_safe(coerced_value)})
 
 
+@app.route("/api/config_remove_subsection", methods=["POST"])
+def config_remove_subsection():
+    """Remove a subsection (top-level key) from the user's config.py if present"""
+    data = request.json or {}
+    path = data.get("path")
+
+    if not isinstance(path, list) or not all(isinstance(p, str) and p for p in path):
+        return jsonify({"success": False, "error": "Invalid path"}), 400
+
+    base_dir = Path(__file__).parent.parent
+    config_path = base_dir / "data" / "config.py"
+
+    try:
+        source = config_path.read_text(encoding="utf-8")
+        updated = _remove_config_key_in_source(source, path)
+        if updated == source:
+            # Nothing changed
+            return jsonify({"success": True, "value": None})
+        config_path.write_text(updated, encoding="utf-8")
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/browse")
 def browse_path():
     """Browse filesystem paths"""
