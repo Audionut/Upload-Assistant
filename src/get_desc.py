@@ -854,7 +854,7 @@ class DescriptionBuilder:
                                         True,
                                     )
                                 except Exception as e:
-                                    print(f"Error during BDMV screenshot capture: {e}")
+                                    console.print(f"Error during BDMV screenshot capture: {e}", markup=False)
                                 new_screens = [os.path.basename(f) for f in glob.glob(
                                     os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png")
                                 )]
@@ -939,7 +939,7 @@ class DescriptionBuilder:
                     if multi_screens != 0:
                         processed_count += 1
                         disc_name = each.get("name", f"Disc {i}")
-                        print(
+                        console.print(markup=False, 
                             f"\rProcessing disc {processed_count}/{total_discs_to_process}: {disc_name[:40]}{'...' if len(disc_name) > 40 else ''}",
                             end="",
                             flush=True,
@@ -1042,7 +1042,7 @@ class DescriptionBuilder:
                                             True,
                                         )
                                     except Exception as e:
-                                        print(f"Error during BDMV screenshot capture: {e}")
+                                        console.print(f"Error during BDMV screenshot capture: {e}", markup=False)
                                     new_screens = [os.path.basename(f) for f in glob.glob(
                                         os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
                                     )]
@@ -1050,7 +1050,7 @@ class DescriptionBuilder:
                                     try:
                                         await self.takescreens_manager.dvd_screenshots(meta, i, multi_screens, True)
                                     except Exception as e:
-                                        print(f"Error during DVD screenshot capture: {e}")
+                                        console.print(f"Error during DVD screenshot capture: {e}", markup=False)
                                     new_screens = [os.path.basename(f) for f in glob.glob(
                                         os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png")
                                     )]
@@ -1158,7 +1158,7 @@ class DescriptionBuilder:
                 if total_files_to_process > 1:
                     processed_count += 1
                     filename = os.path.basename(file)
-                    print(
+                    console.print(markup=False, 
                         f"\rProcessing file {processed_count}/{total_files_to_process}: {filename[:40]}{'...' if len(filename) > 40 else ''}",
                         end="",
                         flush=True,
@@ -1209,7 +1209,7 @@ class DescriptionBuilder:
                             )
                             await asyncio.sleep(0.1)
                         except Exception as e:
-                            print(f"Error during generic screenshot capture: {e}")
+                            console.print(f"Error during generic screenshot capture: {e}", markup=False)
 
                         new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
 

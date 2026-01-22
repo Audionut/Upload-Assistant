@@ -70,10 +70,10 @@ class GPW:
                     loaded_data = json.loads(content)
                     data = cast(dict[str, Any], loaded_data) if isinstance(loaded_data, dict) else {}
             except json.JSONDecodeError:
-                print(f'Warning: Could not decode JSON from {localized_data_file}')
+                console.print(f'Warning: Could not decode JSON from {localized_data_file}', markup=False)
                 data = {}
             except Exception as e:
-                print(f'Error reading file {localized_data_file}: {e}')
+                console.print(f'Error reading file {localized_data_file}: {e}', markup=False)
                 data = {}
 
         ch_data = data.get('zh-cn')
@@ -383,7 +383,7 @@ class GPW:
                     else:
                         return []
             except Exception as e:
-                print(f'An unexpected error occurred while processing the search: {e}')
+                console.print(f'An unexpected error occurred while processing the search: {e}', markup=False)
             return []
 
         else:
@@ -434,10 +434,10 @@ class GPW:
                     return found_items
 
             except httpx.HTTPError as e:
-                print(f'An HTTP error occurred: {e}')
+                console.print(f'An HTTP error occurred: {e}', markup=False)
                 return []
             except Exception as e:
-                print(f'An unexpected error occurred while processing the search: {e}')
+                console.print(f'An unexpected error occurred while processing the search: {e}', markup=False)
                 return []
 
     async def get_slots(self, meta: dict[str, Any], client: httpx.AsyncClient, group_id: str) -> None:
@@ -447,7 +447,7 @@ class GPW:
             response = await client.get(url)
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
-            print(f'Error on request: {e.response.status_code} - {e.response.reason_phrase}')
+            console.print(f'Error on request: {e.response.status_code} - {e.response.reason_phrase}', markup=False)
             return
 
         soup = BeautifulSoup(response.text, 'html.parser')

@@ -448,9 +448,9 @@ class AZTrackerBase:
                             audio_ids.add(target_id)
 
             except FileNotFoundError:
-                print(f'Warning: MediaInfo.json not found for uuid {meta.get("uuid")}. No languages will be processed.')
+                console.print(f'Warning: MediaInfo.json not found for uuid {meta.get("uuid")}. No languages will be processed.', markup=False)
             except (json.JSONDecodeError, KeyError, TypeError) as e:
-                print(f'Error processing MediaInfo.json for uuid {meta.get("uuid")}: {e}')
+                console.print(f'Error processing MediaInfo.json for uuid {meta.get("uuid")}: {e}', markup=False)
 
         final_subtitle_ids = sorted(subtitle_ids)
         final_audio_ids = sorted(audio_ids)
@@ -490,13 +490,13 @@ class AZTrackerBase:
                     return str(image_id)
                 else:
                     error_message = json_data.get('error', 'Unknown image host error.')
-                    print(f'{self.tracker}: Error uploading {filename}: {error_message}')
+                    console.print(f'{self.tracker}: Error uploading {filename}: {error_message}', markup=False)
                     return None
             else:
-                print(f'{self.tracker}: Error uploading {filename}: Status {response.status_code} - {response.text}')
+                console.print(f'{self.tracker}: Error uploading {filename}: Status {response.status_code} - {response.text}', markup=False)
                 return None
         except Exception as e:
-            print(f'{self.tracker}: Exception when uploading {filename}: {e}')
+            console.print(f'{self.tracker}: Exception when uploading {filename}: {e}', markup=False)
             return None
 
     async def get_screenshots(self, meta: dict[str, Any]) -> Optional[list[str]]:
@@ -525,7 +525,7 @@ class AZTrackerBase:
                 filename = os.path.basename(urlparse(url).path) or 'screenshot.png'
                 return await self.img_host(meta, self.tracker, image_bytes, filename)
             except Exception as e:
-                print(f'Failed to process screenshot from URL {url}: {e}')
+                console.print(f'Failed to process screenshot from URL {url}: {e}', markup=False)
                 return None
 
         # Upload menu images
@@ -638,7 +638,7 @@ class AZTrackerBase:
                         return 0
 
         except Exception as e:
-            print(f"An unexpected error occurred while processing the tag '{word}': {e}")
+            console.print(f"An unexpected error occurred while processing the tag '{word}': {e}", markup=False)
 
         return 0
 

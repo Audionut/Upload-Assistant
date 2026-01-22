@@ -224,7 +224,7 @@ class MkbrrBinaryManager:
         """Download mkbrr binary for Docker/Linux - synchronous version."""
         system = platform.system().lower()
         machine = platform.machine().lower()
-        print(f"Detected system: {system}, architecture: {machine}")
+        console.print(f"Detected system: {system}, architecture: {machine}", markup=False)
 
         if system != "linux":
             raise Exception(f"This script is for Docker/Linux only, detected: {system}")
@@ -245,8 +245,8 @@ class MkbrrBinaryManager:
         file_pattern = platform_info['file']
         folder_path = platform_info['folder']
 
-        print(f"Using file pattern: {file_pattern}")
-        print(f"Target folder: {folder_path}")
+        console.print(f"Using file pattern: {file_pattern}", markup=False)
+        console.print(f"Target folder: {folder_path}", markup=False)
 
         bin_dir = Path(base_dir) / "bin" / "mkbrr" / folder_path
         bin_dir.mkdir(parents=True, exist_ok=True)
@@ -257,14 +257,14 @@ class MkbrrBinaryManager:
         binary_executable = os.access(binary_path, os.X_OK)
         binary_valid = binary_exists and binary_executable
         if version_path.exists() and version_path.is_file() and binary_valid:
-            print(f"mkbrr {version} already exists, skipping download")
+            console.print(f"mkbrr {version} already exists, skipping download", markup=False)
             return str(binary_path)
 
         if binary_path.exists():
             binary_path.unlink()
 
         download_url = f"https://github.com/autobrr/mkbrr/releases/download/{version}/mkbrr_{version[1:]}_{file_pattern}"
-        print(f"Downloading from: {download_url}")
+        console.print(f"Downloading from: {download_url}", markup=False)
 
         try:
             with (
@@ -277,7 +277,7 @@ class MkbrrBinaryManager:
                     for chunk in response.iter_bytes(chunk_size=8192):
                         f.write(chunk)
 
-            print(f"Downloaded {file_pattern}")
+            console.print(f"Downloaded {file_pattern}", markup=False)
 
             with tarfile.open(temp_archive, 'r:gz') as tar_ref:
                 def secure_extract(tar: tarfile.TarFile, extract_path: str = ".") -> None:
@@ -286,18 +286,18 @@ class MkbrrBinaryManager:
 
                     for member in tar.getmembers():
                         if member.issym():
-                            print(f"Warning: Skipping symbolic link: {member.name}")
+                            console.print(f"Warning: Skipping symbolic link: {member.name}", markup=False)
                             continue
                         if member.islnk():
-                            print(f"Warning: Skipping hard link: {member.name}")
+                            console.print(f"Warning: Skipping hard link: {member.name}", markup=False)
                             continue
 
                         if os.path.isabs(member.name):
-                            print(f"Warning: Skipping absolute path: {member.name}")
+                            console.print(f"Warning: Skipping absolute path: {member.name}", markup=False)
                             continue
 
                         if ".." in member.name.split(os.sep):
-                            print(f"Warning: Skipping path with '..': {member.name}")
+                            console.print(f"Warning: Skipping path with '..': {member.name}", markup=False)
                             continue
 
                         try:
@@ -306,22 +306,22 @@ class MkbrrBinaryManager:
                             try:
                                 os.path.commonpath([base_path, final_path])
                                 if not str(final_path).startswith(str(base_path) + os.sep) and final_path != base_path:
-                                    print(f"Warning: Path outside base directory: {member.name}")
+                                    console.print(f"Warning: Path outside base directory: {member.name}", markup=False)
                                     continue
                             except ValueError:
-                                print(f"Warning: Invalid path resolution: {member.name}")
+                                console.print(f"Warning: Invalid path resolution: {member.name}", markup=False)
                                 continue
 
                         except (OSError, ValueError) as e:
-                            print(f"Warning: Path resolution failed for {member.name}: {e}")
+                            console.print(f"Warning: Path resolution failed for {member.name}: {e}", markup=False)
                             continue
 
                         if not (member.isfile() or member.isdir()):
-                            print(f"Warning: Skipping non-regular file: {member.name}")
+                            console.print(f"Warning: Skipping non-regular file: {member.name}", markup=False)
                             continue
 
                         if member.isfile() and member.size > 100 * 1024 * 1024:  # 100MB limit
-                            print(f"Warning: Skipping oversized file: {member.name} ({member.size} bytes)")
+                            console.print(f"Warning: Skipping oversized file: {member.name} ({member.size} bytes)", markup=False)
                             continue
 
                         if member.isfile():
@@ -338,7 +338,7 @@ class MkbrrBinaryManager:
                             final_path.mkdir(parents=True, exist_ok=True)
                             final_path.chmod(0o700)
 
-                        print(f"Extracted: {member.name}")
+                        console.print(f"Extracted: {member.name}", markup=False)
 
                 secure_extract(tar_ref, str(bin_dir))
 
@@ -346,7 +346,7 @@ class MkbrrBinaryManager:
 
             if binary_path.exists():
                 os.chmod(binary_path, 0o700)
-                print(f"mkbrr binary ready at: {binary_path}")
+                console.print(f"mkbrr binary ready at: {binary_path}", markup=False)
 
                 with open(version_path, 'w', encoding='utf-8') as version_file:
                     version_file.write(f"mkbrr version {version} installed successfully.")

@@ -30,6 +30,8 @@ try:
 except Exception:
     ansi_to_html = None
 
+from src.console import console
+
 Flask = cast(Any, Flask)
 Response = cast(Any, Response)
 jsonify = cast(Any, jsonify)
@@ -790,8 +792,8 @@ def index():
     try:
         return render_template("index.html")
     except Exception as e:
-        print(f"Error loading template: {e}")
-        print(traceback.format_exc())
+        console.print(f"Error loading template: {e}", markup=False)
+        console.print(traceback.format_exc(), markup=False)
         return "<pre>Internal server error</pre>", 500
 
 
@@ -846,8 +848,8 @@ def config_page():
     try:
         return render_template("config.html")
     except Exception as e:
-        print(f"Error loading config template: {e}")
-        print(traceback.format_exc())
+        console.print(f"Error loading config template: {e}", markup=False)
+        console.print(traceback.format_exc(), markup=False)
         return "<pre>Internal server error</pre>", 500
 
 
@@ -1016,10 +1018,10 @@ def browse_path():
         path = _resolve_browse_path(requested)
     except ValueError as e:
         # Log details server-side, but avoid leaking paths/internal details to clients.
-        print(f"Path resolution error for requested {requested!r}: {e}")
+        console.print(f"Path resolution error for requested {requested!r}: {e}", markup=False)
         return jsonify({"error": "Invalid path specified", "success": False}), 400
 
-    print(f"Browsing path: {path}")
+    console.print(f"Browsing path: {path}", markup=False)
 
     try:
         items: list[BrowseItem] = []
@@ -1037,17 +1039,17 @@ def browse_path():
                 except (PermissionError, OSError):
                     continue
 
-            print(f"Found {len(items)} items in {path}")
+            console.print(f"Found {len(items)} items in {path}", markup=False)
 
         except PermissionError:
-            print(f"Error: Permission denied: {path}")
+            console.print(f"Error: Permission denied: {path}", markup=False)
             return jsonify({"error": "Permission denied", "success": False}), 403
 
         return jsonify({"items": items, "success": True, "path": path, "count": len(items)})
 
     except Exception as e:
-        print(f"Error browsing {path}: {e}")
-        print(traceback.format_exc())
+        console.print(f"Error browsing {path}: {e}", markup=False)
+        console.print(traceback.format_exc(), markup=False)
         return jsonify({"error": "Error browsing path", "success": False}), 500
 
 
@@ -1081,7 +1083,7 @@ def execute_command():
         except Exception:
             pass
 
-        print(f"Execute request - Path: {path}, Args: {args}, Session: {session_id}")
+        console.print(f"Execute request - Path: {path}, Args: {args}, Session: {session_id}", markup=False)
 
         if not path:
             return jsonify({"error": "Missing path", "success": False}), 400
@@ -1103,7 +1105,7 @@ def execute_command():
                     command.extend(_validate_upload_assistant_args(parsed_args))
 
                 command_str = subprocess.list2cmdline(command)
-                print(f"Running: {command_str}")
+                console.print(f"Running: {command_str}", markup=False)
 
                 yield f"data: {json.dumps({'type': 'system', 'data': f'Executing: {command_str}'})}\n\n"
 
@@ -1118,7 +1120,7 @@ def execute_command():
 
                     from src import console as src_console
 
-                    print("Running in-process (rich-captured) mode")
+                    console.print("Running in-process (rich-captured) mode", markup=False)
 
                     # Prepare input queue for prompts
                     input_queue: queue.Queue[str] = queue.Queue()
@@ -1249,8 +1251,8 @@ def execute_command():
                                         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
                                 asyncio.run(upload_main())
                             except Exception as e:
-                                print(f"In-process execution error: {e}")
-                                print(traceback.format_exc())
+                                console.print(f"In-process execution error: {e}", markup=False)
+                                console.print(traceback.format_exc(), markup=False)
                             finally:
                                 # Restore sys.argv in finally block
                                 pass
@@ -1391,7 +1393,7 @@ def execute_command():
                                 break
                             output_queue.put(("stdout", chunk))
                     except Exception as e:
-                        print(f"stdout read error: {e}")
+                        console.print(f"stdout read error: {e}", markup=False)
 
                 # Thread to read stderr - stream raw output
                 def read_stderr():
@@ -1404,7 +1406,7 @@ def execute_command():
                                 break
                             output_queue.put(("stderr", chunk))
                     except Exception as e:
-                        print(f"stderr read error: {e}")
+                        console.print(f"stderr read error: {e}", markup=False)
 
                 output_queue: queue.Queue[tuple[str, str]] = queue.Queue()
 
@@ -1449,7 +1451,7 @@ def execute_command():
 
                                 yield f"data: {json.dumps({'type': 'html', 'data': html_fragment, 'origin': output_type})}\n\n"
                             except Exception as e:
-                                print(f"HTML conversion error: {e}")
+                                console.print(f"HTML conversion error: {e}", markup=False)
                                 import html as _html
 
                                 html_fragment = f"<pre>{_html.escape(chunk)}</pre>"
@@ -1471,7 +1473,7 @@ def execute_command():
 
                             yield f"data: {json.dumps({'type': 'html', 'data': html_fragment, 'origin': t})}\n\n"
                         except Exception as e:
-                            print(f"HTML flush error: {e}")
+                            console.print(f"HTML flush error: {e}", markup=False)
                             import html as _html
 
                             html_fragment = f"<pre>{_html.escape(remaining)}</pre>"
@@ -1487,8 +1489,8 @@ def execute_command():
                 yield f"data: {json.dumps({'type': 'exit', 'code': process.returncode})}\n\n"
 
             except Exception as e:
-                print(f"Execution error for session {session_id}: {e}")
-                print(traceback.format_exc())
+                console.print(f"Execution error for session {session_id}: {e}", markup=False)
+                console.print(traceback.format_exc(), markup=False)
                 yield f"data: {json.dumps({'type': 'error', 'data': 'Execution error'})}\n\n"
 
                 # Clean up on error
@@ -1498,8 +1500,8 @@ def execute_command():
         return Response(generate(), mimetype="text/event-stream")
 
     except Exception as e:
-        print(f"Request error: {e}")
-        print(traceback.format_exc())
+        console.print(f"Request error: {e}", markup=False)
+        console.print(traceback.format_exc(), markup=False)
         return jsonify({"error": "Request error", "success": False}), 500
 
 
@@ -1511,7 +1513,7 @@ def send_input():
         session_id = data.get("session_id", "default")
         user_input = data.get("input", "")
 
-        print(f"Received input for session {session_id}: '{user_input}'")
+        console.print(f"Received input for session {session_id}: '{user_input}'", markup=False)
 
 
         if session_id not in active_processes:
@@ -1526,7 +1528,7 @@ def send_input():
                     return jsonify({"error": "No input queue", "success": False}), 500
                 q = raw_q
                 q.put(user_input)
-                print(f"Queued input for inproc session {session_id}: '{user_input}'")
+                console.print(f"Queued input for inproc session {session_id}: '{user_input}'", markup=False)
                 return jsonify({"success": True})
 
             # Otherwise write to subprocess stdin
@@ -1541,21 +1543,21 @@ def send_input():
                 if process.stdin is not None:
                     process.stdin.write(input_with_newline)
                     process.stdin.flush()
-                    print(f"Sent to stdin: '{input_with_newline.strip()}'")
+                    console.print(f"Sent to stdin: '{input_with_newline.strip()}'", markup=False)
             else:
-                print(f"Process already terminated for session {session_id}")
+                console.print(f"Process already terminated for session {session_id}", markup=False)
                 return jsonify({"error": "Process not running", "success": False}), 400
 
         except Exception as e:
-            print(f"Error handling input for session {session_id}: {e}")
-            print(traceback.format_exc())
+            console.print(f"Error handling input for session {session_id}: {e}", markup=False)
+            console.print(traceback.format_exc(), markup=False)
             return jsonify({"error": "Failed to handle input", "success": False}), 500
 
         return jsonify({"success": True})
 
     except Exception as e:
-        print(f"Input error: {e}")
-        print(traceback.format_exc())
+        console.print(f"Input error: {e}", markup=False)
+        console.print(traceback.format_exc(), markup=False)
         return jsonify({"error": "Input error", "success": False}), 500
 
 
@@ -1566,7 +1568,7 @@ def kill_process():
         data = request.json
         session_id = data.get("session_id")
 
-        print(f"Kill request for session {session_id}")
+        console.print(f"Kill request for session {session_id}", markup=False)
 
         if session_id not in active_processes:
             return jsonify({"error": "No active process", "success": False}), 404
@@ -1591,12 +1593,12 @@ def kill_process():
         # Clean up
         del active_processes[session_id]
 
-        print(f"Process killed for session {session_id}")
+        console.print(f"Process killed for session {session_id}", markup=False)
         return jsonify({"success": True, "message": "Process terminated"})
 
     except Exception as e:
-        print(f"Kill error: {e}")
-        print(traceback.format_exc())
+        console.print(f"Kill error: {e}", markup=False)
+        console.print(traceback.format_exc(), markup=False)
         return jsonify({"error": "Kill error", "success": False}), 500
 
 
@@ -1607,17 +1609,17 @@ def not_found(_e: Exception):
 
 @app.errorhandler(500)
 def internal_error(e: Exception):
-    print(f"500 error: {str(e)}")
-    print(traceback.format_exc())
+    console.print(f"500 error: {str(e)}", markup=False)
+    console.print(traceback.format_exc(), markup=False)
     return jsonify({"error": "Internal server error", "success": False}), 500
 
 
 if __name__ == "__main__":
-    print("=" * 50)
-    print("Starting Upload Assistant Web UI...")
-    print("=" * 50)
-    print(f"Python version: {sys.version}")
-    print(f"Working directory: {os.getcwd()}")
+    console.print("=" * 50, markup=False)
+    console.print("Starting Upload Assistant Web UI...", markup=False)
+    console.print("=" * 50, markup=False)
+    console.print(f"Python version: {sys.version}", markup=False)
+    console.print(f"Working directory: {os.getcwd()}", markup=False)
     host = os.environ.get("UA_WEBUI_HOST", "127.0.0.1").strip() or "127.0.0.1"
     try:
         port = int(os.environ.get("UA_WEBUI_PORT", "5000"))
@@ -1625,19 +1627,19 @@ if __name__ == "__main__":
         port = 5000
 
     scheme = "http"
-    print(f"Server will run at: {scheme}://{host}:{port}")
-    print(f"Health check: {scheme}://{host}:{port}/api/health")
+    console.print(f"Server will run at: {scheme}://{host}:{port}", markup=False)
+    console.print(f"Health check: {scheme}://{host}:{port}/api/health", markup=False)
     if _webui_auth_configured():
         if not os.environ.get("UA_WEBUI_USERNAME") or not os.environ.get("UA_WEBUI_PASSWORD"):
-            print("WARNING: One of UA_WEBUI_USERNAME/UA_WEBUI_PASSWORD is missing; only the configured value will be enforced")
-        print("Auth: HTTP Basic Auth enabled")
+            console.print("WARNING: One of UA_WEBUI_USERNAME/UA_WEBUI_PASSWORD is missing; only the configured value will be enforced", markup=False)
+        console.print("Auth: HTTP Basic Auth enabled", markup=False)
     else:
-        print("Auth: Session-based (login page for web, basic auth for API)")
-    print("=" * 50)
+        console.print("Auth: Session-based (login page for web, basic auth for API)", markup=False)
+    console.print("=" * 50, markup=False)
 
     try:
         serve(app, host=host, port=port)
     except Exception as e:
-        print(f"FATAL: Failed to start server: {str(e)}")
-        print(traceback.format_exc())
+        console.print(f"FATAL: Failed to start server: {str(e)}", markup=False)
+        console.print(traceback.format_exc(), markup=False)
         sys.exit(1)

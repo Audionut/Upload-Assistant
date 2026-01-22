@@ -157,7 +157,7 @@ async def disc_screenshots(
 
     keyframe = 'nokey' if "VC-1" in bdinfo['video'][0]['codec'] or bdinfo['video'][0]['hdr_dv'] != "" else 'none'
     if meta['debug']:
-        print(f"File: {file_path}, Length: {length}, Frame Rate: {frame_rate}")
+        console.print(f"File: {file_path}, Length: {length}, Frame Rate: {frame_rate}", markup=False)
     os.chdir(f"{base_dir}/tmp/{folder_id}")
     existing_screens = glob.glob(f"{sanitized_filename}-*.png")
     total_existing = len(existing_screens) + len(existing_images)

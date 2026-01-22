@@ -198,7 +198,7 @@ class TIK(UNIT3D):
         if meta.get('description_link') or meta.get('description_file'):
             desc = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, comparison=True)
 
-            print(f'Custom Description Link/File Path: {desc}')
+            console.print(f'Custom Description Link/File Path: {desc}', markup=False)
             return {'description': desc}
 
         discs = cast(list[dict[str, Any]], meta.get('discs', []))

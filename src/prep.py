@@ -50,7 +50,7 @@ try:
         return cast(dict[str, Any], guessit_module.guessit(value, options))
 
 except ModuleNotFoundError:
-    print('Missing Module Found. Please reinstall required dependencies from requirements.txt.')
+    console.print('Missing Module Found. Please reinstall required dependencies from requirements.txt.', markup=False)
     raise SystemExit(1) from None
 except KeyboardInterrupt:
     exit()

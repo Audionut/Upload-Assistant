@@ -86,7 +86,7 @@ class Wait:
         if not self.proxy_url and not self.qbt_client:
             raise Exception("[ERROR] qBittorrent is not configured.")
 
-        print(f"Waiting for torrent {infohash} to complete...")
+        console.print(f"Waiting for torrent {infohash} to complete...", markup=False)
 
         if self.proxy_url:
             self.qbt_session = aiohttp.ClientSession()
@@ -104,7 +104,7 @@ class Wait:
                             torrents_data = cast(list[dict[str, Any]], await response.json())
                             target_torrent = torrents_data[0] if torrents_data else None
                         else:
-                            print(f"[ERROR] Failed to get torrent info via proxy: {response.status}")
+                            console.print(f"[ERROR] Failed to get torrent info via proxy: {response.status}", markup=False)
                             break
                 else:
                     if self.qbt_client is None:
@@ -119,13 +119,13 @@ class Wait:
                     else:
                         state_value = getattr(target_torrent, 'state', None)
                     state_str = str(state_value) if state_value is not None else 'unknown'
-                    print(f"[DEBUG] Torrent {infohash} state: {state_str}")
+                    console.print(f"[DEBUG] Torrent {infohash} state: {state_str}", markup=False)
 
                     if state_str in {'pausedUP', 'seeding', 'completed', 'stalledUP', 'uploading'}:
-                        print(f"[INFO] Torrent {infohash} has completed!")
+                        console.print(f"[INFO] Torrent {infohash} has completed!", markup=False)
                         return
                 else:
-                    print(f"[ERROR] Torrent with hash {infohash} not found!")
+                    console.print(f"[ERROR] Torrent with hash {infohash} not found!", markup=False)
                     break
 
                 await asyncio.sleep(check_interval)
@@ -268,10 +268,10 @@ class Wait:
                     state_str = str(state) if state is not None else 'unknown'
                     progress_float = float(progress or 0)
 
-                print(f"\r[INFO] Torrent is at {progress_float * 100:.2f}% progress of {state_str}...", end='', flush=True)
+                console.print(f"\r[INFO] Torrent is at {progress_float * 100:.2f}% progress of {state_str}...", end='', flush=True, markup=False)
 
                 if state_str not in ('checkingUP', 'checkingDL', 'checkingResumeData'):
-                    print()
+                    console.print(, markup=False)
                     break
 
                 await asyncio.sleep(check_interval)

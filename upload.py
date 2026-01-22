@@ -58,13 +58,13 @@ base_dir = os.path.abspath(os.path.dirname(__file__))
 _config_path = os.path.join(base_dir, "data", "config.py")
 _example_config_path = os.path.join(base_dir, "data", "example-config.py")
 if "-webui" in sys.argv or "--webui" in sys.argv and not os.path.exists(_config_path) and os.path.exists(_example_config_path):
-    print("No config.py found. Creating default config from example-config.py...")
+    console.print("No config.py found. Creating default config from example-config.py...", markup=False)
     try:
         shutil.copy2(_example_config_path, _config_path)
-        print("Default config created successfully!")
+        console.print("Default config created successfully!", markup=False)
     except Exception as e:
-        print(f"Failed to create default config: {e}")
-        print("Continuing without config file...")
+        console.print(f"Failed to create default config: {e}", markup=False)
+        console.print("Continuing without config file...", markup=False)
 
 Meta: TypeAlias = dict[str, Any]
 
@@ -95,18 +95,18 @@ def _print_config_error(error_type: str, message: str, lineno: Optional[int] = N
                         text: Optional[str] = None, offset: Optional[int] = None,
                         suggestion: Optional[str] = None) -> None:
     """Print a formatted config error message."""
-    print(f"{_RED}{error_type} in config.py:{_RESET}")
+    console.print(f"{_RED}{error_type} in config.py:{_RESET}", markup=False)
     if lineno:
-        print(f"{_RED}  Line {lineno}: {message}{_RESET}")
+        console.print(f"{_RED}  Line {lineno}: {message}{_RESET}", markup=False)
         if text:
-            print(f"{_YELLOW}    {text.rstrip()}{_RESET}")
+            console.print(f"{_YELLOW}    {text.rstrip()}{_RESET}", markup=False)
             if offset:
-                print(f"{_YELLOW}    {' ' * (offset - 1)}^{_RESET}")
+                console.print(f"{_YELLOW}    {' ' * (offset - 1)}^{_RESET}", markup=False)
     else:
-        print(f"{_RED}  {message}{_RESET}")
+        console.print(f"{_RED}  {message}{_RESET}", markup=False)
     if suggestion:
-        print(f"{_GREEN}  Suggestion: {suggestion}{_RESET}")
-    print(f"\n{_RED}Reference: https://github.com/Audionut/Upload-Assistant/blob/master/data/example-config.py{_RESET}")
+        console.print(f"{_GREEN}  Suggestion: {suggestion}{_RESET}", markup=False)
+    console.print(f"\n{_RED}Reference: https://github.com/Audionut/Upload-Assistant/blob/master/data/example-config.py{_RESET}", markup=False)
 
 
 config: dict[str, Any]
@@ -123,10 +123,10 @@ if os.path.exists(_config_path):
             text=e.text,
             offset=e.offset
         )
-        print(f"\n{_RED}Common syntax issues:{_RESET}")
-        print(f"{_YELLOW}  - Missing comma between dictionary items{_RESET}")
-        print(f"{_YELLOW}  - Missing closing bracket, brace, quote or comma{_RESET}")
-        print(f"{_YELLOW}  - Unclosed string (missing quote at end){_RESET}")
+        console.print(f"\n{_RED}Common syntax issues:{_RESET}", markup=False)
+        console.print(f"{_YELLOW}  - Missing comma between dictionary items{_RESET}", markup=False)
+        console.print(f"{_YELLOW}  - Missing closing bracket, brace, quote or comma{_RESET}", markup=False)
+        console.print(f"{_YELLOW}  - Unclosed string (missing quote at end){_RESET}", markup=False)
         sys.exit(1)
     except NameError as e:
         # Extract line number from traceback
@@ -172,9 +172,9 @@ if os.path.exists(_config_path):
             lineno=lineno,
             text=text
         )
-        print(f"\n{_RED}Common type issues:{_RESET}")
-        print(f"{_YELLOW}  - Using unhashable type as dictionary key{_RESET}")
-        print(f"{_YELLOW}  - Incorrect data structure nesting{_RESET}")
+        console.print(f"\n{_RED}Common type issues:{_RESET}", markup=False)
+        console.print(f"{_YELLOW}  - Using unhashable type as dictionary key{_RESET}", markup=False)
+        console.print(f"{_YELLOW}  - Incorrect data structure nesting{_RESET}", markup=False)
         sys.exit(1)
     except Exception as e:
         import traceback
@@ -190,12 +190,9 @@ if os.path.exists(_config_path):
         )
         sys.exit(1)
 else:
-    print(f"{_RED}Configuration file 'config.py' not found.{_RESET}")
-    print(f"{_RED}Please ensure the file is located at: {_YELLOW}{_config_path}{_RESET}")
-    print(f"{_RED}Follow the setup instructions: https://github.com/Audionut/Upload-Assistant{_RESET}")
-    sys.exit(1)
-
-client = Clients(config=config)
+    console.print(f"{_RED}Configuration file 'config.py' not found.{_RESET}", markup=False)
+    console.print(f"{_RED}Please ensure the file is located at: {_YELLOW}{_config_path}{_RESET}", markup=False)
+    console.print(f"{_RED}Follow the setup instructions: https://github.com/Audionut/Upload-Assistant{_RESET}", markup=False)
 parser = Args(config)
 name_manager = NameManager(config)
 tracker_data_manager = TrackerDataManager(config)
@@ -1316,7 +1313,7 @@ async def do_the_thing(base_dir: str) -> None:
                 console.print(f"[yellow]Config validation passed with {len(grouped)} warning(s):[/yellow]")
                 for warning_str in grouped:
                     console.print(f"[yellow]  ⚠ {warning_str}[/yellow]")
-                print()  # Blank line after warnings
+                console.print()  # Blank line after warnings
 
         if meta.get('cleanup'):
             if os.path.exists(f"{base_dir}/tmp"):

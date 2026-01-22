@@ -130,10 +130,10 @@ class BT:
                     loaded_data = json.loads(content)
                     data = cast(dict[str, Any], loaded_data) if isinstance(loaded_data, dict) else {}
             except json.JSONDecodeError:
-                print(f'Warning: Could not decode JSON from {localized_data_file}')
+                console.print(f'Warning: Could not decode JSON from {localized_data_file}', markup=False)
                 data = {}
             except Exception as e:
-                print(f'Error reading file {localized_data_file}: {e}')
+                console.print(f'Error reading file {localized_data_file}: {e}', markup=False)
                 data = {}
 
         ptbr_data = data.get('pt-BR')
