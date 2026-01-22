@@ -44,6 +44,222 @@ const apiFetch = async (url, options = {}) => {
   return response;
 };
 
+// Shared HTML sanitizer used throughout this module. Uses DOMPurify when available
+// with a narrowed allowed-attributes list; falls back to a hardened DOMParser-based
+// sanitizer and ultimately escapes on failure.
+const sanitizeHtml = (html) => {
+  const rawHtml = String(html || '');
+  if (window.DOMPurify) {
+    return DOMPurify.sanitize(rawHtml, { ALLOWED_ATTR: ['style', 'class', 'href', 'src'] });
+  }
+  try {
+    const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
+    const dangerousTags = ['script', 'style', 'img', 'svg', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'meta', 'link'];
+    dangerousTags.forEach(tag => {
+      doc.querySelectorAll(tag).forEach(el => el.remove());
+    });
+    doc.querySelectorAll('*').forEach((el) => {
+      [...el.attributes].forEach((attr) => {
+        const attrName = attr.name.toLowerCase();
+        const attrValue = String(attr.value).toLowerCase().trim();
+        if (attrName.startsWith('on')) {
+          el.removeAttribute(attr.name);
+        } else if ((attrName === 'href' || attrName === 'src') && (attrValue.startsWith('javascript:') || attrValue.startsWith('data:') || attrValue.startsWith('vbscript:'))) {
+          el.removeAttribute(attr.name);
+        } else if (attrName === 'srcset' || (attrName === 'style' && attrValue.includes('url('))) {
+          el.removeAttribute(attr.name);
+        }
+      });
+    });
+    return doc.body.innerHTML;
+  } catch (e) {
+    return rawHtml.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+};
+
+// Argument categories for the right sidebar (placeholders shown for info only)
+const argumentCategories = [
+  {
+    title: "Modes / Workflows",
+    args: [
+      { label: "--queue", placeholder: "QUEUE_NAME", description: "Process a named queue from a folder path" },
+      { label: "--limit-queue", placeholder: "N", description: "Limit queue successful uploads" },
+      { label: "--site-check", description: "Site check (can it be uploaded)" },
+      { label: "--site-upload", placeholder: "TRACKER", description: "Site upload (process site check content)" },
+      { label: "--search_requests", description: "Search supported site for matching requests (config)" },
+      { label: "--unit3d", description: "Upload from UNIT3D-Upload-Checker results" }
+    ]
+  },
+  {
+    title: "Metadata / IDs",
+    subtitle: "Getting these correct is 90% of a successful upload!",
+    args: [
+      { label: "--tmdb", placeholder: "movie/123", description: "TMDb id" },
+      { label: "--imdb", placeholder: "tt0111161", description: "IMDb id" },
+      { label: "--mal", placeholder: "ID", description: "MAL id" },
+      { label: "--tvmaze", placeholder: "ID", description: "TVMaze id" },
+      { label: "--tvdb", placeholder: "ID", description: "TVDB id" }
+    ]
+  },
+  {
+    title: "Screenshots / Images",
+    args: [
+      { label: "--screens", placeholder: "N", description: "Number of screenshots to use" },
+      { label: "--manual_frames", placeholder: '"1,250,500"', description: "Manual frame numbers for screenshots" },
+      { label: "--comparison", placeholder: "PATH", description: "Comparison images folder" },
+      { label: "--comparison_index", placeholder: "N", description: "Comparison main index" },
+      { label: "--disc-menus", placeholder: "PATH", description: "Folder containing disc menus screenshots" },
+      { label: "--imghost", placeholder: "HOST", description: "Specific image host to use" },
+      { label: "--skip-imagehost-upload", description: "Skip uploading screenshots" }
+    ]
+  },
+  {
+    title: "TV Fields",
+    args: [
+      { label: "--season", placeholder: "S01", description: "Season number" },
+      { label: "--episode", placeholder: "E01", description: "Episode number" },
+      { label: "--manual-episode-title", placeholder: "TITLE", description: "Manual episode title" },
+      { label: "--daily", placeholder: "YYYY-MM-DD", description: "Air date for daily shows" }
+    ]
+  },
+  {
+    title: "Title Shaping",
+    args: [
+      { label: "--year", placeholder: "YYYY", description: "Override year" },
+      { label: "--no-season", description: "Remove season" },
+      { label: "--no-year", description: "Remove year" },
+      { label: "--no-aka", description: "Remove AKA" },
+      { label: "--no-dub", description: "Remove Dubbed" },
+      { label: "--no-dual", description: "Remove Dual-Audio" },
+      { label: "--no-tag", description: "Remove group tag" },
+      { label: "--no-edition", description: "Remove edition" },
+      { label: "--dual-audio", description: "Add Dual-Audio" },
+      { label: "--tag", placeholder: "GROUP", description: "Group tag" },
+      { label: "--service", placeholder: "SERVICE", description: "Streaming service" },
+      { label: "--region", placeholder: "REGION", description: "Disc Region" },
+      { label: "--edition", placeholder: "TEXT", description: "Edition marker" },
+      { label: "--repack", placeholder: "TEXT", description: "Repack" }
+    ]
+  },
+  {
+    title: "Description / NFO",
+    args: [
+      { label: "--desclink", placeholder: "URL", description: "Custom description link" },
+      { label: "--descfile", placeholder: "PATH", description: "Custom description file" },
+      { label: "--nfo", description: "Use .nfo for description" }
+    ]
+  },
+  {
+    title: "Language",
+    args: [
+      { label: "--original-language", placeholder: "en", description: "Original language of content" },
+      { label: "--only-if-languages", placeholder: "en,fr", description: "Only proceed with upload if the content has these languages" }
+    ]
+  },
+  {
+    title: "Misc Metadata Flags",
+    args: [
+      { label: "--commentary", description: "Commentary" },
+      { label: "--sfx-subtitles", description: "SFX subtitles" },
+      { label: "--extras", description: "Extras included" },
+      { label: "--distributor", placeholder: "NAME", description: "Disc distributor" },
+      { label: "--sorted-filelist", description: "Sorted filelist (handles typical anime nonsense)" },
+      { label: "--keep-folder", description: "Keep top folder with single file uploads" },
+      { label: "--keep-nfo", description: "Keep nfo (extremely site specific)" },
+    ]
+  },
+  {
+    title: "Tracker References",
+    subtitle: "Pull metadata ids, descriptions, and screenshots from these trackers",
+    args: [
+      { label: "--onlyID", description: "Only grab meta ids, not descriptions" },
+      { label: "--ptp", placeholder: "ID_OR_URL", description: "PTP id/link" },
+      { label: "--blu", placeholder: "ID_OR_URL", description: "BLU id/link" },
+      { label: "--aither", placeholder: "ID_OR_URL", description: "Aither id/link" },
+      { label: "--lst", placeholder: "ID_OR_URL", description: "LST id/link" },
+      { label: "--oe", placeholder: "ID_OR_URL", description: "OE id/link" },
+      { label: "--hdb", placeholder: "ID_OR_URL", description: "HDB id/link" },
+      { label: "--btn", placeholder: "ID_OR_URL", description: "BTN id/link" },
+      { label: "--bhd", placeholder: "ID_OR_URL", description: "BHD id/link" },
+      { label: "--huno", placeholder: "ID_OR_URL", description: "HUNO id/link" },
+      { label: "--ulcx", placeholder: "ID_OR_URL", description: "ULCX id/link" },
+      { label: "--torrenthash", placeholder: "HASH", description: "(qBitTorrent only) Get site id from Torrent hash" }
+    ]
+  },
+  {
+    title: "Upload Selection / Dupe",
+    args: [
+      { label: "--trackers", placeholder: "aither,lst,ptp,etc", description: "Specific Trackers list for uploading" },
+      { label: "--trackers-remove", placeholder: "blu,xyz,etc", description: "Remove these trackers from the default list for this upload" },
+      { label: "--trackers-pass", placeholder: "N", description: "How many trackers need to pass all checks for upload to proceed" },
+      { label: "--skip_auto_torrent", description: "Skip auto torrent searching" },
+      { label: "--skip-dupe-check", description: "Skip dupe check" },
+      { label: "--skip-dupe-asking", description: "Accept any reported dupes without prompting about it" },
+      { label: "--double-dupe-check", description: "Run another dupe check right before upload" },
+      { label: "--draft", description: "Send to Draft at supported sites (config)" },
+      { label: "--modq", description: "Send to modQ at supported sites (config)" },
+      { label: "--freeleech", placeholder: "25%", description: "Mark upload as Freeleech (percentage)" }
+    ]
+  },
+  {
+    title: "Anonymity / Seeding / Streaming",
+    args: [
+      { label: "--anon", description: "Anon upload at supported sites (config)" },
+      { label: "--no-seed", description: "Don't send torrents to client" },
+      { label: "--stream", description: "Stream" },
+      { label: "--webdv", description: "Dolby Vision hybrid" },
+      { label: "--hardcoded-subs", description: "Release contains hardcoded subs" },
+      { label: "--personalrelease", description: "Personal release" }
+    ]
+  },
+  {
+    title: "Torrent Creation / Hashing",
+    args: [
+      { label: "--max-piece-size", placeholder: "N", description: "Max piece size (in MiB) of created torrent (1 <> 128)" },
+      { label: "--nohash", description: "Don't rehash torrent even if it was needed" },
+      { label: "--rehash", description: "Create a fresh torrent from the actual data, not an existing .torrent file" },
+      { label: "--mkbrr", description: "Use mkbrr for torrent creation (config)" },
+      { label: "--entropy", placeholder: "N", description: "Entropy" },
+      { label: "--randomized", placeholder: "N", description: "Randomized" },
+      { label: "--infohash", placeholder: "HASH", description: "Use this Infohash as the existing torrent from client" },
+      { label: "--force-recheck", description: "(qBitTorrent only) Force recheck the file in client before upload" }
+    ]
+  },
+  {
+    title: "Torrent Client Integration",
+    args: [
+      { label: "--client", placeholder: "NAME", description: "Client name (config)" },
+      { label: "--qbit-tag", placeholder: "TAG", description: "qBittorrent tag (config)" },
+      { label: "--qbit-cat", placeholder: "CATEGORY", description: "qBittorrent category (config)" },
+      { label: "--rtorrent-label", placeholder: "LABEL", description: "rTorrent label (config)" }
+    ]
+  },
+  {
+    title: "Cleanup / Temp",
+    args: [
+      { label: "--delete-tmp", description: "Delete the tmp folder associated with this upload" },
+      { label: "--cleanup", description: "Cleanup the entire UA tmp folder" }
+    ]
+  },
+  {
+    title: "Debug / Output",
+    args: [
+      { label: "--debug", description: "Debug mode" },
+      { label: "--ffdebug", description: "FFmpeg debug" },
+      { label: "--upload-timer", description: "Upload timer (config)" }
+    ]
+  },
+  {
+    title: "Misc Options",
+    args: [
+      { label: "--not-anime", description: "Can speed up tv data extraction when not anime content" },
+      { label: "--channel", placeholder: "ID_OR_TAG", description: "SPD channel" },
+      { label: "--unattended", description: "Unattended (no prompts (AT ALL))" },
+      { label: "--unattended_confirm", description: "Unattended confirm (use with --unattended, some prompting)" }
+    ]
+  }
+];
+
 // Icon components
 const FolderIcon = () => (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -115,49 +331,6 @@ function AudionutsUAGUI() {
   const inputRef = useRef(null);
 
   const appendHtmlFragment = (rawHtml) => {
-  const sanitizeHtml = (html) => {
-    if (window.DOMPurify) {
-      return DOMPurify.sanitize(html, { ALLOWED_ATTR: ['style', 'class', 'href', 'src'] });
-    }
-    // Hardened fallback when DOMPurify is not available
-    try {
-      const doc = new DOMParser().parseFromString(html, 'text/html');
-
-      // Remove dangerous elements
-      const dangerousTags = ['script', 'style', 'img', 'svg', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'meta', 'link'];
-      dangerousTags.forEach(tag => {
-        doc.querySelectorAll(tag).forEach(el => el.remove());
-      });
-
-      // Remove dangerous attributes
-      doc.querySelectorAll('*').forEach((el) => {
-        [...el.attributes].forEach((attr) => {
-          const attrName = attr.name.toLowerCase();
-          const attrValue = String(attr.value).toLowerCase().trim();
-
-          // Remove event handlers
-          if (attrName.startsWith('on')) {
-            el.removeAttribute(attr.name);
-          }
-          // Remove dangerous href/src
-          else if ((attrName === 'href' || attrName === 'src') &&
-                   (attrValue.startsWith('javascript:') || attrValue.startsWith('data:') || attrValue.startsWith('vbscript:'))) {
-            el.removeAttribute(attr.name);
-          }
-          // Remove srcset and style with url()
-          else if (attrName === 'srcset' || (attrName === 'style' && attrValue.includes('url('))) {
-            el.removeAttribute(attr.name);
-          }
-        });
-      });
-
-      return doc.body.innerHTML;
-    } catch (e) {
-      // Fail closed: escape all HTML
-      return rawHtml.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-  };
-
     const container = richOutputRef.current;
     if (container) {
       const clean = sanitizeHtml((rawHtml || '').trim());
@@ -190,7 +363,6 @@ function AudionutsUAGUI() {
   };
 
   const sendInput = async (session_id, input) => {
-    if (!input) return;
     // Optimistically echo the user's input locally so it appears before
     // any subsequent server-generated prompt / output.
     appendSystemMessage('> ' + input, 'user-input');
@@ -384,7 +556,7 @@ function AudionutsUAGUI() {
                 if (data.type === 'html' || data.type === 'html_full') {
                   try {
                     const rawHtml = data.data || '';
-                    const clean = (window.DOMPurify ? DOMPurify.sanitize(rawHtml, { ALLOWED_ATTR: ['style', 'class', 'href', 'src'] }) : rawHtml);
+                    const clean = sanitizeHtml(rawHtml);
                     const container = richOutputRef.current;
                     if (container && data.type === 'html_full') {
                       container.innerHTML = clean;
@@ -424,7 +596,7 @@ function AudionutsUAGUI() {
               // Render Rich-generated HTML fragment into the rich output container
               try {
                 const rawHtml = data.data || '';
-                const clean = (window.DOMPurify ? DOMPurify.sanitize(rawHtml, { ALLOWED_ATTR: ['style', 'class', 'href', 'src'] }) : rawHtml);
+                const clean = sanitizeHtml(rawHtml);
                 const container = richOutputRef.current;
                 if (container && data.type === 'html_full') {
                   // Avoid replacing content (which can cause flicker) — append
@@ -554,188 +726,7 @@ function AudionutsUAGUI() {
     }
   }, [isResizingRight]);
 
-  // Argument categories for the right sidebar (placeholders shown for info only)
-  const argumentCategories = [
-    {
-      title: "Modes / Workflows",
-      args: [
-        { label: "--queue", placeholder: "QUEUE_NAME", description: "Process a named queue from a folder path" },
-        { label: "--limit-queue", placeholder: "N", description: "Limit queue successful uploads" },
-        { label: "--site-check", description: "Site check (can it be uploaded)" },
-        { label: "--site-upload", placeholder: "TRACKER", description: "Site upload (process site check content)" },
-        { label: "--search_requests", description: "Search supported site for matching requests (config)" },
-        { label: "--unit3d", description: "Upload from UNIT3D-Upload-Checker results" }
-      ]
-    },
-    {
-      title: "Metadata / IDs",
-      subtitle: "Getting these correct is 90% of a successful upload!",
-      args: [
-        { label: "--tmdb", placeholder: "movie/123", description: "TMDb id" },
-        { label: "--imdb", placeholder: "tt0111161", description: "IMDb id" },
-        { label: "--mal", placeholder: "ID", description: "MAL id" },
-        { label: "--tvmaze", placeholder: "ID", description: "TVMaze id" },
-        { label: "--tvdb", placeholder: "ID", description: "TVDB id" }
-      ]
-    },
-    {
-      title: "Screenshots / Images",
-      args: [
-        { label: "--screens", placeholder: "N", description: "Number of screenshots to use" },
-        { label: "--manual_frames", placeholder: '"1,250,500"', description: "Manual frame numbers for screenshots" },
-        { label: "--comparison", placeholder: "PATH", description: "Comparison images folder" },
-        { label: "--comparison_index", placeholder: "N", description: "Comparison main index" },
-        { label: "--disc-menus", placeholder: "PATH", description: "Folder containing disc menus screenshots" },
-        { label: "--imghost", placeholder: "HOST", description: "Specific image host to use" },
-        { label: "--skip-imagehost-upload", description: "Skip uploading screenshots" }
-      ]
-    },
-    {
-      title: "TV Fields",
-      args: [
-        { label: "--season", placeholder: "S01", description: "Season number" },
-        { label: "--episode", placeholder: "E01", description: "Episode number" },
-        { label: "--manual-episode-title", placeholder: "TITLE", description: "Manual episode title" },
-        { label: "--daily", placeholder: "YYYY-MM-DD", description: "Air date for daily shows" }
-      ]
-    },
-    {
-      title: "Title Shaping",
-      args: [
-        { label: "--year", placeholder: "YYYY", description: "Override year" },
-        { label: "--no-season", description: "Remove season" },
-        { label: "--no-year", description: "Remove year" },
-        { label: "--no-aka", description: "Remove AKA" },
-        { label: "--no-dub", description: "Remove Dubbed" },
-        { label: "--no-dual", description: "Remove Dual-Audio" },
-        { label: "--no-tag", description: "Remove group tag" },
-        { label: "--no-edition", description: "Remove edition" },
-        { label: "--dual-audio", description: "Add Dual-Audio" },
-        { label: "--tag", placeholder: "GROUP", description: "Group tag" },
-        { label: "--service", placeholder: "SERVICE", description: "Streaming service" },
-        { label: "--region", placeholder: "REGION", description: "Disc Region" },
-        { label: "--edition", placeholder: "TEXT", description: "Edition marker" },
-        { label: "--repack", placeholder: "TEXT", description: "Repack" }
-      ]
-    },
-    {
-      title: "Description / NFO",
-      args: [
-        { label: "--desclink", placeholder: "URL", description: "Custom description link" },
-        { label: "--descfile", placeholder: "PATH", description: "Custom description file" },
-        { label: "--nfo", description: "Use .nfo for description" }
-      ]
-    },
-    {
-      title: "Language",
-      args: [
-        { label: "--original-language", placeholder: "en", description: "Original language of content" },
-        { label: "--only-if-languages", placeholder: "en,fr", description: "Only proceed with upload if the content has these languages" }
-      ]
-    },
-    {
-      title: "Misc Metadata Flags",
-      args: [
-        { label: "--commentary", description: "Commentary" },
-        { label: "--sfx-subtitles", description: "SFX subtitles" },
-        { label: "--extras", description: "Extras included" },
-        { label: "--distributor", placeholder: "NAME", description: "Disc distributor" },
-        { label: "--sorted-filelist", description: "Sorted filelist (handles typical anime nonsense)" },
-        { label: "--keep-folder", description: "Keep top folder with single file uploads" },
-        { label: "--keep-nfo", description: "Keep nfo (extremely site specific)" },
-      ]
-    },
-    {
-      title: "Tracker References",
-      subtitle: "Pull metadata ids, descriptions, and screenshots from these trackers",
-      args: [
-        { label: "--onlyID", description: "Only grab meta ids, not descriptions" },
-        { label: "--ptp", placeholder: "ID_OR_URL", description: "PTP id/link" },
-        { label: "--blu", placeholder: "ID_OR_URL", description: "BLU id/link" },
-        { label: "--aither", placeholder: "ID_OR_URL", description: "Aither id/link" },
-        { label: "--lst", placeholder: "ID_OR_URL", description: "LST id/link" },
-        { label: "--oe", placeholder: "ID_OR_URL", description: "OE id/link" },
-        { label: "--hdb", placeholder: "ID_OR_URL", description: "HDB id/link" },
-        { label: "--btn", placeholder: "ID_OR_URL", description: "BTN id/link" },
-        { label: "--bhd", placeholder: "ID_OR_URL", description: "BHD id/link" },
-        { label: "--huno", placeholder: "ID_OR_URL", description: "HUNO id/link" },
-        { label: "--ulcx", placeholder: "ID_OR_URL", description: "ULCX id/link" },
-        { label: "--torrenthash", placeholder: "HASH", description: "(qBitTorrent only) Get site id from Torrent hash" }
-      ]
-    },
-    {
-      title: "Upload Selection / Dupe",
-      args: [
-        { label: "--trackers", placeholder: "aither,lst,ptp,etc", description: "Specific Trackers list for uploading" },
-        { label: "--trackers-remove", placeholder: "blu,xyz,etc", description: "Remove these trackers from the default list for this upload" },
-        { label: "--trackers-pass", placeholder: "N", description: "How many trackers need to pass all checks for upload to proceed" },
-        { label: "--skip_auto_torrent", description: "Skip auto torrent searching" },
-        { label: "--skip-dupe-check", description: "Skip dupe check" },
-        { label: "--skip-dupe-asking", description: "Accept any reported dupes without prompting about it" },
-        { label: "--double-dupe-check", description: "Run another dupe check right before upload" },
-        { label: "--draft", description: "Send to Draft at supported sites (config)" },
-        { label: "--modq", description: "Send to modQ at supported sites (config)" },
-        { label: "--freeleech", placeholder: "25%", description: "Mark upload as Freeleech (percentage)" }
-      ]
-    },
-    {
-      title: "Anonymity / Seeding / Streaming",
-      args: [
-        { label: "--anon", description: "Anon upload at supported sites (config)" },
-        { label: "--no-seed", description: "Don't send torrents to client" },
-        { label: "--stream", description: "Stream" },
-        { label: "--webdv", description: "Dolby Vision hybrid" },
-        { label: "--hardcoded-subs", description: "Release contains hardcoded subs" },
-        { label: "--personalrelease", description: "Personal release" }
-      ]
-    },
-    {
-      title: "Torrent Creation / Hashing",
-      args: [
-        { label: "--max-piece-size", placeholder: "N", description: "Max piece size (in MiB) of created torrent (1 <> 128)" },
-        { label: "--nohash", description: "Don't rehash torrent even if it was needed" },
-        { label: "--rehash", description: "Create a fresh torrent from the actual data, not an existing .torrent file" },
-        { label: "--mkbrr", description: "Use mkbrr for torrent creation (config)" },
-        { label: "--entropy", placeholder: "N", description: "Entropy" },
-        { label: "--randomized", placeholder: "N", description: "Randomized" },
-        { label: "--infohash", placeholder: "HASH", description: "Use this Infohash as the existing torrent from client" },
-        { label: "--force-recheck", description: "(qBitTorrent only) Force recheck the file in client before upload" }
-      ]
-    },
-    {
-      title: "Torrent Client Integration",
-      args: [
-        { label: "--client", placeholder: "NAME", description: "Client name (config)" },
-        { label: "--qbit-tag", placeholder: "TAG", description: "qBittorrent tag (config)" },
-        { label: "--qbit-cat", placeholder: "CATEGORY", description: "qBittorrent category (config)" },
-        { label: "--rtorrent-label", placeholder: "LABEL", description: "rTorrent label (config)" }
-      ]
-    },
-    {
-      title: "Cleanup / Temp",
-      args: [
-        { label: "--delete-tmp", description: "Delete the tmp folder associated with this upload" },
-        { label: "--cleanup", description: "Cleanup the entire UA tmp folder" }
-      ]
-    },
-    {
-      title: "Debug / Output",
-      args: [
-        { label: "--debug", description: "Debug mode" },
-        { label: "--ffdebug", description: "FFmpeg debug" },
-        { label: "--upload-timer", description: "Upload timer (config)" }
-      ]
-    },
-    {
-      title: "Misc Options",
-      args: [
-        { label: "--not-anime", description: "Can speed up tv data extraction when not anime content" },
-        { label: "--channel", placeholder: "ID_OR_TAG", description: "SPD channel" },
-        { label: "--unattended", description: "Unattended (no prompts (AT ALL))" },
-        { label: "--unattended_confirm", description: "Unattended confirm (use with --unattended, some prompting)" }
-      ]
-    }
-  ];
+  // argumentCategories moved to module scope
 
   // Append only the plain argument flag to the input (no example values)
   const addArgument = (arg) => {
