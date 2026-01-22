@@ -50,7 +50,17 @@ const apiFetch = async (url, options = {}) => {
 const sanitizeHtml = (html) => {
   const rawHtml = String(html || '');
   if (window.DOMPurify) {
-    return DOMPurify.sanitize(rawHtml, { ALLOWED_ATTR: ['style', 'class', 'href', 'src'] });
+    // Enforce the same restrictions as the fallback sanitizer: forbid
+    // dangerous tags and attributes, and only allow a small set of safe
+    // attributes. This prevents attributes like `style` (with url()) and
+    // event handlers from slipping through when DOMPurify is present.
+    const dangerousTags = ['script', 'style', 'img', 'svg', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'meta', 'link'];
+    const forbiddenAttrs = ['style', 'srcset', 'onerror', 'onload', 'onclick', 'onmouseover', 'onmouseenter', 'onmouseleave', 'onkeydown', 'onkeypress', 'onkeyup'];
+    return DOMPurify.sanitize(rawHtml, {
+      ALLOWED_ATTR: ['class', 'href', 'src', 'title', 'alt', 'rel'],
+      FORBID_TAGS: dangerousTags,
+      FORBID_ATTR: forbiddenAttrs,
+    });
   }
   try {
     const doc = new DOMParser().parseFromString(rawHtml, 'text/html');

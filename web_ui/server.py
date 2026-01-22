@@ -96,11 +96,28 @@ if DOCKER_MODE:
         saved_totp_secret = docker_totp
 else:
     # Try keyring for persisted credentials when not in Docker
+    # Read persisted credentials from keyring. Historically we stored credentials
+    # as a simple "username:password" string which fails when the username
+    # itself contains a colon. Switch to a JSON encoding to make the round-trip
+    # safe. Keep backwards-compatibility by attempting to parse JSON first,
+    # then falling back to the legacy colon-separated format.
     with contextlib.suppress(Exception):
         auth_data = keyring.get_password("upload-assistant", "auth")
         if auth_data:
-            username, password = auth_data.split(":", 1)
-            saved_auth = (username, password)
+            try:
+                parsed = json.loads(auth_data)
+                if isinstance(parsed, dict) and "username" in parsed and "password" in parsed:
+                    saved_auth = (parsed["username"], parsed["password"])
+                else:
+                    # Not the expected JSON shape; fall back to legacy parsing below
+                    raise ValueError("unexpected json shape")
+            except Exception:
+                # Legacy format: username:password (note this may mis-handle
+                # usernames that contain ':' — new code saves JSON to avoid
+                # that limitation)
+                if ":" in auth_data:
+                    u, p = auth_data.split(":", 1)
+                    saved_auth = (u, p)
 
         totp_secret = keyring.get_password("upload-assistant", "totp_secret")
         if totp_secret:
@@ -388,12 +405,23 @@ def _load_config_from_file(path: Path) -> dict[str, Any]:
         # On Windows, check if file is not hidden and readable
         if os.name == 'nt':
             # Windows: check if not hidden (FILE_ATTRIBUTE_HIDDEN = 2)
-            if stat_info.st_file_attributes & 2:  # Hidden
+            if getattr(stat_info, 'st_file_attributes', 0) & 2:  # Hidden
                 return {}
         else:
-            # Unix-like: check ownership and permissions
-            if stat_info.st_uid != os.getuid() or (stat_info.st_mode & 0o022):
-                return {}
+            # Unix-like: check ownership and permissions. Only call os.getuid()
+            # on platforms that expose it (non-Windows). This avoids raising
+            # AttributeError on Windows.
+            if hasattr(os, 'getuid'):
+                try:
+                    if stat_info.st_uid != os.getuid() or (stat_info.st_mode & 0o022):
+                        return {}
+                except Exception:
+                    return {}
+            else:
+                # If getuid is not available, fall back to a conservative
+                # permissions check using the mode bits only.
+                if (stat_info.st_mode & 0o022):
+                    return {}
     except Exception:
         return {}
 
@@ -1010,10 +1038,11 @@ def login_page():
                 session["authenticated"] = True
                 if remember:
                     session.permanent = True
-                # Save auth to keyring (only when not running in Docker)
+                # Save auth to keyring (only when not running in Docker).
+                # Store as JSON to avoid ambiguities with ':' in usernames.
                 if not DOCKER_MODE:
                     with contextlib.suppress(Exception):
-                        keyring.set_password("upload-assistant", "auth", f"{username}:{password}")
+                        keyring.set_password("upload-assistant", "auth", json.dumps({"username": username, "password": password}))
                     # Update saved_auth
                     saved_auth = (username, password)
                 else:
@@ -1724,7 +1753,19 @@ def execute_command():
 
                         worker = threading.Thread(target=run_upload, daemon=True)
                         # Acquire lock to prevent concurrent inproc runs (avoids cross-session interference)
-                        inproc_lock.acquire()
+                        # Use a timed acquire so we don't block indefinitely; if we fail
+                        # to acquire the lock, return an error to the client.
+                        try:
+                            acquired = inproc_lock.acquire(timeout=2)
+                        except TypeError:
+                            # Some older Python runtimes may not support timeout parameter
+                            acquired = inproc_lock.acquire(blocking=False)
+
+                        if not acquired:
+                            console.print(f"Failed to acquire inproc lock for session {session_id}; another inproc run may be active", markup=False)
+                            yield f"data: {json.dumps({'type': 'error', 'data': 'Another in-process run is active'})}\n\n"
+                            return
+
                         worker.start()
 
                         # Record worker thread for debugging/cleanup
