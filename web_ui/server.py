@@ -91,8 +91,12 @@ else:
         saved_totp_secret = keyring.get_password("upload-assistant", "totp_secret")
 
 
-# Load credentials: prefer Docker secrets when running in Docker; otherwise use OS keyring
-if DOCKER_MODE:
+# Load credentials: prefer env vars, then Docker secrets when running in Docker; otherwise use OS keyring
+env_user = os.environ.get("UA_WEBUI_USERNAME")
+env_pass = os.environ.get("UA_WEBUI_PASSWORD")
+if env_user and env_pass:
+    saved_auth = (env_user, env_pass)
+elif DOCKER_MODE:
     # Try separate username/password secrets first, then combined auth secret
     docker_user = _read_docker_secret_file("UA_WEBUI_USERNAME", "ua_webui_username")
     docker_pass = _read_docker_secret_file("UA_WEBUI_PASSWORD", "ua_webui_password")
@@ -1170,8 +1174,8 @@ def twofa_enable():
         return jsonify({"error": "Invalid code", "success": False}), 400
 
     # Save the secret permanently (only when not running in Docker and not using env var)
-    if DOCKER_MODE:
-        return jsonify({"error": "Cannot persist 2FA secret when running in Docker. Provide the TOTP secret via Docker secrets (e.g. /run/secrets/UA_TOTP_SECRET).", "success": False}), 400
+    if DOCKER_MODE and not os.environ.get("UA_WEBUI_TOTP_SECRET"):
+        return jsonify({"error": "Cannot persist 2FA secret when running in Docker. Provide the TOTP secret via UA_WEBUI_TOTP_SECRET environment variable or Docker secrets (e.g. /run/secrets/UA_TOTP_SECRET).", "success": False}), 400
 
     if not os.environ.get("UA_WEBUI_TOTP_SECRET"):
         with contextlib.suppress(Exception):
