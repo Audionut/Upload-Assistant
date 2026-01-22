@@ -101,6 +101,7 @@ IMAGE_HOST_API_KEYS: dict[str, str] = {
     "seedpool_cdn": "seedpool_cdn_api",
     "sharex": "sharex_api_key",
     "zipline": "zipline_api_key",
+    "utppm": "utppm_api",
     # imgbox and pixhost don't require API keys
 }
 
