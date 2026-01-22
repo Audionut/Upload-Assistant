@@ -25,8 +25,8 @@ class A4K(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.rehost_images_manager = RehostImagesManager(config)
-        self.approved_image_hosts = ['imgbox', 'imgbb', 'imgur', 'postimg']
-        self.banned_groups = [""]
+        self.approved_image_hosts = ['imgbox', 'ptscreens', 'imgbb', 'imgur', 'postimg']
+        self.banned_groups = ["BiTOR", "DepraveD", "Flights", "SasukeducK", "SPDVD", "TEKNO3D"]
         pass
 
     async def get_type_id(
@@ -136,6 +136,7 @@ class A4K(UNIT3D):
             'imgbox.com': 'imgbox',
             'imgur.com': 'imgur',
             'postimg.cc': 'postimg',
+            'ptscreens.com': 'ptscreens',
         }
         await self.rehost_images_manager.check_hosts(
             meta,
