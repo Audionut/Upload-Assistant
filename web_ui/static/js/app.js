@@ -646,7 +646,7 @@ function AudionutsUAGUI() {
         { label: "--bhd", placeholder: "ID_OR_URL", description: "BHD id/link" },
         { label: "--huno", placeholder: "ID_OR_URL", description: "HUNO id/link" },
         { label: "--ulcx", placeholder: "ID_OR_URL", description: "ULCX id/link" },
-        { label: "--torrenthash", placeholder: "HASH", description: "(qBitTorrent only, get site id from Torrent hash" }
+        { label: "--torrenthash", placeholder: "HASH", description: "(qBitTorrent only) Get site id from Torrent hash" }
       ]
     },
     {
@@ -678,14 +678,14 @@ function AudionutsUAGUI() {
     {
       title: "Torrent Creation / Hashing",
       args: [
-        { label: "--max-piece-size", placeholder: "N", description: "Max piece size of created torrent (1 MiB <> 128 MiB)" },
+        { label: "--max-piece-size", placeholder: "N", description: "Max piece size (in MiB) of created torrent (1 <> 128)" },
         { label: "--nohash", description: "Don't rehash torrent even if it was needed" },
         { label: "--rehash", description: "Create a fresh torrent from the actual data, not an existing .torrent file" },
         { label: "--mkbrr", description: "Use mkbrr for torrent creation (config)" },
         { label: "--entropy", placeholder: "N", description: "Entropy" },
         { label: "--randomized", placeholder: "N", description: "Randomized" },
         { label: "--infohash", placeholder: "HASH", description: "Use this Infohash as the existing torrent from client" },
-        { label: "--force-recheck", description: "Force recheck" }
+        { label: "--force-recheck", description: "(qBitTorrent only) Force recheck the file in client before upload" }
       ]
     },
     {
@@ -717,8 +717,8 @@ function AudionutsUAGUI() {
       args: [
         { label: "--not-anime", description: "Can speed up tv data extraction when not anime content" },
         { label: "--channel", placeholder: "ID_OR_TAG", description: "SPD channel" },
-        { label: "--unattended", description: "Unattended" },
-        { label: "--unattended_confirm", description: "Unattended confirm" }
+        { label: "--unattended", description: "Unattended (no prompts (AT ALL))" },
+        { label: "--unattended_confirm", description: "Unattended confirm (use with --unattended, some prompting)" }
       ]
     }
   ];

@@ -955,8 +955,8 @@ config = {
             "qbit_cross_tag": "",
             "qbit_cross_cat": "",
             "content_layout": "Original",
-            # here you can chose to use either symbolic or hard links, or None to use original path
-            # this will disable any automatic torrent management if set
+            # Here you can chose to use either symbolic or hard links, or None to use original path.
+            # This will disable any automatic torrent management if set.
             # use either "symlink" or "hardlink"
             # on windows, symlinks needs admin privs, both link types need ntfs/refs filesytem (and same drive)
             "linking": "",

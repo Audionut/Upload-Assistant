@@ -214,6 +214,81 @@ const statusClassFor = (type, isDarkMode) => {
   return isDarkMode ? 'text-gray-400' : 'text-gray-500';
 };
 
+// NumberInput component - styled number input using browser's built-in controls
+const NumberInput = ({
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+  step = 1,
+  className = "",
+  isDarkMode = false
+}) => {
+  const currentValue = value === null || value === undefined || value === '' ? min : Number(value);
+
+  const handleInputChange = (e) => {
+    const inputValue = e.target.value;
+    if (inputValue === '') {
+      onChange(min);
+    } else {
+      const numValue = Number(inputValue);
+      if (!isNaN(numValue)) {
+        onChange(Math.max(min, Math.min(max, numValue)));
+      }
+    }
+  };
+
+  const inputClass = isDarkMode
+    ? 'px-3 py-2 border border-gray-700 bg-gray-900 text-gray-100 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent'
+    : 'px-3 py-2 border border-gray-300 bg-white text-gray-800 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent';
+
+  return (
+    <input
+      type="number"
+      value={currentValue}
+      onChange={handleInputChange}
+      min={min}
+      max={max}
+      step={step}
+      className={`${inputClass} ${className}`}
+      style={{ width: '100px' }}
+    />
+  );
+};
+
+// SelectDropdown component - styled select dropdown for categorical options
+const SelectDropdown = ({
+  value,
+  onChange,
+  options = [],
+  className = "",
+  isDarkMode = false
+}) => {
+  const currentValue = value === null || value === undefined ? '' : String(value);
+
+  const handleSelectChange = (e) => {
+    onChange(e.target.value);
+  };
+
+  const selectClass = isDarkMode
+    ? 'w-full px-3 py-2 border border-gray-700 bg-gray-900 text-gray-100 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent'
+    : 'w-full px-3 py-2 border border-gray-300 bg-white text-gray-800 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent';
+
+  return (
+    <select
+      value={currentValue}
+      onChange={handleSelectChange}
+      className={`${selectClass} ${className}`}
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
+};
+
 function ConfigLeaf({
   item,
   pathParts,
@@ -282,6 +357,234 @@ function ConfigLeaf({
             </button>
             <span className={isDarkMode ? 'text-gray-200' : 'text-gray-700'}>{checked ? 'True' : 'False'}</span>
           </div>
+        </div>
+        {!fullWidth && (
+          <div className="col-span-1 text-right">
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Check if this is a numeric field that should use NumberInput
+  const isNumericField = (key, pathParts) => {
+    // Define which fields should be treated as numeric
+    const numericFields = [
+      'tracker_pass_checks',
+      'mkbrr_threads',
+      'ffmpeg_compression',
+      'screens',
+      'cutoff_screens',
+      'thumbnail_size',
+      'process_limit',
+      'threads',
+      'multiScreens',
+      'pack_thumb_size',
+      'charLimit',
+      'fileLimit',
+      'processLimit',
+      'min_successful_image_uploads',
+      'overlay_text_size',
+      'logo_size',
+      'bluray_image_size',
+      'rehash_cooldown',
+      'custom_layout'
+    ];
+    return numericFields.includes(key);
+  };
+
+  // Check if this is a linking field that should use SelectDropdown
+  const isLinkingField = (key, pathParts) => {
+    return key === 'linking' && pathParts.includes('TORRENT_CLIENTS');
+  };
+
+  if (isNumericField(item.key, pathParts)) {
+    const getDefaultValue = (key) => {
+      switch (key) {
+        case 'mkbrr_threads':
+        case 'rehash_cooldown':
+          return 0;
+        case 'multiScreens':
+          return 2;
+        case 'tracker_pass_checks':
+        case 'screens':
+        case 'cutoff_screens':
+        case 'process_limit':
+        case 'threads':
+        case 'min_successful_image_uploads':
+        case 'overlay_text_size':
+        case 'logo_size':
+        case 'thumbnail_size':
+        case 'pack_thumb_size':
+        case 'charLimit':
+        case 'fileLimit':
+        case 'processLimit':
+        case 'bluray_image_size':
+        case 'custom_layout':
+          return 1;
+        case 'ffmpeg_compression':
+          return 6;
+        default:
+          return 1;
+      }
+    };
+
+    const [numericValue, setNumericValue] = useState(() => {
+      const val = item.value;
+      if (val === null || val === undefined || val === '') return getDefaultValue(item.key);
+      const num = Number(val);
+      return isNaN(num) ? getDefaultValue(item.key) : num;
+    });
+
+    useEffect(() => {
+      const val = item.value;
+      if (val === null || val === undefined || val === '') {
+        setNumericValue(1);
+      } else {
+        const num = Number(val);
+        setNumericValue(isNaN(num) ? 1 : num);
+      }
+    }, [item.value]);
+
+    const originalValue = String(item.value);
+
+    // Define min/max for different fields
+    const getFieldLimits = (key) => {
+      switch (key) {
+        case 'tracker_pass_checks':
+          return { min: 1, max: 20, step: 1 };
+        case 'mkbrr_threads':
+          return { min: 0, max: 32, step: 1 };
+        case 'ffmpeg_compression':
+          return { min: 0, max: 9, step: 1 };
+        case 'screens':
+          return { min: 1, max: 50, step: 1 };
+        case 'cutoff_screens':
+          return { min: 1, max: 50, step: 1 };
+        case 'thumbnail_size':
+          return { min: 100, max: 1000, step: 50 };
+        case 'process_limit':
+          return { min: 1, max: 100, step: 1 };
+        case 'threads':
+          return { min: 1, max: 32, step: 1 };
+        case 'multiScreens':
+          return { min: 0, max: 20, step: 1 };
+        case 'pack_thumb_size':
+          return { min: 100, max: 1000, step: 50 };
+        case 'charLimit':
+          return { min: 100, max: 50000, step: 100 };
+        case 'fileLimit':
+          return { min: 1, max: 1000, step: 1 };
+        case 'processLimit':
+          return { min: 1, max: 100, step: 1 };
+        case 'min_successful_image_uploads':
+          return { min: 1, max: 10, step: 1 };
+        case 'overlay_text_size':
+          return { min: 10, max: 50, step: 1 };
+        case 'logo_size':
+          return { min: 100, max: 1000, step: 50 };
+        case 'bluray_image_size':
+          return { min: 100, max: 1000, step: 50 };
+        case 'rehash_cooldown':
+          return { min: 0, max: 300, step: 5 };
+        case 'custom_layout':
+          return { min: 1, max: 10, step: 1 };
+        default:
+          return { min: 0, max: 100, step: 1 };
+      }
+    };
+
+    const limits = getFieldLimits(item.key);
+
+    return (
+      <div className="grid grid-cols-12 gap-3 items-start px-4 py-3">
+        <div className={fullWidth ? 'col-span-12' : 'col-span-4'}>
+          <div className="flex items-center gap-2">
+            <div className={labelClass}>{formatDisplayLabel(item.key)}</div>
+            {helpText && (
+              <Tooltip content={helpText}>
+                <InfoIcon className={`w-4 h-4 ${isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-600'}`} />
+              </Tooltip>
+            )}
+          </div>
+        </div>
+        <div className={fullWidth ? 'col-span-12' : 'col-span-7'}>
+          <NumberInput
+            value={numericValue}
+            onChange={(newValue) => {
+              setNumericValue(newValue);
+              onValueChange(path, String(newValue), {
+                originalValue,
+                isSensitive: false,
+                isRedacted: false,
+                readOnly: false
+              });
+            }}
+            min={limits.min}
+            max={limits.max}
+            step={limits.step}
+            isDarkMode={isDarkMode}
+          />
+        </div>
+        {!fullWidth && (
+          <div className="col-span-1 text-right">
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (isLinkingField(item.key, pathParts)) {
+    const linkingOptions = [
+      { value: '', label: 'None (Original Path)' },
+      { value: 'symlink', label: 'Symbolic Link' },
+      { value: 'hardlink', label: 'Hard Link' }
+    ];
+
+    const [selectedValue, setSelectedValue] = useState(() => {
+      const val = item.value;
+      if (val === null || val === undefined) return '';
+      return String(val);
+    });
+
+    useEffect(() => {
+      const val = item.value;
+      if (val === null || val === undefined) {
+        setSelectedValue('');
+      } else {
+        setSelectedValue(String(val));
+      }
+    }, [item.value]);
+
+    const originalValue = String(item.value || '');
+
+    return (
+      <div className="grid grid-cols-12 gap-3 items-start px-4 py-3">
+        <div className={fullWidth ? 'col-span-12' : 'col-span-4'}>
+          <div className="flex items-center gap-2">
+            <div className={labelClass}>{formatDisplayLabel(item.key)}</div>
+            {helpText && (
+              <Tooltip content={helpText}>
+                <InfoIcon className={`w-4 h-4 ${isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-600'}`} />
+              </Tooltip>
+            )}
+          </div>
+        </div>
+        <div className={fullWidth ? 'col-span-12' : 'col-span-7'}>
+          <SelectDropdown
+            value={selectedValue}
+            onChange={(newValue) => {
+              setSelectedValue(newValue);
+              onValueChange(path, newValue, {
+                originalValue,
+                isSensitive: false,
+                isRedacted: false,
+                readOnly: false
+              });
+            }}
+            options={linkingOptions}
+            isDarkMode={isDarkMode}
+          />
         </div>
         {!fullWidth && (
           <div className="col-span-1 text-right">
