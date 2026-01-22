@@ -19,7 +19,7 @@ config = {
         # How many trackers need to pass successful checking to continue with the upload process
         # Default = 1. If 1 (or more) tracker/s pass banned_group, content and dupe checking, uploading will continue
         # If less than the number of trackers pass the checking, exit immediately.
-        "tracker_pass_checks": "1",
+        "tracker_pass_checks": 1,
 
         # Set true to suppress config warnings on startup
         "suppress_warnings": False,

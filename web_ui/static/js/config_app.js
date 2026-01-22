@@ -1078,8 +1078,8 @@ function ItemList({
     configuredSet = new Set([...selectedFromDefault, ...configuredFromSubsections]);
     availableRemaining = availableFromExample.filter((t) => !configuredSet.has(t));
     // Present configured and available lists in alphabetical order by display name
-    var configuredArray = Array.from(configuredSet).sort((a, b) => getTrackerDisplayName(a).localeCompare(getTrackerDisplayName(b)));
-    var availableArray = (availableRemaining || []).slice().sort((a, b) => getTrackerDisplayName(a).localeCompare(getTrackerDisplayName(b)));
+    const configuredArray = Array.from(configuredSet).sort((a, b) => getTrackerDisplayName(a).localeCompare(getTrackerDisplayName(b)));
+    const availableArray = (availableRemaining || []).slice().sort((a, b) => getTrackerDisplayName(a).localeCompare(getTrackerDisplayName(b)));
   }
 
   return (
@@ -1179,7 +1179,8 @@ function ItemList({
                                   <button
                                     type="button"
                                     onClick={async () => {
-                                      if (!confirm(`Remove configured tracker ${tr}? This will remove the user's overrides for this tracker.`)) return;
+                                      const ok = await showConfirmModal(`Remove configured tracker ${tr}? This will remove the user's overrides for this tracker.`);
+                                      if (!ok) return;
                                       try {
                                         const resp = await apiFetch(`${API_BASE}/config_remove_subsection`, {
                                           method: 'POST',
@@ -1476,6 +1477,69 @@ function ItemList({
       })}
     </div>
   );
+}
+
+// Promise-based confirmation modal to avoid blocking `confirm()`.
+// Returns a Promise that resolves to true (confirmed) or false (cancelled).
+function showConfirmModal(message) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'ua-confirm-overlay fixed inset-0 z-50 flex items-center justify-center';
+    overlay.style.background = 'rgba(0,0,0,0.4)';
+
+    const dlg = document.createElement('div');
+    dlg.className = 'ua-confirm-dialog max-w-md w-full rounded-lg p-4 bg-white text-gray-900';
+    dlg.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
+
+    const msg = document.createElement('div');
+    msg.className = 'mb-4 text-sm';
+    msg.textContent = message;
+
+    const btnRow = document.createElement('div');
+    btnRow.className = 'flex justify-end gap-2';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'px-3 py-1 rounded bg-gray-200';
+    cancelBtn.textContent = 'Cancel';
+
+    const okBtn = document.createElement('button');
+    okBtn.type = 'button';
+    okBtn.className = 'px-3 py-1 rounded bg-red-600 text-white';
+    okBtn.textContent = 'Remove';
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(okBtn);
+    dlg.appendChild(msg);
+    dlg.appendChild(btnRow);
+    overlay.appendChild(dlg);
+    document.body.appendChild(overlay);
+
+    // Focus management
+    okBtn.focus();
+
+    function cleanup(result) {
+      try { document.body.removeChild(overlay); } catch (e) {}
+      resolve(result);
+    }
+
+    cancelBtn.addEventListener('click', () => cleanup(false));
+    okBtn.addEventListener('click', () => cleanup(true));
+    overlay.addEventListener('click', (ev) => {
+      if (ev.target === overlay) cleanup(false);
+    });
+    // Keyboard handling
+    function keyHandler(ev) {
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        cleanup(false);
+      } else if (ev.key === 'Enter') {
+        ev.preventDefault();
+        cleanup(true);
+      }
+    }
+    window.addEventListener('keydown', keyHandler, { once: true });
+  });
 }
 
 function SecurityTab({ isDarkMode }) {

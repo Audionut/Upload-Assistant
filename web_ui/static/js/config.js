@@ -166,8 +166,30 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path, value })
       });
-      const data = await response.json();
-      if (!data.success) {
+      // Read response body as text first so we can handle non-JSON responses
+      const contentType = response.headers.get('content-type') || '';
+      const rawBody = await response.text();
+      let data;
+      if (contentType.includes('application/json')) {
+        try {
+          data = JSON.parse(rawBody);
+        } catch (err) {
+          const msg = `Invalid JSON response (status ${response.status}): ${rawBody}`;
+          statusEl.textContent = msg;
+          statusEl.className = isDarkMode ? 'text-xs text-red-400' : 'text-xs text-red-500';
+          console.error('Failed to parse JSON from config_update:', err, rawBody);
+          return;
+        }
+      } else {
+        data = rawBody;
+      }
+
+      if (!response.ok) {
+        const bodyMsg = typeof data === 'string' ? data : JSON.stringify(data);
+        throw new Error(`Server returned ${response.status}: ${bodyMsg}`);
+      }
+
+      if (isPlainObject(data) && !data.success) {
         throw new Error(data.error || 'Failed to save');
       }
       statusEl.textContent = 'Saved';
@@ -181,8 +203,10 @@
         await loadConfigOptions();
       }
     } catch (error) {
-      statusEl.textContent = error.message || 'Failed to save';
+      const msg = error && error.message ? error.message : 'Failed to save';
+      statusEl.textContent = msg;
       statusEl.className = isDarkMode ? 'text-xs text-red-400' : 'text-xs text-red-500';
+      console.error('saveConfigValue error:', error);
     }
   };
 
