@@ -46,7 +46,7 @@ config = {
         "sharex_api_key": "",
 
         # Order of image hosts. primary host as first with others as backup
-        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, oeimg, dalexni, zipline, passtheimage, seedpool_cdn, sharex
+        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, oeimg, dalexni, zipline, passtheimage, seedpool_cdn, sharex, utppm
         "img_host_1": "imgbb",
         "img_host_2": "imgbox",
 
