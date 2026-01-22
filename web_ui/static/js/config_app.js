@@ -156,6 +156,80 @@ const imageHostApiKeys = {
   sharex: ['sharex_url', 'sharex_api_key']
 };
 
+// Mapping from tracker acronyms to full names
+const trackerNameMap = {
+  'AITHER': 'Aither',
+  'AR': 'Alpharatio',
+  'ASC': 'Amigos-Share',
+  'ANT': 'Anthelion',
+  'ACM': 'AsianCinema',
+  'A4K': 'Aura4K',
+  'AZ': 'AvistaZ',
+  'BHD': 'Beyond-HD',
+  'BHDTV': 'BitHDTV',
+  'BLU': 'Blutopia',
+  'BJS': 'BrasilJapão-Share',
+  'BT': 'BrasilTracker',
+  'CBR': 'CapybaraBR',
+  'CZ': 'CinemaZ',
+  'TIK': 'Cinematik',
+  'DP': 'DarkPeers',
+  'DC': 'DigitalCore',
+  'EMUW': 'Emuwarez',
+  'FNP': 'FearNoPeer',
+  'FL': 'FileList',
+  'FRIKI': 'Friki',
+  'FF': 'FunFile',
+  'GPW': 'GreatPosterWall',
+  'HUNO': 'hawke-uno',
+  'HDB': 'HDBits',
+  'HDS': 'HD-Space',
+  'HDT': 'HD-Torrents',
+  'HHD': 'HomieHelpDesk',
+  'IS': 'ImmortalSeed',
+  'IHD': 'InfinityHD',
+  'ITT': 'ItaTorrents',
+  'LDU': 'LastDigitalUnderground',
+  'LT': 'Lat-Team',
+  'LCD': 'Locadora',
+  'LST': 'LST',
+  'MTV': 'MoreThanTV',
+  'NBL': 'Nebulance',
+  'OTW': 'OldToonsWorld',
+  'OE': 'OnlyEncodes+',
+  'PTP': 'PassThePopcorn',
+  'PTT': 'PolishTorrent',
+  'PT': 'Portugas',
+  'PHD': 'PrivateHD',
+  'PTER': 'PTerClub',
+  'PTS': 'PTSKIT',
+  'R4E': 'Racing4Everyone',
+  'RAS': 'Rastastugan',
+  'RF': 'ReelFLiX',
+  'RTF': 'RetroFlix',
+  'SAM': 'Samaritano',
+  'SP': 'seedpool',
+  'SHRI': 'ShareIsland',
+  'STC': 'SkipTheCommerials',
+  'SPD': 'SpeedApp',
+  'SN': 'Swarmazon',
+  'TLZ': 'The Leach Zone',
+  'TOS': 'TheOldSchool',
+  'TTG': 'ToTheGlory',
+  'THR': 'TorrentHR',
+  'TTR': 'Torrenteros',
+  'TL': 'TorrentLeech',
+  'TVC': 'TVChaosUK',
+  'ULCX': 'ULCX',
+  'UTP': 'UTOPIA',
+  'YOINK': 'YOiNKED',
+  'YUS': 'YUSCENE'
+};
+
+const getTrackerDisplayName = (acronym) => {
+  return trackerNameMap[acronym.toUpperCase()] || acronym;
+};
+
 const getImageHostForApiKey = (key) => {
   if (!key) {
     return null;
@@ -629,9 +703,9 @@ function ConfigLeaf({
     };
 
     return (
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <label className={labelClass}>{formatDisplayLabel(item.key)}</label>
+      <div className="col-span-full px-4 py-3">
+        <div className="flex items-center gap-2 mb-2">
+          <div className={labelClass}>{formatDisplayLabel(item.key)}</div>
           {helpText && (
             <Tooltip content={helpText}>
               <InfoIcon className={`w-4 h-4 ${isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-600'}`} />
@@ -642,7 +716,7 @@ function ConfigLeaf({
           <summary className={`cursor-pointer select-none px-3 py-2 text-xs font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
             Show trackers
           </summary>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 p-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 p-3">
             {availableTrackers.map((tracker) => (
               <label key={tracker} className={`flex items-center gap-2 text-xs ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
                 <input
@@ -651,7 +725,7 @@ function ConfigLeaf({
                   onChange={(e) => toggleTracker(tracker, e.target.checked)}
                   className={isDarkMode ? 'h-4 w-4 accent-purple-500' : 'h-4 w-4 accent-purple-600'}
                 />
-                <span>{tracker}</span>
+                <span>{getTrackerDisplayName(tracker)}</span>
               </label>
             ))}
           </div>
@@ -1012,7 +1086,7 @@ function ItemList({
                 aria-expanded={isOpen}
               >
                 <span className="transition-transform" style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>&gt;</span>
-                <span className={isDarkMode ? 'text-purple-300 font-mono' : 'text-purple-700 font-mono'}>{formatDisplayLabel(item.key)}</span>
+                <span className={isDarkMode ? 'text-purple-300 font-mono' : 'text-purple-700 font-mono'}>{getTrackerDisplayName(item.key)}</span>
               </button>
               {isOpen && (
                 <div className={`rounded-lg border p-4 ${isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-50'}`}>
@@ -1411,7 +1485,7 @@ function ConfigApp() {
                       
                       {/* Content */}
                       <ItemList
-                        items={hasSubTabs ? section.items.filter(item => {
+                        items={hasSubTabs ? section.items.filter((item) => {
                           if (section.section === 'TORRENT_CLIENTS') {
                             const clientTypeItem = item.children && item.children.find(c => c.key === 'torrent_client');
                             return clientTypeItem && clientTypeItem.value === activeSubTab;
