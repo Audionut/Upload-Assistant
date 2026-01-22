@@ -1747,6 +1747,10 @@ function SecurityTab({ isDarkMode }) {
             <p className={`text-xs mb-4 text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
               Or manually enter: <code className={`px-2 py-1 rounded ${isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>{setupData.secret}</code>
             </p>
+            <p className={`text-xs mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              <strong>To store in environment variable:</strong> Set <code className={`px-1 py-0.5 rounded text-xs ${isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>UA_WEBUI_TOTP_SECRET={setupData.secret}</code><br />
+              <strong>To copy to password manager:</strong> Save the secret "{setupData.secret}" in your password manager's TOTP field.
+            </p>
             <div className="flex gap-2">
               <input
                 type="text"

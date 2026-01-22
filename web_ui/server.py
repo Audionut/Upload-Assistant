@@ -78,6 +78,19 @@ def _read_docker_secret_file(*names: str) -> Optional[str]:
     return None
 
 
+# Load TOTP secret: prefer env var, then Docker secrets, then keyring
+saved_totp_secret = os.environ.get("UA_WEBUI_TOTP_SECRET")
+if saved_totp_secret:
+    # If loaded from env var, remove from keyring to avoid duplication
+    with contextlib.suppress(Exception):
+        keyring.delete_password("upload-assistant", "totp_secret")
+elif DOCKER_MODE:
+    saved_totp_secret = _read_docker_secret_file("UA_TOTP_SECRET", "ua_totp_secret", "upload-assistant-totp")
+else:
+    with contextlib.suppress(Exception):
+        saved_totp_secret = keyring.get_password("upload-assistant", "totp_secret")
+
+
 # Load credentials: prefer Docker secrets when running in Docker; otherwise use OS keyring
 if DOCKER_MODE:
     # Try separate username/password secrets first, then combined auth secret
@@ -91,10 +104,6 @@ if DOCKER_MODE:
             u, p = combined.split(":", 1)
             saved_auth = (u, p)
 
-    # TOTP secret via Docker secret
-    docker_totp = _read_docker_secret_file("UA_TOTP_SECRET", "ua_totp_secret", "upload-assistant-totp")
-    if docker_totp:
-        saved_totp_secret = docker_totp
 else:
     # Try keyring for persisted credentials when not in Docker
     # Read persisted credentials from keyring. Historically we stored credentials
@@ -119,10 +128,6 @@ else:
                 if ":" in auth_data:
                     u, p = auth_data.split(":", 1)
                     saved_auth = (u, p)
-
-        totp_secret = keyring.get_password("upload-assistant", "totp_secret")
-        if totp_secret:
-            saved_totp_secret = totp_secret
 
 
 def _hash_code(code: str) -> str:
@@ -1164,12 +1169,15 @@ def twofa_enable():
     if not totp.verify(code):
         return jsonify({"error": "Invalid code", "success": False}), 400
 
-    # Save the secret permanently (only when not running in Docker)
+    # Save the secret permanently (only when not running in Docker and not using env var)
     if DOCKER_MODE:
         return jsonify({"error": "Cannot persist 2FA secret when running in Docker. Provide the TOTP secret via Docker secrets (e.g. /run/secrets/UA_TOTP_SECRET).", "success": False}), 400
 
-    with contextlib.suppress(Exception):
-        keyring.set_password("upload-assistant", "totp_secret", temp_secret)
+    if not os.environ.get("UA_WEBUI_TOTP_SECRET"):
+        with contextlib.suppress(Exception):
+            keyring.set_password("upload-assistant", "totp_secret", temp_secret)
+    else:
+        console.print("TOTP secret is managed via UA_WEBUI_TOTP_SECRET environment variable, not saving to keyring.", markup=False)
 
     # Persist recovery codes (hashes) if provided
     temp_codes = session.get("temp_recovery_codes") or []
