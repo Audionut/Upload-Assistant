@@ -51,6 +51,9 @@ safe_join = cast(Any, safe_join)
 app: Any = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 
+# Supported video file extensions for WebUI file browser
+SUPPORTED_VIDEO_EXTS = {'.mkv', '.mp4', '.ts'}
+
 # Lock to prevent concurrent in-process uploads (avoids cross-session interference)
 inproc_lock = threading.Lock()
 
@@ -1075,6 +1078,12 @@ def browse_path():
                 full_path = os.path.join(path, item)
                 try:
                     is_dir = os.path.isdir(full_path)
+
+                    # Skip files that are not supported video formats
+                    if not is_dir:
+                        _, ext = os.path.splitext(item.lower())
+                        if ext not in SUPPORTED_VIDEO_EXTS:
+                            continue
 
                     items.append({"name": item, "path": full_path, "type": "folder" if is_dir else "file", "children": [] if is_dir else None})
                 except (PermissionError, OSError):
