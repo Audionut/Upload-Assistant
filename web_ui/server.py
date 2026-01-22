@@ -1,7 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownParameterType=false
 import ast
-import base64
 import contextlib
 import hmac
 import json
@@ -16,6 +15,16 @@ import traceback
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Literal, Optional, TypedDict, Union, cast
+
+import keyring
+
+# Set keyring backend for Docker environments
+try:
+    import keyrings.alt
+    if os.environ.get('DOCKER_CONTAINER') or os.path.exists('/.dockerenv'):
+        keyring.set_keyring(keyrings.alt.file.PlaintextKeyring())
+except ImportError:
+    pass
 
 from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for  # pyright: ignore[reportMissingImports]
 from flask_cors import CORS  # pyright: ignore[reportMissingModuleSource]
@@ -49,27 +58,15 @@ inproc_lock = threading.Lock()
 # Runtime browse roots (set by upload.py when starting web UI)
 _runtime_browse_roots: Optional[str] = None
 
-# Load saved auth from config file
-config_dir = (
-    os.path.join(os.path.expanduser("~"), "AppData", "Roaming", "UploadAssistant") if os.name == "nt" else os.path.join(os.path.expanduser("~"), ".config", "UploadAssistant")
-)
-config_file = os.path.join(config_dir, "config.toml")
+# Load saved auth from keyring
 saved_auth = None
-if os.path.exists(config_file):
-    try:
-        with open(config_file) as f:
-            content = f.read()
-        lines = content.strip().split("\n")
-        if lines and lines[0] == "[auth]":
-            for line in lines[1:]:
-                if line.startswith("session_secret = "):
-                    secret = line.split(" = ")[1].strip('"')
-                    decoded = base64.b64decode(secret).decode("utf-8")
-                    username, password = decoded.split(":", 1)
-                    saved_auth = (username, password)
-                    break
-    except Exception:
-        pass
+
+# Try keyring
+with contextlib.suppress(Exception):
+    auth_data = keyring.get_password("upload-assistant", "auth")
+    if auth_data:
+        username, password = auth_data.split(":", 1)
+        saved_auth = (username, password)
 
 
 def _parse_cors_origins() -> list[str]:
@@ -132,7 +129,7 @@ class ConfigSection(TypedDict, total=False):
 
 
 def _webui_auth_configured() -> bool:
-    return os.path.exists(config_file) or bool(os.environ.get("UA_WEBUI_USERNAME")) or bool(os.environ.get("UA_WEBUI_PASSWORD"))
+    return bool(saved_auth) or bool(os.environ.get("UA_WEBUI_USERNAME")) or bool(os.environ.get("UA_WEBUI_PASSWORD"))
 
 
 def _webui_auth_ok() -> bool:
@@ -181,14 +178,12 @@ def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
         return jsonify({"error": "Authentication required", "success": False}), 401
 
     # For web routes
-    if _webui_auth_configured():
-        # Use basic auth for web too if configured
-        if (request.path == "/config" or request.path in ("/", "/index.html")) and not _webui_auth_ok():
-            return redirect(url_for("login_page"))
-    else:
-        # Use session auth for web
-        if (request.path == "/config" or request.path in ("/", "/index.html")) and not session.get("authenticated"):
-            return redirect(url_for("login_page"))
+    if session.get("authenticated"):
+        return None
+    if _webui_auth_configured() and _webui_auth_ok():
+        return None
+    if request.path == "/config" or request.path in ("/", "/index.html"):
+        return redirect(url_for("login_page"))
 
     return None
 
@@ -848,15 +843,11 @@ def login_page():
                 session["authenticated"] = True
                 if remember:
                     session.permanent = True
-                # Save auth to config file if not already exists
-                if not os.path.exists(config_file):
-                    os.makedirs(config_dir, exist_ok=True)
-                    encoded = base64.b64encode(f"{username}:{password}".encode()).decode()
-                    with open(config_file, "w") as f:
-                        f.write("[auth]\n")
-                        f.write(f'session_secret = "{encoded}"\n')
-                    # Update saved_auth
-                    saved_auth = (username, password)
+                # Save auth to keyring
+                with contextlib.suppress(Exception):
+                    keyring.set_password("upload-assistant", "auth", f"{username}:{password}")
+                # Update saved_auth
+                saved_auth = (username, password)
                 return redirect(url_for("config_page"))
             else:
                 return render_template("login.html", error="Invalid credentials")
