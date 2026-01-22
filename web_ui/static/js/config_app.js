@@ -1078,9 +1078,13 @@ function ItemList({
     configuredSet = new Set([...selectedFromDefault, ...configuredFromSubsections]);
     availableRemaining = availableFromExample.filter((t) => !configuredSet.has(t));
     // Present configured and available lists in alphabetical order by display name
-    const configuredArray = Array.from(configuredSet).sort((a, b) => getTrackerDisplayName(a).localeCompare(getTrackerDisplayName(b)));
-    const availableArray = (availableRemaining || []).slice().sort((a, b) => getTrackerDisplayName(a).localeCompare(getTrackerDisplayName(b)));
+    var configuredArray = Array.from(configuredSet).sort((a, b) => getTrackerDisplayName(a).localeCompare(getTrackerDisplayName(b)));
+    var availableArray = (availableRemaining || []).slice().sort((a, b) => getTrackerDisplayName(a).localeCompare(getTrackerDisplayName(b)));
   }
+
+  // Ensure arrays are defined in outer scope for rendering even when not tracker config
+  if (typeof configuredArray === 'undefined') configuredArray = [];
+  if (typeof availableArray === 'undefined') availableArray = [];
 
   return (
     <div className="space-y-6">
