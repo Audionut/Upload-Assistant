@@ -14,6 +14,7 @@ import sys
 import threading
 import traceback
 from collections.abc import Sequence
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, Optional, TypedDict, Union, cast
 
@@ -449,6 +450,41 @@ def _json_safe(value: Any) -> Any:
     if isinstance(value, dict):
         return {str(k): _json_safe(v) for k, v in value.items()}
     return str(value)
+
+
+def _write_audit_log(action: str, path: list[str], old_value: Any, new_value: Any, success: bool, error: Optional[str] = None) -> None:
+    """Append an audit record to data/config_audit.log.
+
+    Uses UTC ISO timestamps and attempts to record the acting user and remote
+    address. Values are passed through `_json_safe` to ensure JSON-serializable
+    output. Any exceptions writing the audit are logged to the console but do
+    not raise to callers.
+    """
+    try:
+        base_dir = Path(__file__).parent.parent
+        audit_path = base_dir / "data" / "config_audit.log"
+        user = (
+            session.get("username")
+            or (request.authorization.username if request.authorization else None)
+            or os.environ.get("UA_WEBUI_USERNAME")
+            or request.remote_addr
+        )
+        audit = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "user": user,
+            "remote_addr": request.remote_addr,
+            "action": action,
+            "path": path,
+            "old_value": _json_safe(old_value),
+            "new_value": _json_safe(new_value),
+            "success": bool(success),
+            "error": error,
+        }
+        with open(audit_path, "a", encoding="utf-8") as af:
+            af.write(json.dumps(audit, ensure_ascii=False) + "\n")
+    except Exception as ae:
+        with contextlib.suppress(Exception):
+            console.print(f"Failed to write config audit record: {ae}", markup=False)
 
 
 def _get_nested_value(data: Any, path: list[str]) -> Any:
@@ -1311,20 +1347,7 @@ def config_update():
             config_path.write_text(updated_source, encoding="utf-8")
             # Audit record for removal
             try:
-                audit = {
-                    "timestamp": __import__('datetime').datetime.utcnow().isoformat() + 'Z',
-                    "user": session.get('username') or (request.authorization.username if request.authorization else None) or os.environ.get('UA_WEBUI_USERNAME') or request.remote_addr,
-                    "remote_addr": request.remote_addr,
-                    "action": "remove_key",
-                    "path": path,
-                    "old_value": _json_safe(prior_value),
-                    "new_value": None,
-                    "success": True,
-                    "error": None,
-                }
-                audit_path = base_dir / 'data' / 'config_audit.log'
-                with open(audit_path, 'a', encoding='utf-8') as af:
-                    af.write(json.dumps(audit, ensure_ascii=False) + '\n')
+                _write_audit_log("remove_key", path, prior_value, None, True)
             except Exception as ae:
                 console.print(f"Failed to write config audit record: {ae}", markup=False)
         except Exception as e:
@@ -1344,39 +1367,13 @@ def config_update():
         config_path.write_text(updated_source, encoding="utf-8")
         # Audit record for update
         try:
-            audit = {
-                "timestamp": __import__('datetime').datetime.utcnow().isoformat() + 'Z',
-                "user": session.get('username') or (request.authorization.username if request.authorization else None) or os.environ.get('UA_WEBUI_USERNAME') or request.remote_addr,
-                "remote_addr": request.remote_addr,
-                "action": "update_value",
-                "path": path,
-                "old_value": _json_safe(prior_value),
-                "new_value": _json_safe(coerced_value),
-                "success": True,
-                "error": None,
-            }
-            audit_path = base_dir / 'data' / 'config_audit.log'
-            with open(audit_path, 'a', encoding='utf-8') as af:
-                af.write(json.dumps(audit, ensure_ascii=False) + '\n')
+            _write_audit_log("update_value", path, prior_value, coerced_value, True)
         except Exception as ae:
             console.print(f"Failed to write config audit record: {ae}", markup=False)
     except Exception as e:
         # Attempt to log failed update attempt
         try:
-            audit = {
-                "timestamp": __import__('datetime').datetime.utcnow().isoformat() + 'Z',
-                "user": session.get('username') or (request.authorization.username if request.authorization else None) or os.environ.get('UA_WEBUI_USERNAME') or request.remote_addr,
-                "remote_addr": request.remote_addr,
-                "action": "update_value",
-                "path": path,
-                "old_value": _json_safe(prior_value) if 'prior_value' in locals() else None,
-                "new_value": _json_safe(coerced_value),
-                "success": False,
-                "error": str(e),
-            }
-            audit_path = base_dir / 'data' / 'config_audit.log'
-            with open(audit_path, 'a', encoding='utf-8') as af:
-                af.write(json.dumps(audit, ensure_ascii=False) + '\n')
+            _write_audit_log("update_value", path, prior_value if prior_value is not None else None, coerced_value, False, str(e))
         except Exception as ae:
             console.print(f"Failed to write config audit failure record: {ae}", markup=False)
         return jsonify({"success": False, "error": str(e)}), 500
@@ -1474,18 +1471,13 @@ def execute_command():
         session_id = data.get("session_id", "default")
         # If a previous run for this session left state behind, attempt to
         # terminate/cleanup it so the new execution starts with a clean slate.
-        try:
+        with contextlib.suppress(Exception):
             existing = active_processes.pop(session_id, None)
             if existing:
-                try:
-                    proc = existing.get("process")
-                    if proc and getattr(proc, "poll", None) is None:
-                        with contextlib.suppress(Exception):
-                            proc.kill()
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                proc = existing.get("process")
+                if proc and getattr(proc, "poll", None) is None:
+                    with contextlib.suppress(Exception):
+                        proc.kill()
 
         console.print(f"Execute request - Path: {path}, Args: {args}, Session: {session_id}", markup=False)
 

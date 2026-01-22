@@ -577,7 +577,7 @@ function AudionutsUAGUI() {
                       }, 0);
                       continue;
                     }
-                    appendHtmlFragment(rawHtml);
+                    appendHtmlFragment(clean);
                   } catch (e) {
                     console.error('Failed to render HTML fragment:', e);
                   }
@@ -625,8 +625,8 @@ function AudionutsUAGUI() {
                   }
                   continue;
                 }
-                // Delegate to shared helper (handles sanitization + scrolling)
-                appendHtmlFragment(rawHtml);
+                // Delegate to shared helper (already sanitized + handles scrolling)
+                appendHtmlFragment(clean);
               } catch (e) {
                 console.error('Failed to render HTML fragment:', e);
               }

@@ -1268,7 +1268,7 @@ class DescriptionBuilder:
                         mi_dump = MediaInfo.parse(
                             file, output="STRING", full=False, mediainfo_options={"inform_version": "1"}
                         )
-                        parsed_mediainfo = self.parser.parse_mediainfo(mi_dump)
+                        parsed_mediainfo = self.parser.parse_mediainfo(str(mi_dump))
                         formatted_bbcode = self.parser.format_bbcode(parsed_mediainfo)
                         desc_parts.append(
                             f"[center][spoiler={filename}]{formatted_bbcode}[/spoiler][/center]\n"

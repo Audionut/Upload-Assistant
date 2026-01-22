@@ -406,7 +406,7 @@ function ConfigLeaf({
     : 'w-full px-3 py-2 border border-gray-300 bg-white text-gray-800 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent';
 
   // Check if this is a numeric field that should use NumberInput
-  const isNumericField = (key, pathParts) => {
+  const isNumericField = (key) => {
     // Define which fields should be treated as numeric
     const numericFields = [
       'tracker_pass_checks',
@@ -476,7 +476,7 @@ function ConfigLeaf({
   };
 
   const [numericValue, setNumericValue] = useState(() => {
-    if (isNumericField(item.key, pathParts)) {
+    if (isNumericField(item.key)) {
       const val = item.value;
       if (val === null || val === undefined || val === '') return getDefaultValue(item.key);
       const num = Number(val);
@@ -486,7 +486,7 @@ function ConfigLeaf({
   });
 
   useEffect(() => {
-    if (!isNumericField(item.key, pathParts)) return;
+    if (!isNumericField(item.key)) return;
     const val = item.value;
     if (val === null || val === undefined || val === '') {
       setNumericValue(getDefaultValue(item.key));
@@ -548,7 +548,7 @@ function ConfigLeaf({
     );
   }
 
-  if (isNumericField(item.key, pathParts)) {
+  if (isNumericField(item.key)) {
     const originalValue = String(item.value);
 
     // Define min/max for different fields
@@ -1565,8 +1565,17 @@ function SecurityTab({ isDarkMode }) {
   const loadTwofaStatus = async () => {
     try {
       const response = await apiFetch(`${API_BASE}/2fa/status`);
+      if (!response.ok) {
+        console.error(`Failed to load 2FA status: HTTP ${response.status}`);
+        return;
+      }
       const data = await response.json();
-      setTwofaStatus(data.enabled);
+      if (data && typeof data.enabled === 'boolean') {
+        setTwofaStatus(data.enabled);
+      } else {
+        console.warn('Unexpected 2FA status response shape, defaulting to disabled', data);
+        setTwofaStatus(false);
+      }
     } catch (error) {
       console.error('Failed to load 2FA status:', error);
     }

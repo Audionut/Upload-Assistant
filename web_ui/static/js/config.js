@@ -659,13 +659,26 @@
   const loadConfigOptions = async () => {
     try {
       const response = await apiFetch(`${API_BASE}/config_options`);
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText || 'Request failed'}`);
+      // Read response body as text first to handle non-JSON responses safely
+      const contentType = response.headers.get('content-type') || '';
+      const rawBody = await response.text();
+      let data;
+      if (contentType.includes('application/json')) {
+        try {
+          data = JSON.parse(rawBody);
+        } catch (err) {
+          throw new Error(`Invalid JSON response (status ${response.status}): ${rawBody}`);
+        }
+      } else {
+        data = rawBody;
       }
-      const data = await response.json();
 
-      if (!data.success) {
+      if (!response.ok) {
+        const bodyMsg = typeof data === 'string' ? data : JSON.stringify(data);
+        throw new Error(`HTTP ${response.status}: ${bodyMsg || 'Request failed'}`);
+      }
+
+      if (isPlainObject(data) && !data.success) {
         throw new Error(data.error || 'Failed to load config options');
       }
 
