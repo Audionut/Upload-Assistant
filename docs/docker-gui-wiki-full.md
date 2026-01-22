@@ -104,7 +104,7 @@ services:
       # Optional: only needed if you serve the UI from a different origin/domain
       # - UA_WEBUI_CORS_ORIGINS=https://your-ui-host
     entrypoint: /bin/bash
-    command: -c "source /venv/bin/activate && python /Upload-Assistant/web_ui/server.py & tail -f /dev/null"
+    command: -c "source /venv/bin/activate && python /Upload-Assistant/upload.py --webui 0.0.0.0:5000 & tail -f /dev/null"
     volumes:
       - /path/to/torrents/:/data/torrents/:rw #map this to qbit download location, map exactly as qbittorent template on both sides.
       - /mnt/user/appdata/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw # Optional: will be created automatically if missing
@@ -196,7 +196,7 @@ services:
       # - UA_WEBUI_USERNAME=admin
       # - UA_WEBUI_PASSWORD=change-me
     entrypoint: /bin/bash
-    command: -c "source /venv/bin/activate && python /Upload-Assistant/web_ui/server.py & tail -f /dev/null"
+    command: -c "source /venv/bin/activate && python /Upload-Assistant/upload.py --webui 0.0.0.0:5000 & tail -f /dev/null"
     volumes:
       - /mnt/user/Data/torrents/:/data/torrents/:rw
       - /mnt/user/appdata/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw # Optional: will be created automatically if missing

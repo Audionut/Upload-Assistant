@@ -28,7 +28,6 @@ except ImportError:
 
 from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for  # pyright: ignore[reportMissingImports]
 from flask_cors import CORS  # pyright: ignore[reportMissingModuleSource]
-from waitress import serve  # pyright: ignore[reportMissingImports]
 from werkzeug.security import safe_join  # pyright: ignore[reportMissingImports]
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -1685,34 +1684,3 @@ def internal_error(e: Exception):
     console.print(f"500 error: {str(e)}", markup=False)
     console.print(traceback.format_exc(), markup=False)
     return jsonify({"error": "Internal server error", "success": False}), 500
-
-
-if __name__ == "__main__":
-    console.print("=" * 50, markup=False)
-    console.print("Starting Upload Assistant Web UI...", markup=False)
-    console.print("=" * 50, markup=False)
-    console.print(f"Python version: {sys.version}", markup=False)
-    console.print(f"Working directory: {os.getcwd()}", markup=False)
-    host = os.environ.get("UA_WEBUI_HOST", "127.0.0.1").strip() or "127.0.0.1"
-    try:
-        port = int(os.environ.get("UA_WEBUI_PORT", "5000"))
-    except ValueError:
-        port = 5000
-
-    scheme = "http"
-    console.print(f"Server will run at: {scheme}://{host}:{port}", markup=False)
-    console.print(f"Health check: {scheme}://{host}:{port}/api/health", markup=False)
-    if _webui_auth_configured():
-        if not os.environ.get("UA_WEBUI_USERNAME") or not os.environ.get("UA_WEBUI_PASSWORD"):
-            console.print("WARNING: One of UA_WEBUI_USERNAME/UA_WEBUI_PASSWORD is missing; only the configured value will be enforced", markup=False)
-        console.print("Auth: HTTP Basic Auth enabled", markup=False)
-    else:
-        console.print("Auth: Session-based (login page for web, basic auth for API)", markup=False)
-    console.print("=" * 50, markup=False)
-
-    try:
-        serve(app, host=host, port=port)
-    except Exception as e:
-        console.print(f"FATAL: Failed to start server: {str(e)}", markup=False)
-        console.print(traceback.format_exc(), markup=False)
-        sys.exit(1)
