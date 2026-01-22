@@ -1250,19 +1250,83 @@ def config_update():
     if key in ["injecting_client_list", "searching_client_list"] and coerced_value == []:
         # Remove the key from config if it exists
         try:
+            # Load prior value for audit
+            prior_config = _load_config_from_file(config_path)
+            prior_value = _get_nested_value(prior_config, path)
+
             source = config_path.read_text(encoding="utf-8")
             updated_source = _remove_config_key_in_source(source, path)
             config_path.write_text(updated_source, encoding="utf-8")
+            # Audit record for removal
+            try:
+                audit = {
+                    "timestamp": __import__('datetime').datetime.utcnow().isoformat() + 'Z',
+                    "user": session.get('username') or (request.authorization.username if request.authorization else None) or os.environ.get('UA_WEBUI_USERNAME') or request.remote_addr,
+                    "remote_addr": request.remote_addr,
+                    "action": "remove_key",
+                    "path": path,
+                    "old_value": _json_safe(prior_value),
+                    "new_value": None,
+                    "success": True,
+                    "error": None,
+                }
+                audit_path = base_dir / 'data' / 'config_audit.log'
+                with open(audit_path, 'a', encoding='utf-8') as af:
+                    af.write(json.dumps(audit, ensure_ascii=False) + '\n')
+            except Exception as ae:
+                console.print(f"Failed to write config audit record: {ae}", markup=False)
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
         return jsonify({"success": True, "value": _json_safe(coerced_value)})
     # Else proceed with normal update
 
+    # Ensure prior_value is defined for the exception path below
+    prior_value = None
     try:
+        # Load prior value for audit
+        prior_config = _load_config_from_file(config_path)
+        prior_value = _get_nested_value(prior_config, path)
+
         source = config_path.read_text(encoding="utf-8")
         updated_source = _replace_config_value_in_source(source, path, new_value_literal)
         config_path.write_text(updated_source, encoding="utf-8")
+        # Audit record for update
+        try:
+            audit = {
+                "timestamp": __import__('datetime').datetime.utcnow().isoformat() + 'Z',
+                "user": session.get('username') or (request.authorization.username if request.authorization else None) or os.environ.get('UA_WEBUI_USERNAME') or request.remote_addr,
+                "remote_addr": request.remote_addr,
+                "action": "update_value",
+                "path": path,
+                "old_value": _json_safe(prior_value),
+                "new_value": _json_safe(coerced_value),
+                "success": True,
+                "error": None,
+            }
+            audit_path = base_dir / 'data' / 'config_audit.log'
+            with open(audit_path, 'a', encoding='utf-8') as af:
+                af.write(json.dumps(audit, ensure_ascii=False) + '\n')
+        except Exception as ae:
+            console.print(f"Failed to write config audit record: {ae}", markup=False)
     except Exception as e:
+        # Attempt to log failed update attempt
+        try:
+            audit = {
+                "timestamp": __import__('datetime').datetime.utcnow().isoformat() + 'Z',
+                "user": session.get('username') or (request.authorization.username if request.authorization else None) or os.environ.get('UA_WEBUI_USERNAME') or request.remote_addr,
+                "remote_addr": request.remote_addr,
+                "action": "update_value",
+                "path": path,
+                "old_value": _json_safe(prior_value) if 'prior_value' in locals() else None,
+                "new_value": _json_safe(coerced_value),
+                "success": False,
+                "error": str(e),
+            }
+            audit_path = base_dir / 'data' / 'config_audit.log'
+            with open(audit_path, 'a', encoding='utf-8') as af:
+                af.write(json.dumps(audit, ensure_ascii=False) + '\n')
+        except Exception as ae:
+            console.print(f"Failed to write config audit failure record: {ae}", markup=False)
         return jsonify({"success": False, "error": str(e)}), 500
 
     return jsonify({"success": True, "value": _json_safe(coerced_value)})
