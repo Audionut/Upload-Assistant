@@ -408,8 +408,10 @@ class ANT:
             desc_parts.append(await builder.get_custom_header())
 
             # Logo
-            logo_resize_url = meta.get('tmdb_logo', '')
+            logo_resize_url = str(meta.get("tmdb_logo", ""))
             if logo_resize_url:
+                if logo_resize_url.endswith(".svg"):
+                    logo_resize_url = logo_resize_url.replace(".svg", ".png")
                 desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/align]")
 
         # BDinfo
