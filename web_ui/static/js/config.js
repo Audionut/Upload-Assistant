@@ -9,8 +9,6 @@
   const themeKnob = document.getElementById('theme-knob');
   const themeLabel = document.getElementById('theme-label');
 
-  const AUTH_USER_KEY = 'ua_webui_auth_user';
-  const AUTH_PASS_KEY = 'ua_webui_auth_pass';
   const THEME_KEY = 'ua_config_theme';
 
   const storage = {
@@ -35,51 +33,6 @@
         // Ignore storage failures.
       }
     }
-  };
-
-  const getStoredAuth = () => {
-    const username = (storage.get(AUTH_USER_KEY) || '').trim();
-    const password = storage.get(AUTH_PASS_KEY) || '';
-    if (!username || !password) {
-      if (username || password) {
-        storage.remove(AUTH_USER_KEY);
-        storage.remove(AUTH_PASS_KEY);
-      }
-      return null;
-    }
-    return { username, password };
-  };
-
-  const encodeAuth = (username, password) => {
-    const token = btoa(unescape(encodeURIComponent(`${username}:${password}`)));
-    return `Basic ${token}`;
-  };
-
-  const promptForAuth = () => {
-    const username = window.prompt('Web UI username');
-    if (!username || !username.trim()) {
-      return null;
-    }
-    const password = window.prompt('Web UI password');
-    if (password === null || !password.trim()) {
-      return null;
-    }
-    storage.set(AUTH_USER_KEY, username.trim());
-    storage.set(AUTH_PASS_KEY, password);
-    return { username: username.trim(), password };
-  };
-
-  const clearStoredAuth = () => {
-    storage.remove(AUTH_USER_KEY);
-    storage.remove(AUTH_PASS_KEY);
-  };
-
-  const getAuthHeader = () => {
-    const stored = getStoredAuth();
-    if (!stored) {
-      return null;
-    }
-    return encodeAuth(stored.username, stored.password);
   };
 
   const apiFetch = async (url, options = {}) => {
