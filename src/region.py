@@ -138,7 +138,12 @@ async def get_service(video: Optional[str] = None, tag: Optional[str] = None, au
         'VH1': 'VH1', 'VIAP': 'VIAP', 'VICE': 'VICE', 'Viceland': 'VICE', 'Viki': 'VIKI', 'VIMEO': 'VIMEO', 'Vivamax': 'VMAX', 'VMAX': 'VMAX', 'Vivaone': 'VONE', 'VONE': 'VONE', 'VLCT': 'VLCT',
         'Velocity': 'VLCT', 'VMEO': 'VMEO', 'Vimeo': 'VMEO', 'VRV': 'VRV', 'VUDU': 'VUDU', 'WME': 'WME', 'WatchMe': 'WME', 'WNET': 'WNET',
         'W Network': 'WNET', 'WOW Presents Plus': 'WOWP', 'WOWP': 'WOWP', 'WWEN': 'WWEN', 'WWE Network': 'WWEN', 'XBOX': 'XBOX', 'Xbox Video': 'XBOX', 'XUMO': 'XUMO', 'YHOO': 'YHOO', 'Yahoo': 'YHOO',
-        'YT': 'YT', 'ZDF': 'ZDF', 'iP': 'iP', 'BBC iPlayer': 'iP', 'iQIYI': 'iQIYI', 'iT': 'iT', 'iTunes': 'iT'
+        'YT': 'YT', 'ZDF': 'ZDF', 'iP': 'iP', 'BBC iPlayer': 'iP', 'iQIYI': 'iQIYI', 'iT': 'iT', 'iTunes': 'iT',
+        'MGG': 'MGG', 'Megogo': 'MGG', 'MEGOGO': 'MGG', 'MeGoGo': 'MGG',
+        'SWEET': 'SWEET',
+        'KS': 'KS', 'Kyivstar': 'KS', 'KyivstarTV': 'KS', 'Kyivstar TV': 'KS', 'kyivstar': 'KS',
+        'PKO': 'PKO', 'Planeta Kino Online': 'PKO',
+        'TF': 'TF', 'takflix': 'TF', 'Takflix': 'TF'
     }
 
     if get_services_only:
