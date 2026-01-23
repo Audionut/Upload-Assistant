@@ -26,4 +26,4 @@ data/*.json
 .venv/*
 venv/*
 .pyright
-web_ui/static/js/node_modules
+web_ui/static/js/node_modules/

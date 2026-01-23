@@ -31,7 +31,7 @@ config = {
         # IMAGE HOSTING SETTINGS
 
         # Order of image hosts. primary host as first with others as backup
-        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, onlyimage, dalexni, zipline, passtheimage, seedpool_cdn, sharex
+        # Available image hosts: imgbb, ptpimg, imgbox, pixhost, lensdump, ptscreens, onlyimage, dalexni, zipline, passtheimage, seedpool_cdn, sharex, utppm
         "img_host_1": "",
         "img_host_2": "",
         "img_host_3": "",
@@ -55,6 +55,8 @@ config = {
         # ShareX-style image host (IMageHosting) token
         "sharex_url": "https://img.digitalcore.club/api/upload",
         "sharex_api_key": "",
+        # utp.pm API key
+        "utppm_api": "",
 
         # GETTING METADATA
 
@@ -344,8 +346,8 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available trackers: A4K, ACM, AITHER, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, IHD, IS, ITT, LCD, LDU, LST, LT, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TLZ, TOS, TTG, TTR, TVC, ULCX, UTP, YOINK, YUS
-        # Only add the trackers that you want to upload to on a regular basis
+        # Available tracker: A4K, ACM, AITHER, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, IHD, IS, ITT, LCD, LDU, LST, LT, LUME, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TLZ, TOS, TTG, TTR, TVC, ULCX, UTP, YOINK, YUS
+        # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
         "A4K": {
@@ -652,6 +654,14 @@ config = {
             "api_key": "",
             "anon": False,
             # Send uploads to LT modq for staff approval
+            "modq": False,
+        },
+        "LUME": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            "api_key": "",
+            "anon": False,
+            # Send uploads to LUME modq for staff approval
             "modq": False,
         },
         "MTV": {

@@ -401,6 +401,7 @@ def get_img_host(
         "passtheimage": "passtheima_ge_api",
         "seedpool_cdn": "seedpool_cdn_api",
         "sharex": ["sharex_url", "sharex_api_key"],
+        "utppm": "utppm_api",
         "imgbox": None,
         "pixhost": None
     }

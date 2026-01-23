@@ -40,7 +40,7 @@ upload.py [path...] [options]
 - `-comps_index`, `--comparison_index N`: Which comparison index is the “main” images (required when using `--comparison`).
 - `-menus`, `--disc-menus PATH`: Raw Disc only (Blu-ray/DVD). Folder containing disc menu screenshots (all images in folder are used).
 - `-ih`, `--imghost HOST`: Select image host.
-  - Choices: `imgbb`, `ptpimg`, `imgbox`, `pixhost`, `lensdump`, `ptscreens`, `onlyimage`, `dalexni`, `zipline`, `passtheimage`, `seedpool_cdn`.
+  - Choices: `imgbb`, `ptpimg`, `imgbox`, `pixhost`, `lensdump`, `ptscreens`, `onlyimage`, `dalexni`, `zipline`, `passtheimage`, `seedpool_cdn`, `utppm`.
 - `-siu`, `--skip-imagehost-upload`: Skip uploading images to an image host.
 
 ## Description inputs

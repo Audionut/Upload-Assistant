@@ -242,6 +242,44 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
                 console.print(f"[red]Invalid JSON response from ptscreens: {e}")
                 return {'status': 'failed', 'reason': 'Invalid JSON response'}
 
+        elif img_host == "utppm":
+            url = "https://utp.pm/api/1/upload"
+            try:
+                async with aiofiles.open(image, "rb") as img_file:
+                    encoded_image = base64.b64encode(await img_file.read()).decode('utf8')
+
+                data = {
+                    'source': encoded_image
+                }
+                headers = {
+                    'X-API-Key': config['DEFAULT']['utppm_api'],
+                }
+
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(url, data=data, headers=headers, timeout=timeout)
+                    response_data = response.json()
+
+                    if response.status_code != 200:
+                        console.print("[yellow]utppm failed, trying next image host")
+                        return {'status': 'failed', 'reason': 'utppm upload failed'}
+
+                    img_url = response_data['image']['medium']['url']
+                    raw_url = response_data['image']['url']
+                    web_url = response_data['image']['url_viewer']
+
+                    if meta['debug']:
+                        console.print(f"[green]Image URLs: img_url={img_url}, raw_url={raw_url}, web_url={web_url}")
+
+            except httpx.TimeoutException:
+                console.print("[red]Request timed out. The server took too long to respond.")
+                return {'status': 'failed', 'reason': 'Request timed out'}
+            except httpx.RequestError as e:
+                console.print(f"[red]Request failed with error: {e}")
+                return {'status': 'failed', 'reason': str(e)}
+            except ValueError as e:
+                console.print(f"[red]Invalid JSON response from utppm: {e}")
+                return {'status': 'failed', 'reason': 'Invalid JSON response'}
+
         elif img_host == "onlyimage":
             url = "https://onlyimage.org/api/1/upload"
             try:
