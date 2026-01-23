@@ -694,6 +694,7 @@ function ConfigLeaf({
     );
 
     const [selected, setSelected] = useState(() => new Set(normalizeTrackers(item.value)));
+    const prevDefaultRef = useRef(() => normalizeTrackers(item.value).join(', '));
 
     useEffect(() => {
       setSelected(new Set(normalizeTrackers(item.value)));
@@ -703,6 +704,8 @@ function ConfigLeaf({
     useEffect(() => {
       const nextValue = Array.from(selected).map((t) => String(t).toUpperCase()).join(', ');
       const originalValue = normalizeTrackers(item.value).join(', ');
+      if (prevDefaultRef.current === nextValue) return;
+      prevDefaultRef.current = nextValue;
       onValueChange(path, nextValue, {
         originalValue,
         isSensitive: false,
@@ -1063,6 +1066,8 @@ function ItemList({
   let configuredFromSubsections = new Set();
   let configuredSet = new Set();
   let availableRemaining = [];
+  let configuredArray = [];
+  let availableArray = [];
   if (isTrackerConfig && defaultTrackersItem) {
     availableFromExample = getAvailableTrackers(defaultTrackersItem).map((t) => String(t).toUpperCase());
     selectedFromDefault = new Set(normalizeTrackers(defaultTrackersItem.value));
@@ -1073,13 +1078,12 @@ function ItemList({
     configuredSet = new Set([...selectedFromDefault, ...configuredFromSubsections]);
     availableRemaining = availableFromExample.filter((t) => !configuredSet.has(t));
     // Present configured and available lists in alphabetical order by display name
-    var configuredArray = Array.from(configuredSet).sort((a, b) => getTrackerDisplayName(a).localeCompare(getTrackerDisplayName(b)));
-    var availableArray = (availableRemaining || []).slice().sort((a, b) => getTrackerDisplayName(a).localeCompare(getTrackerDisplayName(b)));
+    configuredArray = Array.from(configuredSet).sort((a, b) => getTrackerDisplayName(a).localeCompare(getTrackerDisplayName(b)));
+    availableArray = (availableRemaining || []).slice().sort((a, b) => getTrackerDisplayName(a).localeCompare(getTrackerDisplayName(b)));
   }
-
   // Ensure arrays are defined in outer scope for rendering even when not tracker config
-  if (typeof configuredArray === 'undefined') configuredArray = [];
-  if (typeof availableArray === 'undefined') availableArray = [];
+  if (!configuredArray) configuredArray = [];
+  if (!availableArray) availableArray = [];
 
   return (
     <div className="space-y-6">
@@ -1229,7 +1233,8 @@ function ItemList({
                           <button
                             type="button"
                             onClick={async () => {
-                              if (!confirm(`Remove ${tr} from default trackers?`)) return;
+                              const ok = await showConfirmModal({ message: `Remove ${tr} from default trackers?`, confirmLabel: 'Remove' });
+                              if (!ok) return;
                               try {
                                 const next = Array.from(selectedFromDefault).filter(x => x !== tr).join(', ');
                                 const resp = await apiFetch(`${API_BASE}/config_update`, {

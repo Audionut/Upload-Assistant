@@ -1,4 +1,4 @@
-const { useState, useRef, useEffect } = React;
+const { useState, useRef, useEffect, useCallback } = React;
 const THEME_KEY = 'ua_config_theme';
 
 const storage = {
@@ -355,18 +355,18 @@ function AudionutsUAGUI() {
   };
 
   const appendSystemMessage = (text, kind = 'info') => {
-    const container = richOutputRef.current;
-    if (!container) return;
+    const rootContainer = richOutputRef.current;
+    if (!rootContainer) return;
     const el = document.createElement('div');
     el.className = kind === 'error' ? 'text-red-400' : 'text-blue-300';
     el.style.whiteSpace = 'pre-wrap';
     el.textContent = text;
-    container.appendChild(el);
+    rootContainer.appendChild(el);
     // ensure fully visible
     setTimeout(() => {
-      const last = container.lastElementChild;
+      const last = rootContainer.lastElementChild;
       if (last && last.scrollIntoView) last.scrollIntoView({ block: 'end' });
-      else container.scrollTop = container.scrollHeight;
+      else rootContainer.scrollTop = rootContainer.scrollHeight;
     }, 0);
   };
 
@@ -518,15 +518,15 @@ function AudionutsUAGUI() {
       return;
     }
 
-    const container = richOutputRef.current;
-    if (!container) return;
+    const rootContainer = richOutputRef.current;
+    if (!rootContainer) return;
 
     const newSessionId = 'session_' + Date.now();
     setSessionId(newSessionId);
     setIsExecuting(true);
     // Clear the initial welcome text so execution output appears immediately
-    if (container) {
-      container.innerHTML = '';
+    if (rootContainer) {
+      rootContainer.innerHTML = '';
     }
     // Reset last-full snapshot key to allow appending fresh full snapshots
     if (lastFullHashRef) lastFullHashRef.current = '';
@@ -559,6 +559,44 @@ function AudionutsUAGUI() {
       const decoder = new TextDecoder();
       let buffer = '';
 
+      const processSSELine = (line) => {
+        if (!line.trim() || !line.startsWith('data: ')) return;
+        try {
+          const data = JSON.parse(line.substring(6));
+          if (data.type === 'html' || data.type === 'html_full') {
+            try {
+              const rawHtml = data.data || '';
+              const clean = sanitizeHtml(rawHtml);
+              if (data.type === 'html_full') {
+                const shortSample = clean.slice(0, 200);
+                const key = `${clean.length}:${shortSample}`;
+                if (lastFullHashRef.current !== key) {
+                  lastFullHashRef.current = key;
+                  const wrapper = document.createElement('div');
+                  wrapper.innerHTML = clean;
+                  if (rootContainer) rootContainer.appendChild(wrapper);
+                  setTimeout(() => {
+                    const last = rootContainer && rootContainer.lastElementChild;
+                    if (last && last.scrollIntoView) last.scrollIntoView({ block: 'end' });
+                    else if (rootContainer) rootContainer.scrollTop = rootContainer.scrollHeight;
+                  }, 0);
+                }
+                return;
+              }
+              // delegate to shared helper for fragments
+              appendHtmlFragment(clean);
+            } catch (e) {
+              console.error('Failed to render HTML fragment:', e);
+            }
+          } else if (data.type === 'exit') {
+            appendSystemMessage('');
+            appendSystemMessage(`✓ Process exited with code ${data.code}`);
+          }
+        } catch (e) {
+          console.error('Parse error:', e);
+        }
+      };
+
       /* eslint-disable no-constant-condition */
       while (true) {
         const { done, value } = await reader.read();
@@ -567,35 +605,7 @@ function AudionutsUAGUI() {
           if (buffer) {
             const finalLines = buffer.split('\n');
             for (const line of finalLines) {
-              if (!line.trim() || !line.startsWith('data: ')) continue;
-              try {
-                const data = JSON.parse(line.substring(6));
-                // fall through to same handling below
-                if (data.type === 'html' || data.type === 'html_full') {
-                  try {
-                    const rawHtml = data.data || '';
-                    const clean = sanitizeHtml(rawHtml);
-                    const container = richOutputRef.current;
-                    if (container && data.type === 'html_full') {
-                      container.innerHTML = clean;
-                      setTimeout(() => {
-                        const last = container.lastElementChild;
-                        if (last && last.scrollIntoView) last.scrollIntoView({ block: 'end' });
-                        else container.scrollTop = container.scrollHeight;
-                      }, 0);
-                      continue;
-                    }
-                    appendHtmlFragment(clean);
-                  } catch (e) {
-                    console.error('Failed to render HTML fragment:', e);
-                  }
-                } else if (data.type === 'exit') {
-                  appendSystemMessage('');
-                  appendSystemMessage(`✓ Process exited with code ${data.code}`);
-                }
-              } catch (e) {
-                console.error('Parse error:', e);
-              }
+              processSSELine(line);
             }
           }
           break;
@@ -606,45 +616,7 @@ function AudionutsUAGUI() {
         buffer = parts.pop(); // last item may be incomplete
 
         for (const line of parts) {
-          if (!line.trim() || !line.startsWith('data: ')) continue;
-          try {
-            const data = JSON.parse(line.substring(6));
-            
-            if (data.type === 'html' || data.type === 'html_full') {
-              // Render Rich-generated HTML fragment into the rich output container
-              try {
-                const rawHtml = data.data || '';
-                const clean = sanitizeHtml(rawHtml);
-                const container = richOutputRef.current;
-                if (container && data.type === 'html_full') {
-                  // Avoid replacing content (which can cause flicker) — append
-                  const shortSample = clean.slice(0, 200);
-                  const key = `${clean.length}:${shortSample}`;
-                  if (lastFullHashRef.current !== key) {
-                    lastFullHashRef.current = key;
-                    const wrapper = document.createElement('div');
-                    wrapper.innerHTML = clean;
-                    container.appendChild(wrapper);
-                    setTimeout(() => {
-                      const last = container.lastElementChild;
-                      if (last && last.scrollIntoView) last.scrollIntoView({ block: 'end' });
-                      else container.scrollTop = container.scrollHeight;
-                    }, 0);
-                  }
-                  continue;
-                }
-                // Delegate to shared helper (already sanitized + handles scrolling)
-                appendHtmlFragment(clean);
-              } catch (e) {
-                console.error('Failed to render HTML fragment:', e);
-              }
-            } else if (data.type === 'exit') {
-              appendSystemMessage('');
-              appendSystemMessage(`✓ Process exited with code ${data.code}`);
-            }
-          } catch (e) {
-            console.error('Parse error:', e);
-          }
+          processSSELine(line);
         }
       }
       /* eslint-enable no-constant-condition */
@@ -687,22 +659,20 @@ function AudionutsUAGUI() {
   };
 
   // Sidebar resizing
-  const startResizing = () => {
+  const startResizing = useCallback(() => {
     setIsResizing(true);
-  };
+  }, [setIsResizing]);
 
-  const stopResizing = () => {
+  const stopResizing = useCallback(() => {
     setIsResizing(false);
-  };
+  }, [setIsResizing]);
 
-  const resize = (e) => {
-    if (isResizing) {
-      const newWidth = e.clientX;
-      if (newWidth >= 200 && newWidth <= 600) {
-        setSidebarWidth(newWidth);
-      }
+  const resize = useCallback((e) => {
+    const newWidth = e.clientX;
+    if (newWidth >= 200 && newWidth <= 600) {
+      setSidebarWidth(newWidth);
     }
-  };
+  }, [setSidebarWidth]);
 
   useEffect(() => {
     if (isResizing) {
@@ -713,26 +683,24 @@ function AudionutsUAGUI() {
         window.removeEventListener('mouseup', stopResizing);
       };
     }
-  }, [isResizing]);
+  }, [isResizing, resize, stopResizing]);
 
   // Right sidebar resizing
-  const startResizingRight = () => {
+  const startResizingRight = useCallback(() => {
     setIsResizingRight(true);
-  };
+  }, [setIsResizingRight]);
 
-  const stopResizingRight = () => {
+  const stopResizingRight = useCallback(() => {
     setIsResizingRight(false);
-  };
+  }, [setIsResizingRight]);
 
-  const resizeRight = (e) => {
-    if (isResizingRight) {
-      // Calculate width from right edge
-      const newWidth = window.innerWidth - e.clientX;
-      if (newWidth >= 200 && newWidth <= 800) {
-        setRightSidebarWidth(newWidth);
-      }
+  const resizeRight = useCallback((e) => {
+    // Calculate width from right edge
+    const newWidth = window.innerWidth - e.clientX;
+    if (newWidth >= 200 && newWidth <= 800) {
+      setRightSidebarWidth(newWidth);
     }
-  };
+  }, [setRightSidebarWidth]);
 
   useEffect(() => {
     if (isResizingRight) {
@@ -743,7 +711,7 @@ function AudionutsUAGUI() {
         window.removeEventListener('mouseup', stopResizingRight);
       };
     }
-  }, [isResizingRight]);
+  }, [isResizingRight, resizeRight, stopResizingRight]);
 
   // argumentCategories moved to module scope
 
