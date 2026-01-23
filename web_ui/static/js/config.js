@@ -160,7 +160,8 @@
     passtheimage: ['passtheima_ge_api'],
     zipline: ['zipline_url', 'zipline_api_key'],
     seedpool_cdn: ['seedpool_cdn_api'],
-    sharex: ['sharex_url', 'sharex_api_key']
+    sharex: ['sharex_url', 'sharex_api_key'],
+    utppm: ['utppm_api']
   };
 
   const getImageHostForApiKey = (key) => {

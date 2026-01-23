@@ -222,6 +222,7 @@ const trackerNameMap = {
   'LT': 'Lat-Team',
   'LCD': 'Locadora',
   'LST': 'LST',
+  'LUME': 'Luminarr',
   'MTV': 'MoreThanTV',
   'NBL': 'Nebulance',
   'OTW': 'OldToonsWorld',
