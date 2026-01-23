@@ -53,7 +53,6 @@ const Tooltip = ({ children, content, className = "" }) => {
       const triggerRect = triggerRef.current.getBoundingClientRect();
       const tooltipRect = tooltipRef.current.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
 
       let top = triggerRect.top - tooltipRect.height - 8;
       let left = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
@@ -145,7 +144,6 @@ const apiFetch = async (url, options = {}) => {
   return response;
 };
 
-const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
 const sensitiveKeyPattern = /(api|username|password|announce_url|rss_key|passkey|discord_bot_token|discord_channel_id|qui_proxy_url)/i;
 const isSensitiveKey = (key) => sensitiveKeyPattern.test(key || '');
 const isTorrentClientUserPass = (key, pathParts) =>
@@ -384,7 +382,6 @@ const SelectDropdown = ({
 function ConfigLeaf({
   item,
   pathParts,
-  depth,
   isDarkMode,
   fullWidth,
   allImageHosts,
@@ -399,9 +396,6 @@ function ConfigLeaf({
     ? 'text-sm font-medium text-gray-200'
     : 'text-sm font-medium text-gray-700';
 
-  const valueWrapperClass = isDarkMode
-    ? 'text-sm text-gray-200'
-    : 'text-sm text-gray-700';
 
   const inputClass = isDarkMode
     ? 'w-full px-3 py-2 border border-gray-700 bg-gray-900 text-gray-100 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent'
@@ -716,8 +710,6 @@ function ConfigLeaf({
         readOnly: false
       });
     }, [selected, onValueChange, path, item.value]);
-
-    const originalValue = normalizeTrackers(item.value).join(', ');
 
     const toggleTracker = (tracker, checked) => {
       const selections = new Set(selected);
@@ -1216,7 +1208,7 @@ function ItemList({
                                         try {
                                           sessionStorage.setItem('ua_active_tab', String(pathParts[0] || '').toLowerCase());
                                           sessionStorage.setItem('ua_tracker_tab', trackerTab || 'configured');
-                                        } catch (e) {}
+                                        } catch (e) { /* ignore */ }
                                         window.location.reload();
                                       } catch (err) {
                                         alert(err.message || 'Failed to remove subsection');
@@ -1250,7 +1242,7 @@ function ItemList({
                                 try {
                                   sessionStorage.setItem('ua_active_tab', String(pathParts[0] || '').toLowerCase());
                                   sessionStorage.setItem('ua_tracker_tab', trackerTab || 'default');
-                                } catch (e) {}
+                                } catch (e) { /* ignore */ }
                                 window.location.reload();
                               } catch (err) {
                                 alert(err.message || 'Failed to update default trackers');
@@ -1535,10 +1527,10 @@ function showConfirmModal(opts) {
     okBtn.focus();
 
     function cleanup(result) {
-      try { document.body.removeChild(overlay); } catch (e) {}
-      try { window.removeEventListener('keydown', keyHandler); } catch (e) {}
-      resolve(result);
-    }
+        try { document.body.removeChild(overlay); } catch (e) { /* ignore */ }
+        try { window.removeEventListener('keydown', keyHandler); } catch (e) { /* ignore */ }
+        resolve(result);
+      }
 
     cancelBtn.addEventListener('click', () => cleanup(false));
     okBtn.addEventListener('click', () => cleanup(true));
@@ -1757,7 +1749,7 @@ function SecurityTab({ isDarkMode }) {
             </p>
             <p className={`text-xs mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
               <strong>To store in environment variable:</strong> Set <code className={`px-1 py-0.5 rounded text-xs ${isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>UA_WEBUI_TOTP_SECRET={setupData.secret}</code><br />
-              <strong>To copy to password manager:</strong> Save the secret "{setupData.secret}" in your password manager's TOTP field.
+              <strong>To copy to password manager:</strong> Save the secret &quot;{setupData.secret}&quot; in your password manager&#39;s TOTP field.
             </p>
             <div className="flex gap-2">
               <input

@@ -1,6 +1,4 @@
 const { useState, useRef, useEffect } = React;
-
-const API_BASE = window.location.origin + '/api';
 const THEME_KEY = 'ua_config_theme';
 
 const storage = {
@@ -324,7 +322,7 @@ function AudionutsUAGUI() {
   ]);
   
   const [selectedPath, setSelectedPath] = useState('');
-  const [selectedName, setSelectedName] = useState('');
+  const [, setSelectedName] = useState('');
   const [customArgs, setCustomArgs] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState(new Set(['/data', '/torrent_storage_dir']));
@@ -561,6 +559,7 @@ function AudionutsUAGUI() {
       const decoder = new TextDecoder();
       let buffer = '';
 
+      /* eslint-disable no-constant-condition */
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
@@ -648,6 +647,7 @@ function AudionutsUAGUI() {
           }
         }
       }
+      /* eslint-enable no-constant-condition */
       appendSystemMessage('✓ Execution completed');
       appendSystemMessage('');
     } catch (error) {
