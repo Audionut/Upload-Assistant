@@ -1153,8 +1153,9 @@ def login_page():
         password = request.form.get("password", "").strip()
         # Accept either the legacy 'totp_code' or a common 'otp' field so
         # password managers that target 'otp'/'one-time-code' will be
-        # recognized while preserving backward compatibility.
-        totp_code = (request.form.get("totp_code") or request.form.get("otp") or "").strip()
+        # recognized. Only accept the strict 2FA field here; recovery codes
+        # are handled via a separate endpoint.
+        totp_code = (request.form.get("totp_code") or "").strip()
         remember = request.form.get("remember") == "1"
 
         if _webui_auth_configured():
@@ -1166,12 +1167,8 @@ def login_page():
                 if _totp_enabled():
                     totp_ok = bool(totp_code and _verify_totp_code(totp_code))
                     if not totp_ok:
-                        # Try one-time recovery codes (consumes code when used)
-                        if totp_code and _consume_recovery_code(totp_code):
-                            console.print(f"Recovery code used for user {username}", markup=False)
-                        else:
-                            # Do not reveal why login failed; present a generic message.
-                            return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
+                        # Do not accept recovery codes on this endpoint; show generic error.
+                        return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
 
                 session["authenticated"] = True
                 if remember:
@@ -1195,12 +1192,8 @@ def login_page():
                 if _totp_enabled():
                     totp_ok = bool(totp_code and _verify_totp_code(totp_code))
                     if not totp_ok:
-                        # Try one-time recovery codes (consumes code when used)
-                        if totp_code and _consume_recovery_code(totp_code):
-                            console.print(f"Recovery code used for user {username}", markup=False)
-                        else:
-                            # Generic error only; avoid revealing whether TOTP or recovery code failed.
-                            return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
+                        # Do not accept recovery codes on this endpoint; show generic error.
+                        return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
 
                 session["authenticated"] = True
                 if remember:
@@ -1239,6 +1232,68 @@ def logout():
     # Remove remember cookie if present
     resp.delete_cookie("ua_remember")
     return resp
+
+
+@app.route("/login/recovery", methods=["POST"])
+def login_recovery():
+    """Handle login using a recovery code. This is a separate endpoint to
+    keep recovery-code input distinct from strict 2FA inputs so password
+    managers treat the 2FA input as a one-time code field.
+    """
+    global saved_auth
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "").strip()
+    recovery_code = request.form.get("recovery_code", "").strip()
+    remember = request.form.get("remember") == "1"
+
+    if not _totp_enabled():
+        return render_template("login.html", error="Recovery codes are not enabled", show_2fa=False)
+
+    if _webui_auth_configured():
+        expected_username = os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else "")
+        expected_password = os.environ.get("UA_WEBUI_PASSWORD") or (saved_auth[1] if saved_auth else "")
+        # Validate username/password and recovery code in a single condition
+        if (username == expected_username and password == expected_password
+                and recovery_code and _consume_recovery_code(recovery_code)):
+            session["authenticated"] = True
+            if remember:
+                session.permanent = True
+                try:
+                    token = _create_remember_token(username)
+                    if token:
+                        resp = redirect(url_for("config_page"))
+                        resp.set_cookie("ua_remember", token, max_age=30 * 86400, httponly=True, secure=not DOCKER_MODE, samesite="Lax")
+                        return resp
+                except Exception:
+                    pass
+            return redirect(url_for("config_page"))
+        return render_template("login.html", error="Recovery code invalid", show_2fa=_totp_enabled())
+    else:
+        # No configured auth: accept provided username/password and consume code
+        if username and password and recovery_code and _consume_recovery_code(recovery_code):
+            session["authenticated"] = True
+            if remember:
+                session.permanent = True
+                try:
+                    token = _create_remember_token(username)
+                    if token:
+                        resp = redirect(url_for("config_page"))
+                        resp.set_cookie("ua_remember", token, max_age=30 * 86400, httponly=True, secure=not DOCKER_MODE, samesite="Lax")
+                        # Persist auth when possible
+                        if not DOCKER_MODE:
+                            with contextlib.suppress(Exception):
+                                keyring.set_password("upload-assistant", "auth", json.dumps({"username": username, "password": password}))
+                                saved_auth = (username, password)
+                        return resp
+                except Exception:
+                    pass
+            # Persist auth when possible even if not remembering
+            if not DOCKER_MODE:
+                with contextlib.suppress(Exception):
+                    keyring.set_password("upload-assistant", "auth", json.dumps({"username": username, "password": password}))
+                    saved_auth = (username, password)
+            return redirect(url_for("config_page"))
+        return render_template("login.html", error="Recovery code invalid", show_2fa=_totp_enabled())
 
 
 @app.route("/config")
