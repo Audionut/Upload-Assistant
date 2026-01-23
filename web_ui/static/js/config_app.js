@@ -418,6 +418,7 @@ function ConfigLeaf({
       'charLimit',
       'fileLimit',
       'processLimit',
+      'desat',
       'min_successful_image_uploads',
       'overlay_text_size',
       'logo_size',
@@ -425,7 +426,8 @@ function ConfigLeaf({
       'bluray_score',
       'bluray_single_score',
       'rehash_cooldown',
-      'custom_layout'
+      'custom_layout',
+      'screens_per_row'
     ];
     return numericFields.includes(key);
   };
@@ -464,6 +466,12 @@ function ConfigLeaf({
       case 'fileLimit':
       case 'processLimit':
       case 'bluray_image_size':
+      case 'bluray_score':
+      case 'bluray_single_score':
+      case 'desat':
+        return 10;
+      case 'screens_per_row':
+        return 2;
       case 'custom_layout':
         return 1;
       case 'ffmpeg_compression':
@@ -578,6 +586,8 @@ function ConfigLeaf({
           return { min: 1, max: 1000, step: 1 };
         case 'processLimit':
           return { min: 1, max: 100, step: 1 };
+        case 'desat':
+          return { min: 0, max: 20, step: 0.1 };
         case 'min_successful_image_uploads':
           return { min: 1, max: 10, step: 1 };
         case 'overlay_text_size':
@@ -592,6 +602,8 @@ function ConfigLeaf({
           return { min: 0, max: 100, step: 0.1 };
         case 'rehash_cooldown':
           return { min: 0, max: 300, step: 5 };
+        case 'screens_per_row':
+          return { min: 1, max: 10, step: 1 };
         case 'custom_layout':
           return { min: 1, max: 10, step: 1 };
         default:
@@ -946,6 +958,49 @@ function ConfigLeaf({
     );
   }
 
+  // Special-case: render a dropdown for tonemapping algorithm selection
+  if (item.key === 'algorithm') {
+    const algoOptions = [
+      { value: '', label: '' },
+      { value: 'none', label: 'none — Do not apply any tone map, only desaturate overbright pixels.' },
+      { value: 'clip', label: 'clip — Hard-clip out-of-range values; accurate in-range colors.' },
+      { value: 'linear', label: 'linear — Stretch reference gamut to a linear multiple of the display.' },
+      { value: 'gamma', label: 'gamma — Fit a logarithmic transfer between the tone curves.' },
+      { value: 'reinhard', label: 'reinhard — Preserve brightness with a simple curve; may flatten details.' },
+      { value: 'hable', label: 'hable — Preserve dark/bright details better than reinhard.' },
+      { value: 'mobius', label: 'mobius — Smoothly map out-of-range values while retaining colors.' }
+    ];
+
+    const originalValue = item.value === null || item.value === undefined ? '' : String(item.value);
+
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <label className={labelClass}>{formatDisplayLabel(item.key)}</label>
+          {helpText && (
+            <Tooltip content={helpText}>
+              <InfoIcon className={`w-4 h-4 ${isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-600'}`} />
+            </Tooltip>
+          )}
+        </div>
+        <SelectDropdown
+          value={selectedValue}
+          onChange={(newValue) => {
+            setSelectedValue(newValue);
+            onValueChange(path, newValue, {
+              originalValue,
+              isSensitive: false,
+              isRedacted: false,
+              readOnly: false
+            });
+          }}
+          options={algoOptions}
+          isDarkMode={isDarkMode}
+        />
+      </div>
+    );
+  }
+
   const rawValue = item.value === null || item.value === undefined
     ? ''
     : (typeof item.value === 'string' ? item.value : JSON.stringify(item.value));
@@ -1033,6 +1088,54 @@ function ItemList({
     } else {
       regularItems.push(item);
     }
+  }
+
+  // Define known subgroupings for better visual breakdown (screenshots-related)
+  const subgroupDefinitions = {
+    'General ffmpeg': ['ffmpeg_compression', 'process_limit', 'ffmpeg_limit'],
+    'Overlay': ['frame_overlay', 'overlay_text_size'],
+    'HDR Tonemapping': ['tone_map', 'algorithm', 'desat', 'use_libplacebo', 'ffmpeg_is_good', 'ffmpeg_warmup'],
+    'Bluray & DVD': ['use_largest_playlist', 'get_bluray_info', 'bluray_score', 'bluray_single_score', 'ping_unit3d'],
+    'Extra': ['btn_api', 'user_overrides'],
+    'Logos': ['add_logo', 'logo_size', 'logo_language'],
+    'Bluray/DVD': ['add_bluray_link', 'use_bluray_images', 'bluray_image_size', 'disc_menu_header'],
+    'multi-file/disc': ['multiScreens', 'pack_thumb_size', 'fileLimit', 'processLimit', 'charLimit'],
+    'Headers': ['custom_description_header', 'tonemapped_header', 'screenshot_header'],
+    'Signature': ['custom_signature'],
+  };
+
+  // Partition regularItems into subgroups and an "Other" bucket
+  const grouped = {};
+  const ungrouped = [];
+  // Ensure image host groups appear first
+  grouped['Image Hosts'] = [];
+  grouped['Image Host API Keys'] = [];
+  // Pre-create keys for consistent ordering for other subgroup definitions
+  for (const g of Object.keys(subgroupDefinitions)) grouped[g] = [];
+
+  for (const it of regularItems) {
+    // Image host selection fields (e.g., img_host_1) should be top-level Image Hosts
+    if (it.key && it.key.startsWith && it.key.startsWith('img_host_')) {
+      grouped['Image Hosts'].push(it);
+      continue;
+    }
+
+    // API key fields for image hosts (recognized via helper) go into Image Host API Keys
+    const apiHost = getImageHostForApiKey(it.key);
+    if (apiHost) {
+      grouped['Image Host API Keys'].push(it);
+      continue;
+    }
+
+    let placed = false;
+    for (const [gname, keys] of Object.entries(subgroupDefinitions)) {
+      if (keys.includes(it.key)) {
+        grouped[gname].push(it);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) ungrouped.push(it);
   }
 
   const isTrackerConfig = pathParts.includes('TRACKERS') && depth === 0;
@@ -1386,24 +1489,60 @@ function ItemList({
           </div>
         </div>
       )}
-      {/* Regular form fields in a grid */}
-      {regularItems.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {regularItems.map((item) => {
-            const leafPath = [...pathParts, item.key].join('/');
+      {/* Regular form fields, optionally grouped into subheaders */}
+      {(ungrouped.length > 0 || Object.values(grouped).some(g => g.length > 0)) && (
+        <div className="space-y-4">
+          {/* Ungrouped items */}
+          {ungrouped.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {ungrouped.map((item) => {
+                const leafPath = [...pathParts, item.key].join('/');
+                return (
+                  <ConfigLeaf
+                    key={leafPath}
+                    item={item}
+                    pathParts={pathParts}
+                    depth={depth}
+                    isDarkMode={isDarkMode}
+                    fullWidth={fullWidth}
+                    allImageHosts={allImageHosts}
+                    usedImageHosts={usedImageHosts}
+                    torrentClients={torrentClients}
+                    onValueChange={onValueChange}
+                  />
+                );
+              })}
+            </div>
+          )}
+
+          {/* Grouped subheaders */}
+          {Object.keys(grouped).map((gname) => {
+            const itemsInGroup = grouped[gname] || [];
+            if (!itemsInGroup.length) return null;
+            const headerClass = isDarkMode ? 'text-sm font-semibold text-gray-200 border-b pb-1 mb-3' : 'text-sm font-semibold text-gray-700 border-b pb-1 mb-3';
             return (
-              <ConfigLeaf
-                key={leafPath}
-                item={item}
-                pathParts={pathParts}
-                depth={depth}
-                isDarkMode={isDarkMode}
-                fullWidth={fullWidth}
-                allImageHosts={allImageHosts}
-                usedImageHosts={usedImageHosts}
-                torrentClients={torrentClients}
-                onValueChange={onValueChange}
-              />
+              <div key={gname}>
+                <div className={headerClass}>{gname}</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                  {itemsInGroup.map((item) => {
+                    const leafPath = [...pathParts, item.key].join('/');
+                    return (
+                      <ConfigLeaf
+                        key={leafPath}
+                        item={item}
+                        pathParts={pathParts}
+                        depth={depth}
+                        isDarkMode={isDarkMode}
+                        fullWidth={fullWidth}
+                        allImageHosts={allImageHosts}
+                        usedImageHosts={usedImageHosts}
+                        torrentClients={torrentClients}
+                        onValueChange={onValueChange}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
         </div>

@@ -57,7 +57,11 @@ base_dir = os.path.abspath(os.path.dirname(__file__))
 # Early check for -webui to create config if needed
 _config_path = os.path.join(base_dir, "data", "config.py")
 _example_config_path = os.path.join(base_dir, "data", "example-config.py")
-if ("-webui" in sys.argv or "--webui" in sys.argv) and not os.path.exists(_config_path) and os.path.exists(_example_config_path):
+# Detect -webui or --webui forms, including --webui=host:port
+if any(
+    (arg == "-webui" or arg == "--webui" or arg.startswith("-webui=") or arg.startswith("--webui="))
+    for arg in sys.argv
+) and not os.path.exists(_config_path) and os.path.exists(_example_config_path):
     console.print("No config.py found. Creating default config from example-config.py...", markup=False)
     try:
         shutil.copy2(_example_config_path, _config_path)

@@ -121,23 +121,22 @@ config = {
         # Overlay Frame number/type and "Tonemapped" if applicable to screenshots
         "frame_overlay": False,
 
-        # MULTI PROCESSING
-        # The optimization task is resource intensive.
-        # The final value used will be the lowest value of either 'number of screens'
-        # or this value. Recommended value is enough to cover your normal number of screens.
-        # If you're on a shared seedbox you may want to limit this to avoid hogging resources.
+        # Overlay text size (scales with resolution)
+        "overlay_text_size": "18",
+
+        # Limit how many ffmpeg processes can run at once
+        # The final value will be the minimum, between this value and number of screens being processed
         "process_limit": "4",
 
         # Set true to limit the amount of CPU when running ffmpeg.
+        # This places an additional limitation on ffmpeg to reduce CPU usage
         "ffmpeg_limit": False,
-
-        # Overlay text size (scales with resolution)
-        "overlay_text_size": "18",
 
         # Tonemap HDR - DV+HDR screenshots
         "tone_map": True,
 
         # Set false to disable libtorrent ffmpeg tonemapping and use ffmpeg only
+        # This is a good toggle if you have any ffmpeg related issues when tonemapping
         "use_libplacebo": True,
 
         # Set true to skip ffmpeg check, useful if you know your ffmpeg is compatible with libplacebo
@@ -149,11 +148,16 @@ config = {
         "ffmpeg_warmup": False,
 
         # Set ffmpeg compression level for screenshots (0-9)
+        # 6 is a good balance between compression and speed
         "ffmpeg_compression": "6",
 
         # Tonemap screenshots with the following settings (doesn't apply when using libplacebo)
         # See https://ayosec.github.io/ffmpeg-filters-docs/7.1/Filters/Video/tonemap.html
         "algorithm": "mobius",
+
+        # Apply desaturation for highlights that exceed this level of brightness. The higher the parameter, the more color information will be preserved. This setting helps prevent unnaturally blown-out colors for super-highlights, by (smoothly) turning into white instead. This makes images feel more natural, at the cost of reducing information about out-of-range colors.
+        # The default of 2.0 is somewhat conservative and will mostly just apply to skies or directly sunlit surfaces. A setting of 0.0 disables this option.
+        # This option works only if the input frame has a supported color tag.
         "desat": "10.0",
 
         # DESCRIPTION SETTINGS
@@ -168,9 +172,6 @@ config = {
         # If a logo with this language cannot be found, English will be used instead
         "logo_language": "",
 
-        # set true to add episode overview to description
-        "episode_overview": False,
-
         # Providing the option to change the size of the screenshot thumbnails where supported.
         # Default is 350, ie [img=350]
         "thumbnail_size": "350",
@@ -178,6 +179,9 @@ config = {
         # Number of screenshots per row in the description. Default is single row.
         # Only for sites that use common description for now
         "screens_per_row": "",
+
+        # set true to add episode overview to description
+        "episode_overview": False,
 
         # Add this header above screenshots in description when screens have been tonemapped (in bbcode)
         # Can be overridden in a per-tracker setting by adding this same config

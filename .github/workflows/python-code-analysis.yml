@@ -236,6 +236,5 @@ jobs:
         echo "✅ Type checking completed"
         echo "✅ Security analysis with Bandit completed"
         echo "✅ Dependency security check with Safety completed"
-        echo "✅ Common issues check completed"
         echo ""
         echo "Check the job logs above for detailed results."
