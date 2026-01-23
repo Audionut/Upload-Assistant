@@ -102,60 +102,41 @@ const Tooltip = ({ children, content, className = "" }) => {
 
 const API_BASE = window.location.origin + '/api';
 const THEME_KEY = 'ua_config_theme';
-const storage = (typeof window !== 'undefined' && window.UAStorage) || {
-  get(key) {
-    try {
-      return localStorage.getItem(key);
-    } catch (error) {
-      return null;
-    }
-  },
-  set(key, value) {
-    try {
-      localStorage.setItem(key, value);
-    } catch (error) {
-      // Ignore storage failures (private mode, blocked storage, etc.).
-    }
-  },
-  remove(key) {
-    try {
-      localStorage.removeItem(key);
-    } catch (error) {
-      // Ignore storage failures.
-    }
-  }
-};
+const storage = window.UAStorage;
+const getStoredTheme = window.getUAStoredTheme;
 
-const getStoredTheme = () => {
-  if (typeof window !== 'undefined' && typeof window.getUAStoredTheme === 'function') {
-    return window.getUAStoredTheme();
-  }
-  const stored = storage.get(THEME_KEY);
-  if (stored === 'dark') return true;
-  if (stored === 'light') return false;
-  return Boolean(window.UA_DEFAULT_THEME);
-};
+// Prefer shared `uaApiFetch` when available (provides CSRF handling and retry-on-auth-fail),
+// otherwise fall back to a local implementation.
+const apiFetch = (typeof window !== 'undefined' && window.uaApiFetch) || (async (url, options = {}) => {
+  // Local fallback: load CSRF token once and retry on 401/403 once.
+  let localCsrf = null;
+  const loadLocalCsrf = async (force = false) => {
+    if (localCsrf && !force) return;
+    try {
+      const r = await fetch(`${API_BASE}/csrf_token`, { credentials: 'same-origin' });
+      if (!r.ok) return;
+      const d = await r.json();
+      localCsrf = d && d.csrf_token ? String(d.csrf_token) : null;
+    } catch (e) {
+      // ignore
+    }
+  };
 
-let csrfToken = null;
-const loadCsrfToken = async () => {
-  if (csrfToken) return;
-  try {
-    const resp = await fetch(`${API_BASE}/csrf_token`, { credentials: 'include' });
-    if (!resp.ok) return;
-    const data = await resp.json();
-    csrfToken = data && data.csrf_token ? String(data.csrf_token) : null;
-  } catch (e) {
-    // ignore
-  }
-};
-
-const apiFetch = async (url, options = {}) => {
-  await loadCsrfToken();
+  await loadLocalCsrf();
   const headers = { ...(options.headers || {}) };
-  if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
-  const response = await fetch(url, { ...options, headers, credentials: 'include' });
+  if (localCsrf) headers['X-CSRF-Token'] = localCsrf;
+  let response = await fetch(url, { ...options, headers, credentials: 'same-origin' });
+  if (response.status === 401 || response.status === 403) {
+    await loadLocalCsrf(true);
+    const headers2 = { ...(options.headers || {}) };
+    if (localCsrf) headers2['X-CSRF-Token'] = localCsrf;
+    response = await fetch(url, { ...options, headers: headers2, credentials: 'same-origin' });
+  }
   return response;
-};
+});
+
+// Use shared loader when available; otherwise provide a no-op fallback.
+const loadCsrfToken = (typeof window !== 'undefined' && window.loadCsrfToken) || (async () => {});
 
 const sensitiveKeyPattern = /(api|username|password|announce_url|rss_key|passkey|discord_bot_token|discord_channel_id|qui_proxy_url)/i;
 const isSensitiveKey = (key) => sensitiveKeyPattern.test(key || '');

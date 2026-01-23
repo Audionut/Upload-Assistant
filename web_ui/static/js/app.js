@@ -1,103 +1,40 @@
 const { useState, useRef, useEffect, useCallback } = React;
 const THEME_KEY = 'ua_config_theme';
 
-const storage = (typeof window !== 'undefined' && window.UAStorage) || {
-  get(key) {
-    try {
-      return localStorage.getItem(key);
-    } catch (error) {
-      return null;
-    }
-  },
-  set(key, value) {
-    try {
-      localStorage.setItem(key, value);
-    } catch (error) {
-      // Ignore storage failures (private mode, blocked storage, etc.).
-    }
-  },
-  remove(key) {
-    try {
-      localStorage.removeItem(key);
-    } catch (error) {
-      // Ignore storage failures.
-    }
-  }
-};
+const storage = window.UAStorage;
+const getStoredTheme = window.getUAStoredTheme;
 
-const getStoredTheme = () => {
-  if (typeof window !== 'undefined' && typeof window.getUAStoredTheme === 'function') {
-    return window.getUAStoredTheme();
-  }
-  const stored = storage.get(THEME_KEY);
-  if (stored === 'dark') return true;
-  if (stored === 'light') return false;
-  return typeof window !== 'undefined' && typeof window.UA_DEFAULT_THEME === 'boolean' ? window.UA_DEFAULT_THEME : true;
-};
+// Prefer shared `uaApiFetch` when available (provides CSRF handling and retry-on-auth-fail),
+// otherwise fall back to a local implementation.
+const apiFetch = (typeof window !== 'undefined' && window.uaApiFetch) || (async (url, options = {}) => {
+  // Local fallback: load CSRF token once and retry on 401/403 once.
+  let localCsrf = null;
+  const loadLocalCsrf = async (force = false) => {
+    if (localCsrf && !force) return;
+    try {
+      const r = await fetch('/api/csrf_token', { credentials: 'same-origin' });
+      if (!r.ok) return;
+      const d = await r.json();
+      localCsrf = d && d.csrf_token ? String(d.csrf_token) : null;
+    } catch (e) {
+      // ignore
+    }
+  };
 
-let csrfToken = null;
-const _maybeLoadCsrf = async () => {
-  if (csrfToken) return;
-  try {
-    const r = await fetch('/api/csrf_token', { credentials: 'same-origin' });
-    if (!r.ok) return;
-    const d = await r.json();
-    csrfToken = d && d.csrf_token ? String(d.csrf_token) : null;
-  } catch (e) {
-    // ignore
-  }
-};
-
-const apiFetch = async (url, options = {}) => {
-  await _maybeLoadCsrf();
+  await loadLocalCsrf();
   const headers = { ...(options.headers || {}) };
-  if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
-  const response = await fetch(url, { ...options, headers, credentials: 'same-origin' });
+  if (localCsrf) headers['X-CSRF-Token'] = localCsrf;
+  let response = await fetch(url, { ...options, headers, credentials: 'same-origin' });
+  if (response.status === 401 || response.status === 403) {
+    await loadLocalCsrf(true);
+    const headers2 = { ...(options.headers || {}) };
+    if (localCsrf) headers2['X-CSRF-Token'] = localCsrf;
+    response = await fetch(url, { ...options, headers: headers2, credentials: 'same-origin' });
+  }
   return response;
-};
+});
 
-// Shared HTML sanitizer used throughout this module. Uses DOMPurify when available
-// with a narrowed allowed-attributes list; falls back to a hardened DOMParser-based
-// sanitizer and ultimately escapes on failure.
-const sanitizeHtml = (html) => {
-  const rawHtml = String(html || '');
-    if (window.DOMPurify) {
-    // Allow inline `style` attributes here because Rich exports inline
-    // styles for colors. DOMPurify will still sanitize CSS and remove
-    // dangerous constructs like `url(...)`. Other dangerous tags and
-    // event-handler attributes remain forbidden.
-    const dangerousTags = ['script', 'style', 'img', 'svg', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'meta', 'link'];
-    const forbiddenAttrs = ['srcset', 'onerror', 'onload', 'onclick', 'onmouseover', 'onmouseenter', 'onmouseleave', 'onkeydown', 'onkeypress', 'onkeyup'];
-    return DOMPurify.sanitize(rawHtml, {
-      ALLOWED_ATTR: ['class', 'href', 'src', 'title', 'alt', 'rel', 'style'],
-      FORBID_TAGS: dangerousTags,
-      FORBID_ATTR: forbiddenAttrs,
-    });
-  }
-  try {
-    const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
-    const dangerousTags = ['script', 'style', 'img', 'svg', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'meta', 'link'];
-    dangerousTags.forEach(tag => {
-      doc.querySelectorAll(tag).forEach(el => el.remove());
-    });
-    doc.querySelectorAll('*').forEach((el) => {
-      [...el.attributes].forEach((attr) => {
-        const attrName = attr.name.toLowerCase();
-        const attrValue = String(attr.value).toLowerCase().trim();
-        if (attrName.startsWith('on')) {
-          el.removeAttribute(attr.name);
-        } else if ((attrName === 'href' || attrName === 'src') && (attrValue.startsWith('javascript:') || attrValue.startsWith('data:') || attrValue.startsWith('vbscript:'))) {
-          el.removeAttribute(attr.name);
-        } else if (attrName === 'srcset' || (attrName === 'style' && attrValue.includes('url('))) {
-          el.removeAttribute(attr.name);
-        }
-      });
-    });
-    return doc.body.innerHTML;
-  } catch (e) {
-    return rawHtml.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-};
+const sanitizeHtml = window.sanitizeHtml;
 
 // Argument categories for the right sidebar (placeholders shown for info only)
 const argumentCategories = [
