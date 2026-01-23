@@ -218,7 +218,9 @@ def _get_persistent_cookie_key() -> Optional[bytes]:
 
 
 # API token helpers ----------------------------------------------------------
-_API_TOKEN_STORE_KEY = "upload-assistant-api-tokens"
+# The name of the key used in the keyring/store. This is not a password value
+# but Bandit flags it as a hardcoded password string; suppress with nosec.
+_API_TOKEN_STORE_KEY = "upload-assistant-api-tokens"  # nosec: B105 - key name, not a secret
 
 # If operator provided a single bearer token via `UA_TOKEN`, treat it as canonical
 # and remove any persisted token store to avoid duplicate/conflicting tokens.
@@ -1614,7 +1616,9 @@ def csrf_token():
         token = session.get("csrf_token") or ""
         return jsonify({"csrf_token": token, "success": True})
     except Exception:
-        return jsonify({"csrf_token": "", "success": False}), 500
+        # Returning an empty CSRF token on error is an explicit non-secret
+        # failure response; suppress Bandit's B105 false positive here.
+        return jsonify({"csrf_token": "", "success": False}), 500  # nosec: B105 - not a hardcoded password
 
 
 @app.route("/api/2fa/status")
