@@ -4,7 +4,7 @@ from typing import Any
 
 
 def _auth_header() -> dict[str, str]:
-    token = os.environ.get("UA_TOKEN")
+    token = os.environ.get("UA_TOKEN") or os.environ.get("UA_TEST_BEARER_TOKEN")
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 
