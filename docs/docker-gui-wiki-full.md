@@ -104,7 +104,7 @@ services:
       # Optional: only needed if you serve the UI from a different origin/domain
       # - UA_WEBUI_CORS_ORIGINS=https://your-ui-host
     entrypoint: /bin/bash
-    command: -c "source /venv/bin/activate && python /Upload-Assistant/upload.py --webui 0.0.0.0:5000 & tail -f /dev/null"
+    command: -c "source /venv/bin/activate && exec python /Upload-Assistant/upload.py --webui 0.0.0.0:5000"
     volumes:
       - /path/to/torrents/:/data/torrents/:rw #map this to qbit download location, map exactly as qbittorent template on both sides.
       - /mnt/user/appdata/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw # Optional: will be created automatically if missing

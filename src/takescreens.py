@@ -550,7 +550,7 @@ async def dvd_screenshots(
                     f"{meta['discs'][disc_num]['path']}/VTS_{main_set[n]}",
                     output='JSON'
                 )
-                vob_mi = json.loads(vob_mi)
+                vob_mi = json.loads(str(vob_mi))
 
                 for track in vob_mi.get('media', {}).get('track', []):
                     duration = float(track.get('Duration', 0))

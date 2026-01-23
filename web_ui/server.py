@@ -34,6 +34,19 @@ except Exception:
 
 from src.console import console
 
+# Initialize keyring backend only when needed (not in Docker, and not using env var auth)
+is_docker = os.path.exists('/.dockerenv')
+has_env_auth = bool(os.environ.get('UA_WEBUI_USERNAME') and os.environ.get('UA_WEBUI_PASSWORD')) or bool(os.environ.get('UA_WEBUI_TOTP_SECRET'))
+
+if not is_docker and not has_env_auth:
+    try:
+        keyring.core.init_backend()
+    except Exception as e:
+        console.print(f"[red]Keyring backend initialization failed: {e}[/red]")
+        console.print("[red]Cannot initialize secure credential storage. Please ensure your system has a compatible keyring backend installed.[/red]")
+        console.print("[red]Or use environment variables for authentication instead.[/red]")
+        sys.exit(1)
+
 Flask = cast(Any, Flask)
 Response = cast(Any, Response)
 jsonify = cast(Any, jsonify)
@@ -135,7 +148,7 @@ else:
 
 
 def _hash_code(code: str) -> str:
-    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+    return hashlib.pbkdf2_hmac('sha256', code.encode('utf-8'), b'upload-assistant-recovery-salt', 100000).hex()
 
 
 def _generate_recovery_codes(n: int = 10, length: int = 10) -> list[str]:
@@ -1367,8 +1380,8 @@ def config_update():
                 _write_audit_log("remove_key", path, prior_value, None, True)
             except Exception as ae:
                 console.print(f"Failed to write config audit record: {ae}", markup=False)
-        except Exception as e:
-            return jsonify({"success": False, "error": str(e)}), 500
+        except Exception:
+            return jsonify({"success": False, "error": "An error occurred while updating the configuration"}), 500
         return jsonify({"success": True, "value": _json_safe(coerced_value)})
     # Else proceed with normal update
 
@@ -1393,7 +1406,7 @@ def config_update():
             _write_audit_log("update_value", path, prior_value if prior_value is not None else None, coerced_value, False, str(e))
         except Exception as ae:
             console.print(f"Failed to write config audit failure record: {ae}", markup=False)
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({"success": False, "error": "An error occurred while updating the configuration"}), 500
 
     return jsonify({"success": True, "value": _json_safe(coerced_value)})
 
@@ -1418,8 +1431,8 @@ def config_remove_subsection():
             return jsonify({"success": True, "value": None})
         config_path.write_text(updated, encoding="utf-8")
         return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    except Exception:
+        return jsonify({"success": False, "error": "An error occurred while removing the configuration subsection"}), 500
 
 
 @app.route("/api/browse")

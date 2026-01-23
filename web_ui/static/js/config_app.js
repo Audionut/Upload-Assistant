@@ -9,7 +9,7 @@ function loadQRCodeLib() {
     }
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js';
-    script.integrity = 'sha384-2tbYcIw4qYXyHlIzTf5eFjAPKe2pM9xrGp2fxH64sfaRqtYeR5OTaFEdibBb464KtgO7KpGHIXdOJQ==';
+    script.integrity = 'sha384-HGmnkDZJy7mRkoARekrrj0VjEFSh9a0Z8qxGri/kTTAJkgR8hqD1lHsYSh3JdzRi';
     script.crossOrigin = 'anonymous';
     script.async = true;
     script.onload = () => resolve(window.qrcode || window.QRCode || window.qrcodeModule);
@@ -428,6 +428,8 @@ function ConfigLeaf({
       'overlay_text_size',
       'logo_size',
       'bluray_image_size',
+      'bluray_score',
+      'bluray_single_score',
       'rehash_cooldown',
       'custom_layout'
     ];
@@ -590,6 +592,10 @@ function ConfigLeaf({
           return { min: 100, max: 1000, step: 50 };
         case 'bluray_image_size':
           return { min: 100, max: 1000, step: 50 };
+        case 'bluray_score':
+          return { min: 0, max: 100, step: 0.1 };
+        case 'bluray_single_score':
+          return { min: 0, max: 100, step: 0.1 };
         case 'rehash_cooldown':
           return { min: 0, max: 300, step: 5 };
         case 'custom_layout':

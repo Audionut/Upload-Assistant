@@ -1271,7 +1271,7 @@ async def do_the_thing(base_dir: str) -> None:
                 path_value = meta['path']
                 browse_roots = ','.join(str(p) for p in cast(list[Any], path_value)) if isinstance(path_value, list) else str(path_value)
             if not browse_roots:
-                browse_roots = '.'  # Fallback to current directory
+                raise SystemExit("No browse roots specified. Please set UA_BROWSE_ROOTS environment variable or provide explicit paths.")
 
             set_runtime_browse_roots(browse_roots)
 

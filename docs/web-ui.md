@@ -134,6 +134,11 @@ When an environment variable is set, any existing secrets in keyring or Docker s
 #### Password Manager Compatibility
 The setup process generates standard TOTP secrets compatible with most password managers. The QR code contains all necessary information for automatic setup in apps like Bitwarden, 1Password, LastPass, etc.
 
+### Keyring Backend Configuration
+The Web UI uses the `keyring` library for secure storage of authentication data in non-Docker environments when environment variables for authentication are not set. The library automatically detects and uses the most appropriate secure backend for your platform (such as macOS Keychain, Windows Credential Manager, or Linux keyring services).
+
+If keyring initialization fails, the Web UI will exit with an error, as secure credential storage is required for session-based authentication. Ensure your system has a compatible keyring backend installed or use environment variables.
+
 ### `UA_WEBUI_CORS_ORIGINS`
 Optional comma-separated allowlist of origins for `/api/*` routes.
 
