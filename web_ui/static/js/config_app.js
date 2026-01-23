@@ -135,13 +135,14 @@ const getStoredTheme = () => {
   if (stored === 'light') {
     return false;
   }
-  return true;
+  return Boolean(window.UA_DEFAULT_THEME);
 };
 
 let csrfToken = null;
 const loadCsrfToken = async () => {
+  if (csrfToken) return;
   try {
-    const resp = await fetch(`${API_BASE}/csrf_token`, { credentials: 'same-origin' });
+    const resp = await fetch(`${API_BASE}/csrf_token`, { credentials: 'include' });
     if (!resp.ok) return;
     const data = await resp.json();
     csrfToken = data && data.csrf_token ? String(data.csrf_token) : null;
@@ -151,9 +152,10 @@ const loadCsrfToken = async () => {
 };
 
 const apiFetch = async (url, options = {}) => {
+  await loadCsrfToken();
   const headers = { ...(options.headers || {}) };
   if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
-  const response = await fetch(url, { ...options, headers, credentials: 'same-origin' });
+  const response = await fetch(url, { ...options, headers, credentials: 'include' });
   return response;
 };
 
@@ -182,7 +184,8 @@ const imageHostApiKeys = {
   passtheimage: ['passtheima_ge_api'],
   zipline: ['zipline_url', 'zipline_api_key'],
   seedpool_cdn: ['seedpool_cdn_api'],
-  sharex: ['sharex_url', 'sharex_api_key']
+  sharex: ['sharex_url', 'sharex_api_key'],
+  utppm: ['utppm_api']
 };
 
 // Mapping from tracker acronyms to full names
