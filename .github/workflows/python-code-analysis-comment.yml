@@ -28,16 +28,6 @@ jobs:
         merge-multiple: true
         path: artifacts
 
-    - name: Download Vulture Results
-      uses: actions/download-artifact@v4
-      with:
-        run-id: ${{ github.event.workflow_run.id }}
-        repository: ${{ github.repository }}
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        pattern: vulture-results-*
-        merge-multiple: true
-        path: artifacts
-
     - name: Download Safety Results
       uses: actions/download-artifact@v4
       with:
@@ -223,14 +213,12 @@ jobs:
           }
 
           let banditResults = collectDedupedResults('bandit-results');
-          let vultureResults = collectDedupedResults('vulture-results');
           let safetyResults = collectDedupedResults('safety-results');
           let pyrightResults = collectDedupedResults('pyright-results');
           let ruffResults = collectDedupedResults('ruff-results');
           let deprecationResults = collectDedupedResults('deprecation-warnings');
 
           banditResults = banditResults.trim();
-          vultureResults = vultureResults.trim();
           safetyResults = safetyResults.trim();
           pyrightResults = pyrightResults.trim();
           ruffResults = ruffResults.trim();
@@ -270,13 +258,12 @@ jobs:
           }
 
           const hasBanditIssues = cleanBanditResults && cleanBanditResults.includes('Issue: [');
-          const hasVultureIssues = vultureResults && vultureResults.includes('(100% confidence)');
           const hasSafetyIssues = safetyHasIssues(safetyResults);
           const hasPyrightIssues = pyrightResults && !pyrightResults.includes('0 errors') && pyrightResults.trim() !== '';
           const hasRuffIssues = ruffResults && !ruffResults.includes('All checks passed!') && ruffResults.trim() !== '';
           const hasDeprecationWarnings = deprecationResults && deprecationResults.trim() !== '';
 
-          if (!hasBanditIssues && !hasVultureIssues && !hasSafetyIssues && !hasPyrightIssues && !hasRuffIssues && !hasDeprecationWarnings) {
+          if (!hasBanditIssues && !hasSafetyIssues && !hasPyrightIssues && !hasRuffIssues && !hasDeprecationWarnings) {
             console.log('No security, dead code, dependency, type issues, lint issues, or deprecation warnings found, skipping PR comment.');
             return;
           }
@@ -297,10 +284,6 @@ jobs:
 
           if (hasBanditIssues) {
             body += '### 🔒 Bandit Security Analysis\n\n```\n' + cleanBanditResults + '\n```\n\n';
-          }
-
-          if (hasVultureIssues) {
-            body += '### 🧹 Dead Code Analysis (Vulture)\n\n```\n' + vultureResults + '\n```\n\n';
           }
 
           if (hasSafetyIssues) {
