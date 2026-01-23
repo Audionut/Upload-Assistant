@@ -92,6 +92,32 @@ def _read_docker_secret_file(*names: str) -> Optional[str]:
     return None
 
 
+# CSRF helpers ---------------------------------------------------------------
+def _verify_csrf_header() -> bool:
+    """Verify incoming request contains a valid CSRF token.
+
+    Checks the `X-CSRF-Token` header first, then falls back to JSON/form field
+    named `csrf_token` for compatibility with clients that embed it in the body.
+    """
+    try:
+        token = session.get("csrf_token")
+        if not token:
+            return False
+        header = request.headers.get("X-CSRF-Token")
+        if not header:
+            data = None
+            try:
+                data = request.get_json(silent=True) or {}
+            except Exception:
+                data = {}
+            header = (data or {}).get("csrf_token") or request.form.get("csrf_token")
+        if not header:
+            return False
+        return hmac.compare_digest(str(token), str(header))
+    except Exception:
+        return False
+
+
 # Load TOTP secret: prefer env var, then Docker secrets, then keyring
 saved_totp_secret = os.environ.get("UA_WEBUI_TOTP_SECRET")
 if saved_totp_secret:
@@ -417,6 +443,14 @@ def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
                         session["authenticated"] = True
     except Exception:
         # Any failure to validate the cookie should not block request flow; fallback to normal auth
+        pass
+
+    # Ensure authenticated sessions have a per-session CSRF token
+    try:
+        if session.get("authenticated") and not session.get("csrf_token"):
+            session["csrf_token"] = secrets.token_urlsafe(32)
+    except Exception:
+        # Non-fatal; do not block requests if we cannot set session token
         pass
 
     if request.path.startswith("/api/"):
@@ -1171,6 +1205,9 @@ def login_page():
                         return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
 
                 session["authenticated"] = True
+                # Create a per-session CSRF token for subsequent POST requests
+                with contextlib.suppress(Exception):
+                    session["csrf_token"] = secrets.token_urlsafe(32)
                 if remember:
                     session.permanent = True
                 # Build redirect response and set remember cookie when requested
@@ -1196,6 +1233,9 @@ def login_page():
                         return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
 
                 session["authenticated"] = True
+                # Create a per-session CSRF token for subsequent POST requests
+                with contextlib.suppress(Exception):
+                    session["csrf_token"] = secrets.token_urlsafe(32)
                 if remember:
                     session.permanent = True
                 # Save auth to keyring (only when not running in Docker).
@@ -1257,6 +1297,8 @@ def login_recovery():
         if (username == expected_username and password == expected_password
                 and recovery_code and _consume_recovery_code(recovery_code)):
             session["authenticated"] = True
+            with contextlib.suppress(Exception):
+                session["csrf_token"] = secrets.token_urlsafe(32)
             if remember:
                 session.permanent = True
                 try:
@@ -1273,6 +1315,8 @@ def login_recovery():
         # No configured auth: accept provided username/password and consume code
         if username and password and recovery_code and _consume_recovery_code(recovery_code):
             session["authenticated"] = True
+            with contextlib.suppress(Exception):
+                session["csrf_token"] = secrets.token_urlsafe(32)
             if remember:
                 session.permanent = True
                 try:
@@ -1300,8 +1344,20 @@ def login_recovery():
 @app.route("/config")
 def config_page():
     """Serve the config UI"""
+    # Require a CSRF token or same-origin Referer for the config page when
+    # the user is authenticated to reduce cross-site information leakage.
+    if session.get("authenticated") and not _verify_csrf_header():
+        referer = request.headers.get("Referer", "")
+        if not referer.startswith(request.host_url):
+            return jsonify({"error": "CSRF token missing or invalid", "success": False}), 403
+
     try:
-        return render_template("config.html")
+        # Ensure a session CSRF token exists and expose it to the template so
+        # client-side JS can read it without an extra round-trip if desired.
+        with contextlib.suppress(Exception):
+            if session.get("authenticated") and not session.get("csrf_token"):
+                session["csrf_token"] = secrets.token_urlsafe(32)
+        return render_template("config.html", csrf_token=session.get("csrf_token", ""))
     except Exception as e:
         console.print(f"Error loading config template: {e}", markup=False)
         console.print(traceback.format_exc(), markup=False)
@@ -1312,6 +1368,16 @@ def config_page():
 def health():
     """Health check endpoint"""
     return jsonify({"status": "healthy", "success": True, "message": "Upload Assistant Web UI is running"})
+
+
+@app.route("/api/csrf_token")
+def csrf_token():
+    """Return the per-session CSRF token for use by the frontend."""
+    try:
+        token = session.get("csrf_token") or ""
+        return jsonify({"csrf_token": token, "success": True})
+    except Exception:
+        return jsonify({"csrf_token": "", "success": False}), 500
 
 
 @app.route("/api/2fa/status")
@@ -1510,6 +1576,9 @@ def torrent_clients():
 @app.route("/api/config_update", methods=["POST"])
 def config_update():
     """Update a config value in data/config.py"""
+    # Protect state-changing endpoint with CSRF token
+    if not _verify_csrf_header():
+        return jsonify({"success": False, "error": "CSRF token missing or invalid"}), 403
     data = request.json or {}
     path = data.get("path")
     raw_value = data.get("value")
@@ -1585,6 +1654,10 @@ def config_update():
 @app.route("/api/config_remove_subsection", methods=["POST"])
 def config_remove_subsection():
     """Remove a subsection (top-level key) from the user's config.py if present"""
+    # Protect state-changing endpoint with CSRF token
+    if not _verify_csrf_header():
+        return jsonify({"success": False, "error": "CSRF token missing or invalid"}), 403
+
     data = request.json or {}
     path = data.get("path")
 
@@ -1661,6 +1734,10 @@ def execute_command():
 
     if request.method == "OPTIONS":
         return "", 204
+
+    # Require CSRF token for execute POST requests
+    if request.method == "POST" and not _verify_csrf_header():
+        return jsonify({"error": "CSRF token missing or invalid", "success": False}), 403
 
     try:
         data = request.json

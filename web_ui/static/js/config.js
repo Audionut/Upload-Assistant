@@ -40,12 +40,27 @@
     return null;
   };
 
+  let csrfToken = null;
+  const _maybeLoadCsrf = async () => {
+    if (csrfToken) return;
+    try {
+      const r = await fetch(`${API_BASE}/csrf_token`, { credentials: 'include' });
+      if (!r.ok) return;
+      const d = await r.json();
+      csrfToken = d && d.csrf_token ? String(d.csrf_token) : null;
+    } catch (e) {
+      // ignore
+    }
+  };
+
   const apiFetch = async (url, options = {}) => {
+    await _maybeLoadCsrf();
     const headers = { ...(options.headers || {}) };
     const authHeader = getAuthHeader();
     if (authHeader) {
       headers['Authorization'] = authHeader;
     }
+    if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
     const response = await fetch(url, { ...options, headers, credentials: 'include' });
     return response;
   };

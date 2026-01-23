@@ -138,9 +138,22 @@ const getStoredTheme = () => {
   return true;
 };
 
+let csrfToken = null;
+const loadCsrfToken = async () => {
+  try {
+    const resp = await fetch(`${API_BASE}/csrf_token`, { credentials: 'same-origin' });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    csrfToken = data && data.csrf_token ? String(data.csrf_token) : null;
+  } catch (e) {
+    // ignore
+  }
+};
+
 const apiFetch = async (url, options = {}) => {
   const headers = { ...(options.headers || {}) };
-  const response = await fetch(url, { ...options, headers });
+  if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+  const response = await fetch(url, { ...options, headers, credentials: 'same-origin' });
   return response;
 };
 
@@ -2212,7 +2225,10 @@ function ConfigApp() {
   };
 
   useEffect(() => {
-    loadConfigOptions();
+    (async () => {
+      await loadCsrfToken();
+      await loadConfigOptions();
+    })();
   }, []);
 
   useEffect(() => {
@@ -2299,7 +2315,7 @@ function ConfigApp() {
 
   const handleLogout = async () => {
     try {
-      const resp = await fetch('/logout', { method: 'POST', credentials: 'same-origin' });
+      const resp = await apiFetch('/logout', { method: 'POST' });
       if (resp && resp.redirected) {
         window.location = resp.url;
       } else {

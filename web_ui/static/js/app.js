@@ -36,9 +36,24 @@ const getStoredTheme = () => {
   return true;
 };
 
+let csrfToken = null;
+const _maybeLoadCsrf = async () => {
+  if (csrfToken) return;
+  try {
+    const r = await fetch('/api/csrf_token', { credentials: 'same-origin' });
+    if (!r.ok) return;
+    const d = await r.json();
+    csrfToken = d && d.csrf_token ? String(d.csrf_token) : null;
+  } catch (e) {
+    // ignore
+  }
+};
+
 const apiFetch = async (url, options = {}) => {
+  await _maybeLoadCsrf();
   const headers = { ...(options.headers || {}) };
-  const response = await fetch(url, { ...options, headers });
+  if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+  const response = await fetch(url, { ...options, headers, credentials: 'same-origin' });
   return response;
 };
 
@@ -376,11 +391,11 @@ function AudionutsUAGUI() {
     appendSystemMessage('> ' + input, 'user-input');
     setUserInput('');
     try {
-      await fetch('/api/input', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id, input }),
-      });
+        await apiFetch('/api/input', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id, input }),
+        });
     } catch (err) {
       console.error('Failed to send input:', err);
       appendSystemMessage('Failed to send input', 'error');
