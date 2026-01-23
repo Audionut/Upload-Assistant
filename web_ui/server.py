@@ -1,6 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownParameterType=false
 import ast
+import base64
 import contextlib
 import hashlib
 import hmac
@@ -145,6 +146,79 @@ else:
                 if ":" in auth_data:
                     u, p = auth_data.split(":", 1)
                     saved_auth = (u, p)
+
+
+# Persistent cookie key helpers -------------------------------------------------
+def _get_persistent_cookie_key() -> Optional[bytes]:
+    """Return a bytes key used to HMAC-sign remember-me cookies.
+    Attempt to read from keyring; if missing and not in Docker, generate and store one.
+    """
+    try:
+        # Prefer keyring-backed storage
+        raw = keyring.get_password("upload-assistant", "session_key")
+        if raw:
+            # Accept hex or raw string; prefer hex decode when possible
+            try:
+                return bytes.fromhex(raw)
+            except Exception:
+                return raw.encode("utf-8")
+    except Exception:
+        pass
+
+    # In Docker, try secret file fallback
+    if DOCKER_MODE:
+        raw = _read_docker_secret_file("UA_SESSION_KEY", "ua_session_key", "upload-assistant-session")
+        if raw:
+            try:
+                return bytes.fromhex(raw)
+            except Exception:
+                return raw.encode("utf-8")
+
+    # Non-docker: generate and persist to keyring if possible
+    try:
+        new = secrets.token_hex(32)
+        with contextlib.suppress(Exception):
+            keyring.set_password("upload-assistant", "session_key", new)
+        return bytes.fromhex(new)
+    except Exception:
+        return None
+
+
+def _create_remember_token(username: str, days: int = 30) -> Optional[str]:
+    key = _get_persistent_cookie_key()
+    if not key:
+        return None
+    expiry = int(datetime.now(timezone.utc).timestamp()) + days * 86400
+    payload = json.dumps({"u": username, "e": expiry}, separators=(",", ":")).encode("utf-8")
+    b64 = base64.urlsafe_b64encode(payload).decode("ascii")
+    sig = hmac.new(key, b64.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{b64}|{sig}"
+
+
+def _verify_remember_token(token: str) -> Optional[str]:
+    key = _get_persistent_cookie_key()
+    if not key or not token:
+        return None
+    try:
+        parts = token.split("|")
+        if len(parts) != 2:
+            return None
+        b64, sig = parts
+        expected = hmac.new(key, b64.encode("ascii"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, sig):
+            return None
+        payload = base64.urlsafe_b64decode(b64.encode("ascii"))
+        data = json.loads(payload.decode("utf-8"))
+        if not isinstance(data, dict):
+            return None
+        username = data.get("u")
+        expiry = int(data.get("e") or 0)
+        if not username or expiry < int(datetime.now(timezone.utc).timestamp()):
+            return None
+        return str(username)
+    except Exception:
+        return None
+
 
 
 def _hash_code(code: str) -> str:
@@ -323,6 +397,27 @@ def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
     # Health endpoint can be used for orchestration checks.
     if request.path == "/api/health":
         return None
+
+    # Try to restore session from a long-lived remember-me cookie if present
+    try:
+        if not session.get("authenticated"):
+            token = request.cookies.get("ua_remember")
+            if token:
+                username = _verify_remember_token(token)
+                if username:
+                    # If auth is configured (env or saved), ensure cookie username matches
+                    if _webui_auth_configured():
+                        expected_username = os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else "")
+                        if expected_username and username != expected_username:
+                            # Do not accept token for a different configured username
+                            pass
+                        else:
+                            session["authenticated"] = True
+                    else:
+                        session["authenticated"] = True
+    except Exception:
+        # Any failure to validate the cookie should not block request flow; fallback to normal auth
+        pass
 
     if request.path.startswith("/api/"):
         # For API, allow basic auth
@@ -1081,7 +1176,16 @@ def login_page():
                 session["authenticated"] = True
                 if remember:
                     session.permanent = True
-                return redirect(url_for("config_page"))
+                # Build redirect response and set remember cookie when requested
+                resp = redirect(url_for("config_page"))
+                if remember:
+                    try:
+                        token = _create_remember_token(username)
+                        if token:
+                            resp.set_cookie("ua_remember", token, max_age=30 * 86400, httponly=True, secure=not DOCKER_MODE, samesite="Lax")
+                    except Exception:
+                        pass
+                return resp
             else:
                 return render_template("login.html", error="Credentials did not match")
         else:
@@ -1111,7 +1215,15 @@ def login_page():
                 else:
                     # In Docker, persistent secrets must be provided via Docker secrets
                     console.print("Running in Docker: skipping persistent save of credentials. Provide credentials via Docker secrets.", markup=False)
-                return redirect(url_for("config_page"))
+                resp = redirect(url_for("config_page"))
+                if remember:
+                    try:
+                        token = _create_remember_token(username)
+                        if token:
+                            resp.set_cookie("ua_remember", token, max_age=30 * 86400, httponly=True, secure=not DOCKER_MODE, samesite="Lax")
+                    except Exception:
+                        pass
+                return resp
             else:
                 return render_template("login.html", error="Credentials did not match")
 
@@ -1123,7 +1235,10 @@ def login_page():
 @app.route("/logout")
 def logout():
     session.pop("authenticated", None)
-    return redirect(url_for("login_page"))
+    resp = redirect(url_for("login_page"))
+    # Remove remember cookie if present
+    resp.delete_cookie("ua_remember")
+    return resp
 
 
 @app.route("/config")
