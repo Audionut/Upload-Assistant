@@ -71,7 +71,7 @@ Many thanks to all who have contributed.
 |Torrenteros|TTR|TorrentLeech|TL|
 |TVChaosUK|TVC|ULCX|ULCX|
 |UTOPIA|UTP|YOiNKED|YOINK|
-|YUSCENE|YUS|
+|YUSCENE|YUS|||
 
 ## **Setup:**
    - **REQUIRES AT LEAST PYTHON 3.9 AND PIP3**
