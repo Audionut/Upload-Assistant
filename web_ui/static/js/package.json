@@ -1,0 +1,16 @@
+{
+  "name": "upload-assistant-webui",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Web UI frontend tooling for Upload Assistant",
+  "scripts": {
+    "lint:react": "eslint . --ext .js,.jsx --ignore-pattern .eslintrc.js"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.6",
+    "@babel/eslint-parser": "^7.22.5",
+    "eslint": "^8.54.0",
+    "eslint-plugin-react": "^7.32.2",
+    "eslint-plugin-react-hooks": "^7.0.1"
+  }
+}
