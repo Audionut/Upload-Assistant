@@ -93,7 +93,7 @@ config = {
         # Each missing Audio OR Subtitle track will reduce the score by 5
         # Partial matched audio tracks have a 2.5 score penalty
         # If only a single bdinfo audio/subtitle track, penalties are doubled
-        # Video codec/resolution and disc size mismatches have huge penalities
+        # Video codec/resolution and disc size mismatches have huge penalties
         # Only useful in unattended mode. If not unattended you will be prompted to confirm release
         # Final score must be greater than this value to be considered a match
         # Only works with blu-ray discs, not dvd
@@ -136,7 +136,7 @@ config = {
         # Tonemap HDR - DV+HDR screenshots
         "tone_map": True,
 
-        # Set false to disable libtorrent ffmpeg tonemapping and use ffmpeg only
+        # Set false to disable libplacebo ffmpeg tonemapping and use ffmpeg only
         # This is a good toggle if you have any ffmpeg related issues when tonemapping
         "use_libplacebo": True,
 
@@ -145,7 +145,7 @@ config = {
         "ffmpeg_is_good": False,
 
         # Set true to skip "warming up" libplacebo
-        # Some systems are slow to compile libtorrent shaders, which will cause the first screenshot to fail
+        # Some systems are slow to compile libplacebo shaders, which will cause the first screenshot to fail
         "ffmpeg_warmup": False,
 
         # Set ffmpeg compression level for screenshots (0-9)

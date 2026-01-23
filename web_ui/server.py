@@ -774,6 +774,32 @@ def _json_safe(value: Any) -> Any:
     return str(value)
 
 
+def _redact_sensitive(value: Any) -> Any:
+    """Return a copy of the value with sensitive dictionary fields redacted.
+
+    Keys containing any of these substrings will be redacted (case-insensitive):
+    password, pass, secret, token, key, totp, api, credential, auth
+    """
+    sensitive_parts = ("password", "pass", "secret", "token", "key", "totp", "api", "credential", "auth")
+
+    if isinstance(value, dict):
+        out: dict[str, Any] = {}
+        for k, v in value.items():
+            try:
+                lk = str(k).lower()
+            except Exception:
+                lk = ""
+            if any(p in lk for p in sensitive_parts):
+                out[str(k)] = "<redacted>"
+            else:
+                out[str(k)] = _redact_sensitive(v)
+        return out
+    if isinstance(value, (list, tuple)):
+        return [_redact_sensitive(v) for v in value]
+    # For primitives (str/int/etc.) we keep the value as-is — redaction is key-based
+    return value
+
+
 def _write_audit_log(action: str, path: list[str], old_value: Any, new_value: Any, success: bool, error: Optional[str] = None) -> None:
     """Append an audit record to data/config_audit.log.
 
@@ -791,14 +817,15 @@ def _write_audit_log(action: str, path: list[str], old_value: Any, new_value: An
             or os.environ.get("UA_WEBUI_USERNAME")
             or request.remote_addr
         )
+        # Redact sensitive fields from values before serializing to the audit log.
         audit = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "user": user,
             "remote_addr": request.remote_addr,
             "action": action,
             "path": path,
-            "old_value": _json_safe(old_value),
-            "new_value": _json_safe(new_value),
+            "old_value": _json_safe(_redact_sensitive(old_value)),
+            "new_value": _json_safe(_redact_sensitive(new_value)),
             "success": bool(success),
             "error": error,
         }

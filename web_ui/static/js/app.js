@@ -33,7 +33,8 @@ const getStoredTheme = () => {
   if (stored === 'light') {
     return false;
   }
-  return true;
+  // Use shared default if provided by other scripts, otherwise default to true (dark)
+  return typeof window !== 'undefined' && typeof window.UA_DEFAULT_THEME === 'boolean' ? window.UA_DEFAULT_THEME : true;
 };
 
 let csrfToken = null;

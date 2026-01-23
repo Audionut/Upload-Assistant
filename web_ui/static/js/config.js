@@ -10,6 +10,12 @@
   const themeLabel = document.getElementById('theme-label');
 
   const THEME_KEY = 'ua_config_theme';
+  // Default theme: true = dark, false = light. Expose on window for cross-file
+  // consistency so other scripts (e.g., app.js) can use the same default.
+  const DEFAULT_THEME = true;
+  if (typeof window !== 'undefined' && typeof window.UA_DEFAULT_THEME === 'undefined') {
+    window.UA_DEFAULT_THEME = DEFAULT_THEME;
+  }
 
   const storage = {
     get(key) {
@@ -73,7 +79,7 @@
     if (stored === 'light') {
       return false;
     }
-    return false;
+    return Boolean(window.UA_DEFAULT_THEME);
   };
 
   let cachedSections = [];
@@ -104,7 +110,7 @@
   };
 
   const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
-  const sensitiveKeyPattern = /(api|username|password|aanounce_url|announce_url|rss_key|passkey|discord_bot_token|discord_channel_id|qui_proxy_url)/i;
+  const sensitiveKeyPattern = /(api|username|password|announce_url|rss_key|passkey|discord_bot_token|discord_channel_id|qui_proxy_url)/i;
   const isSensitiveKey = (key) => sensitiveKeyPattern.test(key || '');
   const isTorrentClientUserPass = (key, pathParts) =>
     pathParts.includes('TORRENT_CLIENTS') && /(user|pass)/i.test(key || '');
