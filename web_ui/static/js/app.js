@@ -288,6 +288,7 @@ function AudionutsUAGUI() {
   const richOutputRef = useRef(null);
   const lastFullHashRef = useRef('');
   const inputRef = useRef(null);
+  const sseAbortControllerRef = useRef(null);
 
   const appendHtmlFragment = (rawHtml) => {
     const container = richOutputRef.current;
@@ -487,6 +488,10 @@ function AudionutsUAGUI() {
     appendSystemMessage('→ Starting execution...');
 
     try {
+      // Replace any existing controller to avoid reusing an aborted signal.
+      const controller = new AbortController();
+      sseAbortControllerRef.current = controller;
+
       const response = await apiFetch(`${API_BASE}/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -495,6 +500,7 @@ function AudionutsUAGUI() {
           args: customArgs,
           session_id: newSessionId
         })
+      , signal: controller.signal
       });
 
       if (!response.ok) {
@@ -511,6 +517,7 @@ function AudionutsUAGUI() {
       let buffer = '';
 
       const processSSELine = (line) => {
+        if (sseAbortControllerRef.current && sseAbortControllerRef.current.signal.aborted) return;
         if (!line.trim() || !line.startsWith('data: ')) return;
         try {
           const data = JSON.parse(line.substring(6));
@@ -539,9 +546,11 @@ function AudionutsUAGUI() {
             } catch (e) {
               console.error('Failed to render HTML fragment:', e);
             }
-          } else if (data.type === 'exit') {
-            appendSystemMessage('');
-            appendSystemMessage(`✓ Process exited with code ${data.code}`);
+              } else if (data.type === 'exit') {
+            if (!(sseAbortControllerRef.current && sseAbortControllerRef.current.signal.aborted)) {
+              appendSystemMessage('');
+              appendSystemMessage(`✓ Process exited with code ${data.code}`);
+            }
           }
         } catch (e) {
           console.error('Parse error:', e);
@@ -571,13 +580,21 @@ function AudionutsUAGUI() {
         }
       }
       /* eslint-enable no-constant-condition */
-      appendSystemMessage('✓ Execution completed');
-      appendSystemMessage('');
+      // Only append the final completion message when not aborted.
+      if (!(sseAbortControllerRef.current && sseAbortControllerRef.current.signal.aborted)) {
+        appendSystemMessage('✓ Execution completed');
+        appendSystemMessage('');
+      }
     } catch (error) {
-      appendSystemMessage('✗ Execution error: ' + error.message, 'error');
+      // Suppress abort errors as they are expected when a user cancels.
+      if (!(sseAbortControllerRef.current && sseAbortControllerRef.current.signal.aborted)) {
+        appendSystemMessage('✗ Execution error: ' + error.message, 'error');
+      }
     } finally {
       setIsExecuting(false);
       setSessionId('');
+      // Clear controller reference when finished
+      try { sseAbortControllerRef.current = null; } catch (e) { /* ignore */ }
     }
   };
 
@@ -585,6 +602,10 @@ function AudionutsUAGUI() {
     // If a process is running, kill it first
     if (isExecuting && sessionId) {
       try {
+        // Abort the SSE fetch so the client stops processing incoming events
+        if (sseAbortControllerRef.current) {
+          try { sseAbortControllerRef.current.abort(); } catch (e) { /* ignore */ }
+        }
         await apiFetch(`${API_BASE}/kill`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
