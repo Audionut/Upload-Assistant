@@ -91,6 +91,10 @@ Enables HTTP Basic Auth.
 - When configured, auth is applied to **all** routes (including `/` and static files), except `/api/health`.
 - **Docker note**: In containerized environments, use these environment variables instead of the login page to ensure auth settings persist between container restarts.
 
+### `UA_TOKEN`
+
+Set `UA_TOKEN` to an opaque bearer token (raw token string) to provide a static API token to the Web UI in container environments. To apply or change the token, update the container environment and restart the container. When `UA_TOKEN` is set the server treats the token store as read-only at runtime.
+
 ### Session-Based Authentication
 When `UA_WEBUI_USERNAME` and `UA_WEBUI_PASSWORD` are not set, the Web UI uses session-based authentication with a login page.
 

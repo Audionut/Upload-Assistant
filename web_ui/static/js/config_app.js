@@ -1722,9 +1722,18 @@ function SecurityTab({ isDarkMode }) {
   const [verificationCode, setVerificationCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  // API tokens
+  const [tokens, setTokens] = useState([]);
+  const [tokensLoading, setTokensLoading] = useState(false);
+  const [tokensReadOnly, setTokensReadOnly] = useState(false);
+  const [newTokenLabel, setNewTokenLabel] = useState('');
+  const [createdTokenRaw, setCreatedTokenRaw] = useState(null);
+  const [tokenMessage, setTokenMessage] = useState('');
+  
 
   useEffect(() => {
     loadTwofaStatus();
+    loadTokens();
   }, []);
 
   const loadTwofaStatus = async () => {
@@ -1822,6 +1831,93 @@ function SecurityTab({ isDarkMode }) {
       setMessage('Failed to disable 2FA');
     }
     setLoading(false);
+  };
+
+  const loadTokens = async () => {
+    setTokensLoading(true);
+    setTokenMessage('');
+    try {
+      const resp = await apiFetch(`${API_BASE}/tokens`);
+      const data = await resp.json();
+      if (data && data.success) {
+        setTokens(data.tokens || []);
+        setTokensReadOnly(Boolean(data.read_only));
+      } else {
+        setTokenMessage(data.error || 'Failed to load tokens');
+      }
+    } catch (err) {
+      setTokenMessage('Failed to load tokens');
+    }
+    setTokensLoading(false);
+  };
+
+  const handleCreateToken = async () => {
+    setTokenMessage('');
+    setCreatedTokenRaw(null);
+    try {
+      const resp = await apiFetch(`${API_BASE}/tokens`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'generate', label: newTokenLabel || '', persist: false })
+      });
+      const data = await resp.json();
+      if (data && data.success && data.token) {
+        setCreatedTokenRaw(data.token);
+        if (!data.persisted) {
+          setTokenMessage('Generated token (not yet stored). Click "Store" to persist, or copy it now.');
+        } else {
+          setTokenMessage('Token created and persisted.');
+        }
+      } else {
+        setTokenMessage(data.error || 'Failed to create token');
+      }
+    } catch (err) {
+      setTokenMessage('Failed to create token');
+    }
+  };
+
+  const handleStoreToken = async (token) => {
+    if (!token) return;
+    setTokenMessage('');
+    try {
+      const resp = await apiFetch(`${API_BASE}/tokens`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'store', token, label: newTokenLabel || '' })
+      });
+      const data = await resp.json();
+      if (data && data.success) {
+        setTokenMessage('Token stored successfully');
+        setCreatedTokenRaw(null);
+        setNewTokenLabel('');
+        await loadTokens();
+      } else {
+        setTokenMessage(data.error || 'Failed to store token');
+      }
+    } catch (err) {
+      setTokenMessage('Failed to store token');
+    }
+  };
+
+  const handleRevokeToken = async (id) => {
+    const ok = await showConfirmModal({ message: `Revoke token ${id.slice(0, 8)}...?`, confirmLabel: 'Revoke' });
+    if (!ok) return;
+    setTokenMessage('');
+    try {
+      const resp = await apiFetch(`${API_BASE}/tokens`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      const data = await resp.json();
+      if (data && data.success) {
+        await loadTokens();
+      } else {
+        setTokenMessage(data.error || 'Failed to revoke token');
+      }
+    } catch (err) {
+      setTokenMessage('Failed to revoke token');
+    }
   };
 
   // QR code data URL for setup (generated client-side to avoid leaking the TOTP secret
@@ -1951,6 +2047,64 @@ function SecurityTab({ isDarkMode }) {
             {message}
           </div>
         )}
+        
+        {/* API Tokens management */}
+        <div className="mt-6">
+          <h2 className={`text-lg font-semibold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>API Access Tokens</h2>
+          <p className={`text-sm mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Create opaque bearer tokens for automation and API clients. Tokens are shown once when created — store them securely.</p>
+
+          {createdTokenRaw && (
+            <div className={`p-3 mb-3 rounded ${isDarkMode ? 'bg-gray-700 text-white' : 'bg-yellow-50 text-gray-900'}`}>
+              <div className="font-medium mb-2">New token (store this now)</div>
+              <div className="flex items-center gap-2">
+                <input readOnly value={createdTokenRaw} className={isDarkMode ? 'flex-1 px-2 py-1 rounded border border-gray-700 bg-gray-900 text-gray-100' : 'flex-1 px-2 py-1 rounded border border-gray-300 bg-white text-gray-800'} />
+                <button onClick={() => { navigator.clipboard && navigator.clipboard.writeText(createdTokenRaw); }} className="px-3 py-1 bg-gray-800 text-white rounded">Copy</button>
+                <button onClick={() => handleStoreToken(createdTokenRaw)} className="px-3 py-1 bg-blue-600 text-white rounded">Store</button>
+              </div>
+            </div>
+          )}
+
+          <div className={`p-3 rounded border ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <div className="flex gap-2 mb-3">
+              <input placeholder="Label (optional)" value={newTokenLabel} onChange={(e) => setNewTokenLabel(e.target.value)} className={isDarkMode ? 'px-2 py-1 rounded border border-gray-700 bg-gray-900 text-gray-100 flex-1' : 'px-2 py-1 rounded border border-gray-300 bg-white text-gray-800 flex-1'} />
+              <button onClick={handleCreateToken} className="px-3 py-1 bg-green-600 text-white rounded">Generate</button>
+            </div>
+            {tokenMessage && <div className="text-sm text-red-600">{tokenMessage}</div>}
+            <div className="mt-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium mb-2">Existing tokens</div>
+                {tokensReadOnly && (
+                  <div className="text-xs text-yellow-400">Read-only token store (env)</div>
+                )}
+              </div>
+              {tokensLoading ? (
+                <div className="text-sm">Loading...</div>
+              ) : tokens.length === 0 ? (
+                <div className="text-sm text-gray-500">No tokens</div>
+              ) : (
+                <div className="space-y-2">
+                  {tokens.map((t) => (
+                    <div key={t.id} className={`flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                      <div className="text-xs font-mono">{t.id.slice(0, 8)}..</div>
+                      <div className="flex-1 px-3 text-sm">{t.label || '(no label)'} — {t.user}</div>
+                      <div className="text-sm text-gray-500 mr-3">{t.expiry ? new Date(t.expiry * 1000).toLocaleString() : 'no expiry'}</div>
+                      <button onClick={() => handleRevokeToken(t.id)} className="px-2 py-1 bg-red-600 text-white rounded text-sm">Revoke</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {isDarkMode && (
+            <div className="mt-3 p-3 rounded text-sm bg-gray-900 border-gray-700">
+              <div className="font-medium mb-1">Docker persistence</div>
+              <div className="text-xs text-gray-400">
+                Persist a token in Docker by setting the environment variable <code className="px-1 py-0.5 rounded bg-gray-700">UA_TOKEN</code> to the raw token, then restart the container.
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

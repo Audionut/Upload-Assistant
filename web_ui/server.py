@@ -100,6 +100,13 @@ def _verify_csrf_header() -> bool:
     named `csrf_token` for compatibility with clients that embed it in the body.
     """
     try:
+        # If client used a bearer token, treat that as sufficient for CSRF-safe API usage
+        auth_header = (request.headers.get("Authorization") or "").strip()
+        if auth_header.lower().startswith("bearer "):
+            b = auth_header.split(None, 1)[1].strip()
+            if b and _verify_api_token(b):
+                return True
+
         token = session.get("csrf_token")
         if not token:
             return False
@@ -208,6 +215,153 @@ def _get_persistent_cookie_key() -> Optional[bytes]:
         return bytes.fromhex(new)
     except Exception:
         return None
+
+
+# API token helpers ----------------------------------------------------------
+_API_TOKEN_STORE_KEY = "upload-assistant-api-tokens"
+
+# If operator provided a single bearer token via `UA_TOKEN`, treat it as canonical
+# and remove any persisted token store to avoid duplicate/conflicting tokens.
+# This mirrors how TOTP secrets are handled when `UA_WEBUI_TOTP_SECRET` is set.
+if os.environ.get("UA_TOKEN"):
+    with contextlib.suppress(Exception):
+        keyring.delete_password("upload-assistant", _API_TOKEN_STORE_KEY)
+    with contextlib.suppress(Exception):
+        console.print("UA_TOKEN set; removed persisted API token store from keyring.", markup=False)
+
+def _load_token_store() -> dict[str, Any]:
+    # Support operator-provided single-token via UA_TOKEN environment variable
+    # (raw token string). If present, treat it as a single valid token owned by
+    # the configured webui username (if available). This env var is read-only
+    # at runtime and is the canonical way to supply a token in container setups.
+    single = os.environ.get("UA_TOKEN")
+    if single:
+        try:
+            token = str(single).strip()
+            if token:
+                # Associate token with configured username when available
+                owner = os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else None) or "container"
+                return {
+                    token: {
+                        "user": owner,
+                        "label": "env",
+                        "created": int(datetime.now(timezone.utc).timestamp()),
+                        "expiry": None,
+                    }
+                }
+        except Exception:
+            return {}
+
+    # Note: file-backed token stores are not supported. Operator should
+    # provide tokens via UA_TOKEN_STORE or UA_TOKEN_STORE_B64 environment
+    # variables. For non-Docker hosts we fallback to keyring when available.
+
+    try:
+        raw = None
+        # Fallback to keyring for non-docker hosts
+        if not DOCKER_MODE:
+            with contextlib.suppress(Exception):
+                raw = keyring.get_password("upload-assistant", _API_TOKEN_STORE_KEY)
+        else:
+            # Docker: prefer UA_TOKEN env var (handled above). No other file
+            # or env formats are supported for token persistence.
+            raw = None
+
+        if not raw:
+            return {}
+        try:
+            data = json.loads(raw)
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            return {}
+    except Exception:
+        return {}
+    return {}
+
+
+def _persist_token_store(store: dict[str, Any]) -> None:
+    # If operator provided the token store via env var, do not attempt to write
+    # back to the environment (env vars are immutable at runtime). Persisting
+    # when UA_TOKEN_STORE/UA_TOKEN_STORE_B64 is set would be a no-op — avoid
+    # surprising behavior and simply skip persistence in that case.
+    if os.environ.get("UA_TOKEN"):
+        with contextlib.suppress(Exception):
+            console.print("Token provided via UA_TOKEN env var; skipping runtime persistence.", markup=False)
+        return
+
+    # Do not persist to files from the running container. Operator-provided
+    # env-var stores are read-only at runtime; on non-Docker hosts we persist
+    # to the OS keyring when available.
+
+    try:
+        raw = json.dumps(store, separators=(",", ":"), ensure_ascii=False)
+        if not DOCKER_MODE:
+            with contextlib.suppress(Exception):
+                keyring.set_password("upload-assistant", _API_TOKEN_STORE_KEY, raw)
+    except Exception:
+        pass
+
+
+def _create_api_token(username: str, label: str = "", persist: bool = True, token_value: Optional[str] = None) -> str:
+    """Create a new API token. If `persist` is False, do not write the token store to durable storage.
+    Optionally accept `token_value` to use an externally-provided token string when persisting.
+    """
+    store = _load_token_store()
+    token_id = str(token_value) if token_value else secrets.token_urlsafe(48)
+    # Tokens are non-expiring by default and remain valid until revoked.
+    expiry = None
+    store[token_id] = {"user": username, "label": label, "created": int(datetime.now(timezone.utc).timestamp()), "expiry": expiry}
+    if persist:
+        _persist_token_store(store)
+    with contextlib.suppress(Exception):
+        _write_audit_log("create_api_token", [username], None, {"id": token_id, "label": label}, True)
+    return token_id
+
+
+def _persist_existing_api_token(token: str, username: str, label: str = "") -> bool:
+    """Persist an existing token string into the token store. Returns True on success."""
+    if not token:
+        return False
+    store = _load_token_store()
+    if token in store:
+        return False
+    # Persisted tokens do not expire unless revoked.
+    expiry = None
+    store[token] = {"user": username, "label": label, "created": int(datetime.now(timezone.utc).timestamp()), "expiry": expiry}
+    _persist_token_store(store)
+    with contextlib.suppress(Exception):
+        _write_audit_log("create_api_token", [username], None, {"id": token, "label": label}, True)
+    return True
+
+
+def _verify_api_token(token: str) -> Optional[str]:
+    if not token:
+        return None
+    store = _load_token_store()
+    info = store.get(token)
+    if not info:
+        return None
+    expiry = info.get("expiry")
+    if expiry and int(datetime.now(timezone.utc).timestamp()) > int(expiry):
+        return None
+    return str(info.get("user"))
+
+
+def _revoke_api_token(token: str) -> bool:
+    store = _load_token_store()
+    if token in store:
+        owner = store[token].get("user")
+        del store[token]
+        _persist_token_store(store)
+        with contextlib.suppress(Exception):
+            _write_audit_log("revoke_api_token", [owner], {"id": token}, None, True)
+        return True
+    return False
+
+
+def _list_api_tokens() -> dict[str, Any]:
+    return _load_token_store()
 
 
 def _create_remember_token(username: str, days: int = 30) -> Optional[str]:
@@ -394,6 +548,23 @@ def _webui_auth_configured() -> bool:
 def _webui_auth_ok() -> bool:
     expected_username = os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else "")
     expected_password = os.environ.get("UA_WEBUI_PASSWORD") or (saved_auth[1] if saved_auth else "")
+
+    # Accept Bearer tokens for API clients: validate and return early when present
+    auth_header = (request.headers.get("Authorization") or "").strip()
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header.split(None, 1)[1].strip()
+        if token:
+            user = _verify_api_token(token)
+            if user:
+                # If auth is configured (env or saved), ensure token user matches configured username when set
+                if _webui_auth_configured():
+                    expected = expected_username
+                    if expected and user != expected:
+                        return False
+                with contextlib.suppress(Exception):
+                    # Record for audit/logging contexts when possible
+                    session["username"] = user
+                return True
 
     auth = request.authorization
     if not auth or auth.type != "basic":
@@ -1677,6 +1848,73 @@ def config_remove_subsection():
         return jsonify({"success": True})
     except Exception:
         return jsonify({"success": False, "error": "An error occurred while removing the configuration subsection"}), 500
+
+
+@app.route("/api/tokens", methods=["GET", "POST", "DELETE"])
+def api_tokens():
+    """Manage API bearer tokens (create/list/revoke).
+
+    Protected: requires a logged-in session or basic auth. Tokens themselves
+    can be used as Bearer auth for API calls.
+    """
+    # Require a browser session (remember-me or login) and a valid CSRF token.
+    # Disallow managing tokens via Basic or Bearer API auth to ensure token
+    # lifecycle actions are only possible from the web UI with CSRF protection.
+    if not session.get("authenticated"):
+        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+    if not _verify_csrf_header():
+        return jsonify({"success": False, "error": "CSRF validation failed"}), 403
+
+    if request.method == "GET":
+        store = _list_api_tokens()
+        # Return metadata only (do not leak token values)
+        tokens = [
+            {"id": tid, "user": info.get("user"), "label": info.get("label"), "created": info.get("created"), "expiry": info.get("expiry")}
+            for tid, info in store.items()
+        ]
+        read_only = bool(os.environ.get("UA_TOKEN"))
+        return jsonify({"success": True, "tokens": tokens, "read_only": read_only})
+
+    if request.method == "POST":
+        data = request.json or {}
+        action = data.get("action")
+        label = data.get("label", "")
+        # No expiry: tokens are non-expiring by default;
+        username = session.get("username") or (request.authorization.username if request.authorization else None) or os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else None)
+        if not username:
+            return jsonify({"success": False, "error": "Unable to determine username for token"}), 400
+
+        # Two-step flow supported:
+        # - action == 'generate' (or persist=false): generate a token and do NOT persist it.
+        # - action == 'store': persist an externally-provided token string (token field required).
+        if action == "store":
+            token_value = data.get("token")
+            if not token_value:
+                return jsonify({"success": False, "error": "Token value required for store action"}), 400
+            # If server is using UA_TOKEN, disallow runtime persistence
+            read_only = bool(os.environ.get("UA_TOKEN"))
+            if read_only:
+                return jsonify({"success": False, "error": "Token store is read-only (UA_TOKEN set). Update the container env to change tokens."}), 400
+            ok = _persist_existing_api_token(token_value, username, label=label)
+            if ok:
+                return jsonify({"success": True, "persisted": True})
+            return jsonify({"success": False, "error": "Failed to persist token (already exists?)"}), 400
+
+        # default/generate
+        persist_flag = bool(data.get("persist", True))
+        token = _create_api_token(username, label=label, persist=persist_flag)
+        persisted = persist_flag and not bool(os.environ.get("UA_TOKEN"))
+        return jsonify({"success": True, "token": token, "persisted": persisted})
+
+    if request.method == "DELETE":
+        data = request.json or {}
+        tid = data.get("id")
+        if not tid:
+            return jsonify({"success": False, "error": "Token id required"}), 400
+        ok = _revoke_api_token(tid)
+        if ok:
+            return jsonify({"success": True})
+        return jsonify({"success": False, "error": "Token not found"}), 404
 
 
 @app.route("/api/browse")

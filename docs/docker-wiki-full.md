@@ -208,6 +208,10 @@ docker run --rm -it --network=host \
 
 For more details (auth, CORS, troubleshooting), see [docs/web-ui.md](web-ui.md).
 
+### Persisting an API bearer token in Docker
+
+If you use the Web UI's API or automation clients, you can persist a single opaque bearer token in container environments by setting the `UA_TOKEN` environment variable to the raw token value and then restarting the container. The token can be generated from the Web UI (Config → Security → API Access Tokens). Note: when `UA_TOKEN` is set the runtime token store is read-only — update the container environment and restart to rotate or change the token.
+
 ---
 
 ## Running as Non-Root (Optional)
