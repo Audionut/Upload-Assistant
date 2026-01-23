@@ -171,6 +171,7 @@ jobs:
             // files exist, fall back to the merged file.
             const perVersionFiles = fs.readdirSync(artifactsDir)
               .filter(name => name.startsWith(prefix + '-') && name.endsWith('.txt'))
+              .sort()
               .map(name => path.join(artifactsDir, name));
             if (perVersionFiles.length > 0) {
               return perVersionFiles;

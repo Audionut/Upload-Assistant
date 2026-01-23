@@ -16,12 +16,18 @@ import pytest
 # store and restore the original value after the test session.
 TEST_BEARER_TOKEN = os.environ.get("UA_TEST_BEARER_TOKEN", "")
 
+# Ensure DOCKER_CONTAINER is not set at import time so keyring fallback
+# isn't accidentally forced in CI or developer environments.
+os.environ.pop("DOCKER_CONTAINER", None)
+
 
 @pytest.fixture(scope="session", autouse=True)
 def test_env() -> Generator[None, None, None]:
     os.environ.setdefault("UA_WEBUI_USERNAME", "testuser")
     # Ensure DOCKER_CONTAINER not set so keyring fallback isn't forced in test env
-    os.environ.setdefault("DOCKER_CONTAINER", "")
+    # Use pop to explicitly remove any pre-existing value instead of
+    # setdefault which would leave an existing value in place.
+    os.environ.pop("DOCKER_CONTAINER", None)
 
     orig_store = None
     token_key = "upload-assistant-api-tokens"

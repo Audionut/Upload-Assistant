@@ -11,6 +11,7 @@ const apiFetch = (typeof window !== 'undefined' && window.uaApiFetch) || (async 
   let localCsrf = null;
   const loadLocalCsrf = async (force = false) => {
     if (localCsrf && !force) return;
+
     try {
       const r = await fetch('/api/csrf_token', { credentials: 'same-origin' });
       if (!r.ok) return;
@@ -487,10 +488,17 @@ function AudionutsUAGUI() {
     appendSystemMessage(`$ python upload.py "${selectedPath}" ${customArgs}`);
     appendSystemMessage('→ Starting execution...');
 
+    // Local controller binding for this run. Declare here so it's visible
+    // to `catch`/`finally` blocks and inner callbacks.
+    let localController = null;
+
     try {
       // Replace any existing controller to avoid reusing an aborted signal.
       const controller = new AbortController();
       sseAbortControllerRef.current = controller;
+      // Bind a local controller reference for this execution run to avoid
+      // races if another run replaces the shared ref concurrently.
+      localController = controller;
 
       const response = await apiFetch(`${API_BASE}/execute`, {
         method: 'POST',
@@ -517,7 +525,7 @@ function AudionutsUAGUI() {
       let buffer = '';
 
       const processSSELine = (line) => {
-        if (sseAbortControllerRef.current && sseAbortControllerRef.current.signal.aborted) return;
+        if (localController && localController.signal.aborted) return;
         if (!line.trim() || !line.startsWith('data: ')) return;
         try {
           const data = JSON.parse(line.substring(6));
@@ -547,7 +555,7 @@ function AudionutsUAGUI() {
               console.error('Failed to render HTML fragment:', e);
             }
               } else if (data.type === 'exit') {
-            if (!(sseAbortControllerRef.current && sseAbortControllerRef.current.signal.aborted)) {
+            if (!(localController && localController.signal.aborted)) {
               appendSystemMessage('');
               appendSystemMessage(`✓ Process exited with code ${data.code}`);
             }
@@ -581,20 +589,25 @@ function AudionutsUAGUI() {
       }
       /* eslint-enable no-constant-condition */
       // Only append the final completion message when not aborted.
-      if (!(sseAbortControllerRef.current && sseAbortControllerRef.current.signal.aborted)) {
+      if (!(localController && localController.signal.aborted)) {
         appendSystemMessage('✓ Execution completed');
         appendSystemMessage('');
       }
     } catch (error) {
       // Suppress abort errors as they are expected when a user cancels.
-      if (!(sseAbortControllerRef.current && sseAbortControllerRef.current.signal.aborted)) {
+      if (!(localController && localController.signal.aborted)) {
         appendSystemMessage('✗ Execution error: ' + error.message, 'error');
       }
     } finally {
       setIsExecuting(false);
       setSessionId('');
-      // Clear controller reference when finished
-      try { sseAbortControllerRef.current = null; } catch (e) { /* ignore */ }
+      // Clear controller reference when finished, but only if it hasn't been
+      // replaced by another concurrent run.
+      try {
+        if (sseAbortControllerRef.current === localController) {
+          sseAbortControllerRef.current = null;
+        }
+      } catch (e) { /* ignore */ }
     }
   };
 
