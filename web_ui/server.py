@@ -86,7 +86,7 @@ def _read_docker_secret_file(*names: str) -> Optional[str]:
             if os.path.exists(path):
                 with open(path, encoding="utf-8") as f:
                     return f.read().strip()
-        except Exception:
+        except OSError:
             continue
     return None
 

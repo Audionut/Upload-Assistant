@@ -136,7 +136,7 @@ const getStoredTheme = () => {
   if (stored === 'light') {
     return false;
   }
-  return false;
+  return true;
 };
 
 const apiFetch = async (url, options = {}) => {

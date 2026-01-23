@@ -90,6 +90,8 @@ class ULCX(UNIT3D):
 
             def wrap_in_spoiler(match: re.Match[str]) -> str:
                 center_block = match.group(1)
+                if '[img' not in center_block.lower():
+                    return center_block
                 return f'[center][spoiler=Screenshots]{center_block}[/spoiler][/center]'
 
             desc = re.sub(pattern, wrap_in_spoiler, desc, flags=re.DOTALL)

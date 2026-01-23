@@ -70,9 +70,6 @@ Meta: TypeAlias = dict[str, Any]
 
 from src.prep import Prep  # noqa: E402
 
-_base_dir = os.path.abspath(os.path.dirname(__file__))
-_config_path = os.path.join(_base_dir, "data", "config.py")
-
 # Enable ANSI colors on Windows
 _use_colors = True
 if sys.platform == "win32":
