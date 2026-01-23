@@ -247,6 +247,7 @@ def _load_token_store() -> dict[str, Any]:
                         "label": "env",
                         "created": int(datetime.now(timezone.utc).timestamp()),
                         "expiry": None,
+                        "scopes": ["*"],
                     }
                 }
         except Exception:
@@ -303,7 +304,7 @@ def _persist_token_store(store: dict[str, Any]) -> None:
         pass
 
 
-def _create_api_token(username: str, label: str = "", persist: bool = True, token_value: Optional[str] = None) -> str:
+def _create_api_token(username: str, label: str = "", persist: bool = True, token_value: Optional[str] = None, scopes: Optional[list[str]] = None) -> str:
     """Create a new API token. If `persist` is False, do not write the token store to durable storage.
     Optionally accept `token_value` to use an externally-provided token string when persisting.
     """
@@ -311,7 +312,10 @@ def _create_api_token(username: str, label: str = "", persist: bool = True, toke
     token_id = str(token_value) if token_value else secrets.token_urlsafe(48)
     # Tokens are non-expiring by default and remain valid until revoked.
     expiry = None
-    store[token_id] = {"user": username, "label": label, "created": int(datetime.now(timezone.utc).timestamp()), "expiry": expiry}
+    # Default to wildcard scope if no explicit scopes supplied
+    if scopes is None:
+        scopes = ["*"]
+    store[token_id] = {"user": username, "label": label, "created": int(datetime.now(timezone.utc).timestamp()), "expiry": expiry, "scopes": scopes}
     if persist:
         _persist_token_store(store)
     with contextlib.suppress(Exception):
@@ -319,7 +323,7 @@ def _create_api_token(username: str, label: str = "", persist: bool = True, toke
     return token_id
 
 
-def _persist_existing_api_token(token: str, username: str, label: str = "") -> bool:
+def _persist_existing_api_token(token: str, username: str, label: str = "", scopes: Optional[list[str]] = None) -> bool:
     """Persist an existing token string into the token store. Returns True on success."""
     if not token:
         return False
@@ -328,7 +332,10 @@ def _persist_existing_api_token(token: str, username: str, label: str = "") -> b
         return False
     # Persisted tokens do not expire unless revoked.
     expiry = None
-    store[token] = {"user": username, "label": label, "created": int(datetime.now(timezone.utc).timestamp()), "expiry": expiry}
+    # Persisted tokens default to wildcard scope unless caller supplied scopes
+    if scopes is None:
+        scopes = ["*"]
+    store[token] = {"user": username, "label": label, "created": int(datetime.now(timezone.utc).timestamp()), "expiry": expiry, "scopes": scopes}
     _persist_token_store(store)
     with contextlib.suppress(Exception):
         _write_audit_log("create_api_token", [username], None, {"id": token, "label": label}, True)
@@ -346,6 +353,38 @@ def _verify_api_token(token: str) -> Optional[str]:
     if expiry and int(datetime.now(timezone.utc).timestamp()) > int(expiry):
         return None
     return str(info.get("user"))
+
+
+def _get_token_info(token: str) -> Optional[dict[str, Any]]:
+    """Return stored token info dict or None."""
+    if not token:
+        return None
+    store = _load_token_store()
+    info = store.get(token)
+    if not info:
+        return None
+    expiry = info.get("expiry")
+    if expiry and int(datetime.now(timezone.utc).timestamp()) > int(expiry):
+        return None
+    return info
+
+
+def _token_has_scope(token: str, scope: str) -> bool:
+    """Return True if token includes the requested scope. Wildcard '*' grants all scopes."""
+    info = _get_token_info(token)
+    if not info:
+        return False
+    scopes = info.get("scopes") or ["*"]
+    if "*" in scopes:
+        return True
+    return scope in scopes
+
+
+def _get_bearer_from_header() -> Optional[str]:
+    auth_header = (request.headers.get("Authorization") or "").strip()
+    if auth_header.lower().startswith("bearer "):
+        return auth_header.split(None, 1)[1].strip()
+    return None
 
 
 def _revoke_api_token(token: str) -> bool:
@@ -1682,6 +1721,11 @@ def browse_roots():
         display_name = os.path.basename(root.rstrip(os.sep)) or root
         items.append({"name": display_name, "path": root, "type": "folder", "children": []})
 
+    # If caller used a bearer token, require it to have the `browse` scope.
+    bearer = _get_bearer_from_header()
+    if bearer and not _token_has_scope(bearer, "browse"):
+        return jsonify({"success": False, "error": "Forbidden (insufficient token scope)"}), 403
+
     return jsonify({"items": items, "success": True})
 
 
@@ -1751,6 +1795,11 @@ def config_options():
                         client_types.add(client_type_item.get("value", "unknown"))
             sections[-1]["client_types"] = sorted(client_types, key=lambda x: (x != "qbit", x))
 
+    # If caller used a bearer token, require it to have the `config` scope.
+    bearer = _get_bearer_from_header()
+    if bearer and not _token_has_scope(bearer, "config"):
+        return jsonify({"success": False, "error": "Forbidden (insufficient token scope)"}), 403
+
     return jsonify({"success": True, "sections": sections})
 
 
@@ -1768,6 +1817,11 @@ def torrent_clients():
     # Include all configured clients in the dropdown
     client_names = list(user_clients.keys())
 
+    # If caller used a bearer token, require it to have the `config` scope.
+    bearer = _get_bearer_from_header()
+    if bearer and not _token_has_scope(bearer, "config"):
+        return jsonify({"success": False, "error": "Forbidden (insufficient token scope)"}), 403
+
     return jsonify({"success": True, "clients": sorted(client_names)})
 
 
@@ -1777,6 +1831,11 @@ def config_update():
     # Protect state-changing endpoint with CSRF token
     if not _verify_csrf_header():
         return jsonify({"success": False, "error": "CSRF token missing or invalid"}), 403
+
+    # If caller used a bearer token, ensure it has the config_update scope
+    bearer = _get_bearer_from_header()
+    if bearer and not _token_has_scope(bearer, "config_update"):
+        return jsonify({"success": False, "error": "Forbidden (insufficient token scope)"}), 403
     data = request.json or {}
     path = data.get("path")
     raw_value = data.get("value")
@@ -1856,6 +1915,11 @@ def config_remove_subsection():
     if not _verify_csrf_header():
         return jsonify({"success": False, "error": "CSRF token missing or invalid"}), 403
 
+    # If caller used a bearer token, ensure it has the config_update scope
+    bearer = _get_bearer_from_header()
+    if bearer and not _token_has_scope(bearer, "config_update"):
+        return jsonify({"success": False, "error": "Forbidden (insufficient token scope)"}), 403
+
     data = request.json or {}
     path = data.get("path")
 
@@ -1896,7 +1960,7 @@ def api_tokens():
         store = _list_api_tokens()
         # Return metadata only (do not leak token values)
         tokens = [
-            {"id": tid, "user": info.get("user"), "label": info.get("label"), "created": info.get("created"), "expiry": info.get("expiry")}
+            {"id": tid, "user": info.get("user"), "label": info.get("label"), "created": info.get("created"), "expiry": info.get("expiry"), "scopes": info.get("scopes", ["*"])}
             for tid, info in store.items()
         ]
         read_only = bool(os.environ.get("UA_TOKEN"))
@@ -1922,16 +1986,23 @@ def api_tokens():
             read_only = bool(os.environ.get("UA_TOKEN"))
             if read_only:
                 return jsonify({"success": False, "error": "Token store is read-only (UA_TOKEN set). Update the container env to change tokens."}), 400
-            ok = _persist_existing_api_token(token_value, username, label=label)
+            # Optional scopes: expect list of strings
+            scopes = data.get("scopes")
+            if scopes is not None and not isinstance(scopes, list):
+                return jsonify({"success": False, "error": "Scopes must be a list"}), 400
+            ok = _persist_existing_api_token(token_value, username, label=label, scopes=scopes)
             if ok:
                 return jsonify({"success": True, "persisted": True})
             return jsonify({"success": False, "error": "Failed to persist token (already exists?)"}), 400
 
         # default/generate
         persist_flag = bool(data.get("persist", True))
-        token = _create_api_token(username, label=label, persist=persist_flag)
+        scopes = data.get("scopes")
+        if scopes is not None and not isinstance(scopes, list):
+            return jsonify({"success": False, "error": "Scopes must be a list"}), 400
+        token = _create_api_token(username, label=label, persist=persist_flag, scopes=scopes)
         persisted = persist_flag and not bool(os.environ.get("UA_TOKEN"))
-        return jsonify({"success": True, "token": token, "persisted": persisted})
+        return jsonify({"success": True, "token": token, "persisted": persisted, "scopes": scopes or ["*"]})
 
     if request.method == "DELETE":
         data = request.json or {}
@@ -1985,6 +2056,11 @@ def browse_path():
             console.print(f"Error: Permission denied: {path}", markup=False)
             return jsonify({"error": "Permission denied", "success": False}), 403
 
+        # If caller used a bearer token, require it to have the `browse` scope.
+        bearer = _get_bearer_from_header()
+        if bearer and not _token_has_scope(bearer, "browse"):
+            return jsonify({"success": False, "error": "Forbidden (insufficient token scope)"}), 403
+
         return jsonify({"items": items, "success": True, "path": path, "count": len(items)})
 
     except Exception as e:
@@ -2003,6 +2079,11 @@ def execute_command():
     # Require CSRF token for execute POST requests
     if request.method == "POST" and not _verify_csrf_header():
         return jsonify({"error": "CSRF token missing or invalid", "success": False}), 403
+
+    # If caller used a bearer token, ensure it has the execute scope
+    bearer = _get_bearer_from_header()
+    if bearer and not _token_has_scope(bearer, "execute"):
+        return jsonify({"error": "Forbidden (insufficient token scope)", "success": False}), 403
 
     try:
         data = request.json
