@@ -1090,6 +1090,18 @@ function ItemList({
     }
   }
 
+  // If we're in the top-level TRACKERS section, extract the default_trackers item
+  // This must happen before we partition/group regularItems so the default_trackers
+  // field is not rendered twice (once in the tracker tabs and once in the grid).
+  const isTrackerConfig = pathParts.includes('TRACKERS') && depth === 0;
+  let defaultTrackersItem = null;
+  if (isTrackerConfig) {
+    const idx = regularItems.findIndex((it) => it.key === 'default_trackers');
+    if (idx >= 0) {
+      defaultTrackersItem = regularItems.splice(idx, 1)[0];
+    }
+  }
+
   // Define known subgroupings for better visual breakdown (screenshots-related)
   const subgroupDefinitions = {
     'General ffmpeg': ['ffmpeg_compression', 'process_limit', 'ffmpeg_limit'],
@@ -1102,6 +1114,8 @@ function ItemList({
     'multi-file/disc': ['multiScreens', 'pack_thumb_size', 'fileLimit', 'processLimit', 'charLimit'],
     'Headers': ['custom_description_header', 'tonemapped_header', 'screenshot_header'],
     'Signature': ['custom_signature'],
+    'Sonarr': ['use_sonarr', 'sonarr_url', 'sonarr_api_key', 'sonarr_url_1', 'sonarr_api_key_1'],
+    'Radarr': ['use_radarr', 'radarr_url', 'radarr_api_key', 'radarr_url_1', 'radarr_api_key_1'],
   };
 
   // Partition regularItems into subgroups and an "Other" bucket
@@ -1138,15 +1152,6 @@ function ItemList({
     if (!placed) ungrouped.push(it);
   }
 
-  const isTrackerConfig = pathParts.includes('TRACKERS') && depth === 0;
-  // If we're in the top-level TRACKERS section, extract the default_trackers item
-  let defaultTrackersItem = null;
-  if (isTrackerConfig) {
-    const idx = regularItems.findIndex((it) => it.key === 'default_trackers');
-    if (idx >= 0) {
-      defaultTrackersItem = regularItems.splice(idx, 1)[0];
-    }
-  }
   // Track user choices to add available-only trackers into default_trackers
   const [pendingDefaultAdds, setPendingDefaultAdds] = useState(() => new Set());
   const [trackerTab, setTrackerTab] = useState(() => {

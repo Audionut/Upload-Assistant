@@ -37,6 +37,7 @@ config = {
         "img_host_3": "",
         "img_host_4": "",
         "img_host_5": "",
+        "img_host_6": "",
 
         # image host api keys
         "imgbb_api": "",
