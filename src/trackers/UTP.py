@@ -86,27 +86,28 @@ class UTP(UNIT3D):
 
         # Save original values and transform
         original_image_list = meta.get('image_list', [])
-        transformed_image_list: list[dict[str, Any]] = []
-        for img in original_image_list:
-            transformed_image_list.append({
+        transformed_image_list: list[dict[str, Any]] = [
+            {
                 'web_url': img.get('raw_url', ''),   # Link goes to full image
                 'raw_url': img.get('img_url', ''),   # Display shows medium image
                 'img_url': img.get('img_url', ''),
-            })
+            }
+            for img in original_image_list
+        ]
 
         # Also transform any new_images_* keys for packed content
-        new_images_keys = [k for k in meta.keys() if k.startswith('new_images_')]
+        new_images_keys = [k for k in meta if k.startswith('new_images_')]
         original_new_images: dict[str, Any] = {}
         for key in new_images_keys:
             original_new_images[key] = meta[key]
-            transformed: list[dict[str, Any]] = []
-            for img in meta[key]:
-                transformed.append({
+            meta[key] = [
+                {
                     'web_url': img.get('raw_url', ''),
                     'raw_url': img.get('img_url', ''),
                     'img_url': img.get('img_url', ''),
-                })
-            meta[key] = transformed
+                }
+                for img in meta[key]
+            ]
 
         # Temporarily replace image_list
         meta['image_list'] = transformed_image_list
