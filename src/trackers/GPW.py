@@ -218,6 +218,8 @@ class GPW:
         # Logo
         logo, logo_size = await builder.get_logo_section(meta)
         if logo and logo_size:
+            if logo.endswith(".svg"):
+                logo = logo.replace(".svg", ".png")
             desc_parts.append(f'[center][img={logo_size}]{logo}[/img][/center]')
 
         # NFO
