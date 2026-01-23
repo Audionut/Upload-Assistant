@@ -548,6 +548,15 @@ function AudionutsUAGUI() {
         })
       });
 
+      if (!response.ok) {
+        const errText = await response.text();
+        appendSystemMessage(`✗ Execute failed (${response.status}): ${errText || 'Request failed'}`, 'error');
+        return;
+      }
+      if (!response.body) {
+        appendSystemMessage('✗ Execute failed: empty response body', 'error');
+        return;
+      }
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';

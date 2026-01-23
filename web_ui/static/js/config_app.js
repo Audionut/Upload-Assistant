@@ -9,6 +9,8 @@ function loadQRCodeLib() {
     }
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js';
+    script.integrity = 'sha384-2tbYcIw4qYXyHlIzTf5eFjAPKe2pM9xrGp2fxH64sfaRqtYeR5OTaFEdibBb464KtgO7KpGHIXdOJQ==';
+    script.crossOrigin = 'anonymous';
     script.async = true;
     script.onload = () => resolve(window.qrcode || window.QRCode || window.qrcodeModule);
     script.onerror = () => reject(new Error('Failed to load qrcode library'));
