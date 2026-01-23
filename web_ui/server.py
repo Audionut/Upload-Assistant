@@ -1225,8 +1225,9 @@ def login_page():
     return render_template("login.html", show_2fa=show_2fa)
 
 
-@app.route("/logout")
+@app.route("/logout", methods=["GET", "POST"])  # prefer POST from the UI
 def logout():
+    # Accept both GET and POST for compatibility, but UI should use POST.
     session.pop("authenticated", None)
     resp = redirect(url_for("login_page"))
     # Remove remember cookie if present

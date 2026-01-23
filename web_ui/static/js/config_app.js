@@ -226,7 +226,7 @@ const trackerNameMap = {
   'SAM': 'Samaritano',
   'SP': 'seedpool',
   'SHRI': 'ShareIsland',
-  'STC': 'SkipTheCommerials',
+  'STC': 'SkipTheCommercials',
   'SPD': 'SpeedApp',
   'SN': 'Swarmazon',
   'TLZ': 'The Leach Zone',
@@ -509,6 +509,47 @@ function ConfigLeaf({
     setSelectedValue(item == null || item.value == null ? '' : String(item.value));
   }, [item.value]);
 
+  // Helpers and hooks for `default_trackers` (must run unconditionally to obey Rules of Hooks)
+  const normalizeTrackers = (value) => (
+    String(value || '')
+      .split(',')
+      .map((t) => t.trim().toUpperCase())
+      .filter(Boolean)
+  );
+
+  const [selected, setSelected] = useState(() => new Set(normalizeTrackers(item.value)));
+  const prevDefaultRef = useRef(normalizeTrackers(item.value).join(', '));
+
+  useEffect(() => {
+    setSelected(new Set(normalizeTrackers(item.value)));
+  }, [item.value]);
+
+  // Observer: whenever the selected set changes, persist the default_trackers value
+  useEffect(() => {
+    // Only run this persistence effect for the actual `default_trackers` field.
+    if (item.key !== 'default_trackers') return;
+    const nextValue = Array.from(selected).map((t) => String(t).toUpperCase()).join(', ');
+    const originalValue = normalizeTrackers(item.value).join(', ');
+    if (prevDefaultRef.current === nextValue) return;
+    prevDefaultRef.current = nextValue;
+    onValueChange(path, nextValue, {
+      originalValue,
+      isSensitive: false,
+      isRedacted: false,
+      readOnly: false
+    });
+  }, [selected, onValueChange, path, item.value]);
+
+  const toggleTracker = (tracker, checked) => {
+    const selections = new Set(selected);
+    if (checked) {
+      selections.add(tracker.toUpperCase());
+    } else {
+      selections.delete(tracker.toUpperCase());
+    }
+    setSelected(selections);
+  };
+
 
   if (typeof item.value === 'boolean') {
     const originalValue = Boolean(item.value);
@@ -698,43 +739,6 @@ function ConfigLeaf({
 
   if (item.key === 'default_trackers') {
     const availableTrackers = getAvailableTrackers(item);
-    const normalizeTrackers = (value) => (
-      String(value || '')
-        .split(',')
-        .map((t) => t.trim().toUpperCase())
-        .filter(Boolean)
-    );
-
-    const [selected, setSelected] = useState(() => new Set(normalizeTrackers(item.value)));
-    const prevDefaultRef = useRef(() => normalizeTrackers(item.value).join(', '));
-
-    useEffect(() => {
-      setSelected(new Set(normalizeTrackers(item.value)));
-    }, [item.value]);
-
-    // Observer: whenever the selected set changes, persist the default_trackers value
-    useEffect(() => {
-      const nextValue = Array.from(selected).map((t) => String(t).toUpperCase()).join(', ');
-      const originalValue = normalizeTrackers(item.value).join(', ');
-      if (prevDefaultRef.current === nextValue) return;
-      prevDefaultRef.current = nextValue;
-      onValueChange(path, nextValue, {
-        originalValue,
-        isSensitive: false,
-        isRedacted: false,
-        readOnly: false
-      });
-    }, [selected, onValueChange, path, item.value]);
-
-    const toggleTracker = (tracker, checked) => {
-      const selections = new Set(selected);
-      if (checked) {
-        selections.add(tracker.toUpperCase());
-      } else {
-        selections.delete(tracker.toUpperCase());
-      }
-      setSelected(selections);
-    };
 
     return (
       <div className="col-span-full px-4 py-3">
@@ -1563,7 +1567,6 @@ function ItemList({
         if (pathParts.includes('TRACKERS') && depth === 0) {
           return null;
         }
-        const isTrackerConfig = pathParts.includes('TRACKERS') && depth === 0;
         const isTorrentClientConfig = pathParts.includes('TORRENT_CLIENTS') && depth === 0;
         const isCollapsible = item.subsection === true || isTrackerConfig || isTorrentClientConfig;
         const nextPath = item.subsection ? pathParts : [...pathParts, item.key];
@@ -1840,7 +1843,7 @@ function SecurityTab({ isDarkMode }) {
     return () => {
       cancelled = true;
     };
-  }, [setupData && setupData.uri]);
+  }, [setupData?.uri]);
 
   return (
     <div className={`rounded-lg border p-6 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
@@ -1942,6 +1945,11 @@ function SecurityTab({ isDarkMode }) {
 
 function ConfigApp() {
   const [sections, setSections] = useState([]);
+  // Keep a ref to the latest sections to avoid stale closures inside async loaders
+  const currentSectionsRef = useRef(sections);
+  useEffect(() => {
+    currentSectionsRef.current = sections;
+  }, [sections]);
   const [status, setStatus] = useState({ text: 'Loading config options...', type: 'info' });
   const [isDarkMode, setIsDarkMode] = useState(getStoredTheme);
   const [expandedGroups, setExpandedGroups] = useState(new Set());
@@ -2068,7 +2076,8 @@ function ConfigApp() {
       }
       
       // Only set default tabs if we don't have any sections loaded yet
-      if (sections.length === 0 && newSections.length > 0) {
+      const currentlyHaveSections = (currentSectionsRef && currentSectionsRef.current && currentSectionsRef.current.length) ? currentSectionsRef.current.length : (sections ? sections.length : 0);
+      if (currentlyHaveSections === 0 && newSections.length > 0) {
         // If we restored a tab from sessionStorage above, don't override it.
         if (!didRestoreTab) {
           setActiveTab(newSections[0].section.toLowerCase());
@@ -2288,13 +2297,27 @@ function ConfigApp() {
     : `px-3 py-1.5 rounded-lg text-sm font-semibold bg-purple-600 text-white hover:bg-purple-700${saveDisabled ? ' opacity-50 cursor-not-allowed' : ''}`;
   const statusTypeClass = statusClassFor(status.type, isDarkMode);
 
+  const handleLogout = async () => {
+    try {
+      const resp = await fetch('/logout', { method: 'POST', credentials: 'same-origin' });
+      if (resp && resp.redirected) {
+        window.location = resp.url;
+      } else {
+        window.location = '/login';
+      }
+    } catch (err) {
+      // Fallback to hard redirect
+      window.location = '/login';
+    }
+  };
+
   return (
     <div className={pageRootClass}>
       <header className={headerClass}>
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className={titleClass}>Upload Assistant Config</h1>
-            <a href="/logout" className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700">Logout</a>
+            <button type="button" onClick={handleLogout} className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700">Logout</button>
           </div>
           <div className="flex items-center gap-3">
             <button

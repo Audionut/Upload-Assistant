@@ -241,7 +241,7 @@ config = {
         "use_bluray_images": False,
 
         # Size of bluray.com cover images.
-        # bbcode is width limited, cover images are mostly hight dominant
+        # bbcode is width limited, cover images are mostly height dominant
         # So you probably want a smaller size than screenshots for instance
         "bluray_image_size": "250",
 
