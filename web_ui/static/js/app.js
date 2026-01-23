@@ -423,7 +423,7 @@ function AudionutsUAGUI() {
       });
     };
     
-    setDirectories(updateTree(directories));
+    setDirectories((prev) => updateTree(prev));
   };
 
   const renderFileTree = (items, level = 0) => {

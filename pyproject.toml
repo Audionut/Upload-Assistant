@@ -1,6 +1,7 @@
 [tool.ruff]
 line-length = 176
 target-version = "py39"
+exclude = ["tests"]
 
 [tool.ruff.lint]
 select = [
