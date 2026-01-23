@@ -102,8 +102,7 @@ const Tooltip = ({ children, content, className = "" }) => {
 
 const API_BASE = window.location.origin + '/api';
 const THEME_KEY = 'ua_config_theme';
-
-const storage = {
+const storage = (typeof window !== 'undefined' && window.UAStorage) || {
   get(key) {
     try {
       return localStorage.getItem(key);
@@ -128,13 +127,12 @@ const storage = {
 };
 
 const getStoredTheme = () => {
+  if (typeof window !== 'undefined' && typeof window.getUAStoredTheme === 'function') {
+    return window.getUAStoredTheme();
+  }
   const stored = storage.get(THEME_KEY);
-  if (stored === 'dark') {
-    return true;
-  }
-  if (stored === 'light') {
-    return false;
-  }
+  if (stored === 'dark') return true;
+  if (stored === 'light') return false;
   return Boolean(window.UA_DEFAULT_THEME);
 };
 

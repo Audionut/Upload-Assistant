@@ -1,7 +1,7 @@
 const { useState, useRef, useEffect, useCallback } = React;
 const THEME_KEY = 'ua_config_theme';
 
-const storage = {
+const storage = (typeof window !== 'undefined' && window.UAStorage) || {
   get(key) {
     try {
       return localStorage.getItem(key);
@@ -26,14 +26,12 @@ const storage = {
 };
 
 const getStoredTheme = () => {
+  if (typeof window !== 'undefined' && typeof window.getUAStoredTheme === 'function') {
+    return window.getUAStoredTheme();
+  }
   const stored = storage.get(THEME_KEY);
-  if (stored === 'dark') {
-    return true;
-  }
-  if (stored === 'light') {
-    return false;
-  }
-  // Use shared default if provided by other scripts, otherwise default to true (dark)
+  if (stored === 'dark') return true;
+  if (stored === 'light') return false;
   return typeof window !== 'undefined' && typeof window.UA_DEFAULT_THEME === 'boolean' ? window.UA_DEFAULT_THEME : true;
 };
 
