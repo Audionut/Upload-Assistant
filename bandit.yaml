@@ -33,6 +33,8 @@ exclude_dirs:
   - env
   - .git
   - __pycache__
+  - data
+  - docs
 
 # Test files to exclude
 exclude:

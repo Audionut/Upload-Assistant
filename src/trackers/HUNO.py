@@ -183,6 +183,9 @@ class HUNO(UNIT3D):
             else:
                 languages_result = str(next(iter(normalized_languages), "SKIPPED"))
 
+            if languages_result == "Multiple":
+                languages_result = "Multiple Languages"
+
             if not languages_result:
                 languages_result = "SKIPPED"
 

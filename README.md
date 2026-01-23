@@ -55,22 +55,23 @@ Many thanks to all who have contributed.
 |ImmortalSeed|IS|InfinityHD|IHD|
 |ItaTorrents|ITT|LastDigitalUnderground|LDU|
 |Lat-Team|LT|Locadora|LCD|
-|LST|LST|MoreThanTV|MTV|
-|Nebulance|NBL|OldToonsWorld|OTW|
-|OnlyEncodes+|OE|PassThePopcorn|PTP|
-|PolishTorrent|PTT|Portugas|PT|
-|PrivateHD|PHD|PTerClub|PTER|
-|PTSKIT|PTS|Racing4Everyone|R4E|
-|Rastastugan|RAS|ReelFLiX|RF|
-|RetroFlix|RTF|Samaritano|SAM|
-|seedpool|SP|ShareIsland|SHRI|
-|SkipTheCommerials|STC|SpeedApp|SPD|
-|Swarmazon|SN|The Leach Zone|TLZ|
-|TheOldSchool|TOS|ToTheGlory|TTG|
-|TorrentHR|THR|Torrenteros|TTR|
-|TorrentLeech|TL|TVChaosUK|TVC|
-|ULCX|ULCX|UTOPIA|UTP|
-|YOiNKED|YOINK|YUSCENE|YUS|
+|LST|LST|Luminarr|LUME|
+|MoreThanTV|MTV|Nebulance|NBL|
+|OldToonsWorld|OTW|OnlyEncodes+|OE|
+|PassThePopcorn|PTP|PolishTorrent|PTT|
+|Portugas|PT|PrivateHD|PHD|
+|PTerClub|PTER|PTSKIT|PTS|
+|Racing4Everyone|R4E|Rastastugan|RAS|
+|ReelFLiX|RF|RetroFlix|RTF|
+|Samaritano|SAM|seedpool|SP|
+|ShareIsland|SHRI|SkipTheCommerials|STC|
+|SpeedApp|SPD|Swarmazon|SN|
+|The Leach Zone|TLZ|TheOldSchool|TOS|
+|ToTheGlory|TTG|TorrentHR|THR|
+|Torrenteros|TTR|TorrentLeech|TL|
+|TVChaosUK|TVC|ULCX|ULCX|
+|UTOPIA|UTP|YOiNKED|YOINK|
+|YUSCENE|YUS|||
 
 ## **Setup:**
    - **REQUIRES AT LEAST PYTHON 3.9 AND PIP3**
