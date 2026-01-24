@@ -1265,7 +1265,7 @@ class QbittorrentClientMixin:
                         timeout=aiohttp.ClientTimeout(total=10),
                         connector=aiohttp.TCPConnector(ssl=ssl_context)
                     )
-                    qbt_proxy_url = proxy_url
+                    qbt_proxy_url = proxy_url.rstrip('/')
 
                 except Exception as e:
                     console.print(f"[bold red]Failed to connect to qBittorrent proxy: {e}")

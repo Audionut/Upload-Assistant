@@ -48,7 +48,7 @@ class SonarrManager:
                 continue
 
             api_key = api_key_value.strip()
-            base_url = base_url_value.strip()
+            base_url = base_url_value.strip().rstrip('/')
 
             if debug:
                 console.print(f"[blue]Trying Sonarr instance {instance_index if instance_index > 0 else 'default'}[/blue]")
