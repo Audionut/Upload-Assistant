@@ -147,14 +147,14 @@ class TrackerStatusManager:
                         if tracker_name in ["AITHER", "LST"]:
                             were_trumping = local_meta.get('were_trumping', False)
                             trump_reason = local_meta.get('trump_reason')
-                            trumpable_id_after_dupe_check = local_meta.get('trumpable_id')
+                            trumpable_id_after_dupe_check = local_meta.get(f'{tracker_name}_trumpable_id')
                             async with meta_lock:
                                 if were_trumping:
                                     meta['were_trumping'] = were_trumping
                                 if trump_reason:
                                     meta['trump_reason'] = trump_reason
                                 if trumpable_id_after_dupe_check:
-                                    meta['trumpable_id'] = trumpable_id_after_dupe_check
+                                    meta[f'{tracker_name}_trumpable_id'] = trumpable_id_after_dupe_check
 
                     elif 'skipping' in local_meta:
                         local_tracker_status['skipped'] = True
