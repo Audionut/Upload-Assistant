@@ -1544,7 +1544,7 @@ async def get_romaji(tmdb_name: str, mal: Optional[int], meta: dict[str, Any]) -
         except Exception:
             console.print('[red]Failed to get anime specific info from anilist. Continuing without it...')
             media = []
-    search_name = meta['filename'].lower() if "subsplease" in meta.get('filename', '').lower() else re.sub(r"[^0-9a-zA-Z\[\\]]+", "", tmdb_name.lower().replace(' ', ''))
+    search_name = (meta.get('filename') or '').lower() if "subsplease" in (meta.get('filename') or '').lower() else re.sub(r"[^0-9a-zA-Z\[\\]]+", "", tmdb_name.lower().replace(' ', ''))
 
     # Extract expected season number from various sources
     expected_season = None
