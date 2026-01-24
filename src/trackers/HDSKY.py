@@ -178,7 +178,7 @@ class HDSKY:
         return res_map.get(meta.get('resolution'), 1)
 
     async def get_external_meta(self, meta):
-        result = {"bbcode": "", "trans_title": []}
+        result = {"bbcode": "", "trans_title": [], "douban_url": ""}
         if not self.meta_script:
             return result
         imdb_id = str(meta.get('imdb_id', '')).strip()
@@ -195,6 +195,9 @@ class HDSKY:
                 m = re.search(r'^[ \t]*◎译　　名[ \t　]+(.+)$', output, flags=re.M)
                 if m:
                     result["trans_title"] = [p.strip() for p in re.split(r'\s*/\s*', m.group(1).strip()) if p.strip()]
+                douban_match = re.search(r"https?://(?:movie\.)?douban\.com/subject/\d+/?", output)
+                if douban_match:
+                    result["douban_url"] = douban_match.group(0)
         except Exception:
             pass
         return result
@@ -247,7 +250,7 @@ class HDSKY:
         small_descr = ' / '.join(ext_meta.get("trans_title", [])) if ext_meta.get("trans_title") else meta.get('title', '')
         raw_id = str(meta.get('imdb_id', '0')).replace('tt', '').strip()
         imdb_url = f"http://www.imdb.com/title/tt{raw_id.zfill(7)}/" if (raw_id.isdigit() and int(raw_id) != 0) else ""
-        douban_url = str(meta.get('douban_url', '')).strip()
+        douban_url = str(meta.get('douban_url', '')).strip() or str(ext_meta.get("douban_url", "")).strip()
 
         data = {
             "name": meta['name'].replace('PQ10', 'HDR'),
