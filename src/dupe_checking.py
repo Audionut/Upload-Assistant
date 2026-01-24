@@ -274,7 +274,7 @@ class DupeChecker:
                     meta[matched_torrent_id] = entry.get('id')
 
             # Aither-specific trumping logic - no internal checking, if it's marked trumpable, it's trumpable
-            if tracker_name == "AITHER" and entry.get('trumpable', False) and res_id and target_resolution == res_id:
+            if tracker_name in ["AITHER", "LST"] and entry.get('trumpable', False) and res_id and target_resolution == res_id:
                 meta['trumpable_id'] = entry.get('id')
                 remember_match('trumpable_id')
 
@@ -465,7 +465,7 @@ class DupeChecker:
                     console.log(f"[debug] Season/Episode match result: {season_episode_match}")
                     console.log(f"[debug] is_season: {is_season}")
                 # Aither episode trumping logic
-                if is_season and tracker_name == "AITHER":
+                if is_season and tracker_name in ["AITHER", "LST"]:
                     # Null-safe normalization for comparisons
                     target_source_lower = (target_source or "").lower()
                     type_id_lower = (type_id or "").lower()
