@@ -264,6 +264,25 @@ class SSD:
             return None
         return ptgen_json
 
+    def extract_douban_link(self, ptgen_json: dict[str, Any]) -> str:
+        data_value = ptgen_json.get('data', [])
+        data = cast(list[dict[str, Any]], data_value) if isinstance(data_value, list) else []
+        if data:
+            link = str(data[0].get('link', '')).strip()
+            if 'douban.com/subject/' in link:
+                return link
+
+        format_text = str(ptgen_json.get('format', '')).strip()
+        match = re.search(r"https?://(?:movie\.)?douban\.com/subject/\d+/?", format_text)
+        return match.group(0) if match else ''
+
+    async def fetch_ptgen_with_retry(self, params: dict[str, Any]) -> Optional[dict[str, Any]]:
+        for _ in range(max(self.ptgen_retry, 1)):
+            ptgen_json = await self.fetch_ptgen_json(params)
+            if ptgen_json and not ptgen_json.get('error'):
+                return ptgen_json
+        return None
+
     async def get_douban_url(self, meta: Meta) -> tuple[str, str]:
         douban_url = str(meta.get('douban_url', '')).strip()
         ptgen_text = ''
@@ -277,22 +296,34 @@ class SSD:
 
         if not douban_url:
             imdb_id_raw = str(meta.get('imdb_id', '0')).replace('tt', '').strip()
-            if imdb_id_raw.isdigit() and int(imdb_id_raw) != 0:
-                ptgen_json = await self.fetch_ptgen_json({'search': f'tt{imdb_id_raw.zfill(7)}'})
-                if ptgen_json and not ptgen_json.get('error'):
-                    data_value = ptgen_json.get('data', [])
-                    data = cast(list[dict[str, Any]], data_value) if isinstance(data_value, list) else []
-                    if data:
-                        douban_url = str(data[0].get('link', '')).strip()
+            imdb_id = imdb_id_raw
+            if not imdb_id.isdigit():
+                imdb_id = str(meta.get('imdb_info', {}).get('imdbID', '')).replace('tt', '').strip()
+            if imdb_id.isdigit() and int(imdb_id) != 0:
+                ptgen_json = await self.fetch_ptgen_with_retry({'search': f'tt{imdb_id.zfill(7)}'})
+                if ptgen_json:
+                    douban_url = self.extract_douban_link(ptgen_json)
+                    meta['ptgen'] = ptgen_json
+                    ptgen_text = str(ptgen_json.get('format', '')).strip()
+
+        if not douban_url:
+            title = str(meta.get('title', '')).strip()
+            if title:
+                ptgen_json = await self.fetch_ptgen_with_retry({'search': title})
+                if ptgen_json:
+                    douban_url = self.extract_douban_link(ptgen_json)
+                    meta['ptgen'] = ptgen_json
+                    ptgen_text = str(ptgen_json.get('format', '')).strip()
 
         if not douban_url:
             console.print("[red]Unable to determine Douban URL from PTGEN output.[/red]")
             return '', ''
 
-        ptgen_json = await self.fetch_ptgen_json({'url': douban_url})
-        if ptgen_json and not ptgen_json.get('error'):
-            meta['ptgen'] = ptgen_json
-            ptgen_text = str(ptgen_json.get('format', '')).strip()
+        if not ptgen_text:
+            ptgen_json = await self.fetch_ptgen_with_retry({'url': douban_url})
+            if ptgen_json:
+                meta['ptgen'] = ptgen_json
+                ptgen_text = str(ptgen_json.get('format', '')).strip()
 
         if not ptgen_text:
             ptgen_text = str(meta.get('ptgen', {}).get('format', '')).strip()
