@@ -126,6 +126,11 @@ class TRACKER_SETUP:
         tracker_instance = self._create_tracker_instance(tracker)
         if tracker_instance is None:
             return None
+        if tracker.upper() == "LUME":
+            # LUME doesn't expose a banned_url; sync TRaSH groups and use the file if present
+            await self.sync_trash_groups(meta, file_path)
+            if os.path.exists(file_path):
+                return file_path
         banned_url = getattr(tracker_instance, 'banned_url', None)
         if not isinstance(banned_url, str):
             return None
@@ -224,6 +229,72 @@ class TRACKER_SETUP:
         except Exception as e:
             console.print(f"An error occurred: {e}")
 
+    async def sync_trash_groups(self, meta: Meta, file_path: str) -> None:
+        """Fetch TRaSH guide JSON and extract release group names to ban file.
+
+        This downloads the TRaSH LQ release-group specifications, extracts
+        group names from `ReleaseGroupSpecification` fields, and writes them
+        via `write_banned_groups_to_file` into the tracker's banned file.
+        """
+        url = (
+            "https://raw.githubusercontent.com/TRaSH-Guides/Guides/refs/heads/master/docs/json/radarr/cf/lq.json"
+        )
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(url)
+                if response.status_code != 200:
+                    console.print(f"[red]Failed to fetch TRaSH groups: HTTP {response.status_code}[/red]")
+                    return
+                data = response.json()
+                data = cast(JsonDict, data)
+        except Exception as e:
+            console.print(f"[red]Failed to fetch TRaSH groups: {e}[/red]")
+            return
+
+        specs = cast(list[JsonDict], data.get('specifications', []))
+        groups: list[str] = []
+
+        for spec in specs:
+            try:
+                if spec.get('implementation') != 'ReleaseGroupSpecification':
+                    continue
+                fields = cast(JsonDict, spec.get('fields') or {})
+                val = str(fields.get('value', '') or '')
+                # Prefer a captured group if present: e.g. ^(GROUP)$ or \b(GROUP)\b
+                m = re.search(r"\(([^)]+)\)", val)
+                if m:
+                    name = m.group(1)
+                else:
+                    # Fallback: strip common regex anchors and escapes
+                    name = re.sub(r"[\\\^\$\\b]", "", val)
+                    name = re.sub(r"[\(\)\[\]\|]", "", name).strip()
+
+                if not name:
+                    continue
+
+                # Handle alternation inside the captured name
+                if '|' in name:
+                    parts = [p.strip() for p in name.split('|') if p.strip()]
+                    for p in parts:
+                        if p not in groups:
+                            groups.append(p)
+                else:
+                    if name not in groups:
+                        groups.append(name)
+            except (KeyError, TypeError, ValueError, AttributeError, re.error) as e:
+                if meta.get('debug'):
+                    console.print(f"[yellow]Skipped invalid TRaSH specification: {e}[/yellow]")
+                continue
+
+        json_data = [{"name": g} for g in groups]
+
+        if not json_data:
+            if meta.get('debug'):
+                console.print("[yellow]No groups extracted from TRaSH data.[/yellow]")
+            return
+
+        await self.write_banned_groups_to_file(file_path, json_data, debug=meta.get('debug', False))
+
     def _write_file(self, file_path: str, data: JsonDict) -> None:
         """ Blocking file write operation, runs in a background thread """
         with open(file_path, "w", encoding="utf-8") as file:
@@ -255,7 +326,7 @@ class TRACKER_SETUP:
         if 'taoe' in group_tags:
             group_tags = 'taoe'
 
-        if tracker.upper() in ("AITHER", "LST", "SPD"):
+        if tracker.upper() in ("AITHER", "LST", "LUME", "SPD"):
             file_path = await self.get_banned_groups(meta, tracker)
             if file_path == "empty":
                 console.print(f"[bold red]No banned groups found for '{tracker}'.")
@@ -973,6 +1044,9 @@ class TRACKER_SETUP:
             else:
                 # Store per-tracker to avoid overwriting across multiple trackers
                 meta[f'{tracker}_reported_torrent_id'] = reported_torrent_id
+            if tracker == "LST":
+                # Skip LST-specific processing but continue checking other trackers
+                continue
 
             trumping_reports, status = await self.get_tracker_trumps(meta, tracker, url, reported_torrent_id)
             if status != 200:
@@ -1025,8 +1099,8 @@ class TRACKER_SETUP:
             return False
 
         if not meta.get('tv_pack'):
-            console.print("[yellow]Aither requires comparisons to be provided for trump reports.\n"
-                          "Are the comparison images in the description or are you adding links?")
+            console.print("[yellow]Same trackers require comparisons to be provided for trump reports.\n"
+                        "Are the comparison images in the description or are you adding links?")
             try:
                 where_compare = cli_ui.ask_string(
                     "Enter 'd' if in description, 'L' if you want to paste links, or press Enter to skip trumping:",
@@ -1198,8 +1272,24 @@ class TRACKER_SETUP:
             console.print(f"[red]No trumping URL found for {tracker}[/red]")
             return False
 
-        # Replace /filter with /create
-        create_url = base_url.replace('/filter', '/create')
+        reported_torrent_id = meta.get(f'{tracker}_reported_torrent_id', '')
+        if not reported_torrent_id:
+            console.print(f"[red]No reported torrent ID found in meta for trump report creation on {tracker}[/red]")
+            return False
+        # Replace /filter with /create. For LST the URL requires a numeric ID segment.
+        if tracker == 'LST':
+            rt = str(reported_torrent_id).strip()
+            if not rt.isdigit():
+                console.print(f"[red]Invalid or missing reported torrent ID for LST: {reported_torrent_id}[/red]")
+                return False
+            try:
+                rid_int = int(rt)
+            except ValueError:
+                console.print(f"[red]Reported torrent ID for LST is not an integer: {reported_torrent_id}[/red]")
+                return False
+            create_url = base_url + f"{rid_int}/trump"
+        else:
+            create_url = base_url.replace('/filter', '/create')
 
         headers = {
             'Authorization': f"Bearer {self.config['TRACKERS'][tracker]['api_key'].strip()}",
@@ -1208,7 +1298,6 @@ class TRACKER_SETUP:
         }
 
         # Read per-tracker reported_torrent_id, with fallback to legacy key for backwards compatibility
-        reported_torrent_id = meta.get(f'{tracker}_reported_torrent_id') or meta.get('reported_torrent_id')
         if not reported_torrent_id:
             console.print(f"[red]No reported torrent ID found for {tracker}[/red]")
             return False
@@ -1232,17 +1321,33 @@ class TRACKER_SETUP:
         else:
             message = "Upload Assistant is trumping this torrent for reasons Audionut has not correctly caught. User selected yes at a prompt."
 
-        payload: JsonDict = {
-            'reported_torrent_id': reported_torrent_id,
-            'trumping_torrent_id': trumping_torrent_id,
-            'message': str(message)
-        }
-        if 'screenshots_reported_torrent' in meta:
-            payload['screenshots_reported_torrent'] = ','.join(cast(list[str], meta['screenshots_reported_torrent']))
-        if 'screenshots_trumping_torrent' in meta:
-            payload['screenshots_trumping_torrent'] = ','.join(cast(list[str], meta['screenshots_trumping_torrent']))
-        if 'screenshots_in_description' in meta and meta['screenshots_in_description']:
-            payload['message'] = f"{payload.get('message', '')} - User says comparison screenshots are in description."
+        if tracker != 'LST':
+            payload: JsonDict = {
+                'reported_torrent_id': reported_torrent_id,
+                'trumping_torrent_id': trumping_torrent_id,
+                'message': str(message)
+            }
+            if 'screenshots_reported_torrent' in meta:
+                payload['screenshots_reported_torrent'] = ','.join(cast(list[str], meta['screenshots_reported_torrent']))
+            if 'screenshots_trumping_torrent' in meta:
+                payload['screenshots_trumping_torrent'] = ','.join(cast(list[str], meta['screenshots_trumping_torrent']))
+            if 'screenshots_in_description' in meta and meta['screenshots_in_description']:
+                payload['message'] = f"{payload.get('message', '')} - User says comparison screenshots are in description."
+
+        else:
+            if not meta.get('tv_pack'):
+                try:
+                    user_message = cli_ui.ask_string("Enter a reason for the trump report on LST:")
+                except (EOFError, KeyboardInterrupt):
+                    console.print("[yellow]Prompt cancelled; no additional message provided.[/yellow]")
+                    user_message = None
+                message = message + ": " + user_message if user_message else message + ": No additional message provided by user."
+            payload: JsonDict = {
+                'reported_id': reported_torrent_id,
+                'torrent_id': trumping_torrent_id,
+                'message': str(message)
+            }
+
         if not meta.get('debug', False):
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:

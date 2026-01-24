@@ -1441,8 +1441,8 @@ async def do_the_thing(base_dir: str) -> None:
                 console.print("[yellow]Processing uploads to trackers.....")
                 meta['are_we_trump_reporting'] = False
                 if meta.get('were_trumping', False):
-                    console.print("[yellow]Checking for existing trump reports.....")
                     trump_trackers = [t for t in cast(list[Any], meta.get('trackers', [])) if isinstance(t, str)]
+                    console.print("[yellow]Checking for existing trump reports.....")
                     is_trumping = await tracker_setup.process_trumpables(meta, trackers=trump_trackers)
 
                     # Apply any per-tracker skip decisions made during trumpable processing

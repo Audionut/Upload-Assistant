@@ -21,6 +21,7 @@ class LST(UNIT3D):
         self.upload_url = f'{self.base_url}/api/torrents/upload'
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
+        self.trumping_url = f'{self.base_url}/api/reports/torrents/'
         self.banned_groups = []
         pass
 
@@ -100,5 +101,8 @@ class LST(UNIT3D):
             else:
                 lst_name = lst_name.replace(str(meta.get('source', '')), f"{resolution}", 1)
                 lst_name = lst_name.replace(str(meta.get('video_codec', '')), f"{meta.get('audio', '')} {meta.get('video_codec', '')}", 1)
+
+        if meta.get('trump_reason') == 'exact_match':
+            lst_name = lst_name + " - TRUMP"
 
         return {'name': lst_name}

@@ -116,6 +116,8 @@ class UploadHelper:
                                     meta['trump_reason'] = 'exact_match'
                                 else:
                                     meta['trump_reason'] = 'trumpable_release'
+                                if meta['debug']:
+                                    console.print(f"[bold green]Trump reason: {meta['trump_reason']} on {tracker_name}[/bold green]")
                             else:
                                 # For season packs: individual episodes are only in dupes for trumping purposes.
                                 # If user declines to trump, filter them out so they aren't shown as "potential dupes"
@@ -138,8 +140,8 @@ class UploadHelper:
                     if meta.get('filename_match', False) and meta.get('file_count_match', False):
                         console.print(f'[bold red]Exact match found! - {meta["filename_match"]}[/bold red]')
                         try:
-                            if tracker_name == "AITHER":
-                                console.print("[yellow]AITHER supports automatic trumping of exact matches, if the file is allowed to be trumped.[/yellow]")
+                            if tracker_name in ["AITHER", "LST"]:
+                                console.print(f"[yellow]{tracker_name} supports automatic trumping of exact matches, if the file is allowed to be trumped.[/yellow]")
                                 upload = cli_ui.ask_yes_no("Are you trumping this exact match?", default=False)
                                 if upload:
                                     meta['we_asked'] = True

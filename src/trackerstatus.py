@@ -144,7 +144,7 @@ class TrackerStatusManager:
                         if is_dupe:
                             local_tracker_status['dupe'] = True
 
-                        if tracker_name == "AITHER":
+                        if tracker_name in ["AITHER", "LST"]:
                             were_trumping = local_meta.get('were_trumping', False)
                             trump_reason = local_meta.get('trump_reason')
                             trumpable_id_after_dupe_check = local_meta.get('trumpable_id')
