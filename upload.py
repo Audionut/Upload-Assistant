@@ -1437,41 +1437,40 @@ async def do_the_thing(base_dir: str) -> None:
                                 await save_processed_file(log_file, path)
 
             else:
+                meta = cast(Meta, meta)
                 console.print()
                 console.print("[yellow]Processing uploads to trackers.....")
-                meta['are_we_trump_reporting'] = False
                 if meta.get('were_trumping', False):
                     trump_trackers = [t for t in cast(list[Any], meta.get('trackers', [])) if isinstance(t, str)]
                     console.print("[yellow]Checking for existing trump reports.....")
-                    is_trumping = await tracker_setup.process_trumpables(meta, trackers=trump_trackers)
-
-                    # Apply any per-tracker skip decisions made during trumpable processing
                     skip_upload_trackers = set(meta.get('skip_upload_trackers', []) or [])
                     tracker_status = cast(dict[str, dict[str, Any]], meta.get('tracker_status') or {})
-                    for t, st in tracker_status.items():
-                        if st.get('skip_upload') is True:
-                            skip_upload_trackers.add(t)
+                    trumping_trackers: list[str] = []
+                    for tracker in trump_trackers:
+                        is_trumping = await tracker_setup.process_trumpables(meta, tracker=tracker)
+                        console.print(f'[yellow]Trumpable check for {tracker} resulted in: {is_trumping}[/yellow]')
 
-                    if skip_upload_trackers:
-                        for t in skip_upload_trackers:
-                            per_tracker = tracker_status.setdefault(t, {})
-                            per_tracker['upload'] = False
-                            per_tracker['skipped'] = True
+                        # Apply any per-tracker skip decisions made during trumpable processing
+                        for t, st in tracker_status.items():
+                            if st.get('skip_upload') is True:
+                                skip_upload_trackers.add(t)
 
-                        meta['tracker_status'] = tracker_status
+                        if skip_upload_trackers:
+                            for t in skip_upload_trackers:
+                                per_tracker = tracker_status.setdefault(t, {})
+                                per_tracker['upload'] = False
+                                per_tracker['skipped'] = True
 
-                        meta['trackers'] = [t for t in meta.get('trackers', []) if t not in skip_upload_trackers]
-                        if meta.get('debug', False):
-                            console.print(f"[yellow]Skipping trackers due to trump report selection: {', '.join(sorted(skip_upload_trackers))}[/yellow]")
+                            meta['trackers'] = [t for t in meta.get('trackers', []) if t not in skip_upload_trackers]
+                            if meta.get('debug', False):
+                                console.print(f"[yellow]Skipping trackers due to trump report selection: {', '.join(sorted(skip_upload_trackers))}[/yellow]")
+                            if not meta['trackers']:
+                                console.print("[bold red]No trackers left to upload after trump checking.[/bold red]")
+                        if is_trumping:
+                            trumping_trackers.append(tracker)
 
-                        if not meta['trackers']:
-                            console.print("[bold red]No trackers left to upload after trump checking.[/bold red]")
-                            meta['are_we_trump_reporting'] = False
+                    meta['trumping_trackers'] = trumping_trackers
 
-                    if is_trumping:
-                        meta['are_we_trump_reporting'] = True
-
-                # we're uploading. the hardcoded successful_trackers = 10 is to bypass the skip_uploading check if not doing double dupe check
                 # allowing the skip uploading feature to only apply when double dupe checking is enabled
                 successful_trackers = 10
                 if meta.get('dupe_again', False):
@@ -1585,11 +1584,9 @@ async def do_the_thing(base_dir: str) -> None:
                         config, bot, f"Finished uploading: {meta['path']}\n", debug=meta.get('debug', False), meta=meta
                     )
 
-            if meta.get('are_we_trump_reporting', False):
-                console.print()
-                for tracker in meta.get('trumping_trackers', []):
-                    console.print(f"[yellow]Submitting trumpable report to {tracker}.....")
-                    await tracker_setup.make_trumpable_report(meta, tracker)
+            for tracker in meta.get('trumping_trackers', []):
+                console.print(f"[yellow]Submitting trumpable report to {tracker}.....")
+                await tracker_setup.make_trumpable_report(meta, tracker)
 
             find_requests = config['DEFAULT'].get('search_requests', False) if meta.get('search_requests') is None else meta.get('search_requests')
             if find_requests and meta['trackers'] not in ([], None, "") and not (meta.get('site_check', False) and not meta['is_disc']):

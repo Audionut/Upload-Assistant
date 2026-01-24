@@ -992,114 +992,81 @@ class TRACKER_SETUP:
 
         return match_found
 
-    async def process_trumpables(self, meta: Meta, trackers: Union[str, list[str]]) -> bool:
-        trackers = [trackers.strip().upper()] if isinstance(trackers, str) else [str(s).upper() for s in cast(list[Any], trackers)]
-
-        # Track which trackers support trumping for later use
-        trumping_trackers: list[str] = []
-
-        for tracker in trackers:
-            tracker_instance = self._create_tracker_instance(tracker)
-            if tracker_instance is None:
-                console.print(f"[red]Tracker {tracker} is not registered in tracker_class_map[/red]")
-                continue
-
-            if not isinstance(getattr(tracker_instance, 'trumping_url', None), str):
-                continue  # Skip trackers without trumping url support
-
-            trumping_trackers.append(tracker)
-        if not trumping_trackers:
-            if meta['debug']:
-                console.print("[yellow]No trackers with trumping support found.[/yellow]")
+    async def process_trumpables(self, meta: Meta, tracker: str) -> bool:
+        tracker_instance = self._create_tracker_instance(tracker)
+        if tracker_instance is None:
+            console.print(f"[red]Tracker {tracker} is not registered in tracker_class_map[/red]")
             return False
 
-        # Track trackers to skip without mutating meta['trackers'] in-place
-        # NOTE: meta['skip_trackers'] is used elsewhere as a boolean, so use a distinct key here.
-        if not isinstance(meta.get('skip_upload_trackers'), list):
-            meta['skip_upload_trackers'] = []
-        skip_upload_trackers = cast(list[str], meta.get('skip_upload_trackers', []))
-        meta['skip_upload_trackers'] = skip_upload_trackers
+        if not isinstance(getattr(tracker_instance, 'trumping_url', None), str):
+            return False
 
-        # Store which trackers we're trump reporting on (may be filtered later)
-        meta['trumping_trackers'] = trumping_trackers
+        url = getattr(tracker_instance, 'trumping_url', None)
+        if not isinstance(url, str):
+            console.print(f"[red]Tracker {tracker} does not support trumping reports.[/red]")
+            return False
 
-        for tracker in trumping_trackers:
-            tracker_instance = self._create_tracker_instance(tracker)
-            if tracker_instance is None:
-                console.print(f"[red]Tracker {tracker} is not registered in tracker_class_map[/red]")
-                continue
-            url = getattr(tracker_instance, 'trumping_url', None)
-            if not isinstance(url, str):
-                continue
+        reported_torrent_id = f"{meta.get(f'{tracker}_trumpable_id', '')}"
+        if not reported_torrent_id:
+            # Try tracker-specific matched ID
+            reported_torrent_id = f"{meta.get(f'{tracker}_matched_id', '')}"
+        if not reported_torrent_id and meta.get('matched_episode_ids', []):
+            reported_torrent_id = f"{meta['matched_episode_ids'][0].get('id', '')}"
+        if not reported_torrent_id:
+            console.print(f"[red]No reported torrent ID found in meta for trumpable processing on {tracker}[/red]")
+            return False
+        else:
+            # Store per-tracker to avoid overwriting across multiple trackers
+            meta[f'{tracker}_reported_torrent_id'] = reported_torrent_id
+        if tracker == "LST":
+            if meta.get('debug'):
+                console.print("[bold green]LST does not support searching existing trump reports[/bold green]")
+            return True
 
-            reported_torrent_id = f"{meta.get('trumpable_id', '')}"
-            if not reported_torrent_id:
-                # Try tracker-specific matched ID
-                reported_torrent_id = f"{meta.get(f'{tracker}_matched_id', '')}"
-            if not reported_torrent_id and meta.get('matched_episode_ids', []):
-                reported_torrent_id = f"{meta['matched_episode_ids'][0].get('id', '')}"
-            if not reported_torrent_id:
-                console.print(f"[red]No reported torrent ID found in meta for trumpable processing on {tracker}[/red]")
-                continue
-            else:
-                # Store per-tracker to avoid overwriting across multiple trackers
-                meta[f'{tracker}_reported_torrent_id'] = reported_torrent_id
-            if tracker == "LST":
-                # Skip LST-specific processing but continue checking other trackers
-                continue
+        trumping_reports, status = await self.get_tracker_trumps(meta, tracker, url, reported_torrent_id)
+        upload = False
+        if status != 200:
+            console.print(f"[bold red]Failed to retrieve trumping reports from {tracker}. HTTP Status: {status}[/bold red]")
+            # Mark this tracker as failed/skipped and continue to the next tracker
+            console.print(f"[bold red]Marking {tracker} to be skipped due to API failure[/bold red]")
+            if tracker not in meta.get('skip_upload_trackers', []):
+                meta.setdefault('skip_upload_trackers', [])
+                meta['skip_upload_trackers'].append(tracker)
+            meta.setdefault('tracker_status', {})
+            meta['tracker_status'].setdefault(tracker, {})
+            meta['tracker_status'][tracker]['skip_upload'] = True
+            return False
+        elif trumping_reports:
+            console.print(f"[bold yellow]Found {len(trumping_reports)} existing trumping report/s on {tracker} for this release[/bold yellow]")
+            for report in trumping_reports:
+                console.print(f"  [cyan]Report ID:[/cyan] {report.get('id')} - [cyan]Title:[/cyan] {report.get('title')}")
+                if report.get('trumping_torrent'):
+                    for torrent in report.get('trumping_torrent', []):
+                        torrent_name = torrent.get('name', 'Unknown')
+                        torrent_id = torrent.get('id', 'N/A')
+                        console.print(f"  [bold green]Already being trumped by:[/bold green] {torrent_name} (ID: {torrent_id})")
+                else:
+                    console.print("  [yellow]The trumping torrent for this report seems to be in modq.....[/yellow]")
+            try:
+                upload = cli_ui.ask_yes_no("Do you want to proceed with the upload anyway?", default=False)
+            except (EOFError, KeyboardInterrupt):
+                console.print("[yellow]Prompt cancelled; treating as 'no' for safety.[/yellow]")
+                upload = False
 
-            trumping_reports, status = await self.get_tracker_trumps(meta, tracker, url, reported_torrent_id)
-            if status != 200:
-                console.print(f"[bold red]Failed to retrieve trumping reports from {tracker}. HTTP Status: {status}[/bold red]")
-                # Mark this tracker as failed/skipped and continue to the next tracker
-                console.print(f"[bold red]Marking {tracker} to be skipped due to API failure[/bold red]")
-                if tracker not in skip_upload_trackers:
-                    skip_upload_trackers.append(tracker)
+            if not upload:
+                console.print(f"[bold red]Marking {tracker} to be skipped[/bold red]")
+                # Also mark in tracker_status when available (used elsewhere to skip upload)
                 meta.setdefault('tracker_status', {})
                 meta['tracker_status'].setdefault(tracker, {})
                 meta['tracker_status'][tracker]['skip_upload'] = True
-                continue
-            if trumping_reports:
-                console.print(f"[bold yellow]Found {len(trumping_reports)} existing trumping report/s on {tracker} for this release[/bold yellow]")
-                for report in trumping_reports:
-                    console.print(f"  [cyan]Report ID:[/cyan] {report.get('id')} - [cyan]Title:[/cyan] {report.get('title')}")
-                    if report.get('trumping_torrent'):
-                        for torrent in report.get('trumping_torrent', []):
-                            torrent_name = torrent.get('name', 'Unknown')
-                            torrent_id = torrent.get('id', 'N/A')
-                            console.print(f"  [bold green]Already being trumped by:[/bold green] {torrent_name} (ID: {torrent_id})")
-                    else:
-                        console.print("  [yellow]The trumping torrent for this report seems to be in modq.....[/yellow]")
-                try:
-                    upload = cli_ui.ask_yes_no("Do you want to proceed with the upload anyway?", default=False)
-                except (EOFError, KeyboardInterrupt):
-                    console.print("[yellow]Prompt cancelled; treating as 'no' for safety.[/yellow]")
-                    upload = False
-
-                if not upload:
-                    console.print(f"[bold red]Marking {tracker} to be skipped[/bold red]")
-                    if tracker not in skip_upload_trackers:
-                        skip_upload_trackers.append(tracker)
-                    # Also mark in tracker_status when available (used elsewhere to skip upload)
-                    meta.setdefault('tracker_status', {})
-                    meta['tracker_status'].setdefault(tracker, {})
-                    meta['tracker_status'][tracker]['skip_upload'] = True
-                    continue
-                console.print(f"[bold green]Proceeding with upload despite existing trumping reports on {tracker}[/bold green]")
-            else:
-                if meta['debug']:
-                    console.print(f"[bold green]Will make a trumpable report for this upload at {trumping_trackers}[/bold green]")
-
-        # Filter trumping trackers by skip marker (do not mutate meta['trackers'] here)
-        active_trumping_trackers = [t for t in trumping_trackers if t not in skip_upload_trackers]
-        meta['trumping_trackers'] = active_trumping_trackers
-        if not active_trumping_trackers:
-            if meta.get('debug'):
-                console.print("[yellow]All trump-capable trackers were marked to skip; skipping trump report creation.[/yellow]")
-            return False
+                return False
+            console.print(f"[bold green]Proceeding with upload despite existing trumping reports on {tracker}[/bold green]")
+        else:
+            if meta['debug']:
+                console.print(f"[bold green]Will make a trumpable report for this upload at {tracker}[/bold green]")
 
         if not meta.get('tv_pack'):
-            console.print("[yellow]Same trackers require comparisons to be provided for trump reports.\n"
+            console.print(f"[yellow]{tracker} requires comparisons to be provided for trump reports.\n"
                         "Are the comparison images in the description or are you adding links?")
             try:
                 where_compare = cli_ui.ask_string(
@@ -1145,7 +1112,7 @@ class TRACKER_SETUP:
                 return False
         else:
             if meta.get('debug'):
-                console.print(f"[bold green]TV pack upload detected, skipping comparison images for trump report on {active_trumping_trackers}[/bold green]")
+                console.print(f"[bold green]TV pack upload detected, skipping comparison images for trump report on {tracker}[/bold green]")
             return True
 
     async def get_tracker_trumps(self, meta: Meta, tracker: str, url: str, reported_torrent_id: str) -> tuple[list[JsonDict], Optional[int]]:
@@ -1341,10 +1308,9 @@ class TRACKER_SETUP:
                 except (EOFError, KeyboardInterrupt):
                     console.print("[yellow]Prompt cancelled; no additional message provided.[/yellow]")
                     user_message = None
-                message = message + ": " + user_message if user_message else message + ": No additional message provided by user."
+                message = message + ": " + user_message if user_message else message + ": No additional message provided by user"
+                message = message + ": https://lst.gg/torrents/" + str(trumping_torrent_id)
             payload: JsonDict = {
-                'reported_id': reported_torrent_id,
-                'torrent_id': trumping_torrent_id,
                 'message': str(message)
             }
 
