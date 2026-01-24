@@ -310,15 +310,31 @@ class HDSKY:
                 return False
 
     async def download_new_torrent(self, id, torrent_path, meta):
-        url = f"https://hdsky.me/download.php?id={id}&passkey={self.passkey}"
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            r = await client.get(url)
-            if r.status_code == 200:
-                with open(torrent_path, "wb") as f:
-                    f.write(r.content)
-                try:
-                    from src.clients import Clients
-                    client_inst = Clients(config=self.config)
-                    await client_inst.add_to_client(meta, self.tracker)
-                except Exception as e:
-                    console.print(f"[red]Push to client failed: {e}[/red]")
+        common = COMMON(config=self.config)
+        cookiefile = f"{meta['base_dir']}/data/cookies/HDSKY.txt"
+        cookies = await common.parseCookieFile(cookiefile)
+        download_url = ""
+        try:
+            async with httpx.AsyncClient(cookies=cookies, timeout=20.0, follow_redirects=True) as client:
+                details_url = f"https://hdsky.me/details.php?id={id}"
+                details_resp = await client.get(details_url)
+                if details_resp.status_code == 200:
+                    link_match = re.search(r"https://hdsky\.me/download\.php\?id=\d+&passkey=[^\"'&]+&sign=[^\"'&]+", details_resp.text)
+                    if link_match:
+                        download_url = link_match.group(0)
+                if not download_url:
+                    download_url = f"https://hdsky.me/download.php?id={id}&passkey={self.passkey}"
+                r = await client.get(download_url)
+                if r.status_code == 200:
+                    with open(torrent_path, "wb") as f:
+                        f.write(r.content)
+                    try:
+                        from src.clients import Clients
+                        client_inst = Clients(config=self.config)
+                        await client_inst.add_to_client(meta, self.tracker)
+                    except Exception as e:
+                        console.print(f"[red]Push to client failed: {e}[/red]")
+                else:
+                    console.print(f"[red]Failed to download torrent from HDSKY: HTTP {r.status_code}[/red]")
+        except Exception as e:
+            console.print(f"[red]Failed to download torrent from HDSKY: {e}[/red]")
