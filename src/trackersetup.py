@@ -1336,7 +1336,11 @@ class TRACKER_SETUP:
 
         else:
             if not meta.get('tv_pack'):
-                user_message = cli_ui.ask_string("Enter a reason for the trump report on LST:")
+                try:
+                    user_message = cli_ui.ask_string("Enter a reason for the trump report on LST:")
+                except (EOFError, KeyboardInterrupt):
+                    console.print("[yellow]Prompt cancelled; no additional message provided.[/yellow]")
+                    user_message = None
                 message = message + ": " + user_message if user_message else message + ": No additional message provided by user."
             payload: JsonDict = {
                 'reported_id': reported_torrent_id,
