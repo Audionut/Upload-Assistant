@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import Any, Optional, cast
 
 import aiofiles
@@ -253,6 +254,16 @@ class SSD:
         raw_urls = [str(image.get('raw_url', '')).strip() for image in images if image.get('raw_url')]
         return "\n".join(raw_urls)
 
+    async def fetch_ptgen_json(self, params: dict[str, Any]) -> Optional[dict[str, Any]]:
+        url = self.ptgen_api or 'https://ptgen.zhenzhen.workers.dev'
+        try:
+            response = await self.session.get(url, params=params)
+            response.raise_for_status()
+            ptgen_json = response.json()
+        except (httpx.HTTPError, ValueError):
+            return None
+        return ptgen_json
+
     async def get_douban_url(self, meta: Meta) -> tuple[str, str]:
         douban_url = str(meta.get('douban_url', '')).strip()
         ptgen_text = ''
@@ -265,16 +276,23 @@ class SSD:
                 douban_url = str(data[0].get('link', '')).strip()
 
         if not douban_url:
-            ptgen_text = await self.common.ptgen(meta, self.ptgen_api, self.ptgen_retry)
-            ptgen = cast(dict[str, Any], meta.get('ptgen', {}))
-            data_value = ptgen.get('data', [])
-            data = cast(list[dict[str, Any]], data_value) if isinstance(data_value, list) else []
-            if data:
-                douban_url = str(data[0].get('link', '')).strip()
+            imdb_id_raw = str(meta.get('imdb_id', '0')).replace('tt', '').strip()
+            if imdb_id_raw.isdigit() and int(imdb_id_raw) != 0:
+                ptgen_json = await self.fetch_ptgen_json({'search': f'tt{imdb_id_raw.zfill(7)}'})
+                if ptgen_json and not ptgen_json.get('error'):
+                    data_value = ptgen_json.get('data', [])
+                    data = cast(list[dict[str, Any]], data_value) if isinstance(data_value, list) else []
+                    if data:
+                        douban_url = str(data[0].get('link', '')).strip()
 
         if not douban_url:
             console.print("[red]Unable to determine Douban URL from PTGEN output.[/red]")
-            douban_url = console.input("[yellow]Please enter Douban URL: [/yellow]")
+            return '', ''
+
+        ptgen_json = await self.fetch_ptgen_json({'url': douban_url})
+        if ptgen_json and not ptgen_json.get('error'):
+            meta['ptgen'] = ptgen_json
+            ptgen_text = str(ptgen_json.get('format', '')).strip()
 
         if not ptgen_text:
             ptgen_text = str(meta.get('ptgen', {}).get('format', '')).strip()
@@ -338,17 +356,83 @@ class SSD:
         self.session.cookies = cast(Any, cookies)
         data = await self.get_data(meta)
 
-        is_uploaded = await self.cookie_auth_uploader.handle_upload(
+        if 'tracker_status' not in meta:
+            meta['tracker_status'] = {}
+        if self.tracker not in meta['tracker_status']:
+            meta['tracker_status'][self.tracker] = {}
+
+        if not data.get('url'):
+            meta['tracker_status'][self.tracker]['status_message'] = "Missing Douban URL, unable to upload."
+            return False
+
+        announce_url = str(self.config.get('TRACKERS', {}).get(self.tracker, {}).get('announce_url', '')).strip()
+        if not announce_url:
+            announce_url = f"{self.base_url}/announce.php"
+
+        files = await self.cookie_auth_uploader.load_torrent_file(
             meta=meta,
             tracker=self.tracker,
-            source_flag=self.source_flag,
-            torrent_url=self.torrent_url,
-            data=data,
             torrent_field_name='file',
-            upload_cookies=self.session.cookies,
-            upload_url=f"{self.base_url}/takeupload.php",
-            id_pattern=r'details\.php\?id=(\d+)',
-            success_status_code="302, 303",
+            torrent_name='',
+            source_flag=self.source_flag,
+            default_announce=announce_url,
         )
 
-        return is_uploaded
+        headers = {
+            "User-Agent": f"Upload Assistant {meta.get('current_version', 'github.com/Audionut/Upload-Assistant')}"
+        }
+
+        if meta.get("debug", False):
+            self.cookie_auth_uploader.upload_debug(self.tracker, data)
+            meta["tracker_status"][self.tracker]["status_message"] = "Debug mode enabled, not uploading"
+            await self.common.create_torrent_for_upload(
+                meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker"
+            )
+            return True
+
+        async with httpx.AsyncClient(
+            headers=headers, timeout=30.0, cookies=self.session.cookies, follow_redirects=True
+        ) as session:
+            response = await session.post(f"{self.base_url}/takeupload.php", data=data, files=files)
+
+        existing_match = None
+        if "已存在" in response.text or "exists" in response.text.lower():
+            existing_match = re.search(r"details\.php\?id=\d+", response.text)
+            if not existing_match:
+                existing_match = re.search(r"details\.php\?id=\d+", str(response.url))
+
+        if existing_match:
+            existing_path = existing_match.group(0)
+            existing_link = f"{self.base_url}/{existing_path}" if not existing_path.startswith("http") else existing_path
+            meta["tracker_status"][self.tracker]["status_message"] = f"Torrent already exists: {existing_link}"
+            console.print(f"[yellow]{self.tracker}: Torrent already exists: {existing_link}[/yellow]")
+            return False
+
+        id_pattern = r"details\.php\?id=(\d+)"
+        success_codes = {302, 303}
+        success = (
+            response.status_code in success_codes
+            or "details.php?id=" in str(response.url)
+            or re.search(id_pattern, response.text) is not None
+        )
+
+        if success:
+            return await self.cookie_auth_uploader.handle_successful_upload(
+                meta=meta,
+                tracker=self.tracker,
+                response=response,
+                id_pattern=id_pattern,
+                hash_is_id=False,
+                source_flag=self.source_flag,
+                user_announce_url=announce_url,
+                torrent_url=self.torrent_url,
+            )
+
+        return await self.cookie_auth_uploader.handle_failed_upload(
+            meta=meta,
+            tracker=self.tracker,
+            success_status_code="302, 303",
+            success_text="",
+            error_text="",
+            response=response,
+        )
