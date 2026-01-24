@@ -1023,6 +1023,9 @@ class TRACKER_SETUP:
                 console.print("[bold green]LST does not support searching existing trump reports[/bold green]")
             return True
 
+        if not meta.get('skip_upload_trackers') or not isinstance(meta.get('skip_upload_trackers'), list) or meta.get('skip_upload_trackers') is None:
+            meta.setdefault('skip_upload_trackers', [])
+
         trumping_reports, status = await self.get_tracker_trumps(meta, tracker, url, reported_torrent_id)
         upload = False
         if status != 200:
@@ -1030,11 +1033,7 @@ class TRACKER_SETUP:
             # Mark this tracker as failed/skipped and continue to the next tracker
             console.print(f"[bold red]Marking {tracker} to be skipped due to API failure[/bold red]")
             if tracker not in meta.get('skip_upload_trackers', []):
-                meta.setdefault('skip_upload_trackers', [])
                 meta['skip_upload_trackers'].append(tracker)
-            meta.setdefault('tracker_status', {})
-            meta['tracker_status'].setdefault(tracker, {})
-            meta['tracker_status'][tracker]['skip_upload'] = True
             return False
         elif trumping_reports:
             console.print(f"[bold yellow]Found {len(trumping_reports)} existing trumping report/s on {tracker} for this release[/bold yellow]")
@@ -1055,10 +1054,8 @@ class TRACKER_SETUP:
 
             if not upload:
                 console.print(f"[bold red]Marking {tracker} to be skipped[/bold red]")
-                # Also mark in tracker_status when available (used elsewhere to skip upload)
-                meta.setdefault('tracker_status', {})
-                meta['tracker_status'].setdefault(tracker, {})
-                meta['tracker_status'][tracker]['skip_upload'] = True
+                if tracker not in meta.get('skip_upload_trackers', []):
+                    meta['skip_upload_trackers'].append(tracker)
                 return False
             console.print(f"[bold green]Proceeding with upload despite existing trumping reports on {tracker}[/bold green]")
         else:

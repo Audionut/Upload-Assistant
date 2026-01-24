@@ -1443,17 +1443,13 @@ async def do_the_thing(base_dir: str) -> None:
                 if meta.get('were_trumping', False):
                     trump_trackers = [t for t in cast(list[Any], meta.get('trackers', [])) if isinstance(t, str)]
                     console.print("[yellow]Checking for existing trump reports.....")
-                    skip_upload_trackers = set(meta.get('skip_upload_trackers', []) or [])
                     tracker_status = cast(dict[str, dict[str, Any]], meta.get('tracker_status') or {})
                     trumping_trackers: list[str] = []
                     for tracker in trump_trackers:
                         is_trumping = await tracker_setup.process_trumpables(meta, tracker=tracker)
-                        console.print(f'[yellow]Trumpable check for {tracker} resulted in: {is_trumping}[/yellow]')
+                        skip_upload_trackers = set(meta.get('skip_upload_trackers', []) or [])
 
                         # Apply any per-tracker skip decisions made during trumpable processing
-                        for t, st in tracker_status.items():
-                            if st.get('skip_upload') is True:
-                                skip_upload_trackers.add(t)
 
                         if skip_upload_trackers:
                             for t in skip_upload_trackers:
@@ -1466,7 +1462,7 @@ async def do_the_thing(base_dir: str) -> None:
                                 console.print(f"[yellow]Skipping trackers due to trump report selection: {', '.join(sorted(skip_upload_trackers))}[/yellow]")
                             if not meta['trackers']:
                                 console.print("[bold red]No trackers left to upload after trump checking.[/bold red]")
-                        if is_trumping:
+                        if is_trumping and not skip_upload_trackers.__contains__(tracker):
                             trumping_trackers.append(tracker)
 
                     meta['trumping_trackers'] = trumping_trackers
