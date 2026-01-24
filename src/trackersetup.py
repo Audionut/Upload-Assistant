@@ -998,9 +998,6 @@ class TRACKER_SETUP:
             console.print(f"[red]Tracker {tracker} is not registered in tracker_class_map[/red]")
             return False
 
-        if not isinstance(getattr(tracker_instance, 'trumping_url', None), str):
-            return False
-
         url = getattr(tracker_instance, 'trumping_url', None)
         if not isinstance(url, str):
             console.print(f"[red]Tracker {tracker} does not support trumping reports.[/red]")
