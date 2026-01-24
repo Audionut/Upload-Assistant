@@ -93,7 +93,7 @@ class FfmpegBinaryManager:
                 with contextlib.suppress(Exception):
                     temp_archive.unlink()
 
-            except httpx.RequestError as e:
+            except (httpx.RequestError, httpx.HTTPStatusError) as e:
                 console.print(f"[red]Failed to download ffmpeg for {arch}: {e}[/red]")
                 results[arch] = False
 

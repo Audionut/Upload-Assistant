@@ -92,7 +92,7 @@ async def run_ffmpeg(command: Any) -> tuple[Optional[int], bytes, bytes]:
                     stderr=asyncio.subprocess.PIPE
                 )
                 stdout, stderr = await process.communicate()
-                return (process.returncode or -1), stdout, stderr
+                return (process.returncode if process.returncode is not None else -1), stdout, stderr
 
     # Fallback: use system/default ffmpeg (command.compile())
     process = await asyncio.create_subprocess_exec(
@@ -399,7 +399,7 @@ async def capture_disc_task(index: int, file: str, ss_time: str, image_path: str
             frame_info = meta.get('frame_info_map', {}).get(ss_time, {})
 
             frame_rate = meta.get('frame_rate', 24.0)
-            frame_number = int(ss_time * frame_rate)
+            frame_number = int(float(ss_time) * frame_rate)
 
             # If we have PTS time from frame info, use it to calculate a more accurate frame number
             if 'pts_time' in frame_info:
@@ -1331,11 +1331,11 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
                     if loglevel == 'verbose' or (meta and meta.get('debug', False)):
                         console.print("[cyan]Using libplacebo tonemapping[/cyan]")
                 else:
-                    vf_filters.append("format=rgb24")
                     vf_filters.extend([
                         "zscale=transfer=linear",
                         f"tonemap=tonemap={algorithm}:desat={desat}",
-                        "zscale=transfer=bt709"
+                        "zscale=transfer=bt709",
+                        "format=rgb24",
                     ])
                     if loglevel == 'verbose' or (meta and meta.get('debug', False)):
                         console.print(f"[cyan]Using zscale tonemap chain (algo={algorithm}, desat={desat})[/cyan]")
@@ -1444,10 +1444,10 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
 
         if hdr_tonemap:
             vf_filters.extend([
-                "format=rgb24"
                 "zscale=transfer=linear",
                 f"tonemap=tonemap={algorithm}:desat={desat}",
                 "zscale=transfer=bt709",
+                "format=rgb24",
             ])
 
         if meta.get('frame_overlay', False):
