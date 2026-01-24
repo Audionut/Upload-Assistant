@@ -110,8 +110,8 @@ class UploadHelper:
                             if upload:
                                 meta['we_asked'] = True
                                 meta['were_trumping'] = True
-                                if not meta.get('trumpable_id'):
-                                    meta['trumpable_id'] = meta.get(f'{tracker_name}_matched_id', None)
+                                if not meta.get(f'{tracker_name}_trumpable_id'):
+                                    meta[f'{tracker_name}_trumpable_id'] = meta.get(f'{tracker_name}_matched_id', None)
                                 if meta.get('filename_match', False) and meta.get('file_count_match', False):
                                     meta['trump_reason'] = 'exact_match'
                                 else:
@@ -147,8 +147,8 @@ class UploadHelper:
                                     meta['we_asked'] = True
                                     meta['were_trumping'] = True
                                     meta['trump_reason'] = 'exact_match'
-                                    if not meta.get('trumpable_id'):
-                                        meta['trumpable_id'] = meta.get(f'{tracker_name}_matched_id', None)
+                                    if not meta.get(f'{tracker_name}_trumpable_id'):
+                                        meta[f'{tracker_name}_trumpable_id'] = meta.get(f'{tracker_name}_matched_id', None)
                             else:
                                 upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
                                 meta['we_asked'] = True
