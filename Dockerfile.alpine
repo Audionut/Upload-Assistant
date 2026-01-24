@@ -8,6 +8,7 @@ RUN apk add --no-cache \
     ca-certificates \
     curl \
     ffmpeg \
+    libgdiplus \
     mediainfo \
     mktorrent \
     mono \
