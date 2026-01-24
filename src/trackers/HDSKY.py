@@ -18,6 +18,9 @@ class HDSKY:
         self.tracker = 'HDSKY'
         self.source_flag = 'HDSKY'
         self.passkey = str(config['TRACKERS'].get('HDSKY', {}).get('passkey', '')).strip()
+        self.announce_url = str(
+            config['TRACKERS'].get('HDSKY', {}).get('announce_url', 'https://tracker.hdsky.me/announce.php')
+        ).strip()
         self.meta_script = str(config['TRACKERS'].get('HDSKY', {}).get('meta_script', '')).strip()
         self.meta_timeout = int(config['TRACKERS'].get('HDSKY', {}).get('meta_timeout', 30))
         self.signature = None
@@ -234,7 +237,8 @@ class HDSKY:
 
     async def upload(self, meta, disctype):
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        announce_url = self.announce_url or "https://tracker.hdsky.me/announce.php"
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, announce_url=announce_url)
         desc_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
         if not os.path.exists(desc_file):
             await self.edit_desc(meta)
