@@ -61,6 +61,10 @@ class UploadHelper:
                 elif isinstance(tracker_rename, str):
                     display_name = tracker_rename
 
+            # Show naming change before dupe prompts so user knows what the final name will be
+            if display_name is not None and display_name != "" and display_name != meta.get('name', ''):
+                console.print(f"[bold yellow]{tracker_name} applies a naming change for this release: [green]{display_name}[/green][/bold yellow]")
+
             trumpable_text = None
             if meta.get('trumpable_id') or meta.get('matched_episode_ids', []):
                 trumpable_dupes = [
