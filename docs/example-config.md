@@ -279,7 +279,7 @@ Security note: these settings can allow the app (and the Web UI) to interact wit
 
 ### qBittorrent (`torrent_client: "qbit"`)
 Typical keys:
-- `qui_proxy_url` (str): Optional qui reverse proxy URL. No other qbit credentials are required if using qui.
+- `qui_proxy_url` (str): Optional. [QUI reverse proxy](https://getqui.com/docs/features/reverse-proxy) URL for qBittorrent. Create a **Client Proxy API Key** in QUI (**Settings → Client Proxy Keys**): name the client (e.g. "Upload Assistant"), choose the qBittorrent instance, then copy the generated proxy URL. Use the **full** URL, e.g. `http://localhost:7476/proxy/<client-api-key>`. The instance is fixed by the key you create. When set, `qbit_url` / `qbit_port` / `qbit_user` / `qbit_pass` are not used.
 - `enable_search` (bool): Search client for existing torrents to reuse hashes. NOTE: independant of auto_torrent_searching
 - `qbit_url` / `qbit_port` (str): Web UI host/port.
 - `qbit_user` / `qbit_pass` (str): Credentials.

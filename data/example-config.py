@@ -929,8 +929,9 @@ config = {
         # See https://github.com/Audionut/Upload-Assistant/wiki
         "qbittorrent": {
             "torrent_client": "qbit",
-            # qui reverse proxy url, see https://github.com/autobrr/qui#reverse-proxy-for-external-applications
-            # If using the qui reverse proxy, no other auth type needs to be set
+            # QUI reverse proxy: https://getqui.com/docs/features/reverse-proxy
+            # Create a Client Proxy API Key in QUI (Settings → Client Proxy Keys), pick the instance, paste the full proxy URL here.
+            # Example: "http://localhost:7476/proxy/<your-client-api-key>". No other qbit auth needed when set.
             "qui_proxy_url": "",
             # enable_search to True will automatically try and find a suitable hash to save having to rehash when creating torrents
             "enable_search": True,
@@ -978,8 +979,9 @@ config = {
         "qbittorrent_searching": {
             # an example of using a qBitTorrent client just for searching, when using another client for injection
             "torrent_client": "qbit",
-            # qui reverse proxy url, see https://github.com/autobrr/qui#reverse-proxy-for-external-applications
-            # If using the qui reverse proxy, no other auth type needs to be set
+            # QUI reverse proxy: https://getqui.com/docs/features/reverse-proxy
+            # Create a Client Proxy API Key in QUI (Settings → Client Proxy Keys), pick the instance, paste the full proxy URL here.
+            # Example: "http://localhost:7476/proxy/<your-client-api-key>". No other qbit auth needed when set.
             "qui_proxy_url": "",
             # enable_search to True will automatically try and find a suitable hash to save having to rehash when creating torrents
             "enable_search": True,
