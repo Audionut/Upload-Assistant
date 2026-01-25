@@ -31,7 +31,8 @@ async def check_mod_q_and_draft(
         'BHD': {'draft_live': True},
         'BLU': {'mod_q': True, 'draft': False},
         'LST': {'mod_q': True, 'draft': True},
-        'LT': {'mod_q': True, 'draft': False}
+        'LT': {'mod_q': True, 'draft': False},
+        'LUME': {'mod_q': True, 'draft': False},
     }
 
     modq, draft = None, None

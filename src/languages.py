@@ -277,6 +277,7 @@ class LanguagesManager:
 
                         if audio_languages:
                             audio_languages = [lang.split()[0] for lang in audio_languages]
+                            audio_languages = list(set(audio_languages))
                             meta['audio_languages'] = audio_languages
 
                     if (not meta.get('unattended_subtitle_skip', False) or not meta.get('unattended_audio_skip', False)) and not subtitle_languages:
@@ -322,6 +323,7 @@ class LanguagesManager:
 
                             if subtitle_languages:
                                 subtitle_languages = [lang.split()[0] for lang in subtitle_languages]
+                                subtitle_languages = list(set(subtitle_languages))
                                 meta['subtitle_languages'] = subtitle_languages
 
                         if meta.get('hardcoded_subs', False):

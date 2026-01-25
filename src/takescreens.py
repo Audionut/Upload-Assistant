@@ -1343,6 +1343,7 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
                     if loglevel == 'verbose' or (meta and meta.get('debug', False)):
                         console.print("[cyan]Using libplacebo tonemapping[/cyan]")
                 else:
+                    vf_filters.append("format=rgb48le")
                     vf_filters.extend([
                         "zscale=transfer=linear",
                         f"tonemap=tonemap={algorithm}:desat={desat}",
@@ -1424,6 +1425,7 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
                 if w_sar != 1 or h_sar != 1:
                     z_vf_filters.append(f"scale={scaled_w}:{scaled_h}")
                 z_vf_filters.extend([
+                    "format=rgb48le",
                     "zscale=transfer=linear",
                     f"tonemap=tonemap={algorithm}:desat={desat}",
                     "zscale=transfer=bt709",

@@ -61,6 +61,10 @@ class UploadHelper:
                 elif isinstance(tracker_rename, str):
                     display_name = tracker_rename
 
+            # Show naming change before dupe prompts so user knows what the final name will be
+            if display_name is not None and display_name != "" and display_name != meta.get('name', ''):
+                console.print(f"[bold yellow]{tracker_name} applies a naming change for this release: [green]{display_name}[/green][/bold yellow]")
+
             trumpable_text = None
             if meta.get('trumpable_id') or meta.get('matched_episode_ids', []):
                 trumpable_dupes = [
@@ -110,12 +114,14 @@ class UploadHelper:
                             if upload:
                                 meta['we_asked'] = True
                                 meta['were_trumping'] = True
-                                if not meta.get('trumpable_id'):
-                                    meta['trumpable_id'] = meta.get(f'{tracker_name}_matched_id', None)
+                                if not meta.get(f'{tracker_name}_trumpable_id'):
+                                    meta[f'{tracker_name}_trumpable_id'] = meta.get(f'{tracker_name}_matched_id', None)
                                 if meta.get('filename_match', False) and meta.get('file_count_match', False):
                                     meta['trump_reason'] = 'exact_match'
                                 else:
                                     meta['trump_reason'] = 'trumpable_release'
+                                if meta['debug']:
+                                    console.print(f"[bold green]Trump reason: {meta['trump_reason']} on {tracker_name}[/bold green]")
                             else:
                                 # For season packs: individual episodes are only in dupes for trumping purposes.
                                 # If user declines to trump, filter them out so they aren't shown as "potential dupes"
@@ -138,15 +144,15 @@ class UploadHelper:
                     if meta.get('filename_match', False) and meta.get('file_count_match', False):
                         console.print(f'[bold red]Exact match found! - {meta["filename_match"]}[/bold red]')
                         try:
-                            if tracker_name == "AITHER":
-                                console.print("[yellow]AITHER supports automatic trumping of exact matches, if the file is allowed to be trumped.[/yellow]")
+                            if tracker_name in ["AITHER", "LST"]:
+                                console.print(f"[yellow]{tracker_name} supports automatic trumping of exact matches, if the file is allowed to be trumped.[/yellow]")
                                 upload = cli_ui.ask_yes_no("Are you trumping this exact match?", default=False)
                                 if upload:
                                     meta['we_asked'] = True
                                     meta['were_trumping'] = True
                                     meta['trump_reason'] = 'exact_match'
-                                    if not meta.get('trumpable_id'):
-                                        meta['trumpable_id'] = meta.get(f'{tracker_name}_matched_id', None)
+                                    if not meta.get(f'{tracker_name}_trumpable_id'):
+                                        meta[f'{tracker_name}_trumpable_id'] = meta.get(f'{tracker_name}_matched_id', None)
                             else:
                                 upload = cli_ui.ask_yes_no(f"Upload to {tracker_name} anyway?", default=False)
                                 meta['we_asked'] = True
