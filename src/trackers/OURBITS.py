@@ -171,7 +171,49 @@ class OURBITS:
         return res_map.get(meta.get('resolution'), 1)
 
     async def get_processing_sel(self, meta: dict[str, Any]) -> int:
-        region = str(meta.get('region') or meta.get('country') or '').lower()
+        region_raw = str(meta.get('region') or meta.get('country') or '').strip()
+        region = region_raw.lower()
+        region_code = region_raw.upper()
+        code_map = {
+            'CHN': 1,
+            'CHINA': 1,
+            'CN': 1,
+            'HKG': 3,
+            'HONGKONG': 3,
+            'HK': 3,
+            'TWN': 3,
+            'TAIWAN': 3,
+            'TW': 3,
+            'JPN': 4,
+            'JP': 4,
+            'JAPAN': 4,
+            'KOR': 5,
+            'KR': 5,
+            'KOREA': 5,
+            'USA': 2,
+            'US': 2,
+            'UNITEDSTATES': 2,
+            'GBR': 2,
+            'UK': 2,
+            'EUR': 2,
+            'EU': 2,
+            'FRA': 2,
+            'FRANCE': 2,
+            'GER': 2,
+            'GERMANY': 2,
+            'ITA': 2,
+            'ITALY': 2,
+            'ESP': 2,
+            'SPAIN': 2,
+            'CAN': 2,
+            'CANADA': 2,
+        }
+        tokens = [token for token in re.split(r'[^A-Za-z0-9]+', region_code) if token]
+        for token in tokens:
+            if token in code_map:
+                return code_map[token]
+        if region_code in code_map:
+            return code_map[region_code]
         if any(key in region for key in ("china", "chinese", "cn", "chn", "mainland")):
             return 1
         if any(key in region for key in ("hong kong", "hongkong", "hk", "taiwan", "tw")):
@@ -180,7 +222,7 @@ class OURBITS:
             return 4
         if any(key in region for key in ("korea", "kr")):
             return 5
-        if any(key in region for key in ("us", "usa", "united states", "uk", "europe", "eu", "france", "germany", "italy", "spain")):
+        if any(key in region for key in ("us", "usa", "united states", "uk", "europe", "eu", "france", "germany", "italy", "spain", "canada")):
             return 2
         return 6
 
