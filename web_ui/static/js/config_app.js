@@ -1712,13 +1712,8 @@ function SecurityTab({ isDarkMode }) {
   const [newTokenLabel, setNewTokenLabel] = useState('');
   const [createdTokenRaw, setCreatedTokenRaw] = useState(null);
   const [tokenMessage, setTokenMessage] = useState('');
-  const scopeOptions = [
-    { id: 'execute', label: 'Execute' },
-    { id: 'config', label: 'Read config' },
-    { id: 'config_update', label: 'Modify config' },
-    { id: 'browse', label: 'Browse (roots & files)' }
-  ];
-  const [selectedScopes, setSelectedScopes] = useState(['execute']);
+  const [createdTokenCopied, setCreatedTokenCopied] = useState(false);
+  
   
 
   useEffect(() => {
@@ -1845,11 +1840,10 @@ function SecurityTab({ isDarkMode }) {
     setTokenMessage('');
     setCreatedTokenRaw(null);
     try {
-      const scopesToSend = selectedScopes && selectedScopes.length ? selectedScopes : ['*'];
       const resp = await apiFetch(`${API_BASE}/tokens`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate', label: newTokenLabel || '', persist: false, scopes: scopesToSend })
+        body: JSON.stringify({ action: 'generate', label: newTokenLabel || '', persist: false })
       });
       const data = await resp.json();
       if (data && data.success && data.token) {
@@ -1871,11 +1865,10 @@ function SecurityTab({ isDarkMode }) {
     if (!token) return;
     setTokenMessage('');
     try {
-      const scopesToSend = selectedScopes && selectedScopes.length ? selectedScopes : ['*'];
       const resp = await apiFetch(`${API_BASE}/tokens`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'store', token, label: newTokenLabel || '', scopes: scopesToSend })
+        body: JSON.stringify({ action: 'store', token, label: newTokenLabel || '' })
       });
       const data = await resp.json();
       if (data && data.success) {
@@ -2048,9 +2041,27 @@ function SecurityTab({ isDarkMode }) {
           {createdTokenRaw && (
             <div className={`p-3 mb-3 rounded ${isDarkMode ? 'bg-gray-700 text-white' : 'bg-yellow-50 text-gray-900'}`}>
               <div className="font-medium mb-2">New token (store this now)</div>
-              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                 <input readOnly value={createdTokenRaw} className={isDarkMode ? 'flex-1 px-2 py-1 rounded border border-gray-700 bg-gray-900 text-gray-100' : 'flex-1 px-2 py-1 rounded border border-gray-300 bg-white text-gray-800'} />
-                <button onClick={() => { navigator.clipboard && navigator.clipboard.writeText(createdTokenRaw); }} className="px-3 py-1 bg-gray-800 text-white rounded">Copy</button>
+                <button
+                  onClick={async () => {
+                    try {
+                      if (navigator.clipboard && createdTokenRaw) {
+                        await navigator.clipboard.writeText(createdTokenRaw);
+                        setCreatedTokenCopied(true);
+                        setTokenMessage('Token copied to clipboard');
+                        setTimeout(() => setCreatedTokenCopied(false), 2000);
+                      } else {
+                        setTokenMessage('Clipboard unavailable');
+                      }
+                    } catch (err) {
+                      setTokenMessage('Failed to copy token');
+                    }
+                  }}
+                  className="px-3 py-1 bg-gray-800 text-white rounded"
+                >
+                  {createdTokenCopied ? 'Copied!' : 'Copy'}
+                </button>
                 <button onClick={() => handleStoreToken(createdTokenRaw)} className="px-3 py-1 bg-blue-600 text-white rounded">Store</button>
               </div>
             </div>
@@ -2059,36 +2070,7 @@ function SecurityTab({ isDarkMode }) {
             <div className="mb-2 font-medium">Token label</div>
             <input value={newTokenLabel} onChange={(e) => setNewTokenLabel(e.target.value)} placeholder="Optional label" className={`w-full px-3 py-2 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`} />
 
-            <div className="mt-3">
-              <div className="mb-1 font-medium">Scopes</div>
-              <div className="flex gap-2 flex-wrap">
-                {scopeOptions.map((s) => (
-                  React.createElement('label', { key: s.id, className: 'inline-flex items-center gap-2' },
-                    React.createElement('input', {
-                      type: 'checkbox',
-                      checked: selectedScopes.includes(s.id) || selectedScopes.includes('*'),
-                      onChange: (e) => {
-                        if (e.target.checked) {
-                          setSelectedScopes((prev) => {
-                            // if wildcard present, remove it when specific selected
-                            const next = new Set(prev.filter(p => p !== '*'));
-                            next.add(s.id);
-                            return Array.from(next);
-                          });
-                        } else {
-                          setSelectedScopes((prev) => prev.filter(p => p !== s.id));
-                        }
-                      }
-                    }),
-                    React.createElement('span', { className: isDarkMode ? 'text-gray-200' : 'text-gray-700' }, s.label)
-                  )
-                ))}
-                <label className="inline-flex items-center gap-2">
-                  <input type="checkbox" checked={selectedScopes.includes('*')} onChange={(e) => { if (e.target.checked) setSelectedScopes(['*']); else setSelectedScopes([]); }} />
-                  <span className={isDarkMode ? 'text-gray-200' : 'text-gray-700'}>All (wildcard)</span>
-                </label>
-              </div>
-            </div>
+            
 
             <div className="mt-3 flex gap-2">
               <button onClick={handleCreateToken} className="px-3 py-1 bg-green-600 text-white rounded">Generate</button>
@@ -2115,7 +2097,6 @@ function SecurityTab({ isDarkMode }) {
                     <div key={t.id} className={`flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
                       <div className="text-xs font-mono">{t.id.slice(0, 8)}..</div>
                       <div className="flex-1 px-3 text-sm">{t.label || '(no label)'} — {t.user}</div>
-                      <div className="text-sm text-gray-400 mr-3">{(t.scopes || ['*']).join(', ')}</div>
                       <div className="text-sm text-gray-500 mr-3">{t.expiry ? new Date(t.expiry * 1000).toLocaleString() : 'no expiry'}</div>
                       <button onClick={() => handleRevokeToken(t.id)} className="px-2 py-1 bg-red-600 text-white rounded text-sm">Revoke</button>
                     </div>

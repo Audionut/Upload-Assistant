@@ -1,5 +1,4 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownParameterType=false
 import ast
 import base64
 import contextlib
@@ -14,16 +13,18 @@ import subprocess
 import sys
 import threading
 import traceback
-from collections.abc import Sequence
-from datetime import datetime, timezone
+from contextlib import suppress
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal, Optional, TypedDict, Union, cast
 
-import keyring
 import pyotp
-from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for  # pyright: ignore[reportMissingImports]
-from flask_cors import CORS  # pyright: ignore[reportMissingModuleSource]
-from werkzeug.security import safe_join  # pyright: ignore[reportMissingImports]
+from flask import Flask, Response, g, jsonify, redirect, render_template, request, session, url_for
+from flask_cors import CORS
+from flask_session import Session
+from werkzeug.security import safe_join
+
+import web_ui.auth as auth_mod
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -35,18 +36,36 @@ except Exception:
 
 from src.console import console
 
-# Initialize keyring backend only when needed (not in Docker, and not using env var auth)
-is_docker = os.path.exists('/.dockerenv')
-has_env_auth = bool(os.environ.get('UA_WEBUI_USERNAME') and os.environ.get('UA_WEBUI_PASSWORD')) or bool(os.environ.get('UA_WEBUI_TOTP_SECRET'))
+cfg_dir = auth_mod.get_config_dir()
+cfg_dir.mkdir(parents=True, exist_ok=True)
 
-if not is_docker and not has_env_auth:
-    try:
-        keyring.core.init_backend()
-    except Exception as e:
-        console.print(f"[red]Keyring backend initialization failed: {e}[/red]")
-        console.print("[red]Cannot initialize secure credential storage. Please ensure your system has a compatible keyring backend installed.[/red]")
-        console.print("[red]Or use environment variables for authentication instead.[/red]")
-        sys.exit(1)
+# Helper: simple file-backed config store under the auth config dir. Values
+# are stored as raw text. This replaces OS keyring usage and allows Docker
+# and non-Docker deployments to persist credentials via the configured
+# persistent config mechanism.
+def _cfg_file_path(name: str) -> Path:
+    return cfg_dir / name
+
+
+def _cfg_read(name: str) -> Optional[str]:
+    p = _cfg_file_path(name)
+    with contextlib.suppress(Exception):
+        if p.exists():
+            return p.read_text(encoding="utf-8")
+    return None
+
+
+def _cfg_write(name: str, value: str) -> None:
+    p = _cfg_file_path(name)
+    with contextlib.suppress(Exception):
+        p.write_text(value, encoding="utf-8")
+
+
+def _cfg_delete(name: str) -> None:
+    p = _cfg_file_path(name)
+    with contextlib.suppress(Exception):
+        if p.exists():
+            p.unlink()
 
 Flask = cast(Any, Flask)
 Response = cast(Any, Response)
@@ -57,7 +76,142 @@ CORS_fn = cast(Any, CORS)
 safe_join = cast(Any, safe_join)
 
 app: Any = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+# Load stable session secret (env/file/SECRET_KEY fallback). Use bytes directly.
+
+session_secret = auth_mod.load_session_secret()
+app.secret_key = session_secret
+
+# Configure server-side filesystem sessions (persisted under config dir)
+cfg_dir = auth_mod.get_config_dir()
+sess_dir = cfg_dir / "sessions"
+sess_dir.mkdir(parents=True, exist_ok=True)
+app.config["SESSION_TYPE"] = "filesystem"
+app.config["SESSION_FILE_DIR"] = str(sess_dir)
+app.config["SESSION_PERMANENT"] = False
+# Ensure permanent sessions (when set) expire after 30 days to match remember-me cookie
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
+Session(app)
+
+
+# Encrypted session helpers --------------------------------------------------
+def _derive_aes_key() -> Optional[bytes]:
+    try:
+        return auth_mod.derive_aes_key(session_secret)
+    except Exception:
+        return None
+
+
+def _load_session_dict() -> dict:
+    try:
+        enc = session.get("enc")
+        if not enc:
+            return {}
+        key = _derive_aes_key()
+        if not key:
+            return {}
+        dec = auth_mod.decrypt_text(key, enc)
+        if not dec:
+            return {}
+        return json.loads(dec)
+    except Exception:
+        return {}
+
+
+def _commit_session_dict(d: dict) -> None:
+    try:
+        key = _derive_aes_key()
+        if not key:
+            return
+        raw = json.dumps(d, separators=(",", ":"), ensure_ascii=False)
+        enc = auth_mod.encrypt_text(key, raw)
+        session["enc"] = enc
+    except Exception:
+        pass
+
+
+def _session_get(key: str, default: Any = None) -> Any:
+    return _load_session_dict().get(key, default)
+
+
+def _session_set(key: str, value: Any) -> None:
+    d = _load_session_dict()
+    d[key] = value
+    _commit_session_dict(d)
+
+
+def _session_pop(key: str, default: Any = None) -> Any:
+    d = _load_session_dict()
+    val = d.pop(key, default)
+    _commit_session_dict(d)
+    return val
+
+
+def _is_authenticated() -> bool:
+    if getattr(g, "authenticated", False):
+        return True
+    return bool(_session_get("authenticated", False))
+
+
+def _cleanup_duplicate_sessions(username: str) -> None:
+    """Remove other session files that belong to `username` to keep a
+    single session file per user. This inspects files under the configured
+    `SESSION_FILE_DIR` and attempts to decrypt stored `enc` payloads using
+    the current derived AES key.
+    """
+    try:
+        key = _derive_aes_key()
+        if not key:
+            return
+        current_enc = session.get("enc")
+        sdir = Path(app.config.get("SESSION_FILE_DIR", ""))
+        if not sdir or not sdir.exists():
+            return
+        for p in sdir.iterdir():
+            if not p.is_file():
+                continue
+            try:
+                txt = p.read_text(encoding="utf-8", errors="ignore").strip()
+                candidate_enc = None
+                # If file is JSON with an 'enc' key, use that
+                try:
+                    j = json.loads(txt)
+                    if isinstance(j, dict) and isinstance(j.get("enc"), str):
+                        candidate_enc = j.get("enc")
+                except Exception:
+                    # Not JSON - treat whole file as enc payload
+                    candidate_enc = txt
+
+                if not candidate_enc:
+                    continue
+
+                # Skip the file that matches our current session payload
+                if current_enc and candidate_enc == current_enc:
+                    continue
+
+                dec = None
+                try:
+                    dec = auth_mod.decrypt_text(key, candidate_enc)
+                except Exception:
+                    dec = None
+
+                if not dec:
+                    continue
+
+                try:
+                    obj = json.loads(dec)
+                    u = obj.get("username")
+                except Exception:
+                    u = None
+
+                if u and u == username:
+                    # Remove stale session file
+                    with contextlib.suppress(Exception):
+                        p.unlink()
+            except Exception:
+                continue
+    except Exception:
+        pass
+
 
 # Supported video file extensions for WebUI file browser
 SUPPORTED_VIDEO_EXTS = {'.mkv', '.mp4', '.ts'}
@@ -68,28 +222,13 @@ inproc_lock = threading.Lock()
 # Runtime browse roots (set by upload.py when starting web UI)
 _runtime_browse_roots: Optional[str] = None
 
-# Runtime flags and stored auth/totp
-saved_auth: Optional[tuple[str, str]] = None
+# Runtime flags and stored totp
 saved_totp_secret: Optional[str] = None
 
-# Detect docker mode (allow operator to set DOCKER_CONTAINER env explicitly)
-DOCKER_MODE = bool(os.environ.get("DOCKER_CONTAINER") or os.path.exists("/.dockerenv"))
+# Docker-mode special casing removed; behavior is unified regardless of containerization.
 
 
-def _read_docker_secret_file(*names: str) -> Optional[str]:
-    """Return the first secret file content found for any of the provided names.
-    Docker secrets are usually mounted at /run/secrets/<name>.
-    """
-    base = "/run/secrets"
-    for name in names:
-        path = os.path.join(base, name)
-        try:
-            if os.path.exists(path):
-                with open(path, encoding="utf-8") as f:
-                    return f.read().strip()
-        except OSError:
-            continue
-    return None
+
 
 
 # CSRF helpers ---------------------------------------------------------------
@@ -107,7 +246,7 @@ def _verify_csrf_header() -> bool:
             if b and _verify_api_token(b):
                 return True
 
-        token = session.get("csrf_token")
+        token = _session_get("csrf_token")
         if not token:
             return False
         header = request.headers.get("X-CSRF-Token")
@@ -125,61 +264,11 @@ def _verify_csrf_header() -> bool:
         return False
 
 
-# Load TOTP secret: prefer env var, then Docker secrets, then keyring
-saved_totp_secret = os.environ.get("UA_WEBUI_TOTP_SECRET")
-if saved_totp_secret:
-    # If loaded from env var, remove from keyring to avoid duplication
-    with contextlib.suppress(Exception):
-        keyring.delete_password("upload-assistant", "totp_secret")
-elif DOCKER_MODE:
-    saved_totp_secret = _read_docker_secret_file("UA_TOTP_SECRET", "ua_totp_secret", "upload-assistant-totp")
-else:
-    with contextlib.suppress(Exception):
-        saved_totp_secret = keyring.get_password("upload-assistant", "totp_secret")
-
-
-# Load credentials: prefer env vars, then Docker secrets when running in Docker; otherwise use OS keyring
-env_user = os.environ.get("UA_WEBUI_USERNAME")
-env_pass = os.environ.get("UA_WEBUI_PASSWORD")
-if env_user and env_pass:
-    saved_auth = (env_user, env_pass)
-elif DOCKER_MODE:
-    # Try separate username/password secrets first, then combined auth secret
-    docker_user = _read_docker_secret_file("UA_WEBUI_USERNAME", "ua_webui_username")
-    docker_pass = _read_docker_secret_file("UA_WEBUI_PASSWORD", "ua_webui_password")
-    if docker_user and docker_pass:
-        saved_auth = (docker_user, docker_pass)
-    else:
-        combined = _read_docker_secret_file("upload-assistant-auth", "upload_assistant_auth", "ua_webui_auth")
-        if combined and ":" in combined:
-            u, p = combined.split(":", 1)
-            saved_auth = (u, p)
-
-else:
-    # Try keyring for persisted credentials when not in Docker
-    # Read persisted credentials from keyring. Historically we stored credentials
-    # as a simple "username:password" string which fails when the username
-    # itself contains a colon. Switch to a JSON encoding to make the round-trip
-    # safe. Keep backwards-compatibility by attempting to parse JSON first,
-    # then falling back to the legacy colon-separated format.
-    with contextlib.suppress(Exception):
-        auth_data = keyring.get_password("upload-assistant", "auth")
-        if auth_data:
-            try:
-                parsed = json.loads(auth_data)
-                if isinstance(parsed, dict) and "username" in parsed and "password" in parsed:
-                    saved_auth = (parsed["username"], parsed["password"])
-                else:
-                    # Not the expected JSON shape; fall back to legacy parsing below
-                    raise ValueError("unexpected json shape")
-            except Exception:
-                # Legacy format: username:password (note this may mis-handle
-                # usernames that contain ':' — new code saves JSON to avoid
-                # that limitation)
-                if ":" in auth_data:
-                    u, p = auth_data.split(":", 1)
-                    saved_auth = (u, p)
-
+# Load TOTP secret
+try:
+    saved_totp_secret = auth_mod.get_totp_secret()
+except Exception:
+    saved_totp_secret = None
 
 # Persistent cookie key helpers -------------------------------------------------
 def _get_persistent_cookie_key() -> Optional[bytes]:
@@ -187,10 +276,8 @@ def _get_persistent_cookie_key() -> Optional[bytes]:
     Attempt to read from keyring; if missing and not in Docker, generate and store one.
     """
     try:
-        # Prefer keyring-backed storage
-        raw = keyring.get_password("upload-assistant", "session_key")
+        raw = _cfg_read("session_key")
         if raw:
-            # Accept hex or raw string; prefer hex decode when possible
             try:
                 return bytes.fromhex(raw)
             except Exception:
@@ -198,126 +285,36 @@ def _get_persistent_cookie_key() -> Optional[bytes]:
     except Exception:
         pass
 
-    # In Docker, try secret file fallback
-    if DOCKER_MODE:
-        raw = _read_docker_secret_file("UA_SESSION_KEY", "ua_session_key", "upload-assistant-session")
-        if raw:
-            try:
-                return bytes.fromhex(raw)
-            except Exception:
-                return raw.encode("utf-8")
-
-    # Non-docker: generate and persist to keyring if possible
+    # Generate and persist to config if no persisted key found
     try:
         new = secrets.token_hex(32)
         with contextlib.suppress(Exception):
-            keyring.set_password("upload-assistant", "session_key", new)
+            _cfg_write("session_key", new)
         return bytes.fromhex(new)
     except Exception:
         return None
 
-
-# API token helpers ----------------------------------------------------------
-# The name of the key used in the keyring/store. This is not a password value
-# but Bandit flags it as a hardcoded password string; suppress with nosec.
-_API_TOKEN_STORE_KEY = "upload-assistant-api-tokens"  # nosec: B105 - key name, not a secret
-
-# If operator provided a single bearer token via `UA_TOKEN`, treat it as canonical
-# and remove any persisted token store to avoid duplicate/conflicting tokens.
-# This mirrors how TOTP secrets are handled when `UA_WEBUI_TOTP_SECRET` is set.
-if os.environ.get("UA_TOKEN"):
-    with contextlib.suppress(Exception):
-        keyring.delete_password("upload-assistant", _API_TOKEN_STORE_KEY)
-    with contextlib.suppress(Exception):
-        console.print("UA_TOKEN set; removed persisted API token store from keyring.", markup=False)
-
 def _load_token_store() -> dict[str, Any]:
-    # Support operator-provided single-token via UA_TOKEN environment variable
-    # (raw token string). If present, treat it as a single valid token owned by
-    # the configured webui username (if available). This env var is read-only
-    # at runtime and is the canonical way to supply a token in container setups.
-    single = os.environ.get("UA_TOKEN")
-    if single:
-        try:
-            token = str(single).strip()
-            if token:
-                # Associate token with configured username when available
-                owner = os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else None) or "container"
-                return {
-                    token: {
-                        "user": owner,
-                        "label": "env",
-                        "created": int(datetime.now(timezone.utc).timestamp()),
-                        "expiry": None,
-                        "scopes": ["*"],
-                    }
-                }
-        except Exception:
-            return {}
-
-    # Note: file-backed token stores are not supported. Operator should
-    # provide tokens via UA_TOKEN_STORE or UA_TOKEN_STORE_B64 environment
-    # variables. For non-Docker hosts we fallback to keyring when available.
-
     try:
-        raw = None
-        # Fallback to keyring for non-docker hosts
-        if not DOCKER_MODE:
-            with contextlib.suppress(Exception):
-                raw = keyring.get_password("upload-assistant", _API_TOKEN_STORE_KEY)
-        else:
-            # Docker: prefer UA_TOKEN env var (handled above). No other file
-            # or env formats are supported for token persistence.
-            raw = None
-
-        if not raw:
-            return {}
-        try:
-            data = json.loads(raw)
-            if isinstance(data, dict):
-                return data
-        except Exception:
-            return {}
+        return auth_mod.get_api_tokens() or {}
     except Exception:
         return {}
-    return {}
-
 
 def _persist_token_store(store: dict[str, Any]) -> None:
-    # If operator provided the token store via env var, do not attempt to write
-    # back to the environment (env vars are immutable at runtime). Persisting
-    # when UA_TOKEN_STORE/UA_TOKEN_STORE_B64 is set would be a no-op — avoid
-    # surprising behavior and simply skip persistence in that case.
-    if os.environ.get("UA_TOKEN"):
-        with contextlib.suppress(Exception):
-            console.print("Token provided via UA_TOKEN env var; skipping runtime persistence.", markup=False)
-        return
-
-    # Do not persist to files from the running container. Operator-provided
-    # env-var stores are read-only at runtime; on non-Docker hosts we persist
-    # to the OS keyring when available.
-
-    try:
-        raw = json.dumps(store, separators=(",", ":"), ensure_ascii=False)
-        if not DOCKER_MODE:
-            with contextlib.suppress(Exception):
-                keyring.set_password("upload-assistant", _API_TOKEN_STORE_KEY, raw)
-    except Exception:
-        pass
+    with suppress(Exception):
+        auth_mod.set_api_tokens(store)
 
 
-def _create_api_token(username: str, label: str = "", persist: bool = True, token_value: Optional[str] = None, scopes: Optional[list[str]] = None) -> str:
+def _create_api_token(username: str, label: str = "", persist: bool = True, token_value: Optional[str] = None) -> str:
     """Create a new API token. If `persist` is False, do not write the token store to durable storage.
     Optionally accept `token_value` to use an externally-provided token string when persisting.
     """
     store = _load_token_store()
-    token_id = str(token_value) if token_value else secrets.token_urlsafe(48)
+    token_id = str(token_value) if token_value else secrets.token_urlsafe(96)
     # Tokens are non-expiring by default and remain valid until revoked.
     expiry = None
-    # Default to wildcard scope if no explicit scopes supplied
-    if scopes is None:
-        scopes = ["*"]
-    store[token_id] = {"user": username, "label": label, "created": int(datetime.now(timezone.utc).timestamp()), "expiry": expiry, "scopes": scopes}
+    # Store token metadata (no per-token scopes; tokens are treated as valid/invalid)
+    store[token_id] = {"user": username, "label": label, "created": int(datetime.now(timezone.utc).timestamp()), "expiry": expiry}
     if persist:
         _persist_token_store(store)
     with contextlib.suppress(Exception):
@@ -325,7 +322,7 @@ def _create_api_token(username: str, label: str = "", persist: bool = True, toke
     return token_id
 
 
-def _persist_existing_api_token(token: str, username: str, label: str = "", scopes: Optional[list[str]] = None) -> bool:
+def _persist_existing_api_token(token: str, username: str, label: str = "") -> bool:
     """Persist an existing token string into the token store. Returns True on success."""
     if not token:
         return False
@@ -334,10 +331,7 @@ def _persist_existing_api_token(token: str, username: str, label: str = "", scop
         return False
     # Persisted tokens do not expire unless revoked.
     expiry = None
-    # Persisted tokens default to wildcard scope unless caller supplied scopes
-    if scopes is None:
-        scopes = ["*"]
-    store[token] = {"user": username, "label": label, "created": int(datetime.now(timezone.utc).timestamp()), "expiry": expiry, "scopes": scopes}
+    store[token] = {"user": username, "label": label, "created": int(datetime.now(timezone.utc).timestamp()), "expiry": expiry}
     _persist_token_store(store)
     with contextlib.suppress(Exception):
         _write_audit_log("create_api_token", [username], None, {"id": token, "label": label}, True)
@@ -371,15 +365,15 @@ def _get_token_info(token: str) -> Optional[dict[str, Any]]:
     return info
 
 
-def _token_has_scope(token: str, scope: str) -> bool:
-    """Return True if token includes the requested scope. Wildcard '*' grants all scopes."""
+def _token_has_scope(token: str) -> bool:
+    """Return True if token is valid. Scopes removed — a valid token grants access."""
     info = _get_token_info(token)
-    if not info:
-        return False
-    scopes = info.get("scopes") or ["*"]
-    if "*" in scopes:
-        return True
-    return scope in scopes
+    return bool(info)
+
+
+def _validate_upload_assistant_args(args: list[str]) -> list[str]:
+    """Validate and return upload-assistant arguments. Currently a pass-through."""
+    return args
 
 
 def _get_bearer_from_header() -> Optional[str]:
@@ -452,45 +446,21 @@ def _generate_recovery_codes(n: int = 10, length: int = 10) -> list[str]:
 
 
 def _load_recovery_hashes() -> list[str]:
-    # Prefer Docker secret file if in Docker
-    if DOCKER_MODE:
-        raw = _read_docker_secret_file("UA_2FA_RECOVERY", "ua_2fa_recovery", "upload-assistant-2fa-recovery")
-        if not raw:
-            return []
-        lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
-        # If lines look like hex hashes, return as-is; otherwise hash them
-        if all(re.fullmatch(r"[0-9a-fA-F]{64}", ln) for ln in lines):
-            return [ln.lower() for ln in lines]
-        return [_hash_code(ln) for ln in lines]
-
-    # Non-docker: load from keyring
-    with contextlib.suppress(Exception):
-        raw = keyring.get_password("upload-assistant", "2fa_recovery")
-        if raw:
-            try:
-                data = json.loads(raw)
-                if isinstance(data, list):
-                    return [str(x) for x in data]
-            except Exception:
-                # Fallback: treat as single-line code
-                return [_hash_code(raw)]
-    return []
+    # Load recovery hashes from the encrypted extras in the user record
+    try:
+        return auth_mod.get_recovery_hashes() or []
+    except Exception:
+        return []
 
 
 def _persist_recovery_hashes(hashes: list[str]) -> None:
-    if DOCKER_MODE:
-        # Not allowed to persist from inside container
-        return
-    with contextlib.suppress(Exception):
-        keyring.set_password("upload-assistant", "2fa_recovery", json.dumps(hashes))
+    with suppress(Exception):
+        auth_mod.set_recovery_hashes(hashes)
 
 
 def _consume_recovery_code(code: str) -> bool:
     """Return True if code matches an unused recovery code and mark it used (persist)."""
     if not code:
-        return False
-    if DOCKER_MODE:
-        # Cannot reliably consume codes in Docker mode (secrets immutable)
         return False
     hashes = _load_recovery_hashes()
     if not hashes:
@@ -583,51 +553,44 @@ class ConfigSection(TypedDict, total=False):
 
 
 def _webui_auth_configured() -> bool:
-    return bool(saved_auth) or bool(os.environ.get("UA_WEBUI_USERNAME")) or bool(os.environ.get("UA_WEBUI_PASSWORD"))
+    # Consider auth configured if a local user file exists
+    return bool(auth_mod.load_user())
 
 
 def _webui_auth_ok() -> bool:
-    expected_username = os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else "")
-    expected_password = os.environ.get("UA_WEBUI_PASSWORD") or (saved_auth[1] if saved_auth else "")
+    """Return True when the incoming request is authenticated.
 
-    # Accept Bearer tokens for API clients: validate and return early when present
+    Authentication sources:
+    - Bearer token (API token) — validated via _verify_api_token(); when a
+      persisted user exists ensure the token's username matches it.
+    - Basic auth — only valid when a persisted user exists and credentials
+      validate against that persisted user.
+    """
+    persisted = auth_mod.load_user()
+
+    # Bearer tokens for API clients
     auth_header = (request.headers.get("Authorization") or "").strip()
     if auth_header.lower().startswith("bearer "):
         token = auth_header.split(None, 1)[1].strip()
         if token:
             user = _verify_api_token(token)
             if user:
-                # If auth is configured (env or saved), ensure token user matches configured username when set
-                if _webui_auth_configured():
-                    expected = expected_username
-                    if expected and user != expected:
+                if persisted:
+                    stored_username = persisted.get("username")
+                    if stored_username and user != stored_username:
                         return False
                 with contextlib.suppress(Exception):
-                    # Record for audit/logging contexts when possible
-                    session["username"] = user
+                    g.username = user
                 return True
+        return False
 
+    # Basic auth is only supported against a persisted user
     auth = request.authorization
     if not auth or auth.type != "basic":
         return False
-
-    has_expected_username = bool(expected_username)
-    has_expected_password = bool(expected_password)
-
-    # If auth is configured (env or saved), require exact match.
-    if has_expected_username or has_expected_password:
-        # Constant-time compare to avoid leaking timing info.
-        if has_expected_username and not hmac.compare_digest(auth.username or "", expected_username):
-            return False
-        if has_expected_password and not hmac.compare_digest(auth.password or "", expected_password):
-            return False
-        # For any unset value, still require a non-empty value to avoid blank auth.
-        if not has_expected_username and not (auth.username or ""):
-            return False
-        return has_expected_password or bool(auth.password or "")
-
-    # If auth is not configured, still require non-empty basic auth.
-    return bool(auth.username) and bool(auth.password)
+    if not persisted:
+        return False
+    return auth_mod.verify_user(auth.username or "", auth.password or "")
 
 
 @app.before_request
@@ -638,31 +601,24 @@ def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
 
     # Try to restore session from a long-lived remember-me cookie if present
     try:
-        if not session.get("authenticated"):
+        if not _is_authenticated():
             token = request.cookies.get("ua_remember")
             if token:
                 username = _verify_remember_token(token)
                 if username:
-                    # If auth is configured (env or saved), ensure cookie username matches
-                    if _webui_auth_configured():
-                        expected_username = os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else "")
-                        if expected_username and username != expected_username:
-                            # Do not accept token for a different configured username
-                            pass
-                        else:
-                            session["authenticated"] = True
+                    # Only accept remember token if it matches the persisted user (if any)
+                    persisted = auth_mod.load_user()
+                    if persisted:
+                        stored = persisted.get("username")
+                        if stored and username == stored:
+                            g.authenticated = True
+                            g.username = username
                     else:
-                        session["authenticated"] = True
+                        # No persisted user yet: accept remembered username as provisional
+                        g.authenticated = True
+                        g.username = username
     except Exception:
         # Any failure to validate the cookie should not block request flow; fallback to normal auth
-        pass
-
-    # Ensure authenticated sessions have a per-session CSRF token
-    try:
-        if session.get("authenticated") and not session.get("csrf_token"):
-            session["csrf_token"] = secrets.token_urlsafe(32)
-    except Exception:
-        # Non-fatal; do not block requests if we cannot set session token
         pass
 
     if request.path.startswith("/api/"):
@@ -670,7 +626,7 @@ def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
         if _webui_auth_ok():
             return None
         # Or session auth
-        if session.get("authenticated"):
+        if _is_authenticated():
             return None
         # If request accepts HTML (browser), redirect to login; else 401 for API clients
         if "text/html" in request.headers.get("Accept", ""):
@@ -678,7 +634,7 @@ def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
         return jsonify({"error": "Authentication required", "success": False}), 401
 
     # For web routes
-    if session.get("authenticated"):
+    if _is_authenticated():
         return None
     if _webui_auth_configured() and _webui_auth_ok():
         return None
@@ -689,42 +645,25 @@ def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
 
 
 def _totp_enabled() -> bool:
-    """Check if TOTP 2FA is enabled"""
-    return saved_totp_secret is not None
-
-
+    # TOTP is enabled when a TOTP secret is configured either in persisted
+    # storage or via environment (saved_totp_secret).
+    persisted = auth_mod.load_user()
+    if persisted:
+        return bool(auth_mod.get_totp_secret())
+    return bool(saved_totp_secret)
 def _verify_totp_code(code: str) -> bool:
-    """Verify a TOTP code against the stored secret"""
-    if not saved_totp_secret:
+    """Verify a TOTP code against the stored secret."""
+    persisted = auth_mod.load_user()
+    secret = auth_mod.get_totp_secret() if persisted else saved_totp_secret
+
+    if not secret:
         return False
-    totp = pyotp.TOTP(saved_totp_secret)
-    return totp.verify(code)
 
-
-def _generate_totp_secret() -> str:
-    """Generate a new TOTP secret"""
-    return pyotp.random_base32()
-
-
-def _get_totp_uri(username: str, secret: str) -> str:
-    """Generate TOTP URI for QR code"""
-    return pyotp.totp.TOTP(secret).provisioning_uri(name=username, issuer_name="Upload Assistant")
-
-
-def _validate_upload_assistant_args(tokens: Sequence[Any]) -> list[str]:
-    # These are passed to upload.py (not the Python interpreter) and are executed
-    # with shell=False. Still validate to avoid control characters and abuse.
-    safe: list[str] = []
-    for tok in tokens:
-        if not isinstance(tok, str):
-            raise TypeError("Invalid argument")
-        if not tok or len(tok) > 1024:
-            raise ValueError("Invalid argument")
-        if "\x00" in tok or "\n" in tok or "\r" in tok:
-            raise ValueError("Invalid characters in argument")
-        safe.append(tok)
-    return safe
-
+    try:
+        totp = pyotp.TOTP(secret)
+        return bool(code and totp.verify(code))
+    except Exception:
+        return False
 
 def _get_browse_roots() -> list[str]:
     # Check environment first, then runtime browse roots (set by upload.py)
@@ -852,12 +791,9 @@ def _write_audit_log(action: str, path: list[str], old_value: Any, new_value: An
     try:
         base_dir = Path(__file__).parent.parent
         audit_path = base_dir / "data" / "config_audit.log"
-        user = (
-            session.get("username")
-            or (request.authorization.username if request.authorization else None)
-            or os.environ.get("UA_WEBUI_USERNAME")
-            or request.remote_addr
-        )
+        # Determine acting user: session -> Basic auth username -> persisted user -> remote_addr
+        persisted = auth_mod.load_user()
+        user = session.get("username") or (request.authorization.username if request.authorization else None) or (persisted.get("username") if persisted else None) or request.remote_addr
         # Redact sensitive fields from values before serializing to the audit log.
         audit = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -1420,84 +1356,72 @@ def index():
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
-    global saved_auth
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
-        # Accept either the legacy 'totp_code' or a common 'otp' field so
-        # password managers that target 'otp'/'one-time-code' will be
-        # recognized. Only accept the strict 2FA field here; recovery codes
-        # are handled via a separate endpoint.
         totp_code = (request.form.get("totp_code") or "").strip()
         remember = request.form.get("remember") == "1"
 
-        if _webui_auth_configured():
-            # Validate against env vars or saved_auth
-            expected_username = os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else "")
-            expected_password = os.environ.get("UA_WEBUI_PASSWORD") or (saved_auth[1] if saved_auth else "")
-            if username == expected_username and password == expected_password:
-                # Check 2FA if enabled
-                if _totp_enabled():
-                    totp_ok = bool(totp_code and _verify_totp_code(totp_code))
-                    if not totp_ok:
-                        # Do not accept recovery codes on this endpoint; show generic error.
-                        return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
+        persisted = auth_mod.load_user()
+        # If a persisted user exists, only allow login against that user.
+        if persisted and auth_mod.verify_user(username, password):
+            if _totp_enabled() and not (totp_code and _verify_totp_code(totp_code)):
+                return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
 
-                session["authenticated"] = True
-                # Create a per-session CSRF token for subsequent POST requests
+                _session_set("authenticated", True)
                 with contextlib.suppress(Exception):
-                    session["csrf_token"] = secrets.token_urlsafe(32)
+                    _session_set("username", username)
+                with contextlib.suppress(Exception):
+                    _session_set("csrf_token", secrets.token_urlsafe(32))
                 if remember:
                     session.permanent = True
-                # Build redirect response and set remember cookie when requested
                 resp = redirect(url_for("config_page"))
                 if remember:
                     try:
                         token = _create_remember_token(username)
                         if token:
-                            resp.set_cookie("ua_remember", token, max_age=30 * 86400, httponly=True, secure=not DOCKER_MODE, samesite="Lax")
+                            resp.set_cookie("ua_remember", token, max_age=30 * 86400, httponly=True, secure=True, samesite="Lax")
                     except Exception:
                         pass
+                with suppress(Exception):
+                    _cleanup_duplicate_sessions(username)
                 return resp
-            else:
-                return render_template("login.html", error="Credentials did not match")
-        else:
-            # No env, accept any non-empty
-            if username and password:
-                # Check 2FA if enabled
-                if _totp_enabled():
-                    totp_ok = bool(totp_code and _verify_totp_code(totp_code))
-                    if not totp_ok:
-                        # Do not accept recovery codes on this endpoint; show generic error.
-                        return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
+            return render_template("login.html", error="Credentials did not match")
 
-                session["authenticated"] = True
-                # Create a per-session CSRF token for subsequent POST requests
-                with contextlib.suppress(Exception):
-                    session["csrf_token"] = secrets.token_urlsafe(32)
-                if remember:
-                    session.permanent = True
-                # Save auth to keyring (only when not running in Docker).
-                # Store as JSON to avoid ambiguities with ':' in usernames.
-                if not DOCKER_MODE:
-                    with contextlib.suppress(Exception):
-                        keyring.set_password("upload-assistant", "auth", json.dumps({"username": username, "password": password}))
-                    # Update saved_auth
-                    saved_auth = (username, password)
-                else:
-                    # In Docker, persistent secrets must be provided via Docker secrets
-                    console.print("Running in Docker: skipping persistent save of credentials. Provide credentials via Docker secrets.", markup=False)
-                resp = redirect(url_for("config_page"))
-                if remember:
-                    try:
-                        token = _create_remember_token(username)
-                        if token:
-                            resp.set_cookie("ua_remember", token, max_age=30 * 86400, httponly=True, secure=not DOCKER_MODE, samesite="Lax")
-                    except Exception:
-                        pass
-                return resp
-            else:
-                return render_template("login.html", error="Credentials did not match")
+        # No persisted user: allow UI-driven creation (first-run setup)
+        if username and password:
+            if _totp_enabled() and not (totp_code and _verify_totp_code(totp_code)):
+                return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
+            try:
+                auth_mod.create_user(username, password)
+            except ValueError as exc:
+                return render_template("login.html", error=str(exc), show_2fa=_totp_enabled())
+            except Exception:
+                # Non-fatal persistence error; continue without persisting.
+                pass
+
+            _session_set("authenticated", True)
+            with contextlib.suppress(Exception):
+                _session_set("username", username)
+            with contextlib.suppress(Exception):
+                _session_set("csrf_token", secrets.token_urlsafe(32))
+            if remember:
+                session.permanent = True
+                try:
+                    token = _create_remember_token(username)
+                    if token:
+                        resp = redirect(url_for("config_page"))
+                        resp.set_cookie("ua_remember", token, max_age=30 * 86400, httponly=True, secure=True, samesite="Lax")
+                        with suppress(Exception):
+                            _cleanup_duplicate_sessions(username)
+                        return resp
+                except Exception:
+                    pass
+
+            with suppress(Exception):
+                _cleanup_duplicate_sessions(username)
+            return redirect(url_for("config_page"))
+        return render_template("login.html", error="Credentials did not match")
 
     # Show 2FA field if enabled
     show_2fa = _totp_enabled()
@@ -1507,10 +1431,23 @@ def login_page():
 @app.route("/logout", methods=["GET", "POST"])  # prefer POST from the UI
 def logout():
     # Accept both GET and POST for compatibility, but UI should use POST.
-    session.pop("authenticated", None)
+    # Remove encrypted session payload
+    # Clear all server-side session data
+    try:
+        session.clear()
+    except Exception:
+        # Fallback: remove encrypted payload if clear fails
+        session.pop("enc", None)
+
     resp = redirect(url_for("login_page"))
     # Remove remember cookie if present
     resp.delete_cookie("ua_remember")
+    # Also remove the browser session cookie (Flask's session cookie name)
+    try:
+        resp.delete_cookie(app.session_cookie_name)
+    except Exception:
+        # Fallback to common cookie name
+        resp.delete_cookie("session")
     return resp
 
 
@@ -1520,7 +1457,7 @@ def login_recovery():
     keep recovery-code input distinct from strict 2FA inputs so password
     managers treat the 2FA input as a one-time code field.
     """
-    global saved_auth
+    # removed env-backed saved_auth
     username = request.form.get("username", "").strip()
     password = request.form.get("password", "").strip()
     recovery_code = request.form.get("recovery_code", "").strip()
@@ -1529,55 +1466,60 @@ def login_recovery():
     if not _totp_enabled():
         return render_template("login.html", error="Recovery codes are not enabled", show_2fa=False)
 
-    if _webui_auth_configured():
-        expected_username = os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else "")
-        expected_password = os.environ.get("UA_WEBUI_PASSWORD") or (saved_auth[1] if saved_auth else "")
-        # Validate username/password and recovery code in a single condition
-        if (username == expected_username and password == expected_password
-                and recovery_code and _consume_recovery_code(recovery_code)):
-            session["authenticated"] = True
+    persisted = auth_mod.load_user()
+    # If a persisted user exists, require those credentials + recovery code
+    if persisted:
+        if username and password and recovery_code and _consume_recovery_code(recovery_code) and auth_mod.verify_user(username, password):
+            _session_set("authenticated", True)
             with contextlib.suppress(Exception):
-                session["csrf_token"] = secrets.token_urlsafe(32)
+                _session_set("username", username)
+            with contextlib.suppress(Exception):
+                _session_set("csrf_token", secrets.token_urlsafe(32))
             if remember:
                 session.permanent = True
                 try:
                     token = _create_remember_token(username)
                     if token:
                         resp = redirect(url_for("config_page"))
-                        resp.set_cookie("ua_remember", token, max_age=30 * 86400, httponly=True, secure=not DOCKER_MODE, samesite="Lax")
+                        resp.set_cookie("ua_remember", token, max_age=30 * 86400, httponly=True, secure=True, samesite="Lax")
                         return resp
                 except Exception:
                     pass
             return redirect(url_for("config_page"))
         return render_template("login.html", error="Recovery code invalid", show_2fa=_totp_enabled())
-    else:
-        # No configured auth: accept provided username/password and consume code
-        if username and password and recovery_code and _consume_recovery_code(recovery_code):
-            session["authenticated"] = True
-            with contextlib.suppress(Exception):
-                session["csrf_token"] = secrets.token_urlsafe(32)
-            if remember:
-                session.permanent = True
-                try:
-                    token = _create_remember_token(username)
-                    if token:
-                        resp = redirect(url_for("config_page"))
-                        resp.set_cookie("ua_remember", token, max_age=30 * 86400, httponly=True, secure=not DOCKER_MODE, samesite="Lax")
-                        # Persist auth when possible
-                        if not DOCKER_MODE:
-                            with contextlib.suppress(Exception):
-                                keyring.set_password("upload-assistant", "auth", json.dumps({"username": username, "password": password}))
-                                saved_auth = (username, password)
-                        return resp
-                except Exception:
-                    pass
-            # Persist auth when possible even if not remembering
-            if not DOCKER_MODE:
-                with contextlib.suppress(Exception):
-                    keyring.set_password("upload-assistant", "auth", json.dumps({"username": username, "password": password}))
-                    saved_auth = (username, password)
-            return redirect(url_for("config_page"))
-        return render_template("login.html", error="Recovery code invalid", show_2fa=_totp_enabled())
+
+    # No persisted user: allow first-run creation with recovery-code flow
+    if username and password and recovery_code and _consume_recovery_code(recovery_code):
+        try:
+            auth_mod.create_user(username, password)
+        except ValueError as exc:
+            return render_template("login.html", error=str(exc), show_2fa=_totp_enabled())
+        except Exception:
+            pass
+
+        _session_set("authenticated", True)
+        with contextlib.suppress(Exception):
+            _session_set("username", username)
+        with contextlib.suppress(Exception):
+            _session_set("csrf_token", secrets.token_urlsafe(32))
+        if remember:
+            session.permanent = True
+            try:
+                token = _create_remember_token(username)
+                if token:
+                    resp = redirect(url_for("config_page"))
+                    resp.set_cookie("ua_remember", token, max_age=30 * 86400, httponly=True, secure=True, samesite="Lax")
+                    with suppress(Exception):
+                        _cleanup_duplicate_sessions(username)
+                    return resp
+            except Exception:
+                pass
+
+        with suppress(Exception):
+            _cleanup_duplicate_sessions(username)
+        return redirect(url_for("config_page"))
+
+    return render_template("login.html", error="Recovery code invalid", show_2fa=_totp_enabled())
 
 
 @app.route("/config")
@@ -1585,7 +1527,7 @@ def config_page():
     """Serve the config UI"""
     # Require a CSRF token or same-origin Referer for the config page when
     # the user is authenticated to reduce cross-site information leakage.
-    if session.get("authenticated") and not _verify_csrf_header():
+    if _is_authenticated() and not _verify_csrf_header():
         referer = request.headers.get("Referer", "")
         if not referer.startswith(request.host_url):
             return jsonify({"error": "CSRF token missing or invalid", "success": False}), 403
@@ -1594,9 +1536,9 @@ def config_page():
         # Ensure a session CSRF token exists and expose it to the template so
         # client-side JS can read it without an extra round-trip if desired.
         with contextlib.suppress(Exception):
-            if session.get("authenticated") and not session.get("csrf_token"):
-                session["csrf_token"] = secrets.token_urlsafe(32)
-        return render_template("config.html", csrf_token=session.get("csrf_token", ""))
+            if _is_authenticated() and not _session_get("csrf_token"):
+                _session_set("csrf_token", secrets.token_urlsafe(32))
+        return render_template("config.html", csrf_token=_session_get("csrf_token", ""))
     except Exception as e:
         console.print(f"Error loading config template: {e}", markup=False)
         console.print(traceback.format_exc(), markup=False)
@@ -1613,7 +1555,7 @@ def health():
 def csrf_token():
     """Return the per-session CSRF token for use by the frontend."""
     try:
-        token = session.get("csrf_token") or ""
+        token = _session_get("csrf_token") or ""
         return jsonify({"csrf_token": token, "success": True})
     except Exception:
         # Returning an empty CSRF token on error is an explicit non-secret
@@ -1633,15 +1575,20 @@ def twofa_setup():
     if _totp_enabled():
         return jsonify({"error": "2FA already enabled", "success": False}), 400
 
-    # Get username for QR code
-    username = os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else "user")
+    # Get username for QR code: prefer session, then persisted user, else generic
+    persisted = auth_mod.load_user()
+    username = session.get("username") or (persisted.get("username") if persisted else "user")
 
-    secret = _generate_totp_secret()
-    uri = _get_totp_uri(username, secret)
+    # Generate secret and provisioning URI using pyotp
+    secret = pyotp.random_base32()
+    try:
+        uri = pyotp.TOTP(secret).provisioning_uri(name=username, issuer_name="Upload Assistant")
+    except Exception:
+        uri = ""
     # Generate one-time recovery codes and store temporarily in session
     recovery_codes = _generate_recovery_codes()
-    session["temp_totp_secret"] = secret
-    session["temp_recovery_codes"] = recovery_codes
+    _session_set("temp_totp_secret", secret)
+    _session_set("temp_recovery_codes", recovery_codes)
 
     return jsonify({"secret": secret, "uri": uri, "recovery_codes": recovery_codes, "success": True})
 
@@ -1655,7 +1602,7 @@ def twofa_enable():
     if not code:
         return jsonify({"error": "Code required", "success": False}), 400
 
-    temp_secret = session.get("temp_totp_secret")
+    temp_secret = _session_get("temp_totp_secret")
     if not temp_secret:
         return jsonify({"error": "No setup in progress", "success": False}), 400
 
@@ -1664,18 +1611,12 @@ def twofa_enable():
     if not totp.verify(code):
         return jsonify({"error": "Invalid code", "success": False}), 400
 
-    # Save the secret permanently (only when not running in Docker and not using env var)
-    if DOCKER_MODE and not os.environ.get("UA_WEBUI_TOTP_SECRET"):
-        return jsonify({"error": "Cannot persist 2FA secret when running in Docker. Provide the TOTP secret via UA_WEBUI_TOTP_SECRET environment variable or Docker secrets (e.g. /run/secrets/UA_TOTP_SECRET).", "success": False}), 400
-
-    if not os.environ.get("UA_WEBUI_TOTP_SECRET"):
-        with contextlib.suppress(Exception):
-            keyring.set_password("upload-assistant", "totp_secret", temp_secret)
-    else:
-        console.print("TOTP secret is managed via UA_WEBUI_TOTP_SECRET environment variable, not saving to keyring.", markup=False)
+    # Save the secret permanently to encrypted user record
+    with suppress(Exception):
+        auth_mod.set_totp_secret(temp_secret)
 
     # Persist recovery codes (hashes) if provided
-    temp_codes = session.get("temp_recovery_codes") or []
+    temp_codes = _session_get("temp_recovery_codes") or []
     hashes = [_hash_code(c) for c in temp_codes]
     _persist_recovery_hashes(hashes)
 
@@ -1684,8 +1625,8 @@ def twofa_enable():
     saved_totp_secret = temp_secret
 
     # Clear temp session
-    session.pop("temp_totp_secret", None)
-    session.pop("temp_recovery_codes", None)
+    _session_pop("temp_totp_secret", None)
+    _session_pop("temp_recovery_codes", None)
 
     return jsonify({"success": True, "recovery_codes": temp_codes})
 
@@ -1696,15 +1637,12 @@ def twofa_disable():
     if not _totp_enabled():
         return jsonify({"error": "2FA not enabled", "success": False}), 400
 
-    # Remove from keyring (only when not running in Docker)
-    if DOCKER_MODE:
-        return jsonify({"error": "Cannot remove TOTP secret when running in Docker. Remove the secret from your Docker secrets on the host.", "success": False}), 400
-
     with contextlib.suppress(Exception):
-        keyring.delete_password("upload-assistant", "totp_secret")
-        # Also remove recovery hashes
-        with contextlib.suppress(Exception):
-            keyring.delete_password("upload-assistant", "2fa_recovery")
+        # Remove TOTP secret and recovery hashes from the encrypted user record
+        with suppress(Exception):
+            auth_mod.set_totp_secret(None)
+        with suppress(Exception):
+            auth_mod.set_recovery_hashes([])
 
     # Update global variable
     global saved_totp_secret
@@ -1727,7 +1665,7 @@ def browse_roots():
 
     # If caller used a bearer token, require it to have the `browse` scope.
     bearer = _get_bearer_from_header()
-    if bearer and not _token_has_scope(bearer, "browse"):
+    if bearer and not _token_has_scope(bearer):
         return jsonify({"success": False, "error": "Forbidden (insufficient token scope)"}), 403
 
     return jsonify({"items": items, "success": True})
@@ -1736,6 +1674,10 @@ def browse_roots():
 @app.route("/api/config_options")
 def config_options():
     """Return config options based on example-config.py with overrides from config.py"""
+    # Require an authenticated web session; disallow bearer/basic API auth for config access
+    if not _is_authenticated():
+        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+
     base_dir = Path(__file__).parent.parent
     example_path = base_dir / "data" / "example-config.py"
     config_path = base_dir / "data" / "config.py"
@@ -1799,17 +1741,16 @@ def config_options():
                         client_types.add(client_type_item.get("value", "unknown"))
             sections[-1]["client_types"] = sorted(client_types, key=lambda x: (x != "qbit", x))
 
-    # If caller used a bearer token, require it to have the `config` scope.
-    bearer = _get_bearer_from_header()
-    if bearer and not _token_has_scope(bearer, "config"):
-        return jsonify({"success": False, "error": "Forbidden (insufficient token scope)"}), 403
-
     return jsonify({"success": True, "sections": sections})
 
 
 @app.route("/api/torrent_clients")
 def torrent_clients():
     """Return list of available torrent client names from TORRENT_CLIENTS section"""
+    # Require web session for config listing (disallow bearer token access)
+    if not _is_authenticated():
+        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+
     base_dir = Path(__file__).parent.parent
     config_path = base_dir / "data" / "config.py"
 
@@ -1821,25 +1762,17 @@ def torrent_clients():
     # Include all configured clients in the dropdown
     client_names = list(user_clients.keys())
 
-    # If caller used a bearer token, require it to have the `config` scope.
-    bearer = _get_bearer_from_header()
-    if bearer and not _token_has_scope(bearer, "config"):
-        return jsonify({"success": False, "error": "Forbidden (insufficient token scope)"}), 403
-
     return jsonify({"success": True, "clients": sorted(client_names)})
 
 
 @app.route("/api/config_update", methods=["POST"])
 def config_update():
     """Update a config value in data/config.py"""
-    # Protect state-changing endpoint with CSRF token
+    # Require authenticated web session and CSRF protection; disallow bearer/basic API auth
+    if not _is_authenticated():
+        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
     if not _verify_csrf_header():
         return jsonify({"success": False, "error": "CSRF token missing or invalid"}), 403
-
-    # If caller used a bearer token, ensure it has the config_update scope
-    bearer = _get_bearer_from_header()
-    if bearer and not _token_has_scope(bearer, "config_update"):
-        return jsonify({"success": False, "error": "Forbidden (insufficient token scope)"}), 403
     data = request.json or {}
     path = data.get("path")
     raw_value = data.get("value")
@@ -1915,14 +1848,11 @@ def config_update():
 @app.route("/api/config_remove_subsection", methods=["POST"])
 def config_remove_subsection():
     """Remove a subsection (top-level key) from the user's config.py if present"""
-    # Protect state-changing endpoint with CSRF token
+    # Require authenticated web session and CSRF protection; disallow bearer/basic API auth
+    if not _is_authenticated():
+        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
     if not _verify_csrf_header():
         return jsonify({"success": False, "error": "CSRF token missing or invalid"}), 403
-
-    # If caller used a bearer token, ensure it has the config_update scope
-    bearer = _get_bearer_from_header()
-    if bearer and not _token_has_scope(bearer, "config_update"):
-        return jsonify({"success": False, "error": "Forbidden (insufficient token scope)"}), 403
 
     data = request.json or {}
     path = data.get("path")
@@ -1955,7 +1885,9 @@ def api_tokens():
     # Require a browser session (remember-me or login) and a valid CSRF token.
     # Disallow managing tokens via Basic or Bearer API auth to ensure token
     # lifecycle actions are only possible from the web UI with CSRF protection.
-    if not session.get("authenticated"):
+    # Use the encrypted-session helpers so we read values stored inside the
+    # encrypted `enc` payload rather than top-level Flask session keys.
+    if not _is_authenticated():
         return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
     if not _verify_csrf_header():
         return jsonify({"success": False, "error": "CSRF validation failed"}), 403
@@ -1964,10 +1896,10 @@ def api_tokens():
         store = _list_api_tokens()
         # Return metadata only (do not leak token values)
         tokens = [
-            {"id": tid, "user": info.get("user"), "label": info.get("label"), "created": info.get("created"), "expiry": info.get("expiry"), "scopes": info.get("scopes", ["*"])}
+            {"id": tid, "user": info.get("user"), "label": info.get("label"), "created": info.get("created"), "expiry": info.get("expiry")}
             for tid, info in store.items()
         ]
-        read_only = bool(os.environ.get("UA_TOKEN"))
+        read_only = False
         return jsonify({"success": True, "tokens": tokens, "read_only": read_only})
 
     if request.method == "POST":
@@ -1975,7 +1907,8 @@ def api_tokens():
         action = data.get("action")
         label = data.get("label", "")
         # No expiry: tokens are non-expiring by default;
-        username = session.get("username") or (request.authorization.username if request.authorization else None) or os.environ.get("UA_WEBUI_USERNAME") or (saved_auth[0] if saved_auth else None)
+        persisted = auth_mod.load_user()
+        username = _session_get("username") or (request.authorization.username if request.authorization else None) or (persisted.get("username") if persisted else None)
         if not username:
             return jsonify({"success": False, "error": "Unable to determine username for token"}), 400
 
@@ -1986,27 +1919,17 @@ def api_tokens():
             token_value = data.get("token")
             if not token_value:
                 return jsonify({"success": False, "error": "Token value required for store action"}), 400
-            # If server is using UA_TOKEN, disallow runtime persistence
-            read_only = bool(os.environ.get("UA_TOKEN"))
-            if read_only:
-                return jsonify({"success": False, "error": "Token store is read-only (UA_TOKEN set). Update the container env to change tokens."}), 400
-            # Optional scopes: expect list of strings
-            scopes = data.get("scopes")
-            if scopes is not None and not isinstance(scopes, list):
-                return jsonify({"success": False, "error": "Scopes must be a list"}), 400
-            ok = _persist_existing_api_token(token_value, username, label=label, scopes=scopes)
+            # Persist tokens to the config store
+            ok = _persist_existing_api_token(token_value, username, label=label)
             if ok:
                 return jsonify({"success": True, "persisted": True})
             return jsonify({"success": False, "error": "Failed to persist token (already exists?)"}), 400
 
         # default/generate
         persist_flag = bool(data.get("persist", True))
-        scopes = data.get("scopes")
-        if scopes is not None and not isinstance(scopes, list):
-            return jsonify({"success": False, "error": "Scopes must be a list"}), 400
-        token = _create_api_token(username, label=label, persist=persist_flag, scopes=scopes)
-        persisted = persist_flag and not bool(os.environ.get("UA_TOKEN"))
-        return jsonify({"success": True, "token": token, "persisted": persisted, "scopes": scopes or ["*"]})
+        token = _create_api_token(username, label=label, persist=persist_flag)
+        persisted = persist_flag
+        return jsonify({"success": True, "token": token, "persisted": persisted})
 
     if request.method == "DELETE":
         data = request.json or {}
@@ -2016,7 +1939,7 @@ def api_tokens():
         ok = _revoke_api_token(tid)
         if ok:
             return jsonify({"success": True})
-        return jsonify({"success": False, "error": "Token not found"}), 404
+        return jsonify({"success": False, "error": "Failed to revoke token"}), 500
 
 
 @app.route("/api/browse")
@@ -2062,7 +1985,7 @@ def browse_path():
 
         # If caller used a bearer token, require it to have the `browse` scope.
         bearer = _get_bearer_from_header()
-        if bearer and not _token_has_scope(bearer, "browse"):
+        if bearer and not _token_has_scope(bearer):
             return jsonify({"success": False, "error": "Forbidden (insufficient token scope)"}), 403
 
         return jsonify({"items": items, "success": True, "path": path, "count": len(items)})
@@ -2086,7 +2009,7 @@ def execute_command():
 
     # If caller used a bearer token, ensure it has the execute scope
     bearer = _get_bearer_from_header()
-    if bearer and not _token_has_scope(bearer, "execute"):
+    if bearer and not _token_has_scope(bearer):
         return jsonify({"error": "Forbidden (insufficient token scope)", "success": False}), 403
 
     try:
