@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 
 from src.trackers.COMMON import COMMON
-from src.exceptions import *  # noqa E403
+from src.exceptions import * # noqa E403
 from src.console import console
 
 
@@ -75,31 +75,25 @@ class OURBITS:
         return dupes
 
     async def get_type_category_id(self, meta: dict[str, Any]) -> int:
-        cat_id = 401
+        cat_id = 401 # Movie
         if str(meta.get('3D', '')).upper() == '3D':
             cat_id = 402
 
         if meta.get('category') == 'TV':
             cat_id = 405 if meta.get('tv_pack') else 412
 
-        genres_value = meta.get("genres", "")
-        keywords_value = meta.get("keywords", "")
-        if isinstance(genres_value, list):
-            genres = ' '.join(genres_value).lower()
-        else:
-            genres = str(genres_value).lower()
-        if isinstance(keywords_value, list):
-            keywords = ' '.join(keywords_value).lower()
-        else:
-            keywords = str(keywords_value).lower()
+        # 提取关键词逻辑
+        genres = " ".join(meta.get("genres", [])).lower() if isinstance(meta.get("genres"), list) else str(meta.get("genres", "")).lower()
+        keywords = " ".join(meta.get("keywords", [])).lower() if isinstance(meta.get("keywords"), list) else str(meta.get("keywords", "")).lower()
+        combined_info = f"{genres} {keywords}"
 
-        if 'documentary' in genres or 'documentary' in keywords:
+        if 'documentary' in combined_info:
             cat_id = 410
-        if 'animation' in genres or 'animation' in keywords:
+        elif 'animation' in combined_info or 'anime' in combined_info:
             cat_id = 411
-        if 'concert' in genres or 'concert' in keywords:
+        elif 'concert' in combined_info:
             cat_id = 419
-        if 'sport' in genres or 'sport' in keywords:
+        elif 'sport' in combined_info:
             cat_id = 415
         return cat_id
 
@@ -122,48 +116,28 @@ class OURBITS:
 
     async def get_codec_sel(self, meta: dict[str, Any]) -> int:
         codecmap = {
-            "AVC": 12,
-            "H.264": 12,
-            "x264": 12,
-            "HEVC": 14,
-            "H.265": 14,
-            "x265": 14,
-            "MPEG-2": 15,
-            "VC-1": 16,
-            "Xvid": 17,
-            "AV1": 19,
+            "AVC": 12, "H.264": 12, "x264": 12,
+            "HEVC": 14, "H.265": 14, "x265": 14,
+            "MPEG-2": 15, "VC-1": 16, "Xvid": 17, "AV1": 19,
         }
         searchcodec = meta.get('video_codec', meta.get('video_encode'))
         return codecmap.get(searchcodec, 18)
 
     async def get_audiocodec_sel(self, meta: dict[str, Any]) -> int:
         audio = meta.get('audio', '')
-        if "Atmos" in audio:
-            return 14
-        if "DTS:X" in audio:
-            return 21
-        if "DTS-HD" in audio:
-            return 1
-        if "TrueHD" in audio or "True HD" in audio:
-            return 2
-        if "DTS" in audio:
-            return 4
-        if "LPCM" in audio:
-            return 5
-        if "FLAC" in audio:
-            return 13
-        if "APE" in audio:
-            return 12
-        if "AAC" in audio:
-            return 7
-        if "AC3" in audio or "DD" in audio:
-            return 6
-        if "WAV" in audio:
-            return 11
-        if "OPUS" in audio or "Opus" in audio:
-            return 33
-        if "MP3" in audio or "MP2" in audio or "MPEG" in audio:
-            return 32
+        if "Atmos" in audio: return 14
+        if "DTS:X" in audio: return 21
+        if "DTS-HD" in audio: return 1
+        if any(x in audio for x in ["TrueHD", "True HD"]): return 2
+        if "DTS" in audio: return 4
+        if "LPCM" in audio: return 5
+        if "FLAC" in audio: return 13
+        if "APE" in audio: return 12
+        if "AAC" in audio: return 7
+        if any(x in audio for x in ["AC3", "DD", "AC-3"]): return 6
+        if "WAV" in audio: return 11
+        if "Opus" in audio.lower(): return 33
+        if any(x in audio.upper() for x in ["MP3", "MP2", "MPEG"]): return 32
         return 4
 
     async def get_standard_sel(self, meta: dict[str, Any]) -> int:
@@ -171,59 +145,33 @@ class OURBITS:
         return res_map.get(meta.get('resolution'), 1)
 
     async def get_processing_sel(self, meta: dict[str, Any]) -> int:
-        region_raw = str(meta.get('region') or meta.get('country') or '').strip()
-        region = region_raw.lower()
-        region_code = region_raw.upper()
-        code_map = {
-            'CHN': 1,
-            'CHINA': 1,
-            'CN': 1,
-            'HKG': 3,
-            'HONGKONG': 3,
-            'HK': 3,
-            'TWN': 3,
-            'TAIWAN': 3,
-            'TW': 3,
-            'JPN': 4,
-            'JP': 4,
-            'JAPAN': 4,
-            'KOR': 5,
-            'KR': 5,
-            'KOREA': 5,
-            'USA': 2,
-            'US': 2,
-            'UNITEDSTATES': 2,
-            'GBR': 2,
-            'UK': 2,
-            'EUR': 2,
-            'EU': 2,
-            'FRA': 2,
-            'FRANCE': 2,
-            'GER': 2,
-            'GERMANY': 2,
-            'ITA': 2,
-            'ITALY': 2,
-            'ESP': 2,
-            'SPAIN': 2,
-            'CAN': 2,
-            'CANADA': 2,
+        """
+        修复后的地区选择逻辑
+        1: 大陆, 2: 欧美, 3: 港台, 4: 日本, 5: 韩国, 6: 其他
+        """
+        region_raw = str(meta.get('region') or meta.get('country') or '').strip().lower()
+        
+        mapping = {
+            1: ["china", "mainland", "chn", "cn", "大陆", "中国"],
+            2: ["us", "usa", "united states", "gb", "gbr", "uk", "united kingdom", "eur", "eu", "europe", 
+                "fra", "france", "ger", "germany", "ita", "italy", "esp", "spain", "can", "canada", "欧美", "western"],
+            3: ["hong kong", "hongkong", "hk", "taiwan", "twn", "tw", "macau", "港", "台"],
+            4: ["japan", "jp", "jpn", "日本"],
+            5: ["korea", "kor", "kr", "south korea", "韩国"],
         }
-        tokens = [token for token in re.split(r'[^A-Za-z0-9]+', region_code) if token]
+
+        # 1. 尝试单词级精确匹配 (应对 "USA/France" 或 "USA" 这种)
+        tokens = [t.strip() for t in re.split(r'[^a-z0-9\u4e00-\u9fa5]+', region_raw) if t.strip()]
         for token in tokens:
-            if token in code_map:
-                return code_map[token]
-        if region_code in code_map:
-            return code_map[region_code]
-        if any(key in region for key in ("china", "chinese", "cn", "chn", "mainland")):
-            return 1
-        if any(key in region for key in ("hong kong", "hongkong", "hk", "taiwan", "tw")):
-            return 3
-        if any(key in region for key in ("japan", "jp")):
-            return 4
-        if any(key in region for key in ("korea", "kr")):
-            return 5
-        if any(key in region for key in ("us", "usa", "united states", "uk", "europe", "eu", "france", "germany", "italy", "spain", "canada")):
-            return 2
+            for cat_id, keywords in mapping.items():
+                if token in keywords:
+                    return cat_id
+
+        # 2. 尝试全字符串子串匹配 (应对 "United States" 这种带空格的)
+        for cat_id, keywords in mapping.items():
+            if any(key in region_raw for key in keywords):
+                return cat_id
+
         return 6
 
     async def get_external_meta(self, meta: dict[str, Any]) -> dict[str, Any]:
@@ -271,9 +219,7 @@ class OURBITS:
                 descfile.write(f"[url={img['web_url']}][img]{img['img_url']}[/img][/url]")
 
     async def _has_chinese_audio(self, meta: dict[str, Any]) -> bool:
-        chinese_languages = {
-            'chinese', 'mandarin', 'cantonese', 'zh', 'zho', 'chi', 'cmn', 'yue', 'putonghua', 'guoyu', '国语', '普通话'
-        }
+        chinese_languages = {'chinese', 'mandarin', 'cantonese', 'zh', 'zho', 'chi', 'cmn', 'yue', 'putonghua', 'guoyu', '国语', '普通话'}
         audio_languages = meta.get('audio_languages', [])
         if isinstance(audio_languages, list):
             for lang in audio_languages:
@@ -284,10 +230,8 @@ class OURBITS:
     async def _has_chinese_subs(self, meta: dict[str, Any]) -> bool:
         if meta.get('is_disc') == 'BDMV':
             subtitles = meta.get('bdinfo', {}).get('subtitles', [])
-            return "Chinese" in str(subtitles)
-        chinese_languages = {
-            'chinese', 'mandarin', 'cantonese', 'zh', 'zho', 'chi', 'cmn', 'yue', 'putonghua', 'guoyu', '国语', '普通话'
-        }
+            return any(x in str(subtitles) for x in ["Chinese", "Cantonese", "Mandarin"])
+        chinese_languages = {'chinese', 'mandarin', 'cantonese', 'zh', 'zho', 'chi', 'cmn', 'yue', 'putonghua', 'guoyu', '国语', '普通话'}
         subtitle_languages = meta.get('subtitle_languages', [])
         if isinstance(subtitle_languages, list):
             for lang in subtitle_languages:
@@ -297,21 +241,14 @@ class OURBITS:
 
     async def get_tags(self, meta: dict[str, Any]) -> list[str]:
         tags = []
-        if meta.get('dolby_vision'):
-            tags.append('db')
-        if meta.get('hdr10_plus'):
-            tags.append('hdrp')
-        if meta.get('hlg'):
-            tags.append('hlg')
+        if meta.get('dolby_vision'): tags.append('db')
+        if meta.get('hdr10_plus'): tags.append('hdrp')
+        if meta.get('hlg'): tags.append('hlg')
         hdr = str(meta.get('hdr', '')).lower()
-        if hdr and hdr != "none":
-            tags.append('hdr')
-        if await self._has_chinese_audio(meta):
-            tags.append('gy')
-        if await self._has_chinese_subs(meta):
-            tags.append('zz')
-        if meta.get('diy') or "DIY" in str(meta.get('edition', '')):
-            tags.append('diy')
+        if hdr and hdr != "none": tags.append('hdr')
+        if await self._has_chinese_audio(meta): tags.append('gy')
+        if await self._has_chinese_subs(meta): tags.append('zz')
+        if meta.get('diy') or "DIY" in str(meta.get('edition', '')): tags.append('diy')
         return tags
 
     async def upload(self, meta: dict[str, Any], disctype: str) -> bool:
