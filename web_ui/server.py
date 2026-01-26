@@ -96,23 +96,28 @@ cfg_dir = auth_mod.get_config_dir()
 sess_dir = cfg_dir / "sessions"
 sess_dir.mkdir(parents=True, exist_ok=True)
 app.config["SESSION_TYPE"] = "filesystem"
-app.config["SESSION_FILE_DIR"] = str(sess_dir)
 app.config["SESSION_PERMANENT"] = False
 # Ensure permanent sessions (when set) expire after 30 days to match remember-me cookie
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
-# Prefer CacheLib's FileSystemCache (if available) so Flask-Session uses cachelib
-# instead of deprecated Werkzeug cache implementations. Instantiating the
-# cache here helps Flask-Session detect and use CacheLib automatically.
+
+# Prefer CacheLib's FileSystemCache when available. Set `SESSION_CACHELIB`
+# to an instance of `FileSystemCache` so Flask-Session uses CacheLib's
+# implementation and avoids the deprecated `SESSION_FILE_DIR` path.
+_session_cache = None
 try:
     from cachelib.file import FileSystemCache  # type: ignore
 
     with contextlib.suppress(Exception):
-        # Create a cache instance pointing at the same session dir. We don't
-        # directly wire it into Flask-Session here; Flask-Session will detect
-        # CacheLib's presence and use it for its filesystem backend.
-        _ = FileSystemCache(str(sess_dir))
+        _session_cache = FileSystemCache(str(sess_dir))
 except Exception:
-    pass
+    _session_cache = None
+
+if _session_cache is not None:
+    # Use CacheLib-backed cache for sessions (preferred)
+    app.config["SESSION_CACHELIB"] = _session_cache
+else:
+    # Fallback for environments without CacheLib: keep legacy file-dir config
+    app.config["SESSION_FILE_DIR"] = str(sess_dir)
 
 Session(app)
 
