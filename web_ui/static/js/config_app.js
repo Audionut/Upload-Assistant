@@ -1994,8 +1994,8 @@ function SecurityTab({ isDarkMode }) {
               Or manually enter: <code className={`px-2 py-1 rounded ${isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>{setupData.secret}</code>
             </p>
             <p className={`text-xs mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              <strong>To store in environment variable:</strong> Set <code className={`px-1 py-0.5 rounded text-xs ${isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>UA_WEBUI_TOTP_SECRET={setupData.secret}</code><br />
-              <strong>To copy to password manager:</strong> Save the secret &quot;{setupData.secret}&quot; in your password manager&#39;s TOTP field.
+              <strong>To store in environment variable:</strong> Set <code className={`px-1 py-0.5 rounded text-xs ${isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>UA_WEBUI_TOTP_SECRET={"{"}setupData.secret</code><br />
+              <strong>To copy to password manager:</strong> Save the secret {"{"}setupData.secret{"}"} in your password manager&#39;s TOTP field.
             </p>
             <div className="flex gap-2">
               <input
@@ -2126,10 +2126,15 @@ function AccessLogTab({ isDarkMode }) {
   const [message, setMessage] = useState('');
   const [logEntries, setLogEntries] = useState([]);
   const [logLoading, setLogLoading] = useState(false);
+  const [whitelist, setWhitelist] = useState([]);
+  const [blacklist, setBlacklist] = useState([]);
+  const [ipLoading, setIpLoading] = useState(false);
+  const [ipMessage, setIpMessage] = useState('');
 
   useEffect(() => {
     loadLevel();
     loadLogEntries();
+    loadIpSettings();
   }, []);
 
   const loadLevel = async () => {
@@ -2191,8 +2196,163 @@ function AccessLogTab({ isDarkMode }) {
     setLoading(false);
   };
 
+  const loadIpSettings = async () => {
+    try {
+      const response = await apiFetch(`${API_BASE}/ip_control`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      if (data && data.success) {
+        setWhitelist(data.whitelist || []);
+        setBlacklist(data.blacklist || []);
+      } else {
+        console.warn('Failed to load IP settings:', data.error);
+      }
+    } catch (error) {
+      console.warn('Failed to load IP settings:', error);
+    }
+  };
+
+  const handleIpSave = async () => {
+    setIpLoading(true);
+    setIpMessage('');
+    try {
+      const response = await apiFetch(`${API_BASE}/ip_control`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ whitelist, blacklist })
+      });
+      const data = await response.json();
+      if (data && data.success) {
+        setIpMessage('Saved.');
+      } else {
+        setIpMessage(data.error || 'Save failed');
+      }
+    } catch (error) {
+      setIpMessage('Save failed');
+    }
+    setIpLoading(false);
+  };
+
+  const addToWhitelist = (ip) => {
+    if (ip && !whitelist.includes(ip)) {
+      setWhitelist([...whitelist, ip]);
+    }
+  };
+
+  const removeFromWhitelist = (ip) => {
+    setWhitelist(whitelist.filter(item => item !== ip));
+  };
+
+  const addToBlacklist = (ip) => {
+    if (ip && !blacklist.includes(ip)) {
+      setBlacklist([...blacklist, ip]);
+    }
+  };
+
+  const removeFromBlacklist = (ip) => {
+    setBlacklist(blacklist.filter(item => item !== ip));
+  };
+
   return (
-    <div className={`rounded-lg border p-6 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+    <div>
+      {/* IP Control Panel */}
+      <div className={`rounded-lg border p-6 mb-6 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+        <h2 className={`text-xl font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>IP Access Control</h2>
+        <p className={`text-sm mb-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+          Control which IP addresses can access the Web UI. If whitelist is set, only listed IPs are allowed. Otherwise, listed IPs in blacklist are denied.
+        </p>
+
+        <div className="mb-4">
+          <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>Whitelist (allowed IPs)</label>
+          <div className="flex gap-2 mb-2">
+            <input
+              type="text"
+              placeholder="192.168.1.100"
+              className={`flex-1 rounded-md border px-3 py-2 text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  addToWhitelist(e.target.value.trim());
+                  e.target.value = '';
+                }
+              }}
+            />
+            <button
+              onClick={(e) => {
+                const input = e.target.previousElementSibling;
+                addToWhitelist(input.value.trim());
+                input.value = '';
+              }}
+              className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
+            >
+              Add
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {whitelist.map(ip => (
+              <span key={ip} className={`inline-flex items-center px-2 py-1 rounded text-xs ${isDarkMode ? 'bg-green-800 text-green-200' : 'bg-green-100 text-green-800'}`}>
+                {ip}
+                <button onClick={() => removeFromWhitelist(ip)} className="ml-1 text-red-500 hover:text-red-700">×</button>
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>Blacklist (denied IPs)</label>
+          <div className="flex gap-2 mb-2">
+            <input
+              type="text"
+              placeholder="192.168.1.100"
+              className={`flex-1 rounded-md border px-3 py-2 text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  addToBlacklist(e.target.value.trim());
+                  e.target.value = '';
+                }
+              }}
+            />
+            <button
+              onClick={(e) => {
+                const input = e.target.previousElementSibling;
+                addToBlacklist(input.value.trim());
+                input.value = '';
+              }}
+              className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+            >
+              Add
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {blacklist.map(ip => (
+              <span key={ip} className={`inline-flex items-center px-2 py-1 rounded text-xs ${isDarkMode ? 'bg-red-800 text-red-200' : 'bg-red-100 text-red-800'}`}>
+                {ip}
+                <button onClick={() => removeFromBlacklist(ip)} className="ml-1 text-red-500 hover:text-red-700">×</button>
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={handleIpSave}
+            disabled={ipLoading}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {ipLoading ? 'Saving...' : 'Save IP Settings'}
+          </button>
+        </div>
+
+        {ipMessage && (
+          <div className={`mt-4 text-sm ${ipMessage === 'Saved.' ? 'text-green-600' : 'text-red-600'}`}>
+            {ipMessage}
+          </div>
+        )}
+      </div>
+
+      {/* Access Log Settings */}
+
       <h2 className={`text-xl font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Access Log Settings</h2>
       <p className={`text-sm mb-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
         Control what the Web UI logs. Default is <code className={`px-1 rounded ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>access_denied</code> (only failed API attempts). Choose <code className={`px-1 rounded ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>disabled</code> to turn off all logging.

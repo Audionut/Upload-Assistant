@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
-
+from typing import Any, Optional
 
 DEFAULT_LEVEL = "access_denied"  # default: log only failed/denied attempts
 VALID_LEVELS = {"access_denied", "access", "disabled"}
@@ -75,9 +75,9 @@ class AccessLogger:
         # access_denied: only log non-success (failed) attempts
         return not bool(success)
 
-    def log(self, *, endpoint: str, method: str, remote_addr: Optional[str], username: Optional[str], success: bool, status: int, headers: Optional[Dict[str, Any]] = None, details: Optional[str] = None) -> None:
+    def log(self, *, endpoint: str, method: str, remote_addr: Optional[str], username: Optional[str], success: bool, status: int, headers: Optional[dict[str, Any]] = None, details: Optional[str] = None) -> None:
         try:
-            record: Dict[str, Any] = {
+            record: dict[str, Any] = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "endpoint": endpoint,
                 "method": method,
@@ -99,20 +99,18 @@ class AccessLogger:
             # Best-effort logging: swallow errors
             pass
 
-    def tail(self, n: int = 200) -> list[Dict[str, Any]]:
+    def tail(self, n: int = 200) -> list[dict[str, Any]]:
         try:
             if not self.log_file.exists():
                 return []
             # Read last n lines (simple approach)
-            with open(self.log_file, "r", encoding="utf-8") as f:
+            with open(self.log_file, encoding="utf-8") as f:
                 lines = f.read().splitlines()
             lines = lines[-n:]
             out = []
             for ln in lines:
-                try:
+                with suppress(Exception):
                     out.append(json.loads(ln))
-                except Exception:
-                    continue
             return out
         except Exception:
             return []

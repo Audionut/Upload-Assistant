@@ -16,6 +16,7 @@ discord.py==2.6.4
 ffmpeg-python==0.2.0
 flask==3.1.2
 flask-cors==6.0.2
+Flask-Limiter==3.8.0
 Flask-Session==0.5.0
 guessit==3.8.0
 httpx==0.28.1

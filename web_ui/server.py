@@ -21,6 +21,8 @@ from typing import Any, Literal, Optional, TypedDict, Union, cast
 import pyotp
 from flask import Flask, Response, g, jsonify, redirect, render_template, request, session, url_for
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from flask_session import Session
 from werkzeug.security import safe_join
 
@@ -100,6 +102,20 @@ app.config["SESSION_PERMANENT"] = False
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 Session(app)
 
+# Initialize Flask-Limiter for rate limiting
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://",
+)
+
+def _rate_limit_key_func():
+    """Rate limit key function that considers authentication status."""
+    if _is_authenticated():
+        return f"auth:{get_remote_address()}"
+    return f"unauth:{get_remote_address()}"
+
 
 # Encrypted session helpers --------------------------------------------------
 def _derive_aes_key() -> Optional[bytes]:
@@ -152,6 +168,86 @@ def _session_pop(key: str, default: Any = None) -> Any:
     val = d.pop(key, default)
     _commit_session_dict(d)
     return val
+
+
+# IP control helpers --------------------------------------------------
+def _get_ip_whitelist() -> list[str]:
+    """Get the list of whitelisted IPs."""
+    try:
+        path = cfg_dir / "webui_auth.json"
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            val = data.get("ip_whitelist")
+            if isinstance(val, list):
+                return val
+    except Exception:
+        pass
+    return []
+
+
+def _set_ip_whitelist(ips: list[str]) -> None:
+    """Set the list of whitelisted IPs."""
+    try:
+        path = cfg_dir / "webui_auth.json"
+        data = {}
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8")) or {}
+            except Exception:
+                data = {}
+        data["ip_whitelist"] = ips
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _get_ip_blacklist() -> list[str]:
+    """Get the list of blacklisted IPs."""
+    try:
+        path = cfg_dir / "webui_auth.json"
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            val = data.get("ip_blacklist")
+            if isinstance(val, list):
+                return val
+    except Exception:
+        pass
+    return []
+
+
+def _set_ip_blacklist(ips: list[str]) -> None:
+    """Set the list of blacklisted IPs."""
+    try:
+        path = cfg_dir / "webui_auth.json"
+        data = {}
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8")) or {}
+            except Exception:
+                data = {}
+        data["ip_blacklist"] = ips
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _is_ip_allowed(ip: str) -> bool:
+    """Check if an IP is allowed based on whitelist/blacklist."""
+    whitelist = _get_ip_whitelist()
+    blacklist = _get_ip_blacklist()
+
+    # If whitelist is set, only allow IPs in whitelist
+    if whitelist:
+        return ip in whitelist
+
+    # Otherwise, deny IPs in blacklist
+    return ip not in blacklist
+
+
+def _handle_failed_auth(ip: str) -> None:
+    """Handle failed authentication attempt. Track failures and blacklist if too many."""
+    # adding later
+    pass
 
 
 def _is_authenticated() -> bool:
@@ -607,6 +703,23 @@ def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
     if request.path == "/api/health":
         return None
 
+    # Check IP access control
+    client_ip = get_remote_address()
+    if not _is_ip_allowed(client_ip):
+        # Log the blocked attempt
+        if access_logger:
+            access_logger.log(
+                endpoint=request.path,
+                method=request.method,
+                remote_addr=client_ip,
+                username=None,
+                success=False,
+                status=403,
+                headers={"User-Agent": request.headers.get("User-Agent", "")},
+                details="IP blocked",
+            )
+        return jsonify({"error": "Access denied", "success": False}), 403
+
     # Try to restore session from a long-lived remember-me cookie if present
     try:
         if not _is_authenticated():
@@ -692,7 +805,7 @@ def _maybe_log_api_access(response):
         try:
             # First try authenticated user
             user = getattr(g, "username", None) or _session_get("username")
-            
+
             # For failed auth attempts, try to extract attempted username
             if user is None and not success:
                 # Check Basic auth
@@ -708,7 +821,7 @@ def _maybe_log_api_access(response):
             user = None
 
         # Minimal headers for context
-        headers = {k: v for k, v in request.headers.items()} if request.headers else None
+        headers = dict(request.headers) if request.headers else None
 
         remote = request.remote_addr or request.environ.get('REMOTE_ADDR')
 
@@ -1438,6 +1551,7 @@ def index():
 
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("3 per minute", key_func=get_remote_address)
 def login_page():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
@@ -1727,6 +1841,59 @@ def access_log_entries_api():
         return jsonify({"success": True, "entries": entries})
     except Exception:
         return jsonify({"success": False, "error": "Failed to read log entries"}), 500
+
+
+@app.route("/api/ip_control", methods=["GET", "POST"])
+def ip_control_api():
+    """Get or set IP whitelist/blacklist.
+
+    GET: returns current whitelist and blacklist (requires web session).
+    POST: updates whitelist/blacklist. Body: {"whitelist": [...], "blacklist": [...]}
+    (requires web session + CSRF).
+    """
+    # Require authenticated web session
+    if not _is_authenticated():
+        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+
+    if request.method == "GET":
+        try:
+            whitelist = _get_ip_whitelist()
+            blacklist = _get_ip_blacklist()
+            return jsonify({"success": True, "whitelist": whitelist, "blacklist": blacklist})
+        except Exception:
+            return jsonify({"success": False, "error": "Failed to read IP control settings"}), 500
+
+    elif request.method == "POST":
+        # Require CSRF for POST
+        if not _verify_csrf_header():
+            return jsonify({"success": False, "error": "CSRF validation failed"}), 403
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({"success": False, "error": "Invalid JSON"}), 400
+
+            whitelist = data.get("whitelist", [])
+            blacklist = data.get("blacklist", [])
+
+            if not isinstance(whitelist, list) or not isinstance(blacklist, list):
+                return jsonify({"success": False, "error": "whitelist and blacklist must be arrays"}), 400
+
+            # Validate IP addresses
+            import ipaddress
+            for ip in whitelist + blacklist:
+                if not isinstance(ip, str):
+                    return jsonify({"success": False, "error": f"Invalid IP format: {ip}"}), 400
+                try:
+                    ipaddress.ip_address(ip)
+                except ValueError:
+                    return jsonify({"success": False, "error": f"Invalid IP address: {ip}"}), 400
+
+            _set_ip_whitelist(whitelist)
+            _set_ip_blacklist(blacklist)
+            return jsonify({"success": True})
+        except Exception as e:
+            console.print(f"Error updating IP control: {e}", markup=False)
+            return jsonify({"success": False, "error": "Failed to update IP control settings"}), 500
 
 
 
@@ -2167,6 +2334,7 @@ def browse_path():
 
 
 @app.route("/api/execute", methods=["POST", "OPTIONS"])
+@limiter.limit("100 per hour", key_func=_rate_limit_key_func)
 def execute_command():
     """Execute upload.py with interactive terminal support"""
 
@@ -2766,6 +2934,7 @@ def execute_command():
 
 
 @app.route("/api/input", methods=["POST"])
+@limiter.limit("200 per hour", key_func=_rate_limit_key_func)
 def send_input():
     """Send user input to running process"""
     try:
@@ -2820,6 +2989,7 @@ def send_input():
 
 
 @app.route("/api/kill", methods=["POST"])
+@limiter.limit("50 per hour", key_func=_rate_limit_key_func)
 def kill_process():
     """Kill a running process"""
     try:
