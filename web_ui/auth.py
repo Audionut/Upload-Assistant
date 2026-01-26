@@ -67,16 +67,16 @@ def get_config_dir() -> Path:
     if _running_in_docker():
         if os.name == "nt":
             appdata = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
-            return Path(appdata) / "UploadAssistant"
+            return Path(appdata) / "upload-assistant"
         # Unix-like: prefer XDG_CONFIG_HOME if set, otherwise ~/.config
         xdg = os.environ.get("XDG_CONFIG_HOME")
         base = Path(xdg) if xdg else (Path.home() / ".config")
-        return base / "UploadAssistant"
+        return base / "upload-assistant"
 
     # Windows: prefer roaming AppData (per-user persistent config)
     if os.name == "nt":
         appdata = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
-        return Path(appdata) / "Upload_Assistant"
+        return Path(appdata) / "upload-assistant"
     # Unix-like: prefer XDG_CONFIG_HOME, fall back to repo data/config or ~/.config/upload-assistant
     xdg = os.environ.get("XDG_CONFIG_HOME")
     if xdg:

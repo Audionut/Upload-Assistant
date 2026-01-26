@@ -25,7 +25,7 @@ services:
       - /mnt/user/appdata/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw # Optional: will be created automatically if missing
       - /mnt/user/appdata/qBittorrent/data/BT_backup/:/torrent_storage_dir:rw #map this to your qbittorrent bt_backup
       - /mnt/user/appdata/Upload-Assistant/tmp/:/Upload-Assistant/tmp:rw #map this to your /tmp folder.
-      - /mnt/user/appdata/Upload-Assistant/webui-auth:/root/.config/UploadAssistant:rw # persist web UI session auth config
+      - /mnt/user/appdata/Upload-Assistant/webui-auth:/root/.config/upload-assistant:rw # persist web UI session auth config
 networks:
   "yournetwork": #change this to your network 
     external: true

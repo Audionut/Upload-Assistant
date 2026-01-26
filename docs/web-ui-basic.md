@@ -64,7 +64,7 @@ Notes:
 
 **Notes and troubleshooting**
 - If browsing is not configured (no browse roots), the file browser will be empty — set `UA_BROWSE_ROOTS` or configure `upload.py` to set the runtime browse roots.
-- Credentials and recovery storage: the Web UI stores the encrypted local user record (password hash, API tokens, 2FA secret/recovery hashes) in `webui_auth.json` under the application config directory. On Windows this is under `%APPDATA%/Upload_Assistant` by default; on Unix-like systems it prefers `XDG_CONFIG_HOME` or the repository `data/` directory depending on environment (docker users should correctly map as needed).
+- Credentials and recovery storage: the Web UI stores the encrypted local user record (password hash, API tokens, 2FA secret/recovery hashes) in `webui_auth.json` under the application config directory. On Windows this is under `%APPDATA%/upload-assistant` by default; on Unix-like systems it prefers `XDG_CONFIG_HOME` or the repository `data/` directory depending on environment (docker users should correctly map as needed).
 
 - Resetting password / 2FA problems: stopping the web UI and removing the `webui_auth.json` file in the app config dir will remove the persisted user record and allow you to recreate a local user via the login page (this also removes persisted API tokens and recovery codes). If you rely on a persisted session secret, `session_secret` in the config dir may be used to derive encryption keys — removing or changing it will invalidate encrypted fields, so treat that file carefully.
 
