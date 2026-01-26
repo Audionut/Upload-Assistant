@@ -92,7 +92,7 @@ class SSD(COMMON):
         try:
             response = await self.session.get(search_url, timeout=10)
             response.raise_for_status()
-            pattern = re.compile(r'window\.__DATA__ = (\{.*\});')
+            pattern = re.compile(r'window\.__DATA__ = (\{.*?\});', re.DOTALL)
             match = pattern.search(response.text)
             if not match: return None
             data = json.loads(match.group(1))
@@ -178,7 +178,7 @@ class SSD(COMMON):
     # ==========================================================
 
     def _get_region_id_from_fkgen(self):
-        EUROPE_AMERICA_OCEANIA_SET = {'阿尔巴尼亚', '爱尔兰', '爱沙尼亚', '安道尔', '奥地利', '白俄罗斯', '保加利亚','北马其顿', '比利时', '冰岛', '波黑', '波兰', '丹麦', '德国', '法国','梵地冈', '芬兰', '荷兰', '黑山', '捷克', '克罗地亚', '拉脱维亚', '立陶宛','列支敦士登', '卢森堡', '罗马尼亚', '马耳他', '摩尔多瓦', '摩纳哥', '挪威','葡萄牙', '瑞典', '瑞士', '塞尔维亚', '塞浦路斯', '圣马力诺', '斯洛伐克','斯洛文尼亚', '乌克兰', '西班牙', '希腊', '匈牙利', '意大利', '英国','安提瓜和巴布达', '巴巴多斯', '巴哈马', '巴拿马', '伯利兹', '多米尼加', '多米尼克','格林纳达', '哥斯达黎加', '古巴', '海地', '洪都拉斯', '加拿大', '美国', '墨西哥','尼加拉瓜', '萨尔вадор', '圣基茨和尼维斯', '圣卢西亚', '圣文森特和格林на丁斯','特立尼达和多巴哥', '危地马拉', '牙买加', '阿根廷', '巴拉圭', '巴西', '秘鲁','玻利维亚', '厄瓜多尔', '哥伦比亚', '圭亚那', '苏里南', '委内瑞拉', '乌拉圭','智利', '捷克斯洛伐克', '澳大利亚', '西德', '新西兰'}
+        EUROPE_AMERICA_OCEANIA_SET = {'阿尔巴尼亚', '爱尔兰', '爱沙尼亚', '安道尔', '奥地利', '白俄罗斯', '保加利亚','北马其顿', '比利时', '冰岛', '波黑', '波兰', '丹麦', '德国', '法国','梵地冈', '芬兰', '荷兰', '黑山', '捷克', '克罗地亚', '拉脱维亚', '立陶宛','列支敦士登', '卢森堡', '罗马尼亚', '马耳他', '摩尔多瓦', '摩纳哥', '挪威','葡萄牙', '瑞典', '瑞士', '塞尔维亚', '塞浦路斯', '圣马力诺', '斯洛伐克','斯洛文尼亚', '乌克兰', '西班牙', '希腊', '匈牙利', '意大利', '英国','安提瓜和巴布达', '巴巴多斯', '巴哈马', '巴拿马', '伯利兹', '多米尼加', '多米尼克','格林纳达', '哥斯达黎加', '古巴', '海地', '洪都拉斯', '加拿大', '美国', '墨西哥','尼加拉瓜', '萨尔вадор', '圣基茨和尼维斯', '圣卢西亚', '圣文森特和格林纳丁斯','特立尼达和多巴哥', '危地马拉', '牙买加', '阿根廷', '巴拉圭', '巴西', '秘鲁','玻利维亚', '厄瓜多尔', '哥伦比亚', '圭亚那', '苏里南', '委内瑞拉', '乌拉圭','智利', '捷克斯洛伐克', '澳大利亚', '西德', '新西兰'}
         movie_regions = self.fkgen_data.get('countries', [])
         if not movie_regions: return '99'
         for region in movie_regions:
@@ -413,15 +413,33 @@ class SSD(COMMON):
         return True
 
     async def validate_cookies(self, meta):
-        if not self.cookie_file or not os.path.exists(self.cookie_file): return False
-        try:
-            with open(self.cookie_file, 'r') as f: cookie_str = f.read().strip()
-            self.session.cookies.update({k.strip(): v.strip() for k, v in (p.split('=', 1) for p in cookie_str.split(';') if '=' in p)})
-        except Exception: return False
+        cookie_str = await self._load_cookie_header(meta)
+        if not cookie_str:
+            return False
         try:
             response = await self.session.get("https://springsunday.net/upload.php", timeout=10, follow_redirects=False)
             return response.status_code == 200
         except httpx.RequestError: return False
+
+    async def _load_cookie_header(self, meta):
+        if not self.cookie_file or not os.path.exists(self.cookie_file):
+            return ""
+        try:
+            with open(self.cookie_file, 'r', encoding='utf-8') as f:
+                cookie_str = f.read().strip()
+            if not cookie_str:
+                return ""
+            if "\t" in cookie_str or cookie_str.startswith("# Netscape"):
+                common = COMMON(config=self.config)
+                cookies = await common.parseCookieFile(self.cookie_file)
+                cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
+            self.session.cookies.update({
+                k.strip(): v.strip()
+                for k, v in (p.split('=', 1) for p in cookie_str.split(';') if '=' in p)
+            })
+            return cookie_str
+        except Exception:
+            return ""
 
     async def search_existing(self, meta, disctype): return []
     
@@ -453,20 +471,29 @@ class SSD(COMMON):
 
     async def upload(self, meta, disctype):
         print(f"[{self.tracker}] 开始处理上传任务...")
+        if not self.cookie_file or not os.path.exists(self.cookie_file):
+            meta['tracker_status'][self.tracker] = {
+                'status': 'failed',
+                'reason': "Cookie file not configured or missing",
+            }
+            return False
         
         imdb_id_num = meta.get('imdb_id')
         if not imdb_id_num:
-            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "IMDb ID not found"}; return
+            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "IMDb ID not found"}
+            return False
         
         self.imdb_id_with_prefix = f"tt{str(imdb_id_num).zfill(7)}"
         
         if not await self._get_and_cache_fkgen_data(meta):
-            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "fkgen 信息获取失败或无效，上传任务中止。"}; return
+            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "fkgen 信息获取失败或无效，上传任务中止。"}
+            return False
             
         douban_link = f"https://movie.douban.com/subject/{self.fkgen_data.get('DoubanID')}/" if self.fkgen_data.get('DoubanID') else ""
 
         if not await self.edit_torrent(meta, self.tracker, self.source_flag):
-            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "Failed to edit torrent"}; return
+            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "Failed to edit torrent"}
+            return False
             
         ssd_name = self.edit_name(meta)
         poster_url = await self._get_poster_url(meta)
@@ -501,10 +528,14 @@ class SSD(COMMON):
         
         final_torrent_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], f"[{self.tracker}].torrent")
         if not os.path.exists(final_torrent_path):
-            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "Torrent file not created after edit"}; return
+            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "Torrent file not created after edit"}
+            return False
             
         try:
-            with open(self.cookie_file, 'r') as f: cookie_str = f.read().strip()
+            cookie_str = await self._load_cookie_header(meta)
+            if not cookie_str:
+                meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "Cookie file empty or invalid"}
+                return False
             command = ["curl", "--silent", "--output", "/dev/null", "--write-out", "%{redirect_url}", self.upload_url]
             command.extend(["-H", f"Cookie: {cookie_str}"])
             command.extend(["-H", f"User-Agent: {self.session.headers.get('User-Agent')}"])
@@ -516,20 +547,37 @@ class SSD(COMMON):
             final_url = result.stdout.strip()
             
             if result.returncode == 0 and 'details.php?id=' in final_url:
-                print(f"[{self.tracker}] ✅ 上传成功！")
-                print(f"[{self.tracker}] 种子详情页: {final_url}")
+                if meta.get('debug', False):
+                    print(f"[{self.tracker}] ✅ 上传成功！")
+                    print(f"[{self.tracker}] 种子详情页: {final_url}")
                 torrent_id = re.search(r'id=(\d+)', final_url).group(1) if re.search(r'id=(\d+)', final_url) else None
-                meta['tracker_status'][self.tracker] = {'status': 'success', 'torrent_url': final_url, 'torrent_id': torrent_id}
+                meta['tracker_status'][self.tracker] = {
+                    'status': 'success',
+                    'status_message': 'Upload successful',
+                    'torrent_url': final_url,
+                    'torrent_id': torrent_id,
+                }
                 
                 if meta.get('debug', False):
                     print(f"[{self.tracker}] 🚧 DEBUG模式：跳过将种子添加到 qBittorrent 的步骤。")
                 elif torrent_id:
                     upload_limit_kib = 112640 
                     await self._add_to_qbittorrent(meta, torrent_id, upload_limit_kib)
+                return True
             else:
                 print(f"[{self.tracker}] ❌ 上传失败。")
-                meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': f"curl failed with exit code {result.returncode}"}
+                meta['tracker_status'][self.tracker] = {
+                    'status': 'failed',
+                    'status_message': 'Upload failed',
+                    'reason': f"curl failed with exit code {result.returncode}",
+                }
+                return False
         except Exception as e:
             error_message = f"执行 curl 命令时发生 Python 错误: {e}"
             print(f"[{self.tracker}] ❌ {error_message}")
-            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': error_message}
+            meta['tracker_status'][self.tracker] = {
+                'status': 'failed',
+                'status_message': 'Upload failed',
+                'reason': error_message,
+            }
+            return False
