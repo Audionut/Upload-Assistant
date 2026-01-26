@@ -86,11 +86,37 @@ class AccessLogger:
                 "success": bool(success),
                 "status": int(status),
             }
+
+            # Only keep full, unredacted data when the attempt failed due to auth (401/403).
+            # For successful attempts and non-auth failures redact sensitive fields.
+            st = int(status)
+            keep_full = (not bool(success)) and st in (401, 403)
+            redact = not keep_full
+
             if headers:
-                # Store a small subset of headers for context
-                record["headers"] = {k: headers.get(k) for k in ("User-Agent", "Authorization", "Referer") if headers.get(k) is not None}
+                # Store a small subset of headers for context. For non-failed attempts redact sensitive header values.
+                hdr_keys = ("User-Agent", "Authorization", "Referer")
+                if redact:
+                    rec_headers: dict[str, Any] = {}
+                    for k in hdr_keys:
+                        v = headers.get(k)
+                        if v is None:
+                            continue
+                        # Keep User-Agent for context, redact anything else
+                        rec_headers[k] = v if k == "User-Agent" else "<REDACTED>"
+                    record["headers"] = rec_headers
+                else:
+                    record["headers"] = {k: headers.get(k) for k in hdr_keys if headers.get(k) is not None}
+
             if details:
-                record["details"] = str(details)
+                record["details"] = ("<REDACTED>" if redact else str(details))
+
+            # Redact top-level sensitive fields for non-failed attempts
+            if redact:
+                if record.get("remote_addr") is not None:
+                    record["remote_addr"] = "<REDACTED>"
+                if record.get("user") is not None:
+                    record["user"] = "<REDACTED>"
 
             # Append as JSON line
             with open(self.log_file, "a", encoding="utf-8") as f:
