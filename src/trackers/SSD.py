@@ -1,469 +1,535 @@
-# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-from __future__ import annotations
-
 import os
-import re
-from typing import Any, Optional, cast
-
-import aiofiles
 import httpx
+import json
+import re
+from urllib.parse import quote
 from bs4 import BeautifulSoup
+import bencodepy
+import cli_ui
+import subprocess
+import shlex
+import asyncio
 
-from src.console import console
-from src.cookie_auth import CookieAuthUploader, CookieValidator
+from src.fkgen import DoubanMovieGenerator
+from src import image777
 from src.trackers.COMMON import COMMON
 
-Meta = dict[str, Any]
-Config = dict[str, Any]
 
+class SSD(COMMON):
+    
+    def __init__(self, config):
+        super().__init__(config)
+        self.config = config
+        self.tracker = 'SSD'
+        self.source_flag = 'SSD'
+        
+        tracker_config = self.config['TRACKERS'].get(self.tracker, {})
+        self.cookie_file = tracker_config.get('cookie')
+        self.anon = tracker_config.get('anon', True)
+        self.offer = tracker_config.get('offer', True)
+        self.passkey = tracker_config.get('passkey')
+        self.upload_url = 'https://springsunday.net/takeupload.php'
+        self.torrent_url = 'https://springsunday.net/details.php?id='
+        self.banned_groups = []
 
-class SSD:
-    def __init__(self, config: Config) -> None:
-        self.config: Config = config
-        self.common = COMMON(config)
-        self.cookie_validator = CookieValidator(config)
-        self.cookie_auth_uploader = CookieAuthUploader(config)
-        self.tracker = "SSD"
-        self.source_flag = "SSD"
-        tracker_cfg = cast(dict[str, Any], config.get('TRACKERS', {}).get(self.tracker, {}))
-        self.base_url = str(tracker_cfg.get('base_url', 'https://on.springsunday.net')).rstrip('/')
-        self.torrent_url = f"{self.base_url}/details.php?id="
-        self.ptgen_api = str(tracker_cfg.get('ptgen_api', '')).strip()
-        self.ptgen_retry = int(tracker_cfg.get('ptgen_retry', 3))
-        self.banned_groups: list[str] = []
-        self.session = httpx.AsyncClient(timeout=60.0)
+        self.fkgen_data = {}
+        self.imdb_id_with_prefix = None
+        
+        self.session = httpx.AsyncClient()
+        self.session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'})
 
-    async def validate_credentials(self, meta: Meta) -> bool:
-        cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
-        self.session.cookies = cast(Any, cookies)
-        return await self.cookie_validator.cookie_validation(
-            meta=meta,
-            tracker=self.tracker,
-            test_url=f'{self.base_url}/upload.php',
-            success_text='logout.php',
-        )
+        self.medium_map = {'Blu-ray': '1', 'Remux': '4', 'BDRip': '6', 'WEB-DL': '7', 'WEBRip': '8', 'HDTV': '5', 'Other': '99'}
+        self.codec_map = {'H.265': '1', 'HEVC': '1', 'x265': '1', 'H.264': '2', 'AVC': '2', 'x264': '2', 'VC-1': '3', 'MPEG-2': '4', 'AV1': '5', 'Other': '99'}
+        self.audiocodec_map = {'DTS:X': '1', 'DTS-HD': '1', 'TrueHD': '2', 'LPCM': '6', 'FLAC': '7', 'DDP': '11', 'E-AC-3': '11', 'EAC3': '11', 'DD+': '11', 'DTS': '3', 'AC-3': '4', 'AC3': '4', 'DD': '4', 'AAC': '5', 'APE': '8', 'WAV': '9', 'MP3': '10', 'OPUS': '12', 'Other': '99'}
+        self.resolution_map = {'2160p': '1', '1080p': '2', '1080i': '3', '720p': '4', 'SD': '5', 'Other': '99'}
+        self.category_map = {'MOVIE': '501', 'TV_SERIES': '502', 'DOCS': '503', 'TV_SHOWS': '505', 'SPORTS': '506', 'MV': '507', 'MUSIC': '508', 'AUDIO': '510', 'OTHER': '509'}
 
-    async def search_existing(self, meta: Meta, _disctype: str) -> Optional[list[str]]:
-        imdb_id_raw = str(meta.get('imdb_id', '0')).replace('tt', '').strip()
-        if not imdb_id_raw.isdigit() or int(imdb_id_raw) == 0:
-            return []
+    async def edit_torrent(self, meta, tracker, source_flag):
+        edited_torrent_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], f"[{tracker}].torrent")
+        decoded_torrent = None
+        user_input_path = meta.get('path')
+        if user_input_path:
+            qbt_client = None
+            try:
+                from qbittorrentapi import Client
+                client_config = self.config.get('TORRENT_CLIENTS', {}).get('qbittorrent', {})
+                qbt_url, qbt_port, qbt_user, qbt_pass = (client_config.get(k) for k in ['qbit_url', 'qbit_port', 'qbit_user', 'qbit_pass'])
+                if all([qbt_url, qbt_port, qbt_user, qbt_pass]):
+                    qbt_client = Client(host=f"{qbt_url}:{qbt_port}", username=qbt_user, password=qbt_pass)
+                    qbt_client.auth_log_in()
+                    target_name = os.path.basename(os.path.normpath(user_input_path))
+                    for torrent in qbt_client.torrents_info():
+                        if torrent.name == target_name:
+                            content_path_in_qb = os.path.join(torrent.save_path, torrent.name)
+                            if os.path.normpath(content_path_in_qb) == os.path.normpath(user_input_path):
+                                print(f"[{self.tracker}] ✅ 在 qb 中找到完美匹配的种子，正在导出...")
+                                torrent_content = qbt_client.torrents_export(torrent_hash=torrent.hash)
+                                decoded_torrent = bencodepy.decode(torrent_content)
+                                break
+            except Exception as e:
+                print(f"[{self.tracker}] 在 qb 中查找种子时出错: {e}")
+            finally:
+                if qbt_client and qbt_client.is_logged_in:
+                    qbt_client.auth_log_out()
+        if not decoded_torrent:
+            print(f"[{self.tracker}] 未在 qb 中找到匹配种子，回退到使用 BASE.torrent。")
+            base_torrent_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], 'BASE.torrent')
+            if not os.path.exists(base_torrent_path):
+                print(f"[{self.tracker}] ❌ 错误：BASE.torrent 文件也不存在，无法编辑。")
+                return False
+            with open(base_torrent_path, 'rb') as f:
+                decoded_torrent = bencodepy.decode(f.read())
+        announce_url = 'https://on.springsunday.net/announce.php'
+        decoded_torrent[b'announce'] = announce_url.encode('utf-8')
+        if source_flag: decoded_torrent[b'source'] = source_flag.encode('utf-8')
+        if b'info' in decoded_torrent: decoded_torrent[b'info'][b'private'] = 1
+        with open(edited_torrent_path, 'wb') as f:
+            f.write(bencodepy.encode(decoded_torrent))
+        return True
 
-        imdb_id = f"tt{imdb_id_raw.zfill(7)}"
-        search_url = f"{self.base_url}/torrents.php"
-        params = {
-            'incldead': 1,
-            'search': imdb_id,
-            'search_area': 4,
-        }
+    async def _get_douban_link_from_imdb(self, imdb_id_with_prefix):
+        search_url = f"https://search.douban.com/movie/subject_search?search_text={imdb_id_with_prefix}"
         try:
-            response = await self.session.get(search_url, params=params, cookies=self.session.cookies)
+            response = await self.session.get(search_url, timeout=10)
             response.raise_for_status()
-        except httpx.HTTPError:
-            return []
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-        torrents_table = soup.find('table', class_='torrents')
-        if not torrents_table:
-            return []
-
-        found_items: list[str] = []
-        for torrent_table in torrents_table.find_all('table', class_='torrentname'):
-            name_tag = torrent_table.find('b')
-            if name_tag:
-                found_items.append(name_tag.get_text(strip=True))
-        return found_items
-
-    async def get_type(self, meta: Meta) -> str:
-        category = str(meta.get('category', '')).upper()
-        if category == 'MOVIE':
-            return '501'
-        if category == 'TV':
-            return '502'
-
-        genres_value = meta.get("genres", [])
-        keywords_value = meta.get("keywords", [])
-        genres = ' '.join(genres_value).lower() if isinstance(genres_value, list) else str(genres_value).lower()
-        keywords = ' '.join(keywords_value).lower() if isinstance(keywords_value, list) else str(keywords_value).lower()
-
-        if 'documentary' in genres or 'documentary' in keywords:
-            return '503'
-        if 'sport' in genres or 'sports' in keywords:
-            return '506'
-        if 'music' in genres or 'music' in keywords:
-            return '508'
-
-        return '509'
-
-    async def get_source_sel(self, meta: Meta) -> str:
-        ptgen = cast(dict[str, Any], meta.get('ptgen', {}))
-        regions_value = ptgen.get('region', [])
-        regions = cast(list[str], regions_value) if isinstance(regions_value, list) else []
-        region_map = {
-            '中国大陆': '1',
-            '中国香港': '2',
-            '中国台湾': '3',
-            '美国': '4',
-            '英国': '4',
-            '法国': '4',
-            '德国': '4',
-            '西班牙': '4',
-            '意大利': '4',
-            '加拿大': '4',
-            '澳大利亚': '4',
-            '日本': '5',
-            '韩国': '6',
-            '印度': '7',
-            '俄罗斯': '8',
-            '泰国': '9',
-        }
-        for region in regions:
-            if region in region_map:
-                return region_map[region]
-
-        origin_countries_value = meta.get('origin_country', [])
-        origin_countries = cast(list[str], origin_countries_value) if isinstance(origin_countries_value, list) else []
-        western_countries = {
-            'US', 'GB', 'CA', 'AU', 'NZ', 'FR', 'DE', 'ES', 'IT', 'NL', 'BE', 'CH', 'AT', 'IE', 'DK', 'NO',
-            'SE', 'FI', 'PT', 'GR', 'PL', 'CZ', 'HU', 'RO', 'BG', 'UA'
-        }
-        if 'CN' in origin_countries:
-            return '1'
-        if 'HK' in origin_countries:
-            return '2'
-        if 'TW' in origin_countries:
-            return '3'
-        if any(code in western_countries for code in origin_countries):
-            return '4'
-        if 'JP' in origin_countries:
-            return '5'
-        if 'KR' in origin_countries:
-            return '6'
-        if 'IN' in origin_countries:
-            return '7'
-        if 'RU' in origin_countries:
-            return '8'
-        if 'TH' in origin_countries:
-            return '9'
-
-        return '99'
-
-    async def get_medium_sel(self, meta: Meta) -> str:
-        if meta.get('is_disc', '') == 'BDMV':
-            return '1'
-        if meta.get('is_disc', '') == 'DVD':
-            return '3'
-
-        type_value = str(meta.get('type', '')).upper()
-        medium_map = {
-            'REMUX': '4',
-            'MINIBD': '2',
-            'BDRIP': '6',
-            'ENCODE': '6',
-            'WEBDL': '7',
-            'WEBRIP': '8',
-            'HDTV': '5',
-            'TVRIP': '9',
-            'DVDRIP': '10',
-            'CD': '11',
-        }
-        return medium_map.get(type_value, '99')
-
-    async def get_standard_sel(self, meta: Meta) -> str:
-        res_map = {
-            '2160p': '1',
-            '1080p': '2',
-            '1080i': '3',
-            '720p': '4',
-            'SD': '5',
-        }
-        return res_map.get(str(meta.get('resolution', '')).lower(), '99')
-
-    async def get_codec_sel(self, meta: Meta) -> str:
-        codec_value = str(meta.get('video_codec', meta.get('video_encode', '')))
-        codec_value = codec_value.lower()
-        if 'hevc' in codec_value or 'h.265' in codec_value or 'x265' in codec_value:
-            return '1'
-        if 'avc' in codec_value or 'h.264' in codec_value or 'x264' in codec_value:
-            return '2'
-        if 'vc-1' in codec_value:
-            return '3'
-        if 'mpeg-2' in codec_value or 'mpeg2' in codec_value:
-            return '4'
-        if 'av1' in codec_value:
-            return '5'
-        return '99'
-
-    async def get_audiocodec_sel(self, meta: Meta) -> str:
-        audio = str(meta.get('audio', '')).upper()
-        if 'DTS-HD' in audio:
-            return '1'
-        if 'TRUEHD' in audio:
-            return '2'
-        if 'LPCM' in audio:
-            return '6'
-        if 'DTS' in audio:
-            return '3'
-        if 'E-AC-3' in audio or 'EAC3' in audio or 'DDP' in audio:
-            return '11'
-        if 'AC-3' in audio or 'AC3' in audio:
-            return '4'
-        if 'AAC' in audio:
-            return '5'
-        if 'FLAC' in audio:
-            return '7'
-        if 'APE' in audio:
-            return '8'
-        if 'WAV' in audio:
-            return '9'
-        if 'MP3' in audio:
-            return '10'
-        if 'OPUS' in audio:
-            return '12'
-        if 'AV3A' in audio:
-            return '13'
-        return '99'
-
-    async def get_team_sel(self) -> str:
-        tracker_cfg = cast(dict[str, Any], self.config.get('TRACKERS', {}).get(self.tracker, {}))
-        team_sel = tracker_cfg.get('team_sel', 0)
-        return str(team_sel) if team_sel is not None else '0'
-
-    async def get_media_info(self, meta: Meta) -> str:
-        if meta.get('is_disc') == 'BDMV':
-            bd_summary = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
-            if os.path.exists(bd_summary):
-                async with aiofiles.open(bd_summary, encoding='utf-8') as f:
-                    return await f.read()
-
-        mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-        if os.path.exists(mi_path):
-            async with aiofiles.open(mi_path, encoding='utf-8') as f:
-                return await f.read()
-        return ''
-
-    async def get_description(self, meta: Meta, ptgen_text: str) -> str:
-        desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
-        if os.path.exists(desc_path):
-            async with aiofiles.open(desc_path, encoding='utf-8') as f:
-                return await f.read()
-        return ptgen_text
-
-    async def get_screenshots(self, meta: Meta) -> str:
-        images_value = meta.get(f'{self.tracker}_images_key', meta.get('image_list', []))
-        images = cast(list[dict[str, Any]], images_value) if isinstance(images_value, list) else []
-        raw_urls = [str(image.get('raw_url', '')).strip() for image in images if image.get('raw_url')]
-        return "\n".join(raw_urls)
-
-    async def fetch_ptgen_json(self, params: dict[str, Any]) -> Optional[dict[str, Any]]:
-        url = self.ptgen_api or 'https://ptgen.zhenzhen.workers.dev'
-        try:
-            response = await self.session.get(url, params=params)
-            response.raise_for_status()
-            ptgen_json = response.json()
-        except (httpx.HTTPError, ValueError):
+            pattern = re.compile(r'window\.__DATA__ = (\{.*\});')
+            match = pattern.search(response.text)
+            if not match: return None
+            data = json.loads(match.group(1))
+            if data.get('items') and len(data['items']) > 0:
+                douban_link = data['items'][0].get('url')
+                if douban_link:
+                    return douban_link
             return None
-        return ptgen_json
+        except Exception:
+            return None
 
-    def extract_douban_link(self, ptgen_json: dict[str, Any]) -> str:
-        data_value = ptgen_json.get('data', [])
-        data = cast(list[dict[str, Any]], data_value) if isinstance(data_value, list) else []
-        if data:
-            link = str(data[0].get('link', '')).strip()
-            if 'douban.com/subject/' in link:
-                return link
+    async def _get_fkgen_data(self, meta, douban_link):
+        if not douban_link:
+            print(f"[{self.tracker}] -> 警告：没有提供豆瓣链接，无法获取信息。")
+            return
+        print(f"[{self.tracker}] 正在从豆瓣链接获取详细信息 (使用fkgen)...")
+        try:
+            generator = DoubanMovieGenerator(movie_url=douban_link)
+            generator.parse()
+            self.fkgen_data = generator.movie_info
 
-        format_text = str(ptgen_json.get('format', '')).strip()
-        match = re.search(r"https?://(?:movie\.)?douban\.com/subject/\d+/?", format_text)
-        return match.group(0) if match else ''
+            if self.fkgen_data and self.fkgen_data.get("names"):
+                print(f"[{self.tracker}]   ✅ 从fkgen获取信息成功!")
+            else:
+                raise ValueError("fkgen未能成功解析出有效数据。")
+        except Exception as e:
+            print(f"[{self.tracker}]   ❌ 使用fkgen获取信息时失败: {e}")
+            self.fkgen_data = {}
 
-    async def fetch_ptgen_with_retry(self, params: dict[str, Any]) -> Optional[dict[str, Any]]:
-        for _ in range(max(self.ptgen_retry, 1)):
-            ptgen_json = await self.fetch_ptgen_json(params)
-            if ptgen_json and not ptgen_json.get('error'):
-                return ptgen_json
-        return None
+    # ==================== NEW UNIFIED FUNCTION ====================
+    async def _get_and_cache_fkgen_data(self, meta):
+        tmp_folder = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
+        fkgen_cache_path = os.path.join(tmp_folder, "NP_fkgen.json")
+        fkgen_lock_path = os.path.join(tmp_folder, "NP_fkgen.lock")
 
-    async def get_douban_url(self, meta: Meta) -> tuple[str, str]:
-        douban_url = str(meta.get('douban_url', '')).strip()
-        ptgen_text = ''
+        while os.path.exists(fkgen_lock_path):
+            print(f"[{self.tracker}] 检测到fkgen信息正在被其他任务获取，等待中...")
+            await asyncio.sleep(1)
 
-        if not douban_url:
-            ptgen = cast(dict[str, Any], meta.get('ptgen', {}))
-            data_value = ptgen.get('data', [])
-            data = cast(list[dict[str, Any]], data_value) if isinstance(data_value, list) else []
-            if data:
-                douban_url = str(data[0].get('link', '')).strip()
+        if os.path.exists(fkgen_cache_path):
+            try:
+                with open(fkgen_cache_path, "r", encoding="utf-8") as f:
+                    self.fkgen_data = json.load(f)
+                if self.fkgen_data and self.fkgen_data.get("names"):
+                    print(f"[{self.tracker}] ✅ 成功读取共享的fkgen缓存。")
+                    return True
+            except (json.JSONDecodeError, FileNotFoundError):
+                print(f"[{self.tracker}] ⚠️ 缓存文件读取失败，将重新获取。")
+                self.fkgen_data = {}
+        
+        try:
+            with open(fkgen_lock_path, 'w') as f: f.write('locked')
+            
+            douban_link, is_manual_mode = "", False
+            if meta.get('category') == 'TV' and re.search(r'[Ss]0*([2-9]|[1-9][0-9])', meta.get('name', '')):
+                is_manual_mode, season_num = True, re.search(r'[Ss](\d+)', meta.get('name', '')).group(1)
+                cli_ui.info_section(f"[{self.tracker}] 非第一季剧集手动干预")
+                cli_ui.info(f"检测到季数为 S{int(season_num):02}。为确保准确性，请手动提供豆瓣链接。")
+                douban_link = cli_ui.ask_string("请输入正确的豆瓣链接:", default="").strip()
+            
+            if not is_manual_mode:
+                douban_link = await self._get_douban_link_from_imdb(self.imdb_id_with_prefix)
+            
+            if not douban_link:
+                if not is_manual_mode:
+                    cli_ui.info_section(f"[{self.tracker}] 豆瓣链接自动获取失败")
+                    cli_ui.info(f"未能通过 IMDb ID '{self.imdb_id_with_prefix}' 自动找到豆瓣链接。")
+                douban_link = cli_ui.ask_string("请手动输入正确的豆瓣链接 (或直接按回车跳过):", default="").strip()
+            
+            await self._get_fkgen_data(meta, douban_link)
+            
+            if self.fkgen_data and self.fkgen_data.get("names"):
+                with open(fkgen_cache_path, "w", encoding="utf-8") as f:
+                    json.dump(self.fkgen_data, f, ensure_ascii=False, indent=4)
+                print(f"[{self.tracker}] fkgen数据已成功获取并写入缓存 NP_fkgen.json。")
+                return True
+            else:
+                print(f"[{self.tracker}] ❌ fkgen信息获取失败，无法继续。")
+                return False
+        finally:
+            if os.path.exists(fkgen_lock_path):
+                os.remove(fkgen_lock_path)
+    # ==========================================================
 
-        if not douban_url:
-            imdb_id_raw = str(meta.get('imdb_id', '0')).replace('tt', '').strip()
-            imdb_id = imdb_id_raw
-            if not imdb_id.isdigit():
-                imdb_id = str(meta.get('imdb_info', {}).get('imdbID', '')).replace('tt', '').strip()
-            if imdb_id.isdigit() and int(imdb_id) != 0:
-                ptgen_json = await self.fetch_ptgen_with_retry({'search': f'tt{imdb_id.zfill(7)}'})
-                if ptgen_json:
-                    douban_url = self.extract_douban_link(ptgen_json)
-                    meta['ptgen'] = ptgen_json
-                    ptgen_text = str(ptgen_json.get('format', '')).strip()
+    def _get_region_id_from_fkgen(self):
+        EUROPE_AMERICA_OCEANIA_SET = {'阿尔巴尼亚', '爱尔兰', '爱沙尼亚', '安道尔', '奥地利', '白俄罗斯', '保加利亚','北马其顿', '比利时', '冰岛', '波黑', '波兰', '丹麦', '德国', '法国','梵地冈', '芬兰', '荷兰', '黑山', '捷克', '克罗地亚', '拉脱维亚', '立陶宛','列支敦士登', '卢森堡', '罗马尼亚', '马耳他', '摩尔多瓦', '摩纳哥', '挪威','葡萄牙', '瑞典', '瑞士', '塞尔维亚', '塞浦路斯', '圣马力诺', '斯洛伐克','斯洛文尼亚', '乌克兰', '西班牙', '希腊', '匈牙利', '意大利', '英国','安提瓜和巴布达', '巴巴多斯', '巴哈马', '巴拿马', '伯利兹', '多米尼加', '多米尼克','格林纳达', '哥斯达黎加', '古巴', '海地', '洪都拉斯', '加拿大', '美国', '墨西哥','尼加拉瓜', '萨尔вадор', '圣基茨和尼维斯', '圣卢西亚', '圣文森特和格林на丁斯','特立尼达和多巴哥', '危地马拉', '牙买加', '阿根廷', '巴拉圭', '巴西', '秘鲁','玻利维亚', '厄瓜多尔', '哥伦比亚', '圭亚那', '苏里南', '委内瑞拉', '乌拉圭','智利', '捷克斯洛伐克', '澳大利亚', '西德', '新西兰'}
+        movie_regions = self.fkgen_data.get('countries', [])
+        if not movie_regions: return '99'
+        for region in movie_regions:
+            if region in EUROPE_AMERICA_OCEANIA_SET: return '4'
+            if region == '中国香港': return '2'
+            if region == '中国大陆': return '1'
+            if region == '中国台湾': return '3'
+            if region == '日本': return '5'
+            if region == '韩国': return '6'
+            if region == '印度': return '7'
+            if region == '俄罗斯' or region == '苏联': return '8'
+            if region == '泰国': return '9'
+        return '99'
 
-        if not douban_url:
-            title = str(meta.get('title', '')).strip()
-            if title:
-                ptgen_json = await self.fetch_ptgen_with_retry({'search': title})
-                if ptgen_json:
-                    douban_url = self.extract_douban_link(ptgen_json)
-                    meta['ptgen'] = ptgen_json
-                    ptgen_text = str(ptgen_json.get('format', '')).strip()
+    def _get_subtitle_from_fkgen(self):
+        names = self.fkgen_data.get('names', {})
+        genres = self.fkgen_data.get('genres', [])
+        trans_name = names.get('translatedTitle', '')
+        original_name = names.get('originalTitle', '')
+        aka_titles = names.get('akaTitles', [])
+        display_title_part = ""
+        is_original_chinese = bool(re.search(r'[\u4e00-\u9fa5]', original_name))
 
-        if not douban_url:
-            console.print("[red]Unable to determine Douban URL from PTGEN output.[/red]")
-            return '', ''
+        if is_original_chinese:
+            if trans_name and original_name != trans_name:
+                display_title_part = f"{original_name} / {trans_name}"
+            else:
+                display_title_part = original_name
+        else:
+            all_chinese_titles = []
+            if trans_name and trans_name not in all_chinese_titles:
+                all_chinese_titles.append(trans_name)
+            for title in aka_titles:
+                if title not in all_chinese_titles:
+                    all_chinese_titles.append(title)
+            
+            if all_chinese_titles:
+                display_title_part = ' / '.join(all_chinese_titles)
+            else:
+                display_title_part = original_name
 
-        if not ptgen_text:
-            ptgen_json = await self.fetch_ptgen_with_retry({'url': douban_url})
-            if ptgen_json:
-                meta['ptgen'] = ptgen_json
-                ptgen_text = str(ptgen_json.get('format', '')).strip()
+        genre_part = f" | 类型: {' / '.join(genres)}" if genres else ""
+        final_subtitle = f"{display_title_part}{genre_part}".strip()
+        return final_subtitle.replace(" /  |", " |").strip()
+        
+    async def _get_poster_url(self, meta):
+        tmp_folder = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
+        poster_cache_path = os.path.join(tmp_folder, "NP_poster.txt")
+        poster_lock_path = os.path.join(tmp_folder, "NP_poster.lock")
 
-        if not ptgen_text:
-            ptgen_text = str(meta.get('ptgen', {}).get('format', '')).strip()
+        while os.path.exists(poster_lock_path):
+            await asyncio.sleep(1)
 
-        return douban_url, ptgen_text
+        if os.path.exists(poster_cache_path):
+            try:
+                with open(poster_cache_path, "r", encoding="utf-8") as f:
+                    poster_url = f.read().strip()
+                if poster_url.startswith("http"):
+                    print(f"[{self.tracker}] ✅ 成功读取由其他任务生成的海报缓存: {poster_url}")
+                    return poster_url
+            except Exception as e:
+                print(f"[{self.tracker}] ⚠️ 读取已存在的海报缓存文件时出错 ({e})，将尝试重新处理。")
 
-    def get_tag_flags(self, meta: Meta) -> dict[str, str]:
-        flags: dict[str, str] = {}
-        if meta.get('anime'):
-            flags['animation'] = '1'
-        if meta.get('tv_pack'):
-            flags['pack'] = '1'
-        if meta.get('dolby_vision'):
-            flags['dovi'] = '1'
-        if meta.get('hdr10_plus'):
-            flags['hdr10plus'] = '1'
-        if meta.get('hlg'):
-            flags['hlg'] = '1'
+        print(f"[{self.tracker}] 开始处理海报（下载与上传）...")
+        try:
+            with open(poster_lock_path, 'w') as f: f.write('locked')
+            
+            original_poster_url = self.fkgen_data.get('image_url', '')
+            if not original_poster_url:
+                print(f"[{self.tracker}]   - 未在 fkgen 信息中找到原始海报链接。")
+                return meta.get('poster', '')
 
-        hdr = str(meta.get('hdr', '')).upper()
-        if 'HDR10' in hdr or (hdr and hdr != 'NONE'):
-            flags['hdr10'] = '1'
+            if 'doubanio.com' in original_poster_url:
+                processed_url = original_poster_url.replace('img1.doubanio.com', 'img9.doubanio.com').replace('img3.doubanio.com', 'img9.doubanio.com')
+                url_without_protocol = processed_url.split('//', 1)[-1]
+                download_url = f"https://cache.springsunday.net/{url_without_protocol}"
+            else:
+                download_url = original_poster_url
+            
+            original_filename = os.path.basename(original_poster_url.split('?')[0])
+            local_poster_path = os.path.join(tmp_folder, f"{original_filename}")
 
+            try:
+                async with self.session.stream("GET", download_url, timeout=30) as response:
+                    response.raise_for_status()
+                    with open(local_poster_path, 'wb') as f:
+                        async for chunk in response.aiter_bytes(): f.write(chunk)
+                print(f"[{self.tracker}]   - ✅ 海报下载成功。")
+            except Exception as e:
+                print(f"[{self.tracker}]   - ❌ 下载海报时出错: {e}")
+                return meta.get('poster', '')
+
+            new_poster_url = await asyncio.to_thread(image777.upload_image, local_poster_path)
+            final_url = new_poster_url if new_poster_url else original_poster_url
+            
+            if final_url:
+                with open(poster_cache_path, "w", encoding="utf-8") as f: f.write(final_url)
+                print(f"[{self.tracker}] 海报链接已写入 NP_poster.txt。")
+                print(f"[{self.tracker}] ✅ 海报处理完成！新链接: {final_url}")
+                return final_url
+            else:
+                print(f"[{self.tracker}]   - ❌ 上传到图床失败或未获取到有效链接。")
+                return original_poster_url
+        finally:
+            if os.path.exists(poster_lock_path):
+                os.remove(poster_lock_path)
+
+    def _get_year_from_fkgen(self):
+        return str(self.fkgen_data.get("year", ""))
+
+    def _get_category_id(self, meta):
+        genres = self.fkgen_data.get("genres", [])
+        if "真人秀" in genres: return self.category_map.get('TV_SHOWS')
+        if "纪录片" in genres: return self.category_map.get('DOCS')
+        main_category = meta.get('category')
+        if main_category == 'MOVIE': return self.category_map.get('MOVIE')
+        if main_category == 'TV': return self.category_map.get('TV_SERIES')
+        return self.category_map.get('OTHER')
+
+    def _get_medium_id(self, name):
+        name = name.upper()
+        if 'BLURAY' in name and ('X264' in name or 'X265' in name): return self.medium_map.get('BDRip')
+        if 'WEB-DL' in name: return self.medium_map.get('WEB-DL')
+        if 'REMUX' in name: return self.medium_map.get('Remux')
+        if 'BLU-RAY' in name or 'BLURAY' in name: return self.medium_map.get('Blu-ray')
+        if 'WEBRIP' in name: return self.medium_map.get('WEBRip')
+        if 'HDTV' in name: return self.medium_map.get('HDTV')
+        return self.medium_map.get('Other')
+
+    def _get_codec_id(self, name):
+        name = name.upper()
+        if 'H.265' in name or 'X265' in name or 'HEVC' in name: return self.codec_map.get('H.265')
+        if 'H.264' in name or 'X264' in name or 'AVC' in name: return self.codec_map.get('H.264')
+        if 'VC-1' in name:return self.codec_map.get('VC-1')
+        if 'MPEG-2' in name:return self.codec_map.get('MPEG-2')
+        if 'AV1' in name:return self.codec_map.get('AV1')
+        return self.codec_map.get('Other')
+
+    def _get_audiocodec_id(self, name):
+        name = name.upper()
+        for key, value in self.audiocodec_map.items():
+            if key.upper() in name: return value
+        return self.audiocodec_map.get('Other')
+        
+    def _get_resolution_id(self, name):
+        if '2160p' in name: return self.resolution_map.get('2160p')
+        if '1080p' in name: return self.resolution_map.get('1080p')
+        if '1080i' in name: return self.resolution_map.get('1080i')
+        if '720p' in name: return self.resolution_map.get('720p')
+        return self.resolution_map.get('Other')
+    
+    def _is_pack(self, meta):
+        return meta.get('category') == 'TV'
+
+    def _has_chinese_subtitle(self, meta):
         if meta.get('is_disc') == 'BDMV':
-            flags['untouched'] = '1'
+            for lang in meta.get('bdinfo', {}).get('subtitles', []):
+                if 'Chinese' in lang: return True
+        for track in meta.get('mediainfo', {}).get('media', {}).get('track', []):
+            if track.get('@type') == 'Text' and any(ch in track.get('Language', '') for ch in ['Chinese', 'zh-Hant', 'zh-Hans', 'zh', 'yue-Hant']):
+                return True
+        return False
 
-        if self.config['TRACKERS'].get(self.tracker, {}).get('internal', False):
-            tag = str(meta.get('tag', '')).lstrip('[]').rstrip(']')
-            internal_groups = self.config['TRACKERS'].get(self.tracker, {}).get('internal_groups', [])
-            if tag and tag in internal_groups:
-                flags['internal'] = '1'
+    def _get_media_bdinfo(self, meta):
+        tmp_folder = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
+        path_to_read = os.path.join(tmp_folder, 'BD_SUMMARY_00.txt')
+        if not os.path.exists(path_to_read):
+            path_to_read = os.path.join(tmp_folder, 'MEDIAINFO.txt')
+        content = ""
+        if os.path.exists(path_to_read):
+            try:
+                with open(path_to_read, 'r', encoding='utf-8') as f: content = f.read()
+            except Exception: pass
+        content = re.sub(r'\[code\]', '[quote]', content, flags=re.IGNORECASE)
+        content = re.sub(r'\[/code\]', '[/quote]', content, flags=re.IGNORECASE)
+        return content.strip()
 
-        return flags
+    def _get_final_description(self, meta):
+        parts = []
+        
+        tag = meta.get('tag', '').lstrip('-')
+        declaration_map = {"HHWEB": "[b][quote][img=100x50]https://img1.pixhost.to/images/9789/656115101_hh.png[/img]\n[color=#f29d38]HHClub[/color]官组作品，[color=#f29d38]感谢[/color]原制作者发布。[/quote][/b]",
+                           "CHDWEB": "[b][quote][img=100x50]https://img1.pixhost.to/images/9788/656111976_chdbits.png[/img]\n[i][color=red]CHD[/color]Bits[/i]官组作品，[i][color=red]感谢[/color][/i] 原制作者发布！[/quote][/b]",
+                           "CHDBits": "[b][quote][img=100x50]https://img1.pixhost.to/images/9788/656111976_chdbits.png[/img]\n[i][color=red]CHD[/color]Bits[/i]官组作品，[i][color=red]感谢[/color][/i] 原制作者发布！[/quote][/b]",
+                           "ADWeb": "[b][quote][img=144x34]https://img1.pixhost.to/images/9788/656113858_aud.png[/img]\n[b]Audiences[/b]官组作品，[color=#ffa32d]感谢[/color]原制作者发布！[/quote][/b]",
+                           "MTeam": "[b][quote][img=120x37]https://img1.pixhost.to/images/9788/656113860_mt.png[/img]\n[color=orange]MTeam[/color]官组作品，[color=orange]感谢[/color]原制作者发布！[/quote][/b]"}
+        if tag in declaration_map:
+             parts.append(declaration_map[tag])
 
-    async def get_data(self, meta: Meta) -> dict[str, Any]:
-        douban_url, ptgen_text = await self.get_douban_url(meta)
-        description = await self.get_description(meta, ptgen_text)
-        media_info = await self.get_media_info(meta)
+        if not meta.get('scene', False):
+            description_file_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], 'DESCRIPTION.txt')
+            if os.path.exists(description_file_path):
+                try:
+                    with open(description_file_path, 'r', encoding='utf-8') as f: 
+                        content = f.read()
+                    content = re.sub(r'\[code\]', '[quote]', content, flags=re.IGNORECASE)
+                    content = re.sub(r'\[/code\]', '[/quote]', content, flags=re.IGNORECASE)
+                    if content.strip():
+                        parts.append(content.strip())
+                except Exception as e: 
+                    print(f"[{self.tracker}] 读取 DESCRIPTION.txt 文件时出错: {e}")
+        
+        return "\n\n".join(parts)
 
-        data: dict[str, Any] = {
-            'name': meta['name'],
-            'small_descr': str(meta.get('title', '')).strip(),
-            'url': douban_url,
-            'descr': description,
-            'type': await self.get_type(meta),
-            'source_sel': await self.get_source_sel(meta),
-            'medium_sel': await self.get_medium_sel(meta),
-            'standard_sel': await self.get_standard_sel(meta),
-            'codec_sel': await self.get_codec_sel(meta),
-            'audiocodec_sel': await self.get_audiocodec_sel(meta),
-            'team_sel': await self.get_team_sel(),
-            'Media_BDInfo': media_info,
-            'url_vimages': await self.get_screenshots(meta),
-            'url_poster': str(meta.get('imdb_info', {}).get('cover', meta.get('cover', ''))).strip(),
+    async def _add_to_qbittorrent(self, meta, torrent_id, upload_limit_kib=-1):
+        if not self.passkey: print(f"[{self.tracker}] ❌ 错误：未在 config.py 的 SSD 配置中找到 'passkey'。"); return
+        download_link = f"https://springsunday.net/download.php?id={torrent_id}&passkey={self.passkey}&https=1"
+        try: from qbittorrentapi import Client
+        except ImportError: print(f"[{self.tracker}] ❌ 错误：缺少 'qbittorrent-api' 库。"); return
+        client_config = self.config.get('TORRENT_CLIENTS', {}).get('qbittorrent', {})
+        if not client_config: print(f"[{self.tracker}] ❌ 错误：在 config.py 中未找到名为 'qbittorrent' 的客户端配置。"); return
+        qbt_url, qbt_port, qbt_user, qbt_pass = (client_config.get(k) for k in ['qbit_url', 'qbit_port', 'qbit_user', 'qbit_pass'])
+        if not all([qbt_url, qbt_port, qbt_user, qbt_pass]): print(f"[{self.tracker}] ❌ 错误：qBittorrent 客户端配置不完整。"); return
+        try:
+            qbt_client = Client(host=f"{qbt_url}:{qbt_port}", username=qbt_user, password=qbt_pass)
+            qbt_client.auth_log_in()
+        except Exception as e: print(f"[{self.tracker}] ❌ 连接到 qBittorrent 失败: {e}"); return
+        try:
+            user_input_path = meta.get('path')
+            if not user_input_path: qbt_client.auth_log_out(); return
+            save_path = os.path.dirname(os.path.normpath(user_input_path))
+            if not save_path: save_path = "/"
+            if not os.path.isdir(save_path): qbt_client.auth_log_out(); return
+            result = qbt_client.torrents_add(urls=download_link, save_path=save_path, skip_checking=True, is_paused=False, upload_limit=upload_limit_kib * 1024)
+            if result == "Ok.": print(f"[{self.tracker}] ✅ 种子已成功添加到 qBittorrent。")
+            else: print(f"[{self.tracker}] ❌ 添加到 qBittorrent 失败，客户端返回: {result}")
+        except Exception as e: print(f"[{self.tracker}] ❌ 添加种子到 qBittorrent 时发生错误: {e}")
+        finally: qbt_client.auth_log_out()
+
+    async def validate_credentials(self, meta):
+        if not await self.validate_cookies(meta): return False
+        return True
+
+    async def validate_cookies(self, meta):
+        if not self.cookie_file or not os.path.exists(self.cookie_file): return False
+        try:
+            with open(self.cookie_file, 'r') as f: cookie_str = f.read().strip()
+            self.session.cookies.update({k.strip(): v.strip() for k, v in (p.split('=', 1) for p in cookie_str.split(';') if '=' in p)})
+        except Exception: return False
+        try:
+            response = await self.session.get("https://springsunday.net/upload.php", timeout=10, follow_redirects=False)
+            return response.status_code == 200
+        except httpx.RequestError: return False
+
+    async def search_existing(self, meta, disctype): return []
+    
+    def edit_name(self, meta):
+        base_name = meta.get('name', '').replace(' ', '.')
+        edited_name = re.sub(r'DD\+', 'DDP', base_name, flags=re.IGNORECASE)
+        category = meta.get('category')
+        if category == 'TV':
+            year_from_fkgen = self._get_year_from_fkgen()
+            if year_from_fkgen:
+                season_pattern = re.compile(r'(S\d{2})', re.IGNORECASE)
+                new_name = season_pattern.sub(fr'\g<1>.{year_from_fkgen}', edited_name, count=1)
+                if new_name != edited_name: edited_name = new_name
+        elif category == 'MOVIE':
+            imdb_year = str(meta.get('imdb_info', {}).get('year', ""))
+            if imdb_year:
+                year_pattern = re.compile(r'\b\d{4}\b')
+                if year_pattern.search(edited_name):
+                    edited_name = year_pattern.sub(imdb_year, edited_name, count=1)
+                else:
+                    name_notag = meta.get('name_notag', '').replace(' ', '.')
+                    name_notag = re.sub(r'DD\+', 'DDP', name_notag, flags=re.IGNORECASE)
+                    tech_info = edited_name.replace(name_notag, '', 1).strip('.')
+                    edited_name = f"{name_notag}.{imdb_year}.{tech_info}"
+        edited_name = re.sub(r'\.{2,}', '.', edited_name)
+        if meta.get('debug', False):
+            return f"[请勿审核].{edited_name}"
+        return edited_name
+
+    async def upload(self, meta, disctype):
+        print(f"[{self.tracker}] 开始处理上传任务...")
+        
+        imdb_id_num = meta.get('imdb_id')
+        if not imdb_id_num:
+            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "IMDb ID not found"}; return
+        
+        self.imdb_id_with_prefix = f"tt{str(imdb_id_num).zfill(7)}"
+        
+        if not await self._get_and_cache_fkgen_data(meta):
+            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "fkgen 信息获取失败或无效，上传任务中止。"}; return
+            
+        douban_link = f"https://movie.douban.com/subject/{self.fkgen_data.get('DoubanID')}/" if self.fkgen_data.get('DoubanID') else ""
+
+        if not await self.edit_torrent(meta, self.tracker, self.source_flag):
+            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "Failed to edit torrent"}; return
+            
+        ssd_name = self.edit_name(meta)
+        poster_url = await self._get_poster_url(meta)
+        final_description = self._get_final_description(meta)
+
+        data = {
+            'name': ssd_name, 
+            'small_descr': self._get_subtitle_from_fkgen(),
+            'url': douban_link or f"https://www.imdb.com/title/{self.imdb_id_with_prefix}/",
+            'url_vimages': '\n'.join([img['raw_url'] for img in meta.get('image_list', [])]),
+            'url_poster': poster_url,
+            'Media_BDInfo': self._get_media_bdinfo(meta), 
+            'descr': final_description,
+            'type': self._get_category_id(meta), 
+            'source_sel': self._get_region_id_from_fkgen(),
+            'medium_sel': self._get_medium_id(ssd_name), 
+            'codec_sel': self._get_codec_id(ssd_name),
+            'audiocodec_sel': self._get_audiocodec_id(ssd_name), 
+            'standard_sel': self._get_resolution_id(ssd_name),
+            'uplver': 'yes' if self.anon else 'no', 
+            'offer': 'yes' if self.offer else 'no',
         }
-        data.update(self.get_tag_flags(meta))
-        return data
-
-    async def upload(self, meta: Meta, _disctype: str) -> bool:
-        cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
-        self.session.cookies = cast(Any, cookies)
-        data = await self.get_data(meta)
-
-        if 'tracker_status' not in meta:
-            meta['tracker_status'] = {}
-        if self.tracker not in meta['tracker_status']:
-            meta['tracker_status'][self.tracker] = {}
-
-        if not data.get('url'):
-            meta['tracker_status'][self.tracker]['status_message'] = "Missing Douban URL, unable to upload."
-            return False
-
-        announce_url = str(self.config.get('TRACKERS', {}).get(self.tracker, {}).get('announce_url', '')).strip()
-        if not announce_url:
-            announce_url = f"{self.base_url}/announce.php"
-
-        files = await self.cookie_auth_uploader.load_torrent_file(
-            meta=meta,
-            tracker=self.tracker,
-            torrent_field_name='file',
-            torrent_name='',
-            source_flag=self.source_flag,
-            default_announce=announce_url,
-        )
-
-        headers = {
-            "User-Agent": f"Upload Assistant {meta.get('current_version', 'github.com/Audionut/Upload-Assistant')}"
-        }
-
-        if meta.get("debug", False):
-            self.cookie_auth_uploader.upload_debug(self.tracker, data)
-            meta["tracker_status"][self.tracker]["status_message"] = "Debug mode enabled, not uploading"
-            await self.common.create_torrent_for_upload(
-                meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker"
-            )
-            return True
-
-        async with httpx.AsyncClient(
-            headers=headers, timeout=30.0, cookies=self.session.cookies, follow_redirects=True
-        ) as session:
-            response = await session.post(f"{self.base_url}/takeupload.php", data=data, files=files)
-
-        existing_match = None
-        if "已存在" in response.text or "exists" in response.text.lower():
-            existing_match = re.search(r"details\.php\?id=\d+", response.text)
-            if not existing_match:
-                existing_match = re.search(r"details\.php\?id=\d+", str(response.url))
-
-        if existing_match:
-            existing_path = existing_match.group(0)
-            existing_link = f"{self.base_url}/{existing_path}" if not existing_path.startswith("http") else existing_path
-            meta["tracker_status"][self.tracker]["status_message"] = f"Torrent already exists: {existing_link}"
-            console.print(f"[yellow]{self.tracker}: Torrent already exists: {existing_link}[/yellow]")
-            return False
-
-        id_pattern = r"details\.php\?id=(\d+)"
-        success_codes = {302, 303}
-        success = (
-            response.status_code in success_codes
-            or "details.php?id=" in str(response.url)
-            or re.search(id_pattern, response.text) is not None
-        )
-
-        if success:
-            return await self.cookie_auth_uploader.handle_successful_upload(
-                meta=meta,
-                tracker=self.tracker,
-                response=response,
-                id_pattern=id_pattern,
-                hash_is_id=False,
-                source_flag=self.source_flag,
-                user_announce_url=announce_url,
-                torrent_url=self.torrent_url,
-            )
-
-        return await self.cookie_auth_uploader.handle_failed_upload(
-            meta=meta,
-            tracker=self.tracker,
-            success_status_code="302, 303",
-            success_text="",
-            error_text="",
-            response=response,
-        )
+        if 'Blu-ray' in ssd_name and meta.get('is_disc') == 'BDMV': data['untouched'] = '1'
+        if self._is_pack(meta): data['pack'] = '1'
+        if "动画" in self.fkgen_data.get("genres", []): data['animation'] = '1'
+        if self._has_chinese_subtitle(meta): data['subtitlezh'] = '1'
+        
+        hdr_string = meta.get('hdr', '').upper()
+        if 'DV' in hdr_string: data['dovi'] = '1'
+        if 'HDR10+' in hdr_string: data['hdr10plus'] = '1'
+        elif 'HDR' in hdr_string: data['hdr10'] = '1'
+        
+        final_torrent_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], f"[{self.tracker}].torrent")
+        if not os.path.exists(final_torrent_path):
+            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "Torrent file not created after edit"}; return
+            
+        try:
+            with open(self.cookie_file, 'r') as f: cookie_str = f.read().strip()
+            command = ["curl", "--silent", "--output", "/dev/null", "--write-out", "%{redirect_url}", self.upload_url]
+            command.extend(["-H", f"Cookie: {cookie_str}"])
+            command.extend(["-H", f"User-Agent: {self.session.headers.get('User-Agent')}"])
+            for key, value in data.items():
+                command.extend(["--form-string", f"{key}={str(value) if value is not None else ''}"])
+            command.extend(["--form", f"file=@{final_torrent_path}"])
+            
+            result = subprocess.run(command, capture_output=True, text=True, check=False)
+            final_url = result.stdout.strip()
+            
+            if result.returncode == 0 and 'details.php?id=' in final_url:
+                print(f"[{self.tracker}] ✅ 上传成功！")
+                print(f"[{self.tracker}] 种子详情页: {final_url}")
+                torrent_id = re.search(r'id=(\d+)', final_url).group(1) if re.search(r'id=(\d+)', final_url) else None
+                meta['tracker_status'][self.tracker] = {'status': 'success', 'torrent_url': final_url, 'torrent_id': torrent_id}
+                
+                if meta.get('debug', False):
+                    print(f"[{self.tracker}] 🚧 DEBUG模式：跳过将种子添加到 qBittorrent 的步骤。")
+                elif torrent_id:
+                    upload_limit_kib = 112640 
+                    await self._add_to_qbittorrent(meta, torrent_id, upload_limit_kib)
+            else:
+                print(f"[{self.tracker}] ❌ 上传失败。")
+                meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': f"curl failed with exit code {result.returncode}"}
+        except Exception as e:
+            error_message = f"执行 curl 命令时发生 Python 错误: {e}"
+            print(f"[{self.tracker}] ❌ {error_message}")
+            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': error_message}
