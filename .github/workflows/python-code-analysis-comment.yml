@@ -197,29 +197,73 @@ jobs:
 
           function collectDedupedResults(prefix) {
             const files = collectFilesByPrefix(prefix);
-            const byContent = new Map();
+            // Helper to normalize outputs for deduplication. For Safety we
+            // strip variable header/footer lines (timestamps, ASCII art,
+            // scan metadata) so runs across Python versions with identical
+            // findings are grouped together.
+            function canonicalize(prefix, raw) {
+              if (!raw) return '';
+              let s = raw.trim();
+              if (prefix === 'safety-results') {
+                // Reuse existing normalization to cut to the REPORT section
+                s = normalizeSafetyOutput(s);
+                // Remove timestamp lines, byline, scan-complete lines and
+                // repeated divider blocks that differ per-run.
+                s = s.split('\n').filter(l => {
+                  if (!l) return false;
+                  if (/^\s*Timestamp\b/i.test(l)) return false;
+                  if (/by\s+pyup\.io/i.test(l)) return false;
+                  if (/^Scan was completed\./i.test(l)) return false;
+                  if (/^\s*\+={3,}/.test(l)) return false;
+                  if (/^\s*REMEDIATIONS\b/i.test(l)) return false;
+                  return true;
+                }).join('\n').trim();
+              }
+              if (prefix === 'bandit-results') {
+                // Extract the Test results block and remove run-specific lines
+                const idx = s.search(/Test results:/i);
+                if (idx !== -1) {
+                  s = s.slice(idx);
+                }
+                s = s.split('\n').filter(l => {
+                  if (!l) return false;
+                  if (/^\s*\[main\]/.test(l)) return false;
+                  if (/^\s*\[tester\]/.test(l)) return false;
+                  if (/^Working\.\.\./.test(l)) return false;
+                  if (/^Run started:/i.test(l)) return false;
+                  if (/^Code scanned:/i.test(l)) return false;
+                  if (/^Run metrics:/i.test(l)) return false;
+                  if (/^Files skipped \(/i.test(l)) return false;
+                  return true;
+                }).join('\n').trim();
+              }
+              return s;
+            }
+
+            const byCanonical = new Map();
             for (const file of files) {
               try {
                 const content = safeReadText(file).trim();
-                if (content) {
-                  const version = path.basename(file).replace(prefix + '-', '').replace('.txt', '');
-                  if (!byContent.has(content)) {
-                    byContent.set(content, []);
-                  }
-                  byContent.get(content).push(version);
+                if (!content) continue;
+                const version = path.basename(file).replace(prefix + '-', '').replace('.txt', '');
+                const canon = canonicalize(prefix, content) || content;
+                if (!byCanonical.has(canon)) {
+                  byCanonical.set(canon, { original: content, versions: [] });
                 }
+                byCanonical.get(canon).versions.push(version);
               } catch (error) {
                 console.log(`Error reading ${file}: ${error.message}`);
               }
             }
 
             let output = '';
-            for (const [content, versions] of byContent.entries()) {
-              versions.sort((a, b) => parseFloat(a) - parseFloat(b));
+            for (const [canon, entry] of byCanonical.entries()) {
+              const versions = entry.versions.sort((a, b) => parseFloat(a) - parseFloat(b));
+              const display = entry.original;
               if (versions.length === 1) {
-                output += `=== Python ${versions[0]} ===\n${content}\n\n`;
+                output += `=== Python ${versions[0]} ===\n${display}\n\n`;
               } else {
-                output += `=== Python ${versions.join(', ')} (identical results) ===\n${content}\n\n`;
+                output += `=== Python ${versions.join(', ')} (identical results) ===\n${display}\n\n`;
               }
             }
             return output;
