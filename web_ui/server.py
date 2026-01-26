@@ -1566,8 +1566,9 @@ def _resolve_user_path(
         expanded = os.path.expandvars(os.path.expanduser(user_path))
 
     # Build a normalized path and validate it against allowlisted roots.
-    # Use werkzeug.utils.safe_join as the initial join/sanitizer, then also
-    # enforce a realpath+commonpath constraint to prevent symlink escapes.
+    # Use werkzeug.security.safe_join as the primary path sanitizer, with a
+    # Windows fallback since safe_join uses posixpath internally.
+    # Enforce a realpath+commonpath constraint to prevent symlink escapes.
     matched_root: Union[str, None] = None
     candidate_norm: Union[str, None] = None
 
@@ -1601,6 +1602,14 @@ def _resolve_user_path(
                     break
 
                 joined = safe_join(check_root, rel)
+
+                # Windows fallback: safe_join uses posixpath internally and returns
+                # None for Windows backslash paths. Fall back to os.path.join on
+                # Windows since we already validated rel above and commonpath check
+                # below provides additional symlink-escape protection.
+                if joined is None and sys.platform == 'win32':
+                    joined = os.path.join(check_root, rel)
+
                 if joined is None:
                     continue
 
@@ -1618,6 +1627,16 @@ def _resolve_user_path(
             candidate_norm = os.path.normpath(matched_root)
         else:
             joined = safe_join(matched_root, expanded)
+
+            # Windows fallback: safe_join uses posixpath internally and returns
+            # None for Windows backslash paths. Fall back to manual validation
+            # and os.path.join. The commonpath check below provides additional security.
+            if joined is None and sys.platform == 'win32':
+                expanded_norm = os.path.normpath(expanded)
+                if expanded_norm == os.pardir or expanded_norm.startswith(os.pardir + os.sep) or os.path.isabs(expanded_norm):
+                    raise ValueError('Browsing this path is not allowed')
+                joined = os.path.join(matched_root, expanded_norm)
+
             if joined is None:
                 raise ValueError("Browsing this path is not allowed")
             candidate_norm = os.path.normpath(joined)
