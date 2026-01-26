@@ -5,12 +5,10 @@ import re
 from urllib.parse import quote
 from bs4 import BeautifulSoup
 import bencodepy
-import cli_ui
 import subprocess
 import shlex
 import asyncio
 
-from src.fkgen import DoubanMovieGenerator
 from src import image777
 from src.trackers.COMMON import COMMON
 
@@ -28,6 +26,8 @@ class SSD(COMMON):
         self.anon = tracker_config.get('anon', True)
         self.offer = tracker_config.get('offer', True)
         self.passkey = tracker_config.get('passkey')
+        self.meta_script = str(tracker_config.get('meta_script', '')).strip()
+        self.meta_timeout = int(tracker_config.get('meta_timeout', 30))
         self.upload_url = 'https://springsunday.net/takeupload.php'
         self.torrent_url = 'https://springsunday.net/details.php?id='
         self.banned_groups = []
@@ -87,40 +87,76 @@ class SSD(COMMON):
             f.write(bencodepy.encode(decoded_torrent))
         return True
 
-    async def _get_douban_link_from_imdb(self, imdb_id_with_prefix):
-        search_url = f"https://search.douban.com/movie/subject_search?search_text={imdb_id_with_prefix}"
+    async def get_external_meta(self, meta):
+        result = {"bbcode": "", "trans_title": [], "douban_url": ""}
+        if not self.meta_script:
+            return result
+        imdb_id = str(meta.get('imdb_id', '')).strip()
+        arg = f"tt{imdb_id.replace('tt', '').zfill(7)}" if imdb_id and imdb_id != '0' else meta.get("douban_url")
+        if not arg:
+            return result
         try:
-            response = await self.session.get(search_url, timeout=10)
-            response.raise_for_status()
-            pattern = re.compile(r'window\.__DATA__ = (\{.*\});')
-            match = pattern.search(response.text)
-            if not match: return None
-            data = json.loads(match.group(1))
-            if data.get('items') and len(data['items']) > 0:
-                douban_link = data['items'][0].get('url')
-                if douban_link:
-                    return douban_link
-            return None
+            cmdline = shlex.split(self.meta_script) + [str(arg).strip()]
+            proc = await asyncio.create_subprocess_exec(
+                *cmdline,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=self.meta_timeout)
+            output = stdout.decode('utf-8').strip()
+            if output:
+                result["bbcode"] = output
+                trans_match = re.search(r'^[ \t]*◎译　　名[ \t　]+(.+)$', output, flags=re.M)
+                if trans_match:
+                    result["trans_title"] = [
+                        part.strip()
+                        for part in re.split(r'\s*/\s*', trans_match.group(1).strip())
+                        if part.strip()
+                    ]
+                douban_match = re.search(r"https?://(?:movie\.)?douban\.com/subject/\d+/?", output)
+                if douban_match:
+                    result["douban_url"] = douban_match.group(0)
         except Exception:
-            return None
+            pass
+        return result
 
-    async def _get_fkgen_data(self, meta, douban_link):
-        if not douban_link:
-            print(f"[{self.tracker}] -> 警告：没有提供豆瓣链接，无法获取信息。")
-            return
-        print(f"[{self.tracker}] 正在从豆瓣链接获取详细信息 (使用fkgen)...")
-        try:
-            generator = DoubanMovieGenerator(movie_url=douban_link)
-            generator.parse()
-            self.fkgen_data = generator.movie_info
+    def _build_fkgen_data_from_meta(self, meta, ext_meta):
+        production_countries = meta.get('production_countries', [])
+        if production_countries and isinstance(production_countries[0], dict):
+            countries = [entry.get('name', '').strip() for entry in production_countries if entry.get('name')]
+        else:
+            countries = []
+        genres_value = meta.get('combined_genres') or meta.get('genres') or meta.get('imdb_info', {}).get('genres') or ""
+        if isinstance(genres_value, str):
+            genres = [g.strip() for g in genres_value.split(',') if g.strip()]
+        else:
+            genres = [str(g).strip() for g in genres_value if str(g).strip()]
 
-            if self.fkgen_data and self.fkgen_data.get("names"):
-                print(f"[{self.tracker}]   ✅ 从fkgen获取信息成功!")
-            else:
-                raise ValueError("fkgen未能成功解析出有效数据。")
-        except Exception as e:
-            print(f"[{self.tracker}]   ❌ 使用fkgen获取信息时失败: {e}")
-            self.fkgen_data = {}
+        poster_url = meta.get('poster') or ""
+        title = meta.get('title') or meta.get('name') or ""
+        original_title = meta.get('original_title') or title
+        aka_titles = ext_meta.get("trans_title", [])
+        translated_title = aka_titles[0] if aka_titles else title
+        year_value = meta.get('year') or meta.get('imdb_info', {}).get('year') or ""
+        douban_url = str(meta.get('douban_url', '')).strip() or str(ext_meta.get("douban_url", "")).strip()
+        douban_id = ""
+        if douban_url:
+            match = re.search(r"/subject/(\d+)", douban_url)
+            if match:
+                douban_id = match.group(1)
+
+        return {
+            "DoubanID": douban_id,
+            "year": str(year_value),
+            "genres": genres,
+            "countries": countries,
+            "image_url": poster_url,
+            "names": {
+                "translatedTitle": translated_title,
+                "originalTitle": original_title,
+                "akaTitles": aka_titles,
+            },
+        }
 
     # ==================== NEW UNIFIED FUNCTION ====================
     async def _get_and_cache_fkgen_data(self, meta):
@@ -146,31 +182,17 @@ class SSD(COMMON):
         try:
             with open(fkgen_lock_path, 'w') as f: f.write('locked')
             
-            douban_link, is_manual_mode = "", False
-            if meta.get('category') == 'TV' and re.search(r'[Ss]0*([2-9]|[1-9][0-9])', meta.get('name', '')):
-                is_manual_mode, season_num = True, re.search(r'[Ss](\d+)', meta.get('name', '')).group(1)
-                cli_ui.info_section(f"[{self.tracker}] 非第一季剧集手动干预")
-                cli_ui.info(f"检测到季数为 S{int(season_num):02}。为确保准确性，请手动提供豆瓣链接。")
-                douban_link = cli_ui.ask_string("请输入正确的豆瓣链接:", default="").strip()
-            
-            if not is_manual_mode:
-                douban_link = await self._get_douban_link_from_imdb(self.imdb_id_with_prefix)
-            
-            if not douban_link:
-                if not is_manual_mode:
-                    cli_ui.info_section(f"[{self.tracker}] 豆瓣链接自动获取失败")
-                    cli_ui.info(f"未能通过 IMDb ID '{self.imdb_id_with_prefix}' 自动找到豆瓣链接。")
-                douban_link = cli_ui.ask_string("请手动输入正确的豆瓣链接 (或直接按回车跳过):", default="").strip()
-            
-            await self._get_fkgen_data(meta, douban_link)
-            
+            ext_meta = await self.get_external_meta(meta)
+            meta['ptgen'] = ext_meta
+            self.fkgen_data = self._build_fkgen_data_from_meta(meta, ext_meta)
+
             if self.fkgen_data and self.fkgen_data.get("names"):
                 with open(fkgen_cache_path, "w", encoding="utf-8") as f:
                     json.dump(self.fkgen_data, f, ensure_ascii=False, indent=4)
-                print(f"[{self.tracker}] fkgen数据已成功获取并写入缓存 NP_fkgen.json。")
+                print(f"[{self.tracker}] 已通过外部ptgen脚本生成元数据并写入缓存 NP_fkgen.json。")
                 return True
             else:
-                print(f"[{self.tracker}] ❌ fkgen信息获取失败，无法继续。")
+                print(f"[{self.tracker}] ❌ 元数据生成失败，无法继续。")
                 return False
         finally:
             if os.path.exists(fkgen_lock_path):
