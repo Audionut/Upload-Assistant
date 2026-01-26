@@ -126,7 +126,7 @@ class TrackerStatusManager:
                     if ('skipping' not in local_meta or local_meta['skipping'] is None) and not local_tracker_status['skipped']:
                         dupes = cast(list[Any], await dupe_checker.filter_dupes(dupes, local_meta, tracker_name))
 
-                        matched_episode_ids = local_meta.get('matched_episode_ids', [])
+                        matched_episode_ids = local_meta.get(f'{tracker_name}_matched_episode_ids', [])
                         trumpable_id = local_meta.get('trumpable_id')
                         cross_seed_key = f'{tracker_name}_cross_seed'
                         cross_seed_value = local_meta.get(cross_seed_key) if cross_seed_key in local_meta else None
@@ -134,7 +134,7 @@ class TrackerStatusManager:
                         # Only shared-state writes go under the lock
                         async with meta_lock:
                             if matched_episode_ids:
-                                meta['matched_episode_ids'] = matched_episode_ids
+                                meta[f'{tracker_name}_matched_episode_ids'] = matched_episode_ids
                             if trumpable_id:
                                 meta['trumpable_id'] = trumpable_id
                             if cross_seed_key in local_meta:

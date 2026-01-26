@@ -1007,8 +1007,8 @@ class TRACKER_SETUP:
         if not reported_torrent_id:
             # Try tracker-specific matched ID
             reported_torrent_id = f"{meta.get(f'{tracker}_matched_id', '')}"
-        if not reported_torrent_id and meta.get('matched_episode_ids', []):
-            reported_torrent_id = f"{meta['matched_episode_ids'][0].get('id', '')}"
+        if not reported_torrent_id and meta.get(f'{tracker}_matched_episode_ids', []):
+            reported_torrent_id = f"{meta[f'{tracker}_matched_episode_ids'][0].get('id', '')}"
         if not reported_torrent_id:
             console.print(f"[red]No reported torrent ID found in meta for trumpable processing on {tracker}[/red]")
             return False
