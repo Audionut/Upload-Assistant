@@ -26,6 +26,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.security import safe_join
+from werkzeug.utils import secure_filename
 
 import web_ui.auth as auth_mod
 from flask_session import Session
@@ -78,6 +79,64 @@ def _cfg_delete(name: str) -> None:
     with contextlib.suppress(Exception):
         if p.exists():
             p.unlink()
+
+
+def _sanitize_relpath(rel: str) -> str:
+    """Sanitize a relative path coming from user input.
+
+    Splits the path into components, rejects empty/parent segments and
+    normalizes each component with Werkzeug's `secure_filename`. Returns a
+    path using the OS separator. Raises ValueError for unsafe input.
+    """
+    if rel == "" or rel == ".":
+        return rel
+
+    if "\x00" in rel:
+        raise ValueError("Invalid path")
+
+    # Split on both forward and backward slashes to support Windows/posix
+    parts = re.split(r"[\\/]+", rel)
+    clean_parts: list[str] = []
+    for p in parts:
+        if not p or p == "." or p == "..":
+            raise ValueError("Invalid path component")
+        safe = secure_filename(p)
+        if not safe:
+            raise ValueError("Invalid path component")
+        clean_parts.append(safe)
+
+    return os.sep.join(clean_parts)
+
+
+def _assert_safe_resolved_path(path: str) -> None:
+    """Assert that a resolved path is safe and within configured browse roots.
+
+    Raises ValueError if the path is unsafe. This provides an explicit,
+    local check at call sites to satisfy static analysis tools.
+    """
+    if not path or "\x00" in path:
+        raise ValueError("Invalid path")
+
+    # Ensure absolute and normalized
+    abs_path = os.path.abspath(path)
+    real_path = os.path.realpath(abs_path)
+
+    roots = _get_browse_roots()
+    if not roots:
+        # If no roots configured, be conservative and disallow.
+        raise ValueError("Browsing is not configured")
+
+    allowed = False
+    for root in roots:
+        root_abs = os.path.abspath(root)
+        root_real = os.path.realpath(root_abs)
+        safe_root_prefix = root_real if root_real.endswith(os.sep) else (root_real + os.sep)
+        if real_path == root_real or real_path.startswith(safe_root_prefix):
+            allowed = True
+            break
+
+    if not allowed:
+        raise ValueError("Path outside allowed roots")
 
 Flask = cast(Any, Flask)
 Response = cast(Any, Response)
@@ -1591,6 +1650,15 @@ def _resolve_user_path(
                     # Different drive on Windows.
                     continue
 
+                # Sanitize the relative path components to defend against
+                # path-injection (e.g. ../../../, absolute segments, nulls).
+                # We reject components that resolve to '.' or '..' and use
+                # Werkzeug's `secure_filename` to normalize each path segment.
+                try:
+                    rel = _sanitize_relpath(rel)
+                except ValueError:
+                    continue
+
                 if rel == os.pardir or rel.startswith(os.pardir + os.sep) or os.path.isabs(rel):
                     continue
 
@@ -1626,13 +1694,19 @@ def _resolve_user_path(
         if not expanded:
             candidate_norm = os.path.normpath(matched_root)
         else:
-            joined = safe_join(matched_root, expanded)
+            # Sanitize the incoming expanded path before joining.
+            try:
+                sanitized_expanded = _sanitize_relpath(expanded)
+            except ValueError as err:
+                raise ValueError('Browsing this path is not allowed') from err
+
+            joined = safe_join(matched_root, sanitized_expanded)
 
             # Windows fallback: safe_join uses posixpath internally and returns
             # None for Windows backslash paths. Fall back to manual validation
             # and os.path.join. The commonpath check below provides additional security.
             if joined is None and sys.platform == 'win32':
-                expanded_norm = os.path.normpath(expanded)
+                expanded_norm = os.path.normpath(sanitized_expanded)
                 if expanded_norm == os.pardir or expanded_norm.startswith(os.pardir + os.sep) or os.path.isabs(expanded_norm):
                     raise ValueError('Browsing this path is not allowed')
                 joined = os.path.join(matched_root, expanded_norm)
@@ -2503,6 +2577,13 @@ def browse_path():
         console.print(f"Path resolution error for requested {requested!r}: {e}", markup=False)
         return jsonify({"error": "Invalid path specified", "success": False}), 400
 
+    # Explicitly assert the resolved path is within allowed browse roots.
+    try:
+        _assert_safe_resolved_path(path)
+    except ValueError:
+        console.print(f"Path failed safety check: {requested!r}", markup=False)
+        return jsonify({"error": "Invalid path specified", "success": False}), 400
+
     # Defensive sanity checks before using `path` in filesystem operations.
     if '\x00' in path:
         console.print("Path contains invalid characters", markup=False)
@@ -2607,6 +2688,15 @@ def execute_command():
             try:
                 # Build command to run upload.py directly
                 validated_path = _resolve_user_path(path, require_exists=True, require_dir=False)
+
+                # Additional explicit assertion for static analysis: ensure the
+                # resolved path is within allowed browse roots and contains no
+                # invalid characters before using it in commands/subprocesses.
+                try:
+                    _assert_safe_resolved_path(validated_path)
+                except ValueError:
+                    yield f"data: {json.dumps({'type': 'error', 'data': 'Invalid execution path'})}\n\n"
+                    return
 
                 base_dir = Path(__file__).parent.parent
                 upload_script = str(base_dir / "upload.py")
