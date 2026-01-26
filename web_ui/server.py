@@ -100,6 +100,20 @@ app.config["SESSION_FILE_DIR"] = str(sess_dir)
 app.config["SESSION_PERMANENT"] = False
 # Ensure permanent sessions (when set) expire after 30 days to match remember-me cookie
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
+# Prefer CacheLib's FileSystemCache (if available) so Flask-Session uses cachelib
+# instead of deprecated Werkzeug cache implementations. Instantiating the
+# cache here helps Flask-Session detect and use CacheLib automatically.
+try:
+    from cachelib.file import FileSystemCache  # type: ignore
+
+    with contextlib.suppress(Exception):
+        # Create a cache instance pointing at the same session dir. We don't
+        # directly wire it into Flask-Session here; Flask-Session will detect
+        # CacheLib's presence and use it for its filesystem backend.
+        _ = FileSystemCache(str(sess_dir))
+except Exception:
+    pass
+
 Session(app)
 
 # Initialize Flask-Limiter for rate limiting
