@@ -320,8 +320,8 @@ jobs:
           const hasRuffIssues = ruffResults && !ruffResults.includes('All checks passed!') && ruffResults.trim() !== '';
           const hasDeprecationWarnings = deprecationResults && deprecationResults.trim() !== '';
 
-          if (!hasBanditIssues && !hasSafetyIssues && !hasPyrightIssues && !hasRuffIssues) {
-            console.log('No security, dead code, dependency, type issues, or lint issues found, skipping PR comment.');
+          if (!hasBanditIssues && !hasSafetyIssues && !hasPyrightIssues && !hasRuffIssues && !hasDeprecationWarnings) {
+            console.log('No security, deprecation, dead code, dependency, type, or lint issues found, skipping PR comment.');
             return;
           }
 

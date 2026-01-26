@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+# ruff: noqa: I001
 import ast
 import base64
 import contextlib

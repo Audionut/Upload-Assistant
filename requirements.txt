@@ -18,6 +18,7 @@ flask==3.1.2
 flask-cors==6.0.2
 Flask-Limiter==3.11.0
 Flask-Session==0.8.0
+cachelib==0.13.0
 guessit==3.8.0
 httpx==0.28.1
 Jinja2==3.1.6
