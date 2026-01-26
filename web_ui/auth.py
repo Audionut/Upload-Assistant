@@ -60,9 +60,18 @@ def get_config_dir() -> Path:
 
     # Repository data dir
     repo_dir = Path(__file__).resolve().parent.parent / "data"
-    # If running in Docker, prefer the repository `data/` directory.
+    # If running in Docker, prefer a per-user XDG/AppData config directory
+    # so container instances write persistent secrets under the user's
+    # config location (respecting XDG_CONFIG_HOME or APPDATA) instead of
+    # writing into the repository tree which is often not mounted.
     if _running_in_docker():
-        return repo_dir
+        if os.name == "nt":
+            appdata = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
+            return Path(appdata) / "UploadAssistant"
+        # Unix-like: prefer XDG_CONFIG_HOME if set, otherwise ~/.config
+        xdg = os.environ.get("XDG_CONFIG_HOME")
+        base = Path(xdg) if xdg else (Path.home() / ".config")
+        return base / "UploadAssistant"
 
     # Windows: prefer roaming AppData (per-user persistent config)
     if os.name == "nt":
