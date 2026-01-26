@@ -7,9 +7,25 @@ from bs4 import BeautifulSoup
 
 
 class DoubanMovieGenerator:
-    def __init__(self, movie_url: str) -> None:
+    def __init__(self, movie_url: str, douban_cookie: str | None = None) -> None:
         self.movie_url = movie_url
+        self.douban_cookie = douban_cookie or ""
         self.movie_info: dict[str, Any] = {}
+
+    def _cookie_dict(self) -> dict[str, str]:
+        cookie_str = self.douban_cookie.strip().strip('"').strip("'")
+        if not cookie_str:
+            return {}
+        cookies: dict[str, str] = {}
+        for part in [p.strip() for p in cookie_str.split(";") if p.strip()]:
+            if "=" not in part:
+                continue
+            key, value = part.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key:
+                cookies[key] = value
+        return cookies
 
     def parse(self) -> None:
         if not self.movie_url:
@@ -23,8 +39,13 @@ class DoubanMovieGenerator:
                 "Chrome/136.0.0.0 Safari/537.36"
             )
         }
-        response = httpx.get(self.movie_url, headers=headers, timeout=15.0)
-        response.raise_for_status()
+        cookies = self._cookie_dict()
+        with httpx.Client(headers=headers, cookies=cookies, follow_redirects=True, timeout=15.0) as client:
+            response = client.get(self.movie_url)
+        if response.status_code != 200:
+            response.raise_for_status()
+        if "sec.douban.com" in str(response.url) or "douban.com/accounts/login" in str(response.url):
+            raise RuntimeError("Douban access requires a valid cookie.")
         soup = BeautifulSoup(response.text, "lxml")
 
         douban_id_match = re.search(r"/subject/(\d+)/?", self.movie_url)

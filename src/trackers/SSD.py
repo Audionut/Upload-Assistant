@@ -110,7 +110,11 @@ class SSD(COMMON):
             return
         print(f"[{self.tracker}] 正在从豆瓣链接获取详细信息 (使用fkgen)...")
         try:
-            generator = DoubanMovieGenerator(movie_url=douban_link)
+            tracker_config = self.config['TRACKERS'].get(self.tracker, {})
+            generator = DoubanMovieGenerator(
+                movie_url=douban_link,
+                douban_cookie=str(tracker_config.get('douban_cookie', '')).strip(),
+            )
             generator.parse()
             self.fkgen_data = generator.movie_info
 
@@ -441,7 +445,31 @@ class SSD(COMMON):
         except Exception:
             return ""
 
-    async def search_existing(self, meta, disctype): return []
+    async def search_existing(self, meta, _disctype):
+        dupes = []
+        if not self.cookie_file or not os.path.exists(self.cookie_file):
+            return []
+        imdb_id_raw = str(meta.get('imdb_id', '0')).replace('tt', '').strip()
+        imdb = f"tt{imdb_id_raw.zfill(7)}" if imdb_id_raw.isdigit() and int(imdb_id_raw) != 0 else ""
+        if not imdb:
+            return []
+        search_url = f"https://springsunday.net/torrents.php?search={imdb}&search_area=4&search_mode=0"
+        cookie_str = await self._load_cookie_header(meta)
+        if not cookie_str:
+            return []
+        try:
+            headers = {"Cookie": cookie_str}
+            response = await self.session.get(search_url, headers=headers, timeout=15)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'lxml')
+                rows = soup.select('table.torrents > tr:has(table.torrentname)')
+                for row in rows:
+                    text = row.select_one('a[href^="details.php?id="]')
+                    if text and text.attrs.get('title'):
+                        dupes.append(text.attrs.get('title'))
+        except Exception:
+            pass
+        return dupes
     
     def edit_name(self, meta):
         base_name = meta.get('name', '').replace(' ', '.')
