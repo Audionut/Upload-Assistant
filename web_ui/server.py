@@ -23,10 +23,10 @@ from flask import Flask, Response, g, jsonify, redirect, render_template, reques
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from flask_session import Session
 from werkzeug.security import safe_join
 
 import web_ui.auth as auth_mod
+from flask_session import Session
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -115,11 +115,21 @@ except Exception:
 if _session_cache is not None:
     # Use CacheLib-backed cache for sessions (preferred)
     app.config["SESSION_CACHELIB"] = _session_cache
+    try:
+        from flask_session.cachelib import CacheLibSessionInterface  # type: ignore
+
+        # Set the session interface directly to the CacheLib-backed implementation
+        # Pass the cache as the `client` kwarg to avoid binding it to the
+        # positional `app` parameter of the constructor.
+        app.session_interface = CacheLibSessionInterface(client=_session_cache)
+    except Exception:
+        # If for some reason the adapter class isn't available, fall back
+        # to letting Flask-Session initialize via Session(app).
+        Session(app)
 else:
     # Fallback for environments without CacheLib: keep legacy file-dir config
     app.config["SESSION_FILE_DIR"] = str(sess_dir)
-
-Session(app)
+    Session(app)
 
 # Initialize Flask-Limiter for rate limiting
 limiter = Limiter(
