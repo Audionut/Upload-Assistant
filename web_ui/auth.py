@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import math
 import os
 import string
@@ -19,6 +20,13 @@ from typing import Optional
 
 from argon2 import PasswordHasher
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+log = logging.getLogger(__name__)
+
+
+class EncryptionError(Exception):
+    """Raised when encryption or key derivation fails."""
+    pass
 
 # Defaults and env var names
 ENV_SESSION_SECRET = "SESSION_SECRET"
@@ -196,22 +204,38 @@ def _pack_field(extras: dict, field: str, plaintext: Optional[str]) -> None:
         extras["fields"] = fields
         return
 
-    master = None
+    # Obtain master key; fail loudly if unavailable
     try:
         master = _get_master_key()
-    except Exception:
-        master = None
+    except Exception as e:
+        log.error("failed to derive master key for field '%s': %s", field, e)
+        raise EncryptionError(f"failed to derive master key for field '{field}'") from e
 
-    fk = _generate_field_key()
+    if not master:
+        msg = f"master key is falsy when packing field '{field}'"
+        log.error(msg)
+        raise EncryptionError(msg)
+
+    # Generate a random per-field key
+    try:
+        fk = _generate_field_key()
+    except Exception as e:
+        log.error("failed to generate field key for '%s': %s", field, e)
+        raise EncryptionError(f"failed to generate field key for '{field}'") from e
+
+    # Encrypt the plaintext with the field key
     try:
         enc = encrypt_text(fk, plaintext)
-    except Exception:
-        enc = None
+    except Exception as e:
+        log.error("encryption failed for field '%s': %s", field, e)
+        raise EncryptionError(f"encryption failed for field '{field}'") from e
 
+    # Encrypt the field key with the master key
     try:
-        key_enc = encrypt_text(master, fk.hex()) if master else None
-    except Exception:
-        key_enc = None
+        key_enc = encrypt_text(master, fk.hex())
+    except Exception as e:
+        log.error("failed to encrypt field key for '%s': %s", field, e)
+        raise EncryptionError(f"failed to encrypt field key for '{field}'") from e
 
     fields[field] = {"enc": enc, "key_enc": key_enc}
     extras["fields"] = fields
@@ -249,7 +273,7 @@ def create_user(username: str, password: str) -> None:
     path = _get_user_file()
     # Prevent creating a new user if one already exists. Persisted user is authoritative.
     if path.exists():
-        raise ValueError("bad credentials")
+        raise ValueError("a user account already exists")
     # Enforce minimum password entropy to ensure user-chosen secrets are strong.
     # Estimate entropy by character-class pool size heuristic: lowercase, uppercase,
     # digits, punctuation. This provides a conservative approximation of bits.
@@ -272,16 +296,12 @@ def create_user(username: str, password: str) -> None:
         raise ValueError("password must have at least 48 bits of entropy")
 
     extras = {}
-    with suppress(Exception):
-        _pack_field(extras, "username", username)  # If encryption fails, username won't be stored, but that's ok for now
+    # Pack username into per-field encrypted storage. Fail loudly on error.
+    _pack_field(extras, "username", username)
 
-    try:
-        key = _get_master_key()
-        extras_enc = encrypt_text(key, json.dumps(extras, separators=(",",":"), ensure_ascii=False))
-        username_enc = encrypt_text(key, username)
-    except Exception:
-        extras_enc = None
-        username_enc = None
+    key = _get_master_key()
+    extras_enc = encrypt_text(key, json.dumps(extras, separators=(",",":"), ensure_ascii=False))
+    username_enc = encrypt_text(key, username)
 
     data = {"username_enc": username_enc, "password_hash": hash_password(password), "extras_enc": extras_enc}
     path.write_text(json.dumps(data), encoding="utf-8")
@@ -365,20 +385,11 @@ def set_totp_secret(secret: Optional[str]) -> None:
         extras = {}
 
     # Pack/unpack with per-field keys
-    try:
-        _pack_field(extras, "totp_secret", secret)
-    except Exception:
-        # Fallback to plain key for compatibility
-        if secret is None:
-            extras.pop("totp_secret", None)
-        else:
-            extras["totp_secret"] = secret
+    # Pack/unpack with per-field keys; let encryption errors propagate
+    _pack_field(extras, "totp_secret", secret)
 
-    try:
-        key = _get_master_key()
-        raw["extras_enc"] = encrypt_text(key, json.dumps(extras, separators=(",",":"), ensure_ascii=False))
-    except Exception:
-        raw["extras_enc"] = None
+    key = _get_master_key()
+    raw["extras_enc"] = encrypt_text(key, json.dumps(extras, separators=(",",":"), ensure_ascii=False))
 
     path.write_text(json.dumps(raw), encoding="utf-8")
 
@@ -417,16 +428,10 @@ def set_recovery_hashes(hashes: list[str]) -> None:
     except Exception:
         extras = {}
 
-    try:
-        _pack_field(extras, "recovery_hashes", json.dumps(hashes, separators=(",",":"), ensure_ascii=False))
-    except Exception:
-        extras["recovery_hashes"] = hashes
+    _pack_field(extras, "recovery_hashes", json.dumps(hashes, separators=(",",":"), ensure_ascii=False))
 
-    try:
-        key = _get_master_key()
-        raw["extras_enc"] = encrypt_text(key, json.dumps(extras, separators=(",",":"), ensure_ascii=False))
-    except Exception:
-        raw["extras_enc"] = None
+    key = _get_master_key()
+    raw["extras_enc"] = encrypt_text(key, json.dumps(extras, separators=(",",":"), ensure_ascii=False))
     path.write_text(json.dumps(raw), encoding="utf-8")
 
 
@@ -463,16 +468,10 @@ def set_api_tokens(store: dict) -> None:
     except Exception:
         extras = {}
 
-    try:
-        _pack_field(extras, "api_tokens", json.dumps(store, separators=(",",":"), ensure_ascii=False))
-    except Exception:
-        extras["api_tokens"] = store
+    _pack_field(extras, "api_tokens", json.dumps(store, separators=(",",":"), ensure_ascii=False))
 
-    try:
-        key = _get_master_key()
-        raw["extras_enc"] = encrypt_text(key, json.dumps(extras, separators=(",",":"), ensure_ascii=False))
-    except Exception:
-        raw["extras_enc"] = None
+    key = _get_master_key()
+    raw["extras_enc"] = encrypt_text(key, json.dumps(extras, separators=(",",":"), ensure_ascii=False))
     path.write_text(json.dumps(raw), encoding="utf-8")
 
 
