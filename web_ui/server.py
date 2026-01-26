@@ -1572,6 +1572,9 @@ def twofa_status():
 @app.route("/api/2fa/setup", methods=["POST"])
 def twofa_setup():
     """Setup 2FA - generate secret and return QR code URI"""
+    # Require an authenticated web session (disallow API token / basic auth)
+    if not _is_authenticated():
+        return jsonify({"error": "Authentication required (web session)", "success": False}), 401
     if _totp_enabled():
         return jsonify({"error": "2FA already enabled", "success": False}), 400
 
@@ -1596,6 +1599,9 @@ def twofa_setup():
 @app.route("/api/2fa/enable", methods=["POST"])
 def twofa_enable():
     """Enable 2FA after verification"""
+    # Require an authenticated web session (disallow API token / basic auth)
+    if not _is_authenticated():
+        return jsonify({"error": "Authentication required (web session)", "success": False}), 401
     data = request.json or {}
     code = data.get("code", "").strip()
 
@@ -1634,6 +1640,9 @@ def twofa_enable():
 @app.route("/api/2fa/disable", methods=["POST"])
 def twofa_disable():
     """Disable 2FA"""
+    # Require an authenticated web session (disallow API token / basic auth)
+    if not _is_authenticated():
+        return jsonify({"error": "Authentication required (web session)", "success": False}), 401
     if not _totp_enabled():
         return jsonify({"error": "2FA not enabled", "success": False}), 400
 

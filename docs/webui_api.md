@@ -146,17 +146,13 @@ POST /api/kill
 ```
 
 Authentication notes
-- Bearer token: send `Authorization: Bearer <token>` header. When `UA_TOKEN` is set on the server, that is the canonical token and persisted token store is disabled.
-- Basic auth / session: if `UA_WEBUI_USERNAME` / `UA_WEBUI_PASSWORD` are set, the server applies auth to routes (except `/api/health`). Use HTTP Basic Auth or the login flow to obtain session cookies.
+- Bearer token: send `Authorization: Bearer <token>` header.
 - CSRF: obtain the CSRF token with `GET /api/csrf_token` and include it as `X-CSRF-Token` header for all POST/DELETE/PUT requests.
 
 Errors and troubleshooting
 - If you receive `401` while using `Bearer` auth, confirm token value and that Authorization header is sent.
 - If `403` on `POST /api/execute` or `GET /api/browse`, confirm the `path` is under `UA_BROWSE_ROOTS` and that the server user has filesystem permission to the path.
 - If streaming response unexpectedly closes, check server logs for process crashes; the SSE consumer should handle partial lines and JSON parse errors gracefully.
-
-Testing and development
-- Tests in this repository may use `UA_TEST_BEARER_TOKEN` to inject a temporary token into the keyring. The test fixture restores the original keyring store after tests complete.
 
 Appendix: minimal Python client example (requests)
 ```python

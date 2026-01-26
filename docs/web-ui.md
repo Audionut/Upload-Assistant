@@ -1,8 +1,9 @@
+
 # Upload Assistant Web UI
 
 This document describes the current Web UI interface and configuration for Upload Assistant.
 
-The Web UI is a small HTTP server that exposes a browser-based frontend and a JSON API used by the frontend and integrations. It is not a generic Flask tutorial — the instructions below focus on the calling method, authentication handling, and runtime configuration used by this project.
+The Web UI is a small HTTP server that exposes a browser-based frontend and a JSON API used by the frontend and integrations.
 
 ## How the UI is called
 
@@ -30,14 +31,11 @@ The server streams events prefixed with `data: ` lines containing JSON objects. 
 The Web UI now uses an encrypted, file-backed auth store under the per-user config directory returned by the application. This unifies behavior across container and non-container deployments.
 
 - Stored files and meaning:
-  - `webui_auth.json` — contains the persisted user record with `password_hash` (Argon2) and an encrypted `username_enc` field.
-  - `api_tokens` — encrypted JSON payload of issued API tokens (stored under the config dir). Encrypted with an AES key derived from the session secret.
-  - `totp_secret` — raw TOTP secret stored under the config dir when 2FA is enabled.
+  - `webui_auth.json` — contains the excrypted user records.
   - `session_key` — persistent HMAC key (hex) used to sign the remember-me cookie.
   - `sessions/` — directory containing server-side session files (when created); sessions are stored as a single encrypted payload in the session store.
 
 - Auth modes supported:
-  - Static bearer token: set `UA_TOKEN` (or provide tokens via the token API). Bearer tokens are verified normally.
   - Interactive session-based login and UI-first creation: users create a local account via the UI; passwords are Argon2-hashed and usernames are encrypted before being persisted. A minimum entropy requirement (48 bits) is enforced for user-chosen passwords.
 
 - Remember-me cookie:
@@ -46,8 +44,8 @@ The Web UI now uses an encrypted, file-backed auth store under the per-user conf
 
 - Encryption & session secret:
   - Encrypted usernames, API token store, and encrypted session payloads are protected with an AES key derived from the session secret. The server looks for the session secret in this order:
-    - `QUI__SESSION_SECRET` (env)
-    - `QUI__SESSION_SECRET_FILE` (path to a file, first line read)
+    - `SESSION_SECRET` (env)
+    - `SESSION_SECRET_FILE` (path to a file, first line read)
     - `SECRET_KEY` (compat fallback)
     - otherwise a random ephemeral secret is used (not recommended for persistent deployments)
   - Rotating or losing the session secret will render previously encrypted data (usernames, tokens, sessions) unrecoverable.
@@ -60,12 +58,7 @@ Security notes:
 
 ## Configuration (important environment variables)
 
-- `UA_WEBUI_HOST`: address to bind to (default `127.0.0.1`). Use `0.0.0.0` to listen on all interfaces.
-- `UA_WEBUI_PORT`: port to listen on (default `5000`).
 - `UA_BROWSE_ROOTS` (required for browsing/execution): comma-separated list of absolute paths the UI is allowed to browse and execute against. If unset, browsing/execution is denied.
-- `UA_TOKEN`: static opaque bearer token; when set the server treats token store as read-only and removes any persisted token store on startup.
-- `UA_TEST_BEARER_TOKEN`: used by tests to inject a temporary token into the keyring (testing only).
-- `UA_WEBUI_TOTP_SECRET`: base32 TOTP secret for enabling TOTP 2FA via env variable (highest priority).
 - `UA_WEBUI_CORS_ORIGINS`: optional comma-separated list of allowed origins for `/api/*` CORS.
 
 ## Running in Docker
@@ -77,8 +70,6 @@ services:
   upload-assistant:
     image: your/image:webui
     environment:
-      - UA_WEBUI_HOST=0.0.0.0
-      - UA_WEBUI_PORT=5000
       - UA_BROWSE_ROOTS=/data/torrents,/Upload-Assistant/tmp
     ports:
       - "127.0.0.1:5000:5000"
@@ -111,11 +102,8 @@ Notes:
 Use this checklist when deploying the Web UI to reduce risk and harden the runtime:
 
 - **Bind to localhost by default:** set `UA_WEBUI_HOST=127.0.0.1` unless you intentionally need network access; expose via an authenticated reverse proxy when remote access is required.
-- **Prefer managed secrets:** provide `UA_TOKEN`, `UA_WEBUI_TOTP_SECRET`, or credentials via Docker/Kubernetes secrets or your platform's secret manager rather than plaintext environment variables when possible.
-- **Require authentication for non-local access:** provision a static bearer token (`UA_TOKEN`) or create a local UI account (and enable TOTP) when the UI is reachable from other hosts.
+- **Prefer managed secrets:** provide `SESSION_SECRET`, `SESSION_SECRET_FILE`, via environment variables when possible.
 - **Restrict `UA_BROWSE_ROOTS`:** list only the absolute paths required for upload/browse operations and mount volumes read-only where feasible.
 - **Run unprivileged:** do not run the Web UI as root; restrict filesystem permissions so the server user cannot write to unrelated user data or system locations.
-- **Harden token/keyring storage:** ensure keyring backends and config paths are permissible and not writable by untrusted users; avoid leaving test tokens or temporary keyring entries in production.
 - **Network controls:** firewall host ports, avoid automatic UPnP/port-forwarding, and publish ports only on necessary interfaces.
-- **Rotate and revoke credentials:** have a process to rotate `UA_TOKEN` / TOTP secrets and remove persisted tokens when changing auth methods.
 - **Monitor and alert:** collect server logs and monitor for unexpected config changes, token writes, or repeated failed auth attempts.
