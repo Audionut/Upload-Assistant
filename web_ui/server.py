@@ -1655,6 +1655,18 @@ def _resolve_user_path(
 
     candidate = candidate_real
 
+    # Additional explicit validation before using `candidate` in filesystem
+    # operations. This defends against accidental use of unvalidated
+    # user-controlled data (helps static analysis tools and provides a
+    # clear guard at the call site).
+    if '\x00' in candidate:
+        raise ValueError("Browsing this path is not allowed")
+
+    # Ensure the resolved candidate path is within the resolved root path.
+    safe_root_prefix = root_real if root_real.endswith(os.sep) else (root_real + os.sep)
+    if not (candidate == root_real or candidate.startswith(safe_root_prefix)):
+        raise ValueError("Browsing this path is not allowed")
+
     if require_exists and not os.path.exists(candidate):
         raise ValueError("Path does not exist")
 
@@ -2491,7 +2503,15 @@ def browse_path():
         console.print(f"Path resolution error for requested {requested!r}: {e}", markup=False)
         return jsonify({"error": "Invalid path specified", "success": False}), 400
 
-    console.print(f"Browsing path: {path}", markup=False)
+    # Defensive sanity checks before using `path` in filesystem operations.
+    if '\x00' in path:
+        console.print("Path contains invalid characters", markup=False)
+        return jsonify({"error": "Invalid path specified", "success": False}), 400
+    if not os.path.isdir(path):
+        console.print("Requested path is not a directory", markup=False)
+        return jsonify({"error": "Invalid path specified", "success": False}), 400
+
+    console.print("Browsing path allowed", markup=False)
 
     try:
         items: list[BrowseItem] = []
@@ -2973,6 +2993,15 @@ def execute_command():
                     env["PYTHONUNBUFFERED"] = "1"
                     env["PYTHONIOENCODING"] = "utf-8"
                     # Disable Python output buffering
+
+                    # Sanity-check the working directory used for the subprocess.
+                    # `base_dir` is computed from the application `__file__`, but
+                    # perform lightweight validation to satisfy static analysis
+                    # tools and ensure we do not pass uncontrolled input here.
+                    if '\x00' in str(base_dir) or not str(base_dir):
+                        raise ValueError("Invalid execution directory")
+                    if not os.path.isabs(str(base_dir)):
+                        base_dir = os.path.abspath(str(base_dir))
 
                     process = subprocess.Popen(  # lgtm[py/command-line-injection]
                         command,
