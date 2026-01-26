@@ -650,8 +650,26 @@ def _token_is_valid(token: str) -> bool:
 
 
 def _validate_upload_assistant_args(args: list[str]) -> list[str]:
-    """Validate and return upload-assistant arguments. Currently a pass-through."""
-    return args
+    """Validate upload-assistant arguments to avoid command-injection.
+
+    Rejects arguments containing nulls, newlines, or common shell metacharacters.
+    Returns the original args if they pass validation, otherwise raises ValueError.
+    """
+    if not isinstance(args, list):
+        raise ValueError("Invalid args")
+    safe_args: list[str] = []
+    # Disallow characters that enable shell injection or command chaining.
+    forbidden = set(";&|$`><*?~!\n\r\x00")
+    for a in args:
+        if not isinstance(a, str):
+            raise ValueError("Invalid arg type")
+        if any(ch in a for ch in forbidden):
+            raise ValueError("Invalid characters in arg")
+        # Disallow arguments that are just parent-directory references
+        if a == ".." or a == ".":
+            raise ValueError("Invalid arg")
+        safe_args.append(a)
+    return safe_args
 
 
 def _get_bearer_from_header() -> Optional[str]:
@@ -1741,6 +1759,13 @@ def _resolve_user_path(
     if not (candidate == root_real or candidate.startswith(safe_root_prefix)):
         raise ValueError("Browsing this path is not allowed")
 
+    # Extra explicit assertion for static analysis and defense-in-depth:
+    # ensure the resolved candidate is within allowed browse roots.
+    try:
+        _assert_safe_resolved_path(candidate)
+    except ValueError as err:
+        raise ValueError("Browsing this path is not allowed") from err
+
     if require_exists and not os.path.exists(candidate):
         raise ValueError("Path does not exist")
 
@@ -2585,10 +2610,11 @@ def browse_path():
         return jsonify({"error": "Invalid path specified", "success": False}), 400
 
     # Defensive sanity checks before using `path` in filesystem operations.
-    if '\x00' in path:
+    safe_path = os.path.abspath(path)
+    if '\x00' in safe_path:
         console.print("Path contains invalid characters", markup=False)
         return jsonify({"error": "Invalid path specified", "success": False}), 400
-    if not os.path.isdir(path):
+    if not os.path.isdir(safe_path):
         console.print("Requested path is not a directory", markup=False)
         return jsonify({"error": "Invalid path specified", "success": False}), 400
 
@@ -2597,12 +2623,19 @@ def browse_path():
     try:
         items: list[BrowseItem] = []
         try:
-            for item in sorted(os.listdir(path)):
+            # `safe_path` was computed and validated above; reuse it for listing.
+            for item in sorted(os.listdir(safe_path)):
                 # Skip hidden files
                 if item.startswith("."):
                     continue
-
-                full_path = os.path.join(path, item)
+                full_path = os.path.join(safe_path, item)
+                # Explicitly assert each resolved child path is safe. If the
+                # assertion fails for a specific entry, skip it rather than
+                # failing the whole browse operation.
+                try:
+                    _assert_safe_resolved_path(full_path)
+                except ValueError:
+                    continue
                 try:
                     is_dir = os.path.isdir(full_path)
 
@@ -2707,7 +2740,13 @@ def execute_command():
                     import shlex
 
                     parsed_args = shlex.split(args)
-                    command.extend(_validate_upload_assistant_args(parsed_args))
+                    try:
+                        validated_args = _validate_upload_assistant_args(parsed_args)
+                    except ValueError as err:
+                        console.print(f"Invalid execution arguments: {err}", markup=False)
+                        yield f"data: {json.dumps({'type': 'error', 'data': 'Invalid execution arguments'})}\n\n"
+                        return
+                    command.extend(validated_args)
 
                 command_str = subprocess.list2cmdline(command)
                 console.print(f"Running: {command_str}", markup=False)

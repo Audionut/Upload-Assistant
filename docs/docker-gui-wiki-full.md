@@ -6,8 +6,7 @@ This guide explains how to run the Upload Assistant WebUI inside Docker (includi
 
 ## Quick summary
 
-- Persist the WebUI configuration and session data by mounting a host `data` folder into `/Upload-Assistant/data` inside the container.
- - Persist the WebUI configuration and session data by mounting a host `data` folder into `/Upload-Assistant/data` inside the container, or mount a directory to the container XDG config location.
+- Persist the WebUI configuration and session data by mounting a host `data` folder into `/Upload-Assistant/data` inside the container, or mount a directory to the container XDG config location.
 - Provide a stable session secret via `SESSION_SECRET` or `SESSION_SECRET_FILE` so encrypted credentials remain decryptable after restarts.
 - Ensure `UA_BROWSE_ROOTS` lists the container-side mount paths the WebUI may browse (must match your `volumes` mounts).
 
