@@ -106,16 +106,21 @@ def load_session_secret() -> bytes:
 
     # Config-file path env override (explicit file path)
     f = os.environ.get(ENV_SESSION_SECRET_FILE)
-    if f and Path(f).exists():
+    if f:
+        p = Path(f)
+        if not p.exists():
+            log.error("SESSION_SECRET_FILE is set but file does not exist")
+            raise OSError("SESSION_SECRET_FILE is set but file does not exist; check the path and permissions")
         try:
-            txt = Path(f).read_text(encoding="utf-8").splitlines()[0].strip()
-            # Support hex-encoded and raw strings
-            try:
-                return _ensure_min_length(bytes.fromhex(txt))
-            except Exception:
-                return _ensure_min_length(txt.encode("utf-8"))
+            txt = p.read_text(encoding="utf-8").splitlines()[0].strip()
+        except Exception as e:
+            log.error("failed to read SESSION_SECRET_FILE: %s", e)
+            raise OSError("failed to read SESSION_SECRET_FILE; check file permissions and encoding") from e
+        # Support hex-encoded and raw strings
+        try:
+            return _ensure_min_length(bytes.fromhex(txt))
         except Exception:
-            pass
+            return _ensure_min_length(txt.encode("utf-8"))
 
     # Compatibility fallback
     s2 = os.environ.get("SECRET_KEY")

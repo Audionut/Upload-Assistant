@@ -22,6 +22,8 @@ This guide explains how to run the Upload Assistant WebUI inside Docker (includi
 
 Note: When running inside a container the WebUI prefers the per-user XDG/AppData config directory for storing `session_secret` and `webui_auth.json` (it respects `XDG_CONFIG_HOME` on Unix-like systems or `APPDATA` on Windows). By default that will be `/root/.config/upload-assistant` inside the container. If you prefer the repository `data/` path, set `SESSION_SECRET_FILE` to a path you mount into the container (for example `/Upload-Assistant/data/session_secret`).
 
+- The `session_secret` if specified, should be a 64 byte string.
+
 --
 
 ## Recommended volume mounts
