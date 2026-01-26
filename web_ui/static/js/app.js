@@ -4,24 +4,25 @@ const THEME_KEY = 'ua_config_theme';
 const storage = window.UAStorage;
 const getStoredTheme = window.getUAStoredTheme;
 
+// Local CSRF cache used by fallback `apiFetch` when `uaApiFetch` isn't present.
+let localCsrf = null;
+const loadLocalCsrf = async (force = false) => {
+  if (localCsrf && !force) return;
+
+  try {
+    const r = await fetch('/api/csrf_token', { credentials: 'same-origin' });
+    if (!r.ok) return;
+    const d = await r.json();
+    localCsrf = d && d.csrf_token ? String(d.csrf_token) : null;
+  } catch (e) {
+    // ignore
+  }
+};
+
 // Prefer shared `uaApiFetch` when available (provides CSRF handling and retry-on-auth-fail),
 // otherwise fall back to a local implementation.
 const apiFetch = (typeof window !== 'undefined' && window.uaApiFetch) || (async (url, options = {}) => {
   // Local fallback: load CSRF token once and retry on 401/403 once.
-  let localCsrf = null;
-  const loadLocalCsrf = async (force = false) => {
-    if (localCsrf && !force) return;
-
-    try {
-      const r = await fetch('/api/csrf_token', { credentials: 'same-origin' });
-      if (!r.ok) return;
-      const d = await r.json();
-      localCsrf = d && d.csrf_token ? String(d.csrf_token) : null;
-    } catch (e) {
-      // ignore
-    }
-  };
-
   await loadLocalCsrf();
   const headers = { ...(options.headers || {}) };
   if (localCsrf) headers['X-CSRF-Token'] = localCsrf;
