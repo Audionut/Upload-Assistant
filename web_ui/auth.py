@@ -305,6 +305,8 @@ def create_user(username: str, password: str) -> None:
 
     data = {"username_enc": username_enc, "password_hash": hash_password(password), "extras_enc": extras_enc}
     path.write_text(json.dumps(data), encoding="utf-8")
+    with suppress(Exception):
+        os.chmod(path, 0o600)
 
 
 def load_user() -> Optional[dict]:
@@ -390,8 +392,9 @@ def set_totp_secret(secret: Optional[str]) -> None:
 
     key = _get_master_key()
     raw["extras_enc"] = encrypt_text(key, json.dumps(extras, separators=(",",":"), ensure_ascii=False))
-
     path.write_text(json.dumps(raw), encoding="utf-8")
+    with suppress(Exception):
+        os.chmod(path, 0o600)
 
 
 def get_recovery_hashes() -> list[str]:
@@ -433,6 +436,8 @@ def set_recovery_hashes(hashes: list[str]) -> None:
     key = _get_master_key()
     raw["extras_enc"] = encrypt_text(key, json.dumps(extras, separators=(",",":"), ensure_ascii=False))
     path.write_text(json.dumps(raw), encoding="utf-8")
+    with suppress(Exception):
+        os.chmod(path, 0o600)
 
 
 def get_api_tokens() -> dict:
@@ -473,6 +478,8 @@ def set_api_tokens(store: dict) -> None:
     key = _get_master_key()
     raw["extras_enc"] = encrypt_text(key, json.dumps(extras, separators=(",",":"), ensure_ascii=False))
     path.write_text(json.dumps(raw), encoding="utf-8")
+    with suppress(Exception):
+        os.chmod(path, 0o600)
 
 
 def verify_user(username: str, password: str) -> bool:
