@@ -3,13 +3,16 @@ import asyncio
 import json
 import os
 import re
+import sys
 import traceback
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Optional, Union, cast
 
 import langcodes
+import cli_ui
 
+from src.cleanup import cleanup_manager
 from src.console import console
 from src.trackers.COMMON import COMMON
 
@@ -251,6 +254,8 @@ async def _get_audio_v2(
         audio_tracks = [t for t in tracks if t.get('@type') == "Audio"]
         meta["has_multiple_default_audio_tracks"] = len(
             [track for track in audio_tracks if track["Default"] == "Yes"]) > 1
+        meta["has_pcm_audio_tracks"] = meta["type"] != "DISC" and any(
+            track for track in audio_tracks if track["Format"] == "PCM")
         first_audio_track = None
         if audio_tracks:
             tracks_with_order = [t for t in audio_tracks if t.get('StreamOrder') and not isinstance(t.get('StreamOrder'), dict)]
@@ -300,6 +305,8 @@ async def _get_audio_v2(
 
         # Enhanced channel count determination based on MediaArea AudioChannelLayout
         chan = determine_channel_count(channels, channel_layout, additional, format)
+
+        dts_core_additional_check(meta)
 
         if meta.get('dual_audio', False):
             dual = "Dual-Audio"
@@ -577,3 +584,33 @@ def bloated_check(meta: Meta, audio_languages: Union[Sequence[str], str], is_eng
         # Early exit if we've printed both messages
         if printed_not_allowed and printed_warning:
             return
+
+def dts_core_additional_check(meta: Meta) -> None:
+    mediainfo_tracks = meta.get("mediainfo", {}).get("media", {}).get("track") or []
+    audio_tracks = [track for track in mediainfo_tracks if track["@type"] == "Audio"]
+    warned_once = False
+    for track_one_index, track_one in enumerate(audio_tracks, start=1):
+        # This is technically O(n^2) but the number of audio tracks is usually very small
+        for track_two_index, track_two in enumerate(audio_tracks, start=1):
+            if track_one_index == track_two_index:
+                continue
+            track_one_is_dts_hd_ma = track_one.get("Format_Commercial_IfAny") == "DTS-HD Master Audio"
+            track_two_is_lossy_dts = track_two.get("Format_Commercial_IfAny") != "DTS-HD Master Audio" and track_two[
+                "Format"] == "DTS"
+            track_one_properties = (track_one.get("Duration"), track_one.get("FrameRate"), track_one.get("FrameCount"),
+                                    track_one.get("Language"))
+            track_two_properties = (track_two.get("Duration"), track_two.get("FrameRate"), track_two.get("FrameCount"),
+                                    track_two.get("Language"))
+            if track_one_is_dts_hd_ma and track_two_is_lossy_dts and track_one_properties == track_two_properties:
+                if meta["debug"]:
+                    console.print(f"[yellow]DEBUG: Detected potential DTS core duplicate between tracks {track_one_index} and {track_two_index}, matched on properties: (Duration={track_one.get('Duration')}, FrameRate={track_one.get('FrameRate')}, FrameCount={track_one.get('FrameCount')}, Language={track_one.get('Language')})[/yellow]")
+                if not warned_once:
+                    warned_once = True
+                    console.print(
+                        f"[bold red]DTS audio track #{track_two_index} appears to be a lossy duplicate of DTS-HD MA track #{track_one_index}.[/bold red]")
+                    if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
+                        if cli_ui.ask_yes_no("Do you want to upload anyway?", default=True):
+                            # Setting this to true to keep current behavior (don't exit on lossy DTS core found)
+                            pass
+                        else:
+                            sys.exit(1)
