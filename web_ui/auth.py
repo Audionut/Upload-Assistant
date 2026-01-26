@@ -249,7 +249,7 @@ def create_user(username: str, password: str) -> None:
     path = _get_user_file()
     # Prevent creating a new user if one already exists. Persisted user is authoritative.
     if path.exists():
-        raise ValueError("user already exists")
+        raise ValueError("bad credentials")
     # Enforce minimum password entropy to ensure user-chosen secrets are strong.
     # Estimate entropy by character-class pool size heuristic: lowercase, uppercase,
     # digits, punctuation. This provides a conservative approximation of bits.
@@ -278,10 +278,12 @@ def create_user(username: str, password: str) -> None:
     try:
         key = _get_master_key()
         extras_enc = encrypt_text(key, json.dumps(extras, separators=(",",":"), ensure_ascii=False))
+        username_enc = encrypt_text(key, username)
     except Exception:
         extras_enc = None
+        username_enc = None
 
-    data = {"password_hash": hash_password(password), "extras_enc": extras_enc}
+    data = {"username_enc": username_enc, "password_hash": hash_password(password), "extras_enc": extras_enc}
     path.write_text(json.dumps(data), encoding="utf-8")
 
 
@@ -296,21 +298,35 @@ def load_user() -> Optional[dict]:
 
     # Attempt to decrypt extras blob (contains per-field encrypted values)
     try:
+        key = _get_master_key()
+        extras = {}
         extras_enc = data.get("extras_enc")
         if extras_enc:
-            key = _get_master_key()
             dec = decrypt_text(key, extras_enc)
             if dec:
                 extras = json.loads(dec)
                 if isinstance(extras, dict):
                     data["extras"] = extras
-                    # Try to unpack username stored in per-field structure
-                    try:
-                        username = _unpack_field(extras, "username")
-                        if username:
-                            data["username"] = username
-                    except Exception:
-                        pass
+        # Decrypt username
+        username_enc = data.get("username_enc")
+        if username_enc:
+            username = decrypt_text(key, username_enc)
+            if username:
+                data["username"] = username
+        # For backwards compatibility, if username not decrypted, try plain or unpack from extras
+        if "username" not in data:
+            # Try plain
+            plain_username = data.get("username")
+            if plain_username:
+                data["username"] = plain_username
+            else:
+                # Try unpack from extras
+                try:
+                    username = _unpack_field(extras, "username")
+                    if username:
+                        data["username"] = username
+                except Exception:
+                    pass
     except Exception:
         pass
 

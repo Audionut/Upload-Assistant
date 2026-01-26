@@ -43,7 +43,7 @@ class AccessLogger:
                 try:
                     data = json.loads(self.user_file.read_text(encoding="utf-8")) or {}
                 except Exception:
-                    data = {}
+                    return False
             if not isinstance(data, dict):
                 data = {}
             data["access_log_level"] = level

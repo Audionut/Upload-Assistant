@@ -194,7 +194,7 @@ def _set_ip_whitelist(ips: list[str]) -> None:
             try:
                 data = json.loads(path.read_text(encoding="utf-8")) or {}
             except Exception:
-                data = {}
+                return
         data["ip_whitelist"] = ips
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
@@ -224,8 +224,38 @@ def _set_ip_blacklist(ips: list[str]) -> None:
             try:
                 data = json.loads(path.read_text(encoding="utf-8")) or {}
             except Exception:
-                data = {}
+                return
         data["ip_blacklist"] = ips
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _get_ip_failures() -> dict[str, int]:
+    """Get the dict of IP failure counts."""
+    try:
+        path = cfg_dir / "webui_auth.json"
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            val = data.get("ip_failures")
+            if isinstance(val, dict):
+                return val
+    except Exception:
+        pass
+    return {}
+
+
+def _set_ip_failures(failures: dict[str, int]) -> None:
+    """Set the dict of IP failure counts."""
+    try:
+        path = cfg_dir / "webui_auth.json"
+        data = {}
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8")) or {}
+            except Exception:
+                return
+        data["ip_failures"] = failures
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         pass
@@ -246,8 +276,17 @@ def _is_ip_allowed(ip: str) -> bool:
 
 def _handle_failed_auth(ip: str) -> None:
     """Handle failed authentication attempt. Track failures and blacklist if too many."""
-    # adding later
-    pass
+    failures = _get_ip_failures()
+    count = failures.get(ip, 0) + 1
+    failures[ip] = count
+    _set_ip_failures(failures)
+
+    # Blacklist after 5 failed attempts
+    if count >= 5:
+        blacklist = _get_ip_blacklist()
+        if ip not in blacklist:
+            blacklist.append(ip)
+            _set_ip_blacklist(blacklist)
 
 
 def _is_authenticated() -> bool:
@@ -316,7 +355,6 @@ def _cleanup_duplicate_sessions(username: str) -> None:
     except Exception:
         pass
 
-
 # Supported video file extensions for WebUI file browser
 SUPPORTED_VIDEO_EXTS = {'.mkv', '.mp4', '.ts'}
 
@@ -328,12 +366,6 @@ _runtime_browse_roots: Optional[str] = None
 
 # Runtime flags and stored totp
 saved_totp_secret: Optional[str] = None
-
-# Docker-mode special casing removed; behavior is unified regardless of containerization.
-
-
-
-
 
 # CSRF helpers ---------------------------------------------------------------
 def _verify_csrf_header() -> bool:
@@ -708,16 +740,17 @@ def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
     if not _is_ip_allowed(client_ip):
         # Log the blocked attempt
         if access_logger:
-            access_logger.log(
-                endpoint=request.path,
-                method=request.method,
-                remote_addr=client_ip,
-                username=None,
-                success=False,
-                status=403,
-                headers={"User-Agent": request.headers.get("User-Agent", "")},
-                details="IP blocked",
-            )
+            with contextlib.suppress(AttributeError):
+                access_logger.log(
+                    endpoint=request.path,
+                    method=request.method,
+                    remote_addr=client_ip,
+                    username=None,
+                    success=False,
+                    status=403,
+                    headers={"User-Agent": request.headers.get("User-Agent", "")},
+                    details="IP blocked",
+                )
         return jsonify({"error": "Access denied", "success": False}), 403
 
     # Try to restore session from a long-lived remember-me cookie if present
@@ -759,6 +792,7 @@ def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
         # If request accepts HTML (browser), redirect to login; else 401 for API clients
         if "text/html" in request.headers.get("Accept", ""):
             return redirect(url_for("login_page"))
+        _handle_failed_auth(client_ip)
         return jsonify({"error": "Authentication required", "success": False}), 401
 
     # For web routes
@@ -1551,19 +1585,24 @@ def index():
 
 
 @app.route("/login", methods=["GET", "POST"])
-@limiter.limit("3 per minute", key_func=get_remote_address)
+@limiter.limit("10 per minute;100 per day", key_func=get_remote_address, error_message="Too many attempts, please try again later.")
 def login_page():
     if request.method == "POST":
+        # Quick IP block check: short-circuit heavy work for known-bad IPs.
+        if not _is_ip_allowed(get_remote_address()):
+            return Response("Too many requests", status=429, mimetype="text/plain")
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
         totp_code = (request.form.get("totp_code") or "").strip()
         remember = request.form.get("remember") == "1"
 
         persisted = auth_mod.load_user()
-        # If a persisted user exists, only allow login against that user.
-        if persisted and auth_mod.verify_user(username, password):
-            if _totp_enabled() and not (totp_code and _verify_totp_code(totp_code)):
-                return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
+        if persisted:
+            # Persisted user exists: require matching credentials
+            if auth_mod.verify_user(username, password):
+                if _totp_enabled() and not (totp_code and _verify_totp_code(totp_code)):
+                    _handle_failed_auth(get_remote_address())
+                    return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
 
                 _session_set("authenticated", True)
                 with contextlib.suppress(Exception):
@@ -1583,46 +1622,59 @@ def login_page():
                 with suppress(Exception):
                     _cleanup_duplicate_sessions(username)
                 return resp
-            return render_template("login.html", error="Credentials did not match")
-
-        # No persisted user: allow UI-driven creation (first-run setup)
-        if username and password:
-            if _totp_enabled() and not (totp_code and _verify_totp_code(totp_code)):
-                return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
-            try:
-                auth_mod.create_user(username, password)
-            except ValueError as exc:
-                return render_template("login.html", error=str(exc), show_2fa=_totp_enabled())
-            except Exception:
-                # Non-fatal persistence error; continue without persisting.
-                pass
-
-            _session_set("authenticated", True)
-            with contextlib.suppress(Exception):
-                _session_set("username", username)
-            with contextlib.suppress(Exception):
-                _session_set("csrf_token", secrets.token_urlsafe(32))
-            if remember:
-                session.permanent = True
+            else:
+                # Credentials don't match persisted user
+                _handle_failed_auth(get_remote_address())
+                return render_template("login.html", error="Credentials did not match")
+        else:
+            # No persisted user: allow UI-driven creation (first-run setup)
+            if username and password:
+                if _totp_enabled() and not (totp_code and _verify_totp_code(totp_code)):
+                    _handle_failed_auth(get_remote_address())
+                    return render_template("login.html", error="Credentials did not match", show_2fa=_totp_enabled())
                 try:
-                    token = _create_remember_token(username)
-                    if token:
-                        resp = redirect(url_for("config_page"))
-                        resp.set_cookie("ua_remember", token, max_age=30 * 86400, httponly=True, secure=True, samesite="Lax")
-                        with suppress(Exception):
-                            _cleanup_duplicate_sessions(username)
-                        return resp
+                    auth_mod.create_user(username, password)
+                except ValueError as exc:
+                    return render_template("login.html", error=str(exc), show_2fa=_totp_enabled())
                 except Exception:
+                    # Non-fatal persistence error; continue without persisting.
                     pass
 
-            with suppress(Exception):
-                _cleanup_duplicate_sessions(username)
-            return redirect(url_for("config_page"))
-        return render_template("login.html", error="Credentials did not match")
+                _session_set("authenticated", True)
+                with contextlib.suppress(Exception):
+                    _session_set("username", username)
+                with contextlib.suppress(Exception):
+                    _session_set("csrf_token", secrets.token_urlsafe(32))
+                if remember:
+                    session.permanent = True
+                    try:
+                        token = _create_remember_token(username)
+                        if token:
+                            resp = redirect(url_for("config_page"))
+                            resp.set_cookie("ua_remember", token, max_age=30 * 86400, httponly=True, secure=True, samesite="Lax")
+                            with suppress(Exception):
+                                _cleanup_duplicate_sessions(username)
+                            return resp
+                    except Exception:
+                        pass
+
+                with suppress(Exception):
+                    _cleanup_duplicate_sessions(username)
+                return redirect(url_for("config_page"))
+            else:
+                # No username/password provided
+                _handle_failed_auth(get_remote_address())
+                return render_template("login.html", error="Credentials did not match")
 
     # Show 2FA field if enabled
     show_2fa = _totp_enabled()
     return render_template("login.html", show_2fa=show_2fa)
+
+
+@app.errorhandler(429)
+def _rate_limit_exceeded(_e):
+    # Return a minimal plain-text 429 response to avoid heavy template rendering.
+    return Response("Too many requests", status=429, mimetype="text/plain")
 
 
 @app.route("/logout", methods=["GET", "POST"])  # prefer POST from the UI
@@ -1778,19 +1830,14 @@ def twofa_status():
 def access_log_level_api():
     """Get or set the access logging level.
 
-    GET: returns current level.
+    GET: returns current level (no auth required for read).
     POST: set level (requires web session + CSRF).
 
     Valid levels: access_denied (default), access, disabled
     """
-    # Require authenticated web session for both GET and POST
-    if not _is_authenticated():
-        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
-
-    if access_logger is None:
-        return jsonify({"success": False, "error": "Access logging unavailable"}), 500
-
     if request.method == "GET":
+        if access_logger is None:
+            return jsonify({"success": False, "error": "Access logging unavailable"}), 500
         try:
             lvl = access_logger.get_level()
             return jsonify({"success": True, "level": lvl})
@@ -1802,6 +1849,9 @@ def access_log_level_api():
         return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
     if not _verify_csrf_header():
         return jsonify({"success": False, "error": "CSRF validation failed"}), 403
+
+    if access_logger is None:
+        return jsonify({"success": False, "error": "Access logging unavailable"}), 500
 
     data = request.json or {}
     level = data.get("level")
