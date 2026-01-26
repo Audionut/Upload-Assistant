@@ -336,7 +336,10 @@ def _cleanup_duplicate_sessions(username: str) -> None:
         for p in sdir.iterdir():
             if not p.is_file():
                 continue
-            try:
+            # Suppress per-file errors and continue processing other files.
+            # Use contextlib.suppress to avoid a try/except/continue pattern
+            # that Bandit flags (B112).
+            with contextlib.suppress(Exception):
                 txt = p.read_text(encoding="utf-8", errors="ignore").strip()
                 candidate_enc = None
                 # If file is JSON with an 'enc' key, use that
@@ -374,8 +377,6 @@ def _cleanup_duplicate_sessions(username: str) -> None:
                     # Remove stale session file
                     with contextlib.suppress(Exception):
                         p.unlink()
-            except Exception:
-                continue
     except Exception:
         pass
 

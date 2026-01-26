@@ -29,8 +29,10 @@ class EncryptionError(Exception):
     pass
 
 # Defaults and env var names
-ENV_SESSION_SECRET = "SESSION_SECRET"
-ENV_SESSION_SECRET_FILE = "SESSION_SECRET_FILE"
+# These are environment variable *names* and not actual secrets — suppress
+# Bandit's hardcoded-password detection for these constants (B105).
+ENV_SESSION_SECRET = "SESSION_SECRET"  # nosec B105
+ENV_SESSION_SECRET_FILE = "SESSION_SECRET_FILE"  # nosec B105
 
 
 def get_config_dir() -> Path:
