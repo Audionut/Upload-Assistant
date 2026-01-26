@@ -1700,20 +1700,29 @@ def logout():
     return resp
 
 
-@app.route("/login/recovery", methods=["POST"])
+@app.route("/login/recovery", methods=["GET", "POST"])
+@limiter.limit("10 per minute;100 per day", key_func=get_remote_address, error_message="Too many attempts, please try again later.")
 def login_recovery():
     """Handle login using a recovery code. This is a separate endpoint to
     keep recovery-code input distinct from strict 2FA inputs so password
     managers treat the 2FA input as a one-time code field.
     """
-    # removed env-backed saved_auth
+    # If GET, render the dedicated recovery page (minimal inputs)
+    if request.method == "GET":
+        return render_template("login_recovery.html", show_2fa=_totp_enabled())
+
+    # POST: process recovery code login
+    # Quick IP block check: short-circuit heavy work for known-bad IPs.
+    if not _is_ip_allowed(get_remote_address()):
+        return Response("Too many requests", status=429, mimetype="text/plain")
+
     username = request.form.get("username", "").strip()
     password = request.form.get("password", "").strip()
     recovery_code = request.form.get("recovery_code", "").strip()
     remember = request.form.get("remember") == "1"
 
     if not _totp_enabled():
-        return render_template("login.html", error="Recovery codes are not enabled", show_2fa=False)
+        return render_template("login_recovery.html", error="Recovery codes are not enabled", show_2fa=False)
 
     persisted = auth_mod.load_user()
     # If a persisted user exists, require those credentials + recovery code
@@ -1735,14 +1744,16 @@ def login_recovery():
                 except Exception:
                     pass
             return redirect(url_for("config_page"))
-        return render_template("login.html", error="Recovery code invalid", show_2fa=_totp_enabled())
+        # Failed recovery attempt -> record and show recovery page
+        _handle_failed_auth(get_remote_address())
+        return render_template("login_recovery.html", error="Recovery code invalid", show_2fa=_totp_enabled())
 
     # No persisted user: allow first-run creation with recovery-code flow
     if username and password and recovery_code and _consume_recovery_code(recovery_code):
         try:
             auth_mod.create_user(username, password)
         except ValueError as exc:
-            return render_template("login.html", error=str(exc), show_2fa=_totp_enabled())
+            return render_template("login_recovery.html", error=str(exc), show_2fa=_totp_enabled())
         except Exception:
             pass
 
@@ -1768,7 +1779,8 @@ def login_recovery():
             _cleanup_duplicate_sessions(username)
         return redirect(url_for("config_page"))
 
-    return render_template("login.html", error="Recovery code invalid", show_2fa=_totp_enabled())
+    _handle_failed_auth(get_remote_address())
+    return render_template("login_recovery.html", error="Recovery code invalid", show_2fa=_totp_enabled())
 
 
 @app.route("/config")

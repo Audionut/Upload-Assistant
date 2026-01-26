@@ -59,60 +59,8 @@
                     <div class="mt-4 border-t pt-4">
                         <div class="flex items-center justify-between">
                             <div class="text-sm text-gray-300">Have a recovery code instead?</div>
-                            <button id="show-recovery-btn" type="button" class="text-sm text-blue-400 hover:underline">Use recovery code</button>
+                            <a href="/login/recovery" class="text-sm text-blue-400 hover:underline">Go to recovery page</a>
                         </div>
-
-                        <div id="recovery-section" style="display:none" class="mt-4">
-                            <form method="post" action="/login/recovery" class="space-y-3">
-                                <div class="space-y-2">
-                                    <label class="flex items-center gap-2 text-sm leading-none font-medium select-none text-white" for="rec_username">Username</label>
-                                    <input id="rec_username" name="username" type="text" autocomplete="username" class="file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base" required>
-                                </div>
-                                <div class="space-y-2">
-                                    <label class="flex items-center gap-2 text-sm leading-none font-medium select-none text-white" for="rec_password">Password</label>
-                                    <input id="rec_password" name="password" type="password" autocomplete="current-password" class="file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base" required>
-                                </div>
-                                <div class="space-y-2">
-                                    <label class="flex items-center gap-2 text-sm leading-none font-medium select-none text-white" for="recovery_code">Recovery Code</label>
-                                    <input id="recovery_code" name="recovery_code" type="text" inputmode="text" maxlength="32" class="file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base" placeholder="Enter recovery code" required>
-                                </div>
-                                <div class="flex items-center space-x-2">
-                                    <input type="checkbox" id="rec_remember" name="remember" value="1" class="border-input dark:bg-input/30" />
-                                    <label class="flex items-center gap-2 select-none text-sm font-normal leading-none text-white" for="rec_remember">Remember me</label>
-                                </div>
-                                <button type="submit" class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-all cursor-pointer bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-10 rounded-md px-6 w-full bg-blue-600 text-white hover:bg-blue-700">Use recovery code</button>
-                            </form>
-                        </div>
-
-                        <script>
-                            (function(){
-                                const btn = document.getElementById('show-recovery-btn');
-                                const section = document.getElementById('recovery-section');
-                                if (!btn || !section) return;
-                                btn.addEventListener('click', function(){
-                                    const showing = section.style.display !== 'none';
-                                    if (showing) {
-                                        section.style.display = 'none';
-                                        btn.textContent = 'Use recovery code';
-                                    } else {
-                                        // Copy username/password from main form to recovery form to avoid retyping
-                                        try {
-                                            const mainUser = document.getElementById('username');
-                                            const mainPass = document.getElementById('password');
-                                            const recUser = document.getElementById('rec_username');
-                                            const recPass = document.getElementById('rec_password');
-                                            if (mainUser && recUser) recUser.value = mainUser.value || '';
-                                            if (mainPass && recPass) recPass.value = mainPass.value || '';
-                                        } catch (e) {}
-                                        section.style.display = '';
-                                        btn.textContent = 'Cancel';
-                                        // focus the recovery input
-                                        const rc = document.getElementById('recovery_code');
-                                        if (rc) rc.focus();
-                                    }
-                                });
-                            })();
-                        </script>
                     </div>
                     {% endif %}
                     <div class="flex items-center justify-end mt-6 px-1">
