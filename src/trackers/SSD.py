@@ -547,10 +547,16 @@ class SSD(COMMON):
             final_url = result.stdout.strip()
             
             if result.returncode == 0 and 'details.php?id=' in final_url:
-                print(f"[{self.tracker}] ✅ 上传成功！")
-                print(f"[{self.tracker}] 种子详情页: {final_url}")
+                if meta.get('debug', False):
+                    print(f"[{self.tracker}] ✅ 上传成功！")
+                    print(f"[{self.tracker}] 种子详情页: {final_url}")
                 torrent_id = re.search(r'id=(\d+)', final_url).group(1) if re.search(r'id=(\d+)', final_url) else None
-                meta['tracker_status'][self.tracker] = {'status': 'success', 'torrent_url': final_url, 'torrent_id': torrent_id}
+                meta['tracker_status'][self.tracker] = {
+                    'status': 'success',
+                    'status_message': 'Upload successful',
+                    'torrent_url': final_url,
+                    'torrent_id': torrent_id,
+                }
                 
                 if meta.get('debug', False):
                     print(f"[{self.tracker}] 🚧 DEBUG模式：跳过将种子添加到 qBittorrent 的步骤。")
@@ -560,10 +566,18 @@ class SSD(COMMON):
                 return True
             else:
                 print(f"[{self.tracker}] ❌ 上传失败。")
-                meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': f"curl failed with exit code {result.returncode}"}
+                meta['tracker_status'][self.tracker] = {
+                    'status': 'failed',
+                    'status_message': 'Upload failed',
+                    'reason': f"curl failed with exit code {result.returncode}",
+                }
                 return False
         except Exception as e:
             error_message = f"执行 curl 命令时发生 Python 错误: {e}"
             print(f"[{self.tracker}] ❌ {error_message}")
-            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': error_message}
+            meta['tracker_status'][self.tracker] = {
+                'status': 'failed',
+                'status_message': 'Upload failed',
+                'reason': error_message,
+            }
             return False
