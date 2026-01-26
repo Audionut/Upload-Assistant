@@ -266,6 +266,8 @@ const UploadIcon = () => (
 
 function AudionutsUAGUI() {
   const API_BASE = window.location.origin + '/api';
+  // Derive an application base path from the API base so links work under subpath deployments
+  const APP_BASE = API_BASE.replace(/\/api$/, '');
   
   const [directories, setDirectories] = useState([
     { name: 'data', type: 'folder', path: '/data', children: [] },
@@ -311,7 +313,10 @@ function AudionutsUAGUI() {
     const rootContainer = richOutputRef.current;
     if (!rootContainer) return;
     const el = document.createElement('div');
-    el.className = kind === 'error' ? 'text-red-400' : 'text-blue-300';
+    // Support multiple kinds: error, user-input, and default info
+    if (kind === 'error') el.className = 'text-red-400';
+    else if (kind === 'user-input') el.className = 'text-green-300';
+    else el.className = 'text-blue-300';
     el.style.whiteSpace = 'pre-wrap';
     el.textContent = text;
     rootContainer.appendChild(el);
@@ -329,7 +334,7 @@ function AudionutsUAGUI() {
     appendSystemMessage('> ' + input, 'user-input');
     setUserInput('');
     try {
-        await apiFetch('/api/input', {
+        await apiFetch(`${API_BASE}/input`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session_id, input }),
@@ -742,7 +747,7 @@ function AudionutsUAGUI() {
                   Upload Assistant Web UI
                 </h1>
                 <a
-                  href="/logout"
+                  href={`${APP_BASE}/logout`}
                   className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors bg-red-600 text-white hover:bg-red-700"
                 >
                   Logout
@@ -752,7 +757,7 @@ function AudionutsUAGUI() {
               {/* Controls */}
               <div className="flex items-center gap-3">
                 <a
-                  href="/config"
+                  href={`${APP_BASE}/config`}
                   className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors bg-blue-600 text-white hover:bg-blue-700"
                 >
                   View Config
