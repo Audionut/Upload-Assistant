@@ -137,7 +137,7 @@ def load_session_secret() -> bytes:
             except Exception:
                 return _ensure_min_length(txt.encode("utf-8"))
         except Exception:
-            pass
+            raise OSError("failed to read existing session_secret file; not overwriting existing secret") from None
 
     # Generate and persist
     try:
@@ -382,20 +382,22 @@ def get_totp_secret() -> Optional[str]:
 def set_totp_secret(secret: Optional[str]) -> None:
     # Read raw file, update extras, re-encrypt
     path = _get_user_file()
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    if path.exists():
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            raise OSError("failed to read existing user file; aborting to avoid overwriting encrypted data") from None
+    else:
         raw = {}
     extras = {}
-    try:
-        extras_enc = raw.get("extras_enc")
-        if extras_enc:
-            key = _get_master_key()
-            dec = decrypt_text(key, extras_enc)
-            if dec:
-                extras = json.loads(dec)
-    except Exception:
-        extras = {}
+    extras_enc = raw.get("extras_enc")
+    if extras_enc:
+        # If an encrypted extras blob exists, require successful decryption
+        key = _get_master_key()
+        dec = decrypt_text(key, extras_enc)
+        if not dec:
+            raise EncryptionError("failed to decrypt existing extras_enc; aborting write to preserve data")
+        extras = json.loads(dec)
 
     # Pack/unpack with per-field keys
     # Pack/unpack with per-field keys; let encryption errors propagate
@@ -427,20 +429,22 @@ def get_recovery_hashes() -> list[str]:
 
 def set_recovery_hashes(hashes: list[str]) -> None:
     path = _get_user_file()
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    if path.exists():
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            raise OSError("failed to read existing user file; aborting to avoid overwriting encrypted data") from None
+    else:
         raw = {}
     extras = {}
-    try:
-        extras_enc = raw.get("extras_enc")
-        if extras_enc:
-            key = derive_aes_key(load_session_secret())
-            dec = decrypt_text(key, extras_enc)
-            if dec:
-                extras = json.loads(dec)
-    except Exception:
-        extras = {}
+    extras_enc = raw.get("extras_enc")
+    if extras_enc:
+        # If an encrypted extras blob exists, require successful decryption
+        key = derive_aes_key(load_session_secret())
+        dec = decrypt_text(key, extras_enc)
+        if not dec:
+            raise EncryptionError("failed to decrypt existing extras_enc; aborting write to preserve data")
+        extras = json.loads(dec)
 
     _pack_field(extras, "recovery_hashes", json.dumps(hashes, separators=(",",":"), ensure_ascii=False))
 
@@ -469,20 +473,22 @@ def get_api_tokens() -> dict:
 
 def set_api_tokens(store: dict) -> None:
     path = _get_user_file()
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    if path.exists():
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            raise OSError("failed to read existing user file; aborting to avoid overwriting encrypted data") from None
+    else:
         raw = {}
     extras = {}
-    try:
-        extras_enc = raw.get("extras_enc")
-        if extras_enc:
-            key = derive_aes_key(load_session_secret())
-            dec = decrypt_text(key, extras_enc)
-            if dec:
-                extras = json.loads(dec)
-    except Exception:
-        extras = {}
+    extras_enc = raw.get("extras_enc")
+    if extras_enc:
+        # If an encrypted extras blob exists, require successful decryption
+        key = derive_aes_key(load_session_secret())
+        dec = decrypt_text(key, extras_enc)
+        if not dec:
+            raise EncryptionError("failed to decrypt existing extras_enc; aborting write to preserve data")
+        extras = json.loads(dec)
 
     _pack_field(extras, "api_tokens", json.dumps(store, separators=(",",":"), ensure_ascii=False))
 
