@@ -6,6 +6,7 @@ import contextlib
 import hashlib
 import hmac
 import json
+import time
 import os
 import queue
 import re
@@ -261,22 +262,39 @@ def _set_ip_blacklist(ips: list[str]) -> None:
         pass
 
 
-def _get_ip_failures() -> dict[str, int]:
-    """Get the dict of IP failure counts."""
+def _get_ip_failures() -> dict[str, list[int]]:
+    """Get the dict of IP failure timestamps.
+
+    Returns a mapping of `ip -> list[int]` (UNIX timestamps). For backward
+    compatibility any integer legacy counts are converted into recent
+    timestamps so they behave as recent failures.
+    """
     try:
         path = cfg_dir / "webui_auth.json"
         if path.exists():
             data = json.loads(path.read_text(encoding="utf-8"))
             val = data.get("ip_failures")
             if isinstance(val, dict):
-                return val
+                now = int(time.time())
+                out: dict[str, list[int]] = {}
+                for k, v in val.items():
+                    if isinstance(v, list):
+                        # Coerce list members to ints and filter invalid
+                        try:
+                            out[k] = [int(x) for x in v]
+                        except Exception:
+                            out[k] = []
+                    elif isinstance(v, int):
+                        # Legacy count: treat as recent failures
+                        out[k] = [now] * v
+                return out
     except Exception:
         pass
     return {}
 
 
-def _set_ip_failures(failures: dict[str, int]) -> None:
-    """Set the dict of IP failure counts."""
+def _set_ip_failures(failures: dict[str, list[int]]) -> None:
+    """Set the dict of IP failure timestamps (ip -> list[timestamps])."""
     try:
         path = cfg_dir / "webui_auth.json"
         data = {}
@@ -311,13 +329,21 @@ def _is_ip_allowed(ip: str) -> bool:
 
 def _handle_failed_auth(ip: str) -> None:
     """Handle failed authentication attempt. Track failures and blacklist if too many."""
+    # Configuration: threshold and window (seconds)
+    FAILURE_THRESHOLD = 5
+    FAILURE_WINDOW = 300  # 5 minutes
+
     failures = _get_ip_failures()
-    count = failures.get(ip, 0) + 1
-    failures[ip] = count
+    now = int(time.time())
+    pts = failures.get(ip, [])
+    # Prune old entries outside the window and append current timestamp
+    pts = [t for t in pts if t >= now - FAILURE_WINDOW]
+    pts.append(now)
+    failures[ip] = pts
     _set_ip_failures(failures)
 
-    # Blacklist after 5 failed attempts
-    if count >= 5:
+    # Blacklist if threshold exceeded within window
+    if len(pts) >= FAILURE_THRESHOLD:
         blacklist = _get_ip_blacklist()
         if ip not in blacklist:
             blacklist.append(ip)
