@@ -547,8 +547,9 @@ class SSD(COMMON):
             final_url = result.stdout.strip()
             
             if result.returncode == 0 and 'details.php?id=' in final_url:
-                print(f"[{self.tracker}] ✅ 上传成功！")
-                print(f"[{self.tracker}] 种子详情页: {final_url}")
+                if meta.get('debug', False):
+                    print(f"[{self.tracker}] ✅ 上传成功！")
+                    print(f"[{self.tracker}] 种子详情页: {final_url}")
                 torrent_id = re.search(r'id=(\d+)', final_url).group(1) if re.search(r'id=(\d+)', final_url) else None
                 meta['tracker_status'][self.tracker] = {
                     'status': 'success',

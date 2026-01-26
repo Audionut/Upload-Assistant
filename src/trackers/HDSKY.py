@@ -18,6 +18,7 @@ class HDSKY:
         self.tracker = 'HDSKY'
         self.source_flag = 'HDSKY'
         self.passkey = str(config['TRACKERS'].get('HDSKY', {}).get('passkey', '')).strip()
+        self.torrent_url = "https://hdsky.me/details.php?id="
         self.announce_url = str(
             config['TRACKERS'].get('HDSKY', {}).get('announce_url', 'https://tracker.hdsky.me/announce.php')
         ).strip()
@@ -292,7 +293,6 @@ class HDSKY:
 
                 if success_match:
                     new_id = success_match.group(1)
-                    console.print(f"[green]Uploaded to HDSKY! [yellow]https://hdsky.me/details.php?id={new_id}[/yellow][/green]")
                     if "tracker_status" not in meta:
                         meta["tracker_status"] = {}
                     meta["tracker_status"][self.tracker] = {"upload": True, "torrent_id": new_id, "status_message": "Success"}
