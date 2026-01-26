@@ -148,9 +148,9 @@ def load_session_secret() -> bytes:
             # Tighten permissions when possible
             os.chmod(secret_file, 0o600)
         return b
-    except Exception:
-        # Last-resort ephemeral
-        return token_bytes(64)
+    except Exception as e:
+        log.error("failed to persist session secret: %s", e)
+        raise OSError("failed to persist session secret; check storage permissions and availability") from e
 
 
 def derive_aes_key(session_secret: bytes) -> bytes:
