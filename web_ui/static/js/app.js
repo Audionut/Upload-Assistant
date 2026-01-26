@@ -265,6 +265,36 @@ const UploadIcon = () => (
   </svg>
 );
 
+const ChevronDownIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+  </svg>
+);
+
+const ChevronRightIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+  </svg>
+);
+
+const SearchIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+  </svg>
+);
+
+const CollapseAllIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+  </svg>
+);
+
+const ExpandAllIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+  </svg>
+);
+
 function AudionutsUAGUI() {
   const API_BASE = window.location.origin + '/api';
   // Derive an application base path from the API base so links work under subpath deployments
@@ -288,6 +318,8 @@ function AudionutsUAGUI() {
   const [isResizingRight, setIsResizingRight] = useState(false);
   const [userInput, setUserInput] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(getStoredTheme);
+  const [argSearchFilter, setArgSearchFilter] = useState('');
+  const [collapsedSections, setCollapsedSections] = useState(new Set());
   
   const richOutputRef = useRef(null);
   const lastFullHashRef = useRef('');
@@ -711,6 +743,57 @@ function AudionutsUAGUI() {
     setCustomArgs((prev) => (prev && prev.length ? `${prev} ${arg}` : arg));
   };
 
+  // Toggle section collapse
+  const toggleSectionCollapse = (title) => {
+    setCollapsedSections((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(title)) {
+        newSet.delete(title);
+      } else {
+        newSet.add(title);
+      }
+      return newSet;
+    });
+  };
+
+  // Collapse all sections
+  const collapseAllSections = () => {
+    setCollapsedSections(new Set(argumentCategories.map((cat) => cat.title)));
+  };
+
+  // Expand all sections
+  const expandAllSections = () => {
+    setCollapsedSections(new Set());
+  };
+
+  // Filter argument categories based on search
+  const getFilteredCategories = () => {
+    if (!argSearchFilter.trim()) {
+      return argumentCategories;
+    }
+    const searchLower = argSearchFilter.toLowerCase();
+    return argumentCategories
+      .map((cat) => {
+        const filteredArgs = cat.args.filter(
+          (a) =>
+            a.label.toLowerCase().includes(searchLower) ||
+            (a.description && a.description.toLowerCase().includes(searchLower)) ||
+            (a.placeholder && a.placeholder.toLowerCase().includes(searchLower))
+        );
+        if (filteredArgs.length > 0) {
+          return { ...cat, args: filteredArgs };
+        }
+        // Also include category if title matches
+        if (cat.title.toLowerCase().includes(searchLower)) {
+          return cat;
+        }
+        return null;
+      })
+      .filter(Boolean);
+  };
+
+  const filteredCategories = getFilteredCategories();
+
   return (
     <div className={`flex h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} overflow-hidden`}>
       {/* Left Sidebar - Resizable */}
@@ -889,43 +972,129 @@ function AudionutsUAGUI() {
             Arguments
           </h2>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-4">
-          {argumentCategories.map((cat) => (
-            <div key={cat.title}>
-              <div>
-                <div className={`text-lg font-bold mb-1 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{cat.title}</div>
-                {cat.subtitle && (
-                  <div className={`text-sm mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-500'}`}>{cat.subtitle}</div>
-                )}
-              </div>
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-2">
-                {cat.args.map((a) => (
-                  <div
-                    key={a.label}
-                    className={`w-full p-2 rounded-lg border ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <button
-                        onClick={() => addArgument(a.label)}
-                        disabled={isExecuting}
-                        className={`px-3 py-1 text-sm font-mono rounded-md border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white hover:bg-purple-600 hover:text-white' : 'bg-white border-gray-200 text-gray-800 hover:bg-purple-600 hover:text-white'} transition-colors`}
-                      >
-                        {a.label}
-                      </button>
-                      <div className="flex-1 text-right">
-                        {a.placeholder && (
-                          <div className={`text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-500'} font-mono`}>{a.placeholder}</div>
-                        )}
-                      </div>
+        
+        {/* Search and Collapse Controls */}
+        <div className={`p-3 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'} space-y-2`}>
+          {/* Search Input */}
+          <div className="relative">
+            <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              <SearchIcon />
+            </div>
+            <input
+              type="text"
+              value={argSearchFilter}
+              onChange={(e) => setArgSearchFilter(e.target.value)}
+              placeholder="Search arguments..."
+              className={`w-full pl-10 pr-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
+                isDarkMode 
+                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+              }`}
+            />
+            {argSearchFilter && (
+              <button
+                onClick={() => setArgSearchFilter('')}
+                className={`absolute inset-y-0 right-0 pr-3 flex items-center ${isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          
+          {/* Collapse/Expand All Buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={collapseAllSections}
+              className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                isDarkMode 
+                  ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600' 
+                  : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <CollapseAllIcon />
+              Collapse All
+            </button>
+            <button
+              onClick={expandAllSections}
+              className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                isDarkMode 
+                  ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600' 
+                  : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <ExpandAllIcon />
+              Expand All
+            </button>
+          </div>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {filteredCategories.length === 0 ? (
+            <div className={`text-center py-8 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              <p className="text-sm">No arguments found matching "{argSearchFilter}"</p>
+            </div>
+          ) : (
+            filteredCategories.map((cat) => (
+              <div key={cat.title} className={`rounded-lg border ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                {/* Collapsible Section Header */}
+                <button
+                  onClick={() => toggleSectionCollapse(cat.title)}
+                  className={`w-full flex items-center justify-between p-3 text-left transition-colors rounded-t-lg ${
+                    isDarkMode 
+                      ? 'hover:bg-gray-700' 
+                      : 'hover:bg-gray-50'
+                  } ${collapsedSections.has(cat.title) ? 'rounded-b-lg' : ''}`}
+                >
+                  <div className="flex-1">
+                    <div className={`text-sm font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'} flex items-center gap-2`}>
+                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>
+                        {collapsedSections.has(cat.title) ? <ChevronRightIcon /> : <ChevronDownIcon />}
+                      </span>
+                      {cat.title}
+                      <span className={`text-xs font-normal px-1.5 py-0.5 rounded ${isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500'}`}>
+                        {cat.args.length}
+                      </span>
                     </div>
-                    {a.description && (
-                      <div className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{a.description}</div>
+                    {cat.subtitle && !collapsedSections.has(cat.title) && (
+                      <div className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{cat.subtitle}</div>
                     )}
                   </div>
-                ))}
+                </button>
+                
+                {/* Collapsible Section Content */}
+                {!collapsedSections.has(cat.title) && (
+                  <div className={`px-3 pb-3 space-y-2 ${isDarkMode ? 'border-t border-gray-700' : 'border-t border-gray-200'}`}>
+                    {cat.args.map((a) => (
+                      <div
+                        key={a.label}
+                        className={`w-full p-2 rounded-lg border ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <button
+                            onClick={() => addArgument(a.label)}
+                            disabled={isExecuting}
+                            className={`px-3 py-1 text-sm font-mono rounded-md border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white hover:bg-purple-600 hover:text-white' : 'bg-white border-gray-200 text-gray-800 hover:bg-purple-600 hover:text-white'} transition-colors`}
+                          >
+                            {a.label}
+                          </button>
+                          <div className="flex-1 text-right">
+                            {a.placeholder && (
+                              <div className={`text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-500'} font-mono`}>{a.placeholder}</div>
+                            )}
+                          </div>
+                        </div>
+                        {a.description && (
+                          <div className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{a.description}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>
