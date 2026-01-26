@@ -257,13 +257,33 @@ jobs:
             }
 
             let output = '';
+            // Derive a human-friendly tool label from the artifact prefix
+            const toolLabelMap = {
+              'bandit-results': 'Bandit',
+              'safety-results': 'Safety',
+              'pyright-results': 'Pyright',
+              'ruff-results': 'Ruff',
+              'deprecation-warnings': 'Deprecation Warnings'
+            };
+            const toolLabel = toolLabelMap[prefix] || prefix.replace(/-(results|warnings)$/i, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
             for (const [canon, entry] of byCanonical.entries()) {
-              const versions = entry.versions.sort((a, b) => parseFloat(a) - parseFloat(b));
+              // Sort versions using localeCompare with numeric collation so
+              // versions like 3.10 sort after 3.9 correctly.
+              const versions = entry.versions.sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'}));
               const display = entry.original;
-              if (versions.length === 1) {
-                output += `=== Python ${versions[0]} ===\n${display}\n\n`;
+
+              // Detect merged-only entries: when the single "version" is a
+              // non-numeric marker (for example the merged file named
+              // `${prefix}.txt` produces a version equal to the prefix).
+              const mergedOnly = (versions.length === 1) && (!/\d/.test(versions[0]) || versions[0] === prefix);
+
+              if (mergedOnly) {
+                output += `=== Python (merged-only) ===\n${display}\n\n`;
+              } else if (versions.length === 1) {
+                output += `=== Python ${versions[0]} — ${toolLabel} ===\n${display}\n\n`;
               } else {
-                output += `=== Python ${versions.join(', ')} (identical results) ===\n${display}\n\n`;
+                output += `=== Python ${versions.join(', ')} (identical results) — ${toolLabel} ===\n${display}\n\n`;
               }
             }
             return output;
