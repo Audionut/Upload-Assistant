@@ -2120,6 +2120,167 @@ function SecurityTab({ isDarkMode }) {
   );
 }
 
+function AccessLogTab({ isDarkMode }) {
+  const [level, setLevel] = useState('access_denied');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [logEntries, setLogEntries] = useState([]);
+  const [logLoading, setLogLoading] = useState(false);
+
+  useEffect(() => {
+    loadLevel();
+    loadLogEntries();
+  }, []);
+
+  const loadLevel = async () => {
+    try {
+      const response = await apiFetch(`${API_BASE}/access_log/level`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      if (data && data.success) {
+        setLevel(data.level || 'access_denied');
+      } else {
+        setMessage(data.error || 'Failed to load level');
+      }
+    } catch (error) {
+      setMessage('Failed to load current level');
+    }
+  };
+
+  const loadLogEntries = async () => {
+    setLogLoading(true);
+    try {
+      const response = await apiFetch(`${API_BASE}/access_log/entries?n=50`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      if (data && data.success) {
+        setLogEntries(data.entries || []);
+      } else {
+        console.warn('Failed to load log entries:', data.error);
+      }
+    } catch (error) {
+      console.warn('Failed to load log entries:', error);
+    }
+    setLogLoading(false);
+  };
+
+  const handleSave = async () => {
+    setLoading(true);
+    setMessage('');
+    try {
+      const response = await apiFetch(`${API_BASE}/access_log/level`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level })
+      });
+      const data = await response.json();
+      if (data && data.success) {
+        setMessage('Saved.');
+        // Refresh log entries to show the change
+        loadLogEntries();
+      } else {
+        setMessage(data.error || 'Save failed');
+      }
+    } catch (error) {
+      setMessage('Save failed');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className={`rounded-lg border p-6 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+      <h2 className={`text-xl font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Access Log Settings</h2>
+      <p className={`text-sm mb-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+        Control what the Web UI logs. Default is <code className={`px-1 rounded ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>access_denied</code> (only failed API attempts). Choose <code className={`px-1 rounded ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>disabled</code> to turn off all logging.
+      </p>
+
+      <div className="mb-4">
+        <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>Level</label>
+        <select
+          value={level}
+          onChange={(e) => setLevel(e.target.value)}
+          className={`mt-1 block w-full rounded-md border px-3 py-2 text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+        >
+          <option value="access_denied">access_denied (failed attempts only)</option>
+          <option value="access">access (log all API accesses)</option>
+          <option value="disabled">disabled (no logging)</option>
+        </select>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={handleSave}
+          disabled={loading}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+        >
+          {loading ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+
+      {message && (
+        <div className={`mt-4 text-sm ${message === 'Saved.' ? 'text-green-600' : 'text-red-600'}`}>
+          {message}
+        </div>
+      )}
+
+      {/* Access Log Display */}
+      <div className="mt-6">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Recent Access Log</h3>
+          <button
+            onClick={loadLogEntries}
+            disabled={logLoading}
+            className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50 text-sm"
+          >
+            {logLoading ? 'Loading...' : 'Refresh'}
+          </button>
+        </div>
+        <div className={`p-3 rounded border ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+          {logLoading ? (
+            <div className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Loading log entries...</div>
+          ) : logEntries.length === 0 ? (
+            <div className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>No log entries found.</div>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {logEntries.map((entry, index) => (
+                <div key={index} className={`p-2 rounded text-xs ${isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-50 text-gray-800'}`}>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <span className={`font-medium ${entry.success ? 'text-green-600' : 'text-red-600'}`}>
+                        {entry.method} {entry.endpoint}
+                      </span>
+                      <span className="ml-2 text-gray-500">
+                        {entry.user || 'anonymous'} @ {entry.remote_addr || 'unknown'}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-gray-500">
+                        {new Date(entry.timestamp).toLocaleString()}
+                      </div>
+                      <div className={`text-xs ${entry.success ? 'text-green-600' : 'text-red-600'}`}>
+                        {entry.status} {entry.success ? '✓' : '✗'}
+                      </div>
+                    </div>
+                  </div>
+                  {entry.details && (
+                    <div className="mt-1 text-gray-600 text-xs">
+                      {entry.details}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConfigApp() {
   const [sections, setSections] = useState([]);
   // Keep a ref to the latest sections to avoid stale closures inside async loaders
@@ -2546,6 +2707,20 @@ function ConfigApp() {
                 >
                   Security
                 </button>
+                <button
+                  onClick={() => setActiveTab('access-log')}
+                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                    activeTab === 'access-log'
+                      ? isDarkMode
+                        ? 'bg-gray-700 text-white'
+                        : 'bg-white text-gray-900 shadow-sm'
+                      : isDarkMode
+                        ? 'text-gray-400 hover:text-white hover:bg-gray-700'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+                  }`}
+                >
+                  Access Log
+                </button>
                 {sections.map((section) => {
                   const sectionId = section.section.toLowerCase();
                   const isActive = activeTab === sectionId;
@@ -2578,6 +2753,7 @@ function ConfigApp() {
               {/* Tab Content */}
               <div className="space-y-4">
                 {activeTab === 'security' && <SecurityTab isDarkMode={isDarkMode} />}
+                {activeTab === 'access-log' && <AccessLogTab isDarkMode={isDarkMode} />}
                 {sections.map((section) => {
                   const sectionId = section.section.toLowerCase();
                   if (activeTab !== sectionId) return null;

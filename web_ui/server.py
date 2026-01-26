@@ -39,6 +39,14 @@ from src.console import console
 cfg_dir = auth_mod.get_config_dir()
 cfg_dir.mkdir(parents=True, exist_ok=True)
 
+# Access logging helper
+try:
+    from web_ui.access_log import AccessLogger
+except Exception:
+    AccessLogger = None
+
+access_logger = AccessLogger(cfg_dir) if AccessLogger is not None else None
+
 # Helper: simple file-backed config store under the auth config dir. Values
 # are stored as raw text. This replaces OS keyring usage and allows Docker
 # and non-Docker deployments to persist credentials via the configured
@@ -627,6 +635,13 @@ def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
             return None
         # Or session auth
         if _is_authenticated():
+            # Set username in g for logging if available
+            try:
+                username = _session_get("username")
+                if username:
+                    g.username = username
+            except Exception:
+                pass
             return None
         # If request accepts HTML (browser), redirect to login; else 401 for API clients
         if "text/html" in request.headers.get("Accept", ""):
@@ -635,6 +650,13 @@ def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
 
     # For web routes
     if _is_authenticated():
+        # Set username in g for logging if available
+        try:
+            username = _session_get("username")
+            if username:
+                g.username = username
+        except Exception:
+            pass
         return None
     if _webui_auth_configured() and _webui_auth_ok():
         return None
@@ -642,6 +664,67 @@ def _require_auth_for_webui():  # pyright: ignore[reportUnusedFunction]
         return redirect(url_for("login_page"))
 
     return None
+
+
+@app.after_request
+def _maybe_log_api_access(response):
+    """Log API access attempts according to configured level.
+
+    By default only non-successful API attempts are logged (level: access_denied).
+    When level=access all accesses are logged.
+    When level=disabled no logging occurs.
+    """
+    try:
+        if access_logger is None:
+            return response
+
+        path = request.path or ""
+        if not path.startswith("/api/"):
+            return response
+
+        status = getattr(response, "status_code", 500)
+        success = 200 <= int(status) < 300
+        if not access_logger.should_log(success):
+            return response
+
+        # Determine username if available
+        user = None
+        try:
+            # First try authenticated user
+            user = getattr(g, "username", None) or _session_get("username")
+            
+            # For failed auth attempts, try to extract attempted username
+            if user is None and not success:
+                # Check Basic auth
+                if request.authorization and request.authorization.username:
+                    user = f"{request.authorization.username} (basic auth)"
+                # Check form data (login attempts)
+                elif request.method == "POST" and request.form.get("username"):
+                    user = f"{request.form.get('username')} (login attempt)"
+                # Check Bearer token (even if invalid, might give us a hint)
+                elif request.headers.get("Authorization", "").startswith("Bearer "):
+                    user = "bearer token attempt"
+        except Exception:
+            user = None
+
+        # Minimal headers for context
+        headers = {k: v for k, v in request.headers.items()} if request.headers else None
+
+        remote = request.remote_addr or request.environ.get('REMOTE_ADDR')
+
+        access_logger.log(
+            endpoint=path,
+            method=request.method,
+            remote_addr=remote,
+            username=user,
+            success=success,
+            status=int(status),
+            headers=headers,
+            details=None,
+        )
+    except Exception:
+        pass
+    return response
 
 
 def _totp_enabled() -> bool:
@@ -793,7 +876,7 @@ def _write_audit_log(action: str, path: list[str], old_value: Any, new_value: An
         audit_path = base_dir / "data" / "config_audit.log"
         # Determine acting user: session -> Basic auth username -> persisted user -> remote_addr
         persisted = auth_mod.load_user()
-        user = session.get("username") or (request.authorization.username if request.authorization else None) or (persisted.get("username") if persisted else None) or request.remote_addr
+        user = _session_get("username") or (request.authorization.username if request.authorization else None) or (persisted.get("username") if persisted else None) or request.remote_addr
         # Redact sensitive fields from values before serializing to the audit log.
         audit = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -1554,6 +1637,10 @@ def health():
 @app.route("/api/csrf_token")
 def csrf_token():
     """Return the per-session CSRF token for use by the frontend."""
+    # Require authenticated web session for CSRF token access
+    if not _is_authenticated():
+        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+
     try:
         token = _session_get("csrf_token") or ""
         return jsonify({"csrf_token": token, "success": True})
@@ -1566,7 +1653,81 @@ def csrf_token():
 @app.route("/api/2fa/status")
 def twofa_status():
     """Check 2FA status"""
+    # Require authenticated web session for 2FA status
+    if not _is_authenticated():
+        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+
     return jsonify({"enabled": _totp_enabled(), "success": True})
+
+
+@app.route("/api/access_log/level", methods=["GET", "POST"])
+def access_log_level_api():
+    """Get or set the access logging level.
+
+    GET: returns current level.
+    POST: set level (requires web session + CSRF).
+
+    Valid levels: access_denied (default), access, disabled
+    """
+    # Require authenticated web session for both GET and POST
+    if not _is_authenticated():
+        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+
+    if access_logger is None:
+        return jsonify({"success": False, "error": "Access logging unavailable"}), 500
+
+    if request.method == "GET":
+        try:
+            lvl = access_logger.get_level()
+            return jsonify({"success": True, "level": lvl})
+        except Exception:
+            return jsonify({"success": False, "error": "Failed to read level"}), 500
+
+    # POST: require authenticated web session and CSRF
+    if not _is_authenticated():
+        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+    if not _verify_csrf_header():
+        return jsonify({"success": False, "error": "CSRF validation failed"}), 403
+
+    data = request.json or {}
+    level = data.get("level")
+    if not isinstance(level, str) or level not in ("access_denied", "access", "disabled"):
+        return jsonify({"success": False, "error": "Invalid level"}), 400
+
+    ok = access_logger.set_level(level)
+    if ok:
+        return jsonify({"success": True, "level": level})
+    return jsonify({"success": False, "error": "Failed to persist level"}), 500
+
+
+@app.route("/api/access_log/entries", methods=["GET"])
+def access_log_entries_api():
+    """Get recent access log entries.
+
+    GET: returns recent log entries (requires web session).
+    Query params: n (number of entries, default 50, max 200)
+    """
+    # Require authenticated web session
+    if not _is_authenticated():
+        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+
+    if access_logger is None:
+        return jsonify({"success": False, "error": "Access logging unavailable"}), 500
+
+    try:
+        n = request.args.get('n', '50')
+        n = int(n)
+        if n < 1 or n > 200:
+            n = 50
+    except (ValueError, TypeError):
+        n = 50
+
+    try:
+        entries = access_logger.tail(n)
+        return jsonify({"success": True, "entries": entries})
+    except Exception:
+        return jsonify({"success": False, "error": "Failed to read log entries"}), 500
+
 
 
 @app.route("/api/2fa/setup", methods=["POST"])
@@ -1580,7 +1741,7 @@ def twofa_setup():
 
     # Get username for QR code: prefer session, then persisted user, else generic
     persisted = auth_mod.load_user()
-    username = session.get("username") or (persisted.get("username") if persisted else "user")
+    username = _session_get("username") or (persisted.get("username") if persisted else "user")
 
     # Generate secret and provisioning URI using pyotp
     secret = pyotp.random_base32()
