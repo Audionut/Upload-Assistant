@@ -420,6 +420,9 @@ def _cleanup_duplicate_sessions(username: str) -> None:
 # Supported video file extensions for WebUI file browser
 SUPPORTED_VIDEO_EXTS = {'.mkv', '.mp4', '.ts'}
 
+# Supported description file extensions for WebUI description file browser
+SUPPORTED_DESC_EXTS = {'.txt', '.nfo', '.md'}
+
 # Lock to prevent concurrent in-process uploads (avoids cross-session interference)
 inproc_lock = threading.Lock()
 
@@ -2539,6 +2542,73 @@ def browse_path():
 
     except Exception as e:
         console.print(f"Error browsing {path}: {e}", markup=False)
+        console.print(traceback.format_exc(), markup=False)
+        return jsonify({"error": "Error browsing path", "success": False}), 500
+
+
+@app.route("/api/browse_desc")
+def browse_desc_path():
+    """Browse filesystem paths for description files (txt, nfo, md)
+    
+    Shows all folders (for navigation) and only description files.
+    """
+    requested = request.args.get("path", "")
+    try:
+        path = _resolve_browse_path(requested)
+    except ValueError as e:
+        # Log details server-side, but avoid leaking paths/internal details to clients.
+        console.print(f"Path resolution error for requested {requested!r}: {e}", markup=False)
+        return jsonify({"error": "Invalid path specified", "success": False}), 400
+
+    console.print(f"Browsing description files path: {path}", markup=False)
+
+    try:
+        items: list[BrowseItem] = []
+        try:
+            for item in sorted(os.listdir(path)):
+                # Skip hidden files
+                if item.startswith("."):
+                    continue
+
+                full_path = os.path.join(path, item)
+                try:
+                    is_dir = os.path.isdir(full_path)
+
+                    # Always show folders for navigation
+                    # For files, only show supported description formats
+                    if not is_dir:
+                        _, ext = os.path.splitext(item.lower())
+                        if ext not in SUPPORTED_DESC_EXTS:
+                            continue
+
+                    items.append({"name": item, "path": full_path, "type": "folder" if is_dir else "file", "children": [] if is_dir else None})
+                except (PermissionError, OSError):
+                    continue
+
+            console.print(f"Found {len(items)} description items in {path}", markup=False)
+
+        except PermissionError:
+            console.print(f"Error: Permission denied: {path}", markup=False)
+            return jsonify({"error": "Permission denied", "success": False}), 403
+
+        # If caller used a bearer token, require it to be valid. Valid bearer
+        # tokens are allowed without CSRF since they are intended for programmatic
+        # access. Otherwise require an authenticated web session + CSRF + same-origin.
+        bearer = _get_bearer_from_header()
+        if bearer:
+            if not _token_is_valid(bearer):
+                return jsonify({"success": False, "error": "Forbidden (invalid token)"}), 403
+        else:
+            # Require session-based callers to be authenticated and provide CSRF + Origin
+            if not _is_authenticated():
+                return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+            if not _verify_csrf_header() or not _verify_same_origin():
+                return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+
+        return jsonify({"items": items, "success": True, "path": path, "count": len(items)})
+
+    except Exception as e:
+        console.print(f"Error browsing description files {path}: {e}", markup=False)
         console.print(traceback.format_exc(), markup=False)
         return jsonify({"error": "Error browsing path", "success": False}), 500
 

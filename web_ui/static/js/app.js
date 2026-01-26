@@ -105,8 +105,8 @@ const argumentCategories = [
   {
     title: "Description / NFO",
     args: [
-      { label: "--desclink", placeholder: "URL", description: "Custom description link" },
-      { label: "--descfile", placeholder: "PATH", description: "Custom description file" },
+      { label: "--desclink", placeholder: "PASTE_URL", description: "Link to pastebin/hastebin with description" },
+      { label: "--descfile", placeholder: "FILE_PATH", description: "Path to description file (.txt, .nfo, .md)" },
       { label: "--nfo", description: "Use .nfo for description" }
     ]
   },
@@ -321,10 +321,164 @@ function AudionutsUAGUI() {
   const [argSearchFilter, setArgSearchFilter] = useState('');
   const [collapsedSections, setCollapsedSections] = useState(new Set());
   
+  // Description file/link states
+  const [descDirectories, setDescDirectories] = useState([]);
+  const [descExpandedFolders, setDescExpandedFolders] = useState(new Set());
+  const [descLinkError, setDescLinkError] = useState('');
+  const [descFileError, setDescFileError] = useState('');
+  
   const richOutputRef = useRef(null);
   const lastFullHashRef = useRef('');
   const inputRef = useRef(null);
   const sseAbortControllerRef = useRef(null);
+  
+  // Detect if --descfile or --desclink is present in arguments
+  const hasDescFile = customArgs.includes('--descfile');
+  const hasDescLink = customArgs.includes('--desclink');
+  
+  // URL validation helper - accepts pastebin, hastebin, and similar paste services
+  const isValidPasteUrl = (string) => {
+    try {
+      const url = new URL(string);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        return false;
+      }
+      // Common paste services
+      const validHosts = [
+        'pastebin.com', 'www.pastebin.com',
+        'hastebin.com', 'www.hastebin.com',
+        'paste.ee', 'dpaste.com', 'paste.debian.net',
+        'gist.github.com', 'ghostbin.com',
+        'rentry.co', 'rentry.org',
+        'privatebin.net', 'bin.disroot.org'
+      ];
+      // Check if it's a known paste service or any valid URL (some trackers host their own)
+      return validHosts.some(host => url.hostname.includes(host)) || url.pathname.length > 1;
+    } catch (_) {
+      return false;
+    }
+  };
+  
+  // Path validation helper - checks if string looks like a valid file path
+  const isValidDescFilePath = (path) => {
+    if (!path || path.trim() === '') return { valid: false, error: '' };
+    
+    const trimmed = path.trim();
+    
+    // Check for valid description file extensions
+    const validExtensions = ['.txt', '.nfo', '.md'];
+    const hasValidExt = validExtensions.some(ext => trimmed.toLowerCase().endsWith(ext));
+    
+    // Check if it looks like a path (has separators or starts with drive letter/root)
+    const hasPathSeparator = trimmed.includes('/') || trimmed.includes('\\');
+    const startsWithRoot = /^[a-zA-Z]:/.test(trimmed) || trimmed.startsWith('/') || trimmed.startsWith('\\');
+    const looksLikePath = hasPathSeparator || startsWithRoot;
+    
+    if (!looksLikePath) {
+      return { 
+        valid: false, 
+        error: 'Path should be a full file path (e.g., /path/to/desc.txt or C:\\path\\desc.txt)' 
+      };
+    }
+    
+    if (!hasValidExt) {
+      return { 
+        valid: false, 
+        error: 'File should have a valid extension (.txt, .nfo, or .md)' 
+      };
+    }
+    
+    return { valid: true, error: '' };
+  };
+  
+  // Extract value from argument string (e.g., --descfile "path" or --desclink "url")
+  const extractArgValue = (args, argName) => {
+    // Match --argname "value" or --argname 'value' or --argname value
+    const regex = new RegExp(`${argName}\\s+(?:"([^"]+)"|'([^']+)'|(\\S+))`, 'i');
+    const match = args.match(regex);
+    if (match) {
+      return match[1] || match[2] || match[3] || '';
+    }
+    return '';
+  };
+  
+  // Update argument value in string
+  const updateArgValue = (args, argName, value) => {
+    // Check if argument exists
+    if (!args.includes(argName)) {
+      return args;
+    }
+    
+    // If value is empty, just leave the flag without value
+    if (!value) {
+      // Remove any existing value after the flag
+      return args.replace(new RegExp(`(${argName})\\s+(?:"[^"]*"|'[^']*'|\\S+)`, 'i'), '$1')
+                 .replace(new RegExp(`(${argName})\\s*$`, 'i'), '$1');
+    }
+    
+    // Quote the value if it contains spaces
+    const quotedValue = value.includes(' ') ? `"${value}"` : `"${value}"`;
+    
+    // Check if there's already a value
+    const hasValue = new RegExp(`${argName}\\s+(?:"[^"]*"|'[^']*'|\\S+)`, 'i').test(args);
+    
+    if (hasValue) {
+      // Replace existing value
+      return args.replace(new RegExp(`(${argName})\\s+(?:"[^"]*"|'[^']*'|\\S+)`, 'i'), `$1 ${quotedValue}`);
+    } else {
+      // Add value after the flag
+      return args.replace(new RegExp(`(${argName})(\\s|$)`, 'i'), `$1 ${quotedValue}$2`);
+    }
+  };
+  
+  // Get current values from args
+  const descFilePath = extractArgValue(customArgs, '--descfile');
+  const descLinkUrl = extractArgValue(customArgs, '--desclink');
+  
+  // Validate desclink URL when it changes
+  useEffect(() => {
+    if (hasDescLink && descLinkUrl) {
+      if (!isValidPasteUrl(descLinkUrl)) {
+        setDescLinkError('Please enter a valid paste URL (pastebin, hastebin, etc.)');
+      } else {
+        setDescLinkError('');
+      }
+    } else {
+      setDescLinkError('');
+    }
+  }, [descLinkUrl, hasDescLink]);
+  
+  // Validate descfile path when it changes
+  useEffect(() => {
+    if (hasDescFile && descFilePath) {
+      const validation = isValidDescFilePath(descFilePath);
+      setDescFileError(validation.error);
+    } else {
+      setDescFileError('');
+    }
+  }, [descFilePath, hasDescFile]);
+  
+  // Reset description browser when argument is removed
+  useEffect(() => {
+    if (!hasDescFile) {
+      setDescDirectories([]);
+      setDescExpandedFolders(new Set());
+      setDescFileError('');
+    }
+    if (!hasDescLink) {
+      setDescLinkError('');
+    }
+  }, [hasDescFile, hasDescLink]);
+  
+  // Update descfile in args
+  const updateDescFile = (path) => {
+    setCustomArgs(prev => updateArgValue(prev, '--descfile', path));
+  };
+  
+  // Update desclink in args
+  const updateDescLink = (url) => {
+    setCustomArgs(prev => updateArgValue(prev, '--desclink', url));
+  };
 
   const appendHtmlFragment = (rawHtml) => {
     const container = richOutputRef.current;
@@ -397,6 +551,72 @@ function AudionutsUAGUI() {
       console.error('Failed to load browse roots:', error);
     }
   };
+  
+  // Load description file browser roots
+  const loadDescBrowseRoots = async () => {
+    try {
+      const response = await apiFetch(`${API_BASE}/browse_roots`);
+      const data = await response.json();
+
+      if (data.success && data.items) {
+        setDescDirectories(data.items);
+        setDescExpandedFolders(new Set());
+      }
+    } catch (error) {
+      console.error('Failed to load desc browse roots:', error);
+    }
+  };
+  
+  // Load description folder contents
+  const loadDescFolderContents = async (path) => {
+    try {
+      const response = await apiFetch(`${API_BASE}/browse_desc?path=${encodeURIComponent(path)}`);
+      const data = await response.json();
+      
+      if (data.success && data.items) {
+        updateDescDirectoryTree(path, data.items);
+      }
+    } catch (error) {
+      console.error('Failed to load desc folder:', error);
+    }
+  };
+  
+  // Update description directory tree
+  const updateDescDirectoryTree = (path, items) => {
+    const updateTree = (nodes) => {
+      return nodes.map(node => {
+        if (node.path === path) {
+          return { ...node, children: items };
+        } else if (node.children) {
+          return { ...node, children: updateTree(node.children) };
+        }
+        return node;
+      });
+    };
+    
+    setDescDirectories((prev) => updateTree(prev));
+  };
+  
+  // Toggle description folder
+  const toggleDescFolder = async (path) => {
+    const newExpanded = new Set(descExpandedFolders);
+    
+    if (newExpanded.has(path)) {
+      newExpanded.delete(path);
+    } else {
+      newExpanded.add(path);
+      await loadDescFolderContents(path);
+    }
+    
+    setDescExpandedFolders(newExpanded);
+  };
+  
+  // Load desc roots when --descfile is added
+  useEffect(() => {
+    if (hasDescFile && descDirectories.length === 0) {
+      loadDescBrowseRoots();
+    }
+  }, [hasDescFile]);
   useEffect(() => {
     storage.set(THEME_KEY, isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
@@ -502,11 +722,76 @@ function AudionutsUAGUI() {
       </div>
     ));
   };
+  
+  // Render description file tree
+  const renderDescFileTree = (items, level = 0) => {
+    return items.map((item, idx) => (
+      <div key={idx}>
+        <div
+          className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+            descFilePath === item.path 
+              ? isDarkMode 
+                ? 'bg-green-900 border-l-4 border-green-500' 
+                : 'bg-green-100 border-l-4 border-green-500'
+              : isDarkMode
+                ? 'hover:bg-gray-700'
+                : 'hover:bg-gray-100'
+          }`}
+          style={{ paddingLeft: `${level * 20 + 12}px` }}
+          onClick={() => {
+            if (item.type === 'folder') {
+              toggleDescFolder(item.path);
+            } else {
+              // Update the argument directly with the selected file path
+              updateDescFile(item.path);
+            }
+          }}
+        >
+          <span className="text-yellow-600">
+            {item.type === 'folder' ? (
+              descExpandedFolders.has(item.path) ? <FolderOpenIcon /> : <FolderIcon />
+            ) : (
+              <span className="text-green-600"><FileIcon /></span>
+            )}
+          </span>
+          <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>{item.name}</span>
+        </div>
+        {item.type === 'folder' && descExpandedFolders.has(item.path) && item.children && item.children.length > 0 && (
+          <div>{renderDescFileTree(item.children, level + 1)}</div>
+        )}
+      </div>
+    ));
+  };
 
   const executeCommand = async () => {
     if (!selectedPath) {
       appendSystemMessage('✗ Please select a file or folder first', 'error');
       return;
+    }
+    
+    // Validate --descfile: must have a valid description file path
+    if (hasDescFile) {
+      if (!descFilePath) {
+        appendSystemMessage('✗ Please select or enter a description file path when using --descfile', 'error');
+        return;
+      }
+      const pathValidation = isValidDescFilePath(descFilePath);
+      if (!pathValidation.valid) {
+        appendSystemMessage(`✗ Invalid description file: ${pathValidation.error}`, 'error');
+        return;
+      }
+    }
+    
+    // Validate --desclink: must have a valid URL
+    if (hasDescLink) {
+      if (!descLinkUrl) {
+        appendSystemMessage('✗ Please enter a description URL when using --desclink', 'error');
+        return;
+      }
+      if (!isValidPasteUrl(descLinkUrl)) {
+        appendSystemMessage('✗ Please enter a valid paste URL for --desclink (pastebin, hastebin, etc.)', 'error');
+        return;
+      }
     }
 
     const rootContainer = richOutputRef.current;
@@ -807,9 +1092,50 @@ function AudionutsUAGUI() {
             File Browser
           </h2>
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className={`${hasDescFile ? 'flex-1 max-h-[50%]' : 'flex-1'} overflow-y-auto`}>
           {renderFileTree(directories)}
         </div>
+        
+        {/* Description File Browser - shown when --descfile is in args */}
+        {hasDescFile && (
+          <>
+            <div className={`p-4 border-t border-b ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50'}`}>
+              <h2 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'} flex items-center gap-2`}>
+                <FileIcon />
+                Description File
+              </h2>
+              <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                Select a .txt, .nfo, or .md file
+              </p>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {descDirectories.length > 0 ? (
+                renderDescFileTree(descDirectories)
+              ) : (
+                <div className={`p-4 text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <p className="text-sm">Loading description files...</p>
+                </div>
+              )}
+            </div>
+            {descFilePath && (
+              <div className={`p-3 border-t ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-green-50'}`}>
+                <p className={`text-xs font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-1`}>Selected Description:</p>
+                <div className="flex items-center gap-2">
+                  <p className={`text-xs ${isDarkMode ? 'text-green-400' : 'text-green-700'} break-all font-mono flex-1`}>{descFilePath}</p>
+                  <button
+                    onClick={() => updateDescFile('')}
+                    className={`p-1 rounded ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                    title="Clear selection"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Resize Handle */}
@@ -888,6 +1214,90 @@ function AudionutsUAGUI() {
                 disabled={isExecuting}
               />
             </div>
+            
+            {/* Description Link URL Input - shown when --desclink is in args */}
+            {hasDescLink && (
+              <div className="space-y-2">
+                <label className={`text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'} flex items-center gap-2`}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  Description Link URL (pastebin, hastebin, etc.):
+                </label>
+                <input
+                  type="url"
+                  value={descLinkUrl}
+                  onChange={(e) => updateDescLink(e.target.value)}
+                  placeholder="https://pastebin.com/abc123"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
+                    descLinkError 
+                      ? 'border-red-500 focus:ring-red-500' 
+                      : isDarkMode 
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                        : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                  disabled={isExecuting}
+                />
+                {descLinkError && (
+                  <p className="text-xs text-red-500 mt-1">{descLinkError}</p>
+                )}
+                {descLinkUrl && !descLinkError && (
+                  <p className="text-xs text-green-500 mt-1">Valid paste URL</p>
+                )}
+              </div>
+            )}
+            
+            {/* Description File Status - shown when --descfile is in args */}
+            {hasDescFile && (
+              <div className={`p-3 rounded-lg ${
+                descFileError 
+                  ? isDarkMode ? 'bg-red-900 border border-red-700' : 'bg-red-50 border border-red-200'
+                  : descFilePath 
+                    ? isDarkMode ? 'bg-green-900 border border-green-700' : 'bg-green-50 border border-green-200'
+                    : isDarkMode ? 'bg-yellow-900 border border-yellow-700' : 'bg-yellow-50 border border-yellow-200'
+              }`}>
+                <div className="flex items-center gap-2">
+                  <svg className={`w-4 h-4 ${
+                    descFileError ? 'text-red-500' : descFilePath ? 'text-green-500' : 'text-yellow-500'
+                  }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {descFileError ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    ) : descFilePath ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    )}
+                  </svg>
+                  <span className={`text-sm font-medium ${
+                    descFileError 
+                      ? isDarkMode ? 'text-red-300' : 'text-red-700'
+                      : descFilePath 
+                        ? isDarkMode ? 'text-green-300' : 'text-green-700'
+                        : isDarkMode ? 'text-yellow-300' : 'text-yellow-700'
+                  }`}>
+                    {descFileError 
+                      ? 'Invalid description file path' 
+                      : descFilePath 
+                        ? 'Description file selected' 
+                        : 'Select a description file from the left panel or enter a path'}
+                  </span>
+                </div>
+                {descFilePath && (
+                  <p className={`text-xs mt-1 break-all font-mono ${
+                    descFileError 
+                      ? isDarkMode ? 'text-red-400' : 'text-red-600'
+                      : isDarkMode ? 'text-green-400' : 'text-green-600'
+                  }`}>
+                    {descFilePath}
+                  </p>
+                )}
+                {descFileError && (
+                  <p className={`text-xs mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                    {descFileError}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Execute Button */}
             <div className="flex gap-2">
