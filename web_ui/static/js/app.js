@@ -337,24 +337,11 @@ function AudionutsUAGUI() {
   const hasDescFile = customArgs.includes('--descfile');
   const hasDescLink = customArgs.includes('--desclink');
   
-  // URL validation helper - accepts pastebin, hastebin, and similar paste services
-  const isValidPasteUrl = (string) => {
+  // URL validation helper - accepts any HTTP/HTTPS URL (server fetches and parses any URL)
+  const isValidUrl = (string) => {
     try {
       const url = new URL(string);
-      if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-        return false;
-      }
-      // Common paste services
-      const validHosts = [
-        'pastebin.com', 'www.pastebin.com',
-        'hastebin.com', 'www.hastebin.com',
-        'paste.ee', 'dpaste.com', 'paste.debian.net',
-        'gist.github.com', 'ghostbin.com',
-        'rentry.co', 'rentry.org',
-        'privatebin.net', 'bin.disroot.org'
-      ];
-      // Check if it's a known paste service or any valid URL (some trackers host their own)
-      return validHosts.some(host => url.hostname.includes(host)) || url.pathname.length > 1;
+      return url.protocol === 'http:' || url.protocol === 'https:';
     } catch (_) {
       return false;
     }
@@ -439,7 +426,7 @@ function AudionutsUAGUI() {
   // Validate desclink URL when it changes
   useEffect(() => {
     if (hasDescLink && descLinkUrl) {
-      if (!isValidPasteUrl(descLinkUrl)) {
+      if (!isValidUrl(descLinkUrl)) {
         setDescLinkError('Please enter a valid paste URL (pastebin, hastebin, etc.)');
       } else {
         setDescLinkError('');
@@ -794,7 +781,7 @@ function AudionutsUAGUI() {
         appendSystemMessage('✗ Please enter a description URL when using --desclink', 'error');
         return;
       }
-      if (!isValidPasteUrl(descLinkUrl)) {
+      if (!isValidUrl(descLinkUrl)) {
         appendSystemMessage('✗ Please enter a valid paste URL for --desclink (pastebin, hastebin, etc.)', 'error');
         return;
       }
