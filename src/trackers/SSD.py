@@ -9,7 +9,6 @@ import subprocess
 import shlex
 import asyncio
 
-from src import image777
 from src.trackers.COMMON import COMMON
 
 
@@ -264,7 +263,7 @@ class SSD(COMMON):
             except Exception as e:
                 print(f"[{self.tracker}] ⚠️ 读取已存在的海报缓存文件时出错 ({e})，将尝试重新处理。")
 
-        print(f"[{self.tracker}] 开始处理海报（下载与上传）...")
+        print(f"[{self.tracker}] 开始处理海报链接...")
         try:
             with open(poster_lock_path, 'w') as f: f.write('locked')
             
@@ -276,25 +275,9 @@ class SSD(COMMON):
             if 'doubanio.com' in original_poster_url:
                 processed_url = original_poster_url.replace('img1.doubanio.com', 'img9.doubanio.com').replace('img3.doubanio.com', 'img9.doubanio.com')
                 url_without_protocol = processed_url.split('//', 1)[-1]
-                download_url = f"https://cache.springsunday.net/{url_without_protocol}"
+                final_url = f"https://cache.springsunday.net/{url_without_protocol}"
             else:
-                download_url = original_poster_url
-            
-            original_filename = os.path.basename(original_poster_url.split('?')[0])
-            local_poster_path = os.path.join(tmp_folder, f"{original_filename}")
-
-            try:
-                async with self.session.stream("GET", download_url, timeout=30) as response:
-                    response.raise_for_status()
-                    with open(local_poster_path, 'wb') as f:
-                        async for chunk in response.aiter_bytes(): f.write(chunk)
-                print(f"[{self.tracker}]   - ✅ 海报下载成功。")
-            except Exception as e:
-                print(f"[{self.tracker}]   - ❌ 下载海报时出错: {e}")
-                return meta.get('poster', '')
-
-            new_poster_url = await asyncio.to_thread(image777.upload_image, local_poster_path)
-            final_url = new_poster_url if new_poster_url else original_poster_url
+                final_url = original_poster_url
             
             if final_url:
                 with open(poster_cache_path, "w", encoding="utf-8") as f: f.write(final_url)
