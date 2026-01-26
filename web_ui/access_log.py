@@ -94,22 +94,53 @@ class AccessLogger:
             redact = not keep_full
 
             if headers:
-                # Store a small subset of headers for context. For non-failed attempts redact sensitive header values.
-                hdr_keys = ("User-Agent", "Authorization", "Referer")
+                # Store a small subset of headers for context. Always redact high-risk headers
+                # such as Authorization and Cookie; keep User-Agent and Referer but avoid
+                # storing tokens or cookies in cleartext even for failed attempts.
+                hdr_keys = ("User-Agent", "Authorization", "Referer", "Cookie")
+                rec_headers: dict[str, Any] = {}
+                for k in hdr_keys:
+                    v = headers.get(k)
+                    if v is None:
+                        continue
+                    if k == "User-Agent":
+                        rec_headers[k] = v
+                    elif k in ("Authorization", "Cookie"):
+                        # Mask sensitive header values instead of storing them raw
+                        try:
+                            # Attempt to preserve scheme for Authorization (e.g., "Bearer ...")
+                            parts = str(v).split(None, 1)
+                            if len(parts) == 2:
+                                scheme = parts[0]
+                                rec_headers[k] = f"{scheme} <REDACTED>"
+                            else:
+                                rec_headers[k] = "<REDACTED>"
+                        except Exception:
+                            rec_headers[k] = "<REDACTED>"
+                    else:
+                        # Referer and other non-sensitive headers
+                        rec_headers[k] = v
+
+                # For non-failed attempts, further redact remote identifying headers
                 if redact:
-                    rec_headers: dict[str, Any] = {}
-                    for k in hdr_keys:
-                        v = headers.get(k)
-                        if v is None:
-                            continue
-                        # Keep User-Agent for context, redact anything else
-                        rec_headers[k] = v if k == "User-Agent" else "<REDACTED>"
-                    record["headers"] = rec_headers
+                    # Keep only User-Agent; redact Referer for privacy
+                    filtered = {"User-Agent": rec_headers.get("User-Agent")} if rec_headers.get("User-Agent") else {}
+                    if not filtered and rec_headers:
+                        # fallback to include a minimal indicator
+                        filtered = dict.fromkeys(rec_headers.keys(), "<REDACTED>")
+                    record["headers"] = filtered
                 else:
-                    record["headers"] = {k: headers.get(k) for k in hdr_keys if headers.get(k) is not None}
+                    record["headers"] = rec_headers
 
             if details:
-                record["details"] = ("<REDACTED>" if redact else str(details))
+                # Avoid storing obvious secrets in details. If the text appears to
+                # contain a password-like token, redact it even for failed attempts.
+                txt = str(details)
+                low = txt.lower()
+                if redact or any(tok in low for tok in ("password", "pass=", "pwd=", "token", "authorization")):
+                    record["details"] = "<REDACTED>"
+                else:
+                    record["details"] = txt
 
             # Redact top-level sensitive fields for non-failed attempts
             if redact:
