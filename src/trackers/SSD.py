@@ -472,6 +472,11 @@ class SSD(COMMON):
 
         if not await self.edit_torrent(meta, self.tracker, self.source_flag):
             meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "Failed to edit torrent"}; return
+
+        if not self.cookie_file:
+            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "Cookie file not configured"}; return False
+        if not os.path.exists(self.cookie_file):
+            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': f"Cookie file not found: {self.cookie_file}"}; return False
             
         ssd_name = self.edit_name(meta)
         poster_url = await self._get_poster_url(meta)
@@ -531,10 +536,13 @@ class SSD(COMMON):
                 elif torrent_id:
                     upload_limit_kib = 112640 
                     await self._add_to_qbittorrent(meta, torrent_id, upload_limit_kib)
+                return True
             else:
                 print(f"[{self.tracker}] ❌ 上传失败。")
                 meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': f"curl failed with exit code {result.returncode}"}
+                return False
         except Exception as e:
             error_message = f"执行 curl 命令时发生 Python 错误: {e}"
             print(f"[{self.tracker}] ❌ {error_message}")
             meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': error_message}
+            return False
