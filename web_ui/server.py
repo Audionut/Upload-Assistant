@@ -266,12 +266,17 @@ def _is_ip_allowed(ip: str) -> bool:
     whitelist = _get_ip_whitelist()
     blacklist = _get_ip_blacklist()
 
-    # If whitelist is set, only allow IPs in whitelist
+    # Blacklist takes absolute precedence. If an IP is blacklisted,
+    # deny it even if it's present in the whitelist.
+    if ip in blacklist:
+        return False
+
+    # If whitelist is set, only allow IPs in whitelist.
     if whitelist:
         return ip in whitelist
 
-    # Otherwise, deny IPs in blacklist
-    return ip not in blacklist
+    # Otherwise, allow (not blacklisted).
+    return True
 
 
 def _handle_failed_auth(ip: str) -> None:
@@ -400,6 +405,27 @@ def _verify_csrf_header() -> bool:
         return False
 
 
+def _verify_same_origin() -> bool:
+    """Require same-origin via Origin or Referer header.
+
+    Returns True if the request appears to be same-origin against the
+    server's `request.host_url`. If an Origin header is present it must
+    exactly match the host_url; otherwise falls back to checking the
+    Referer prefix. Absence or mismatch results in False.
+    """
+    try:
+        host_url = (request.host_url or "").rstrip("/") + "/"
+        origin = request.headers.get("Origin")
+        if origin:
+            return origin.rstrip("/") + "/" == host_url
+        referer = request.headers.get("Referer") or request.headers.get("Referrer")
+        if referer:
+            return referer.startswith(host_url)
+        return False
+    except Exception:
+        return False
+
+
 # Load TOTP secret
 try:
     saved_totp_secret = auth_mod.get_totp_secret()
@@ -501,8 +527,8 @@ def _get_token_info(token: str) -> Optional[dict[str, Any]]:
     return info
 
 
-def _token_has_scope(token: str) -> bool:
-    """Return True if token is valid. Scopes removed — a valid token grants access."""
+def _token_is_valid(token: str) -> bool:
+    """Return True if token is valid. No per-token scopes enforced."""
     info = _get_token_info(token)
     return bool(info)
 
@@ -705,19 +731,17 @@ def _webui_auth_ok() -> bool:
     persisted = auth_mod.load_user()
 
     # Bearer tokens for API clients
-    auth_header = (request.headers.get("Authorization") or "").strip()
-    if auth_header.lower().startswith("bearer "):
-        token = auth_header.split(None, 1)[1].strip()
-        if token:
-            user = _verify_api_token(token)
-            if user:
-                if persisted:
-                    stored_username = persisted.get("username")
-                    if stored_username and user != stored_username:
-                        return False
-                with contextlib.suppress(Exception):
-                    g.username = user
-                return True
+    bearer_token = _get_bearer_from_header()
+    if bearer_token:
+        user = _verify_api_token(bearer_token)
+        if user:
+            if persisted:
+                stored_username = persisted.get("username")
+                if stored_username and user != stored_username:
+                    return False
+            with contextlib.suppress(Exception):
+                g.username = user
+            return True
         return False
 
     # Basic auth is only supported against a persisted user
@@ -1835,6 +1859,10 @@ def twofa_status():
     if not _is_authenticated():
         return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
 
+    # Require CSRF and same-origin for reads of auth/2fa state
+    if not _verify_csrf_header() or not _verify_same_origin():
+        return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+
     return jsonify({"enabled": _totp_enabled(), "success": True})
 
 
@@ -1848,6 +1876,12 @@ def access_log_level_api():
     Valid levels: access_denied (default), access, disabled
     """
     if request.method == "GET":
+        # Require authenticated web session and CSRF + same-origin for reads
+        if not _is_authenticated():
+            return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+        if not _verify_csrf_header() or not _verify_same_origin():
+            return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+
         if access_logger is None:
             return jsonify({"success": False, "error": "Access logging unavailable"}), 500
         try:
@@ -1861,6 +1895,9 @@ def access_log_level_api():
         return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
     if not _verify_csrf_header():
         return jsonify({"success": False, "error": "CSRF validation failed"}), 403
+    # Require same-origin for token management actions
+    if not _verify_same_origin():
+        return jsonify({"success": False, "error": "Origin validation failed"}), 403
 
     if access_logger is None:
         return jsonify({"success": False, "error": "Access logging unavailable"}), 500
@@ -1886,6 +1923,10 @@ def access_log_entries_api():
     # Require authenticated web session
     if not _is_authenticated():
         return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+
+    # Require CSRF + same-origin for reads of access-log entries
+    if not _verify_csrf_header() or not _verify_same_origin():
+        return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
 
     if access_logger is None:
         return jsonify({"success": False, "error": "Access logging unavailable"}), 500
@@ -1918,6 +1959,9 @@ def ip_control_api():
         return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
 
     if request.method == "GET":
+        # Require CSRF + same-origin for reads of IP control settings
+        if not _verify_csrf_header() or not _verify_same_origin():
+            return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
         try:
             whitelist = _get_ip_whitelist()
             blacklist = _get_ip_blacklist()
@@ -1926,9 +1970,9 @@ def ip_control_api():
             return jsonify({"success": False, "error": "Failed to read IP control settings"}), 500
 
     elif request.method == "POST":
-        # Require CSRF for POST
-        if not _verify_csrf_header():
-            return jsonify({"success": False, "error": "CSRF validation failed"}), 403
+        # Require CSRF and same-origin for POST
+        if not _verify_csrf_header() or not _verify_same_origin():
+            return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
         try:
             data = request.get_json()
             if not data:
@@ -1965,6 +2009,9 @@ def twofa_setup():
     # Require an authenticated web session (disallow API token / basic auth)
     if not _is_authenticated():
         return jsonify({"error": "Authentication required (web session)", "success": False}), 401
+    # Require CSRF + same-origin for 2FA setup (sensitive auth action)
+    if not _verify_csrf_header() or not _verify_same_origin():
+        return jsonify({"error": "CSRF/Origin validation failed", "success": False}), 403
     if _totp_enabled():
         return jsonify({"error": "2FA already enabled", "success": False}), 400
 
@@ -1992,6 +2039,9 @@ def twofa_enable():
     # Require an authenticated web session (disallow API token / basic auth)
     if not _is_authenticated():
         return jsonify({"error": "Authentication required (web session)", "success": False}), 401
+    # Require CSRF + same-origin for enabling 2FA
+    if not _verify_csrf_header() or not _verify_same_origin():
+        return jsonify({"error": "CSRF/Origin validation failed", "success": False}), 403
     data = request.json or {}
     code = data.get("code", "").strip()
 
@@ -2033,6 +2083,9 @@ def twofa_disable():
     # Require an authenticated web session (disallow API token / basic auth)
     if not _is_authenticated():
         return jsonify({"error": "Authentication required (web session)", "success": False}), 401
+    # Require CSRF + same-origin for disabling 2FA
+    if not _verify_csrf_header() or not _verify_same_origin():
+        return jsonify({"error": "CSRF/Origin validation failed", "success": False}), 403
     if not _totp_enabled():
         return jsonify({"error": "2FA not enabled", "success": False}), 400
 
@@ -2062,10 +2115,10 @@ def browse_roots():
         display_name = os.path.basename(root.rstrip(os.sep)) or root
         items.append({"name": display_name, "path": root, "type": "folder", "children": []})
 
-    # If caller used a bearer token, require it to have the `browse` scope.
+    # If caller used a bearer token, require it to be valid.
     bearer = _get_bearer_from_header()
-    if bearer and not _token_has_scope(bearer):
-        return jsonify({"success": False, "error": "Forbidden (insufficient token scope)"}), 403
+    if bearer and not _token_is_valid(bearer):
+        return jsonify({"success": False, "error": "Forbidden (invalid token)"}), 403
 
     return jsonify({"items": items, "success": True})
 
@@ -2076,6 +2129,10 @@ def config_options():
     # Require an authenticated web session; disallow bearer/basic API auth for config access
     if not _is_authenticated():
         return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+
+    # Require CSRF and same-origin for reading configuration options
+    if not _verify_csrf_header() or not _verify_same_origin():
+        return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
 
     base_dir = Path(__file__).parent.parent
     example_path = base_dir / "data" / "example-config.py"
@@ -2150,6 +2207,10 @@ def torrent_clients():
     if not _is_authenticated():
         return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
 
+    # Require CSRF + same-origin for config-related reads
+    if not _verify_csrf_header() or not _verify_same_origin():
+        return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+
     base_dir = Path(__file__).parent.parent
     config_path = base_dir / "data" / "config.py"
 
@@ -2170,8 +2231,9 @@ def config_update():
     # Require authenticated web session and CSRF protection; disallow bearer/basic API auth
     if not _is_authenticated():
         return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
-    if not _verify_csrf_header():
-        return jsonify({"success": False, "error": "CSRF token missing or invalid"}), 403
+    # Require CSRF + same-origin for config updates
+    if not _verify_csrf_header() or not _verify_same_origin():
+        return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
     data = request.json or {}
     path = data.get("path")
     raw_value = data.get("value")
@@ -2250,8 +2312,9 @@ def config_remove_subsection():
     # Require authenticated web session and CSRF protection; disallow bearer/basic API auth
     if not _is_authenticated():
         return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
-    if not _verify_csrf_header():
-        return jsonify({"success": False, "error": "CSRF token missing or invalid"}), 403
+    # Require CSRF + same-origin for config removal
+    if not _verify_csrf_header() or not _verify_same_origin():
+        return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
 
     data = request.json or {}
     path = data.get("path")
@@ -2382,10 +2445,19 @@ def browse_path():
             console.print(f"Error: Permission denied: {path}", markup=False)
             return jsonify({"error": "Permission denied", "success": False}), 403
 
-        # If caller used a bearer token, require it to have the `browse` scope.
+        # If caller used a bearer token, require it to be valid. Valid bearer
+        # tokens are allowed without CSRF since they are intended for programmatic
+        # access. Otherwise require an authenticated web session + CSRF + same-origin.
         bearer = _get_bearer_from_header()
-        if bearer and not _token_has_scope(bearer):
-            return jsonify({"success": False, "error": "Forbidden (insufficient token scope)"}), 403
+        if bearer:
+            if not _token_is_valid(bearer):
+                return jsonify({"success": False, "error": "Forbidden (invalid token)"}), 403
+        else:
+            # Require session-based callers to be authenticated and provide CSRF + Origin
+            if not _is_authenticated():
+                return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+            if not _verify_csrf_header() or not _verify_same_origin():
+                return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
 
         return jsonify({"items": items, "success": True, "path": path, "count": len(items)})
 
@@ -2407,10 +2479,10 @@ def execute_command():
     if request.method == "POST" and not _verify_csrf_header():
         return jsonify({"error": "CSRF token missing or invalid", "success": False}), 403
 
-    # If caller used a bearer token, ensure it has the execute scope
+    # If caller used a bearer token, ensure it is valid
     bearer = _get_bearer_from_header()
-    if bearer and not _token_has_scope(bearer):
-        return jsonify({"error": "Forbidden (insufficient token scope)", "success": False}), 403
+    if bearer and not _token_is_valid(bearer):
+        return jsonify({"error": "Forbidden (invalid token)", "success": False}), 403
 
     try:
         data = request.json
@@ -3006,6 +3078,18 @@ def send_input():
 
         # Received input for session (logged at debug level previously) - keep minimal output
 
+        # Authorization: allow either a valid bearer token (programmatic clients)
+        # or an authenticated web session. Bearer tokens are validated by
+        # `_token_is_valid` (valid token grants access).
+        bearer = _get_bearer_from_header()
+        if bearer:
+            if not _token_is_valid(bearer):
+                return jsonify({"error": "Forbidden (invalid token)", "success": False}), 403
+        else:
+            # Require a web session for non-token callers
+            if not _is_authenticated():
+                return jsonify({"error": "Authentication required (web session)" , "success": False}), 401
+
         if session_id not in active_processes:
             return jsonify({"error": "No active process", "success": False}), 404
 
@@ -3059,6 +3143,15 @@ def kill_process():
         session_id = data.get("session_id")
 
         console.print(f"Kill request for session {session_id}", markup=False)
+
+        # Authorization: allow either a valid bearer token or an authenticated web session
+        bearer = _get_bearer_from_header()
+        if bearer:
+            if not _token_is_valid(bearer):
+                return jsonify({"error": "Forbidden (invalid token)", "success": False}), 403
+        else:
+            if not _is_authenticated():
+                return jsonify({"error": "Authentication required (web session)" , "success": False}), 401
 
         if session_id not in active_processes:
             return jsonify({"error": "No active process", "success": False}), 404
