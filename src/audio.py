@@ -249,6 +249,8 @@ async def _get_audio_v2(
         mi_map = mi
         tracks = cast(list[TrackDict], cast(Mapping[str, Any], mi_map.get('media', {})).get('track', []))
         audio_tracks = [t for t in tracks if t.get('@type') == "Audio"]
+        meta["has_multiple_default_audio_tracks"] = len(
+            [track for track in audio_tracks if track["Default"] == "Yes"]) > 1
         first_audio_track = None
         if audio_tracks:
             tracks_with_order = [t for t in audio_tracks if t.get('StreamOrder') and not isinstance(t.get('StreamOrder'), dict)]
