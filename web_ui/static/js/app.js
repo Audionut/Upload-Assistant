@@ -326,6 +326,7 @@ function AudionutsUAGUI() {
   const [descExpandedFolders, setDescExpandedFolders] = useState(new Set());
   const [descLinkError, setDescLinkError] = useState('');
   const [descFileError, setDescFileError] = useState('');
+  const [descBrowserCollapsed, setDescBrowserCollapsed] = useState(false);
   
   const richOutputRef = useRef(null);
   const lastFullHashRef = useRef('');
@@ -448,11 +449,15 @@ function AudionutsUAGUI() {
     }
   }, [descLinkUrl, hasDescLink]);
   
-  // Validate descfile path when it changes
+  // Validate descfile path when it changes and auto-collapse when valid
   useEffect(() => {
     if (hasDescFile && descFilePath) {
       const validation = isValidDescFilePath(descFilePath);
       setDescFileError(validation.error);
+      // Auto-collapse when valid file is selected
+      if (validation.valid) {
+        setDescBrowserCollapsed(true);
+      }
     } else {
       setDescFileError('');
     }
@@ -464,6 +469,7 @@ function AudionutsUAGUI() {
       setDescDirectories([]);
       setDescExpandedFolders(new Set());
       setDescFileError('');
+      setDescBrowserCollapsed(false);
     }
     if (!hasDescLink) {
       setDescLinkError('');
@@ -1092,38 +1098,52 @@ function AudionutsUAGUI() {
             File Browser
           </h2>
         </div>
-        <div className={`${hasDescFile ? 'flex-1 max-h-[50%]' : 'flex-1'} overflow-y-auto`}>
+        <div className={`${hasDescFile && !descBrowserCollapsed ? 'flex-1 max-h-[50%]' : 'flex-1'} overflow-y-auto`}>
           {renderFileTree(directories)}
         </div>
         
         {/* Description File Browser - shown when --descfile is in args */}
         {hasDescFile && (
           <>
-            <div className={`p-4 border-t border-b ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50'}`}>
-              <h2 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'} flex items-center gap-2`}>
-                <FileIcon />
-                Description File
-              </h2>
-              <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                Select a .txt, .nfo, or .md file
-              </p>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {descDirectories.length > 0 ? (
-                renderDescFileTree(descDirectories)
-              ) : (
-                <div className={`p-4 text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  <p className="text-sm">Loading description files...</p>
-                </div>
-              )}
-            </div>
-            {descFilePath && (
-              <div className={`p-3 border-t ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-green-50'}`}>
-                <p className={`text-xs font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-1`}>Selected Description:</p>
-                <div className="flex items-center gap-2">
-                  <p className={`text-xs ${isDarkMode ? 'text-green-400' : 'text-green-700'} break-all font-mono flex-1`}>{descFilePath}</p>
+            <div 
+              className={`p-4 border-t ${!descBrowserCollapsed ? 'border-b' : ''} ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50'} ${descBrowserCollapsed ? 'cursor-pointer' : ''}`}
+              onClick={descBrowserCollapsed ? () => setDescBrowserCollapsed(false) : undefined}
+            >
+              <div className="flex items-center justify-between">
+                <h2 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'} flex items-center gap-2`}>
+                  <FileIcon />
+                  Description File
+                  {descBrowserCollapsed && descFilePath && !descFileError && (
+                    <span className="text-green-500 ml-1">
+                      <svg className="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </span>
+                  )}
+                </h2>
+                {descBrowserCollapsed ? (
                   <button
-                    onClick={() => updateDescFile('')}
+                    onClick={(e) => { e.stopPropagation(); setDescBrowserCollapsed(false); }}
+                    className={`p-1 rounded ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                    title="Expand browser"
+                  >
+                    <ChevronDownIcon />
+                  </button>
+                ) : descFilePath && !descFileError && (
+                  <button
+                    onClick={() => setDescBrowserCollapsed(true)}
+                    className={`p-1 rounded ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                    title="Collapse browser"
+                  >
+                    <ChevronRightIcon />
+                  </button>
+                )}
+              </div>
+              {descBrowserCollapsed && descFilePath ? (
+                <div className="flex items-center gap-2 mt-2">
+                  <p className={`text-xs ${descFileError ? (isDarkMode ? 'text-red-400' : 'text-red-600') : (isDarkMode ? 'text-green-400' : 'text-green-700')} break-all font-mono flex-1`}>{descFilePath}</p>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); updateDescFile(''); setDescBrowserCollapsed(false); }}
                     className={`p-1 rounded ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
                     title="Clear selection"
                   >
@@ -1132,7 +1152,41 @@ function AudionutsUAGUI() {
                     </svg>
                   </button>
                 </div>
-              </div>
+              ) : !descBrowserCollapsed && (
+                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Select a .txt, .nfo, or .md file
+                </p>
+              )}
+            </div>
+            {!descBrowserCollapsed && (
+              <>
+                <div className="flex-1 overflow-y-auto">
+                  {descDirectories.length > 0 ? (
+                    renderDescFileTree(descDirectories)
+                  ) : (
+                    <div className={`p-4 text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      <p className="text-sm">Loading description files...</p>
+                    </div>
+                  )}
+                </div>
+                {descFilePath && (
+                  <div className={`p-3 border-t ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-green-50'}`}>
+                    <p className={`text-xs font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-1`}>Selected Description:</p>
+                    <div className="flex items-center gap-2">
+                      <p className={`text-xs ${isDarkMode ? 'text-green-400' : 'text-green-700'} break-all font-mono flex-1`}>{descFilePath}</p>
+                      <button
+                        onClick={() => updateDescFile('')}
+                        className={`p-1 rounded ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                        title="Clear selection"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
@@ -1247,23 +1301,19 @@ function AudionutsUAGUI() {
               </div>
             )}
             
-            {/* Description File Status - shown when --descfile is in args */}
-            {hasDescFile && (
+            {/* Description File Status - only show on error or when no file selected */}
+            {hasDescFile && (descFileError || !descFilePath) && (
               <div className={`p-3 rounded-lg ${
                 descFileError 
                   ? isDarkMode ? 'bg-red-900 border border-red-700' : 'bg-red-50 border border-red-200'
-                  : descFilePath 
-                    ? isDarkMode ? 'bg-green-900 border border-green-700' : 'bg-green-50 border border-green-200'
-                    : isDarkMode ? 'bg-yellow-900 border border-yellow-700' : 'bg-yellow-50 border border-yellow-200'
+                  : isDarkMode ? 'bg-yellow-900 border border-yellow-700' : 'bg-yellow-50 border border-yellow-200'
               }`}>
                 <div className="flex items-center gap-2">
                   <svg className={`w-4 h-4 ${
-                    descFileError ? 'text-red-500' : descFilePath ? 'text-green-500' : 'text-yellow-500'
+                    descFileError ? 'text-red-500' : 'text-yellow-500'
                   }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     {descFileError ? (
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    ) : descFilePath ? (
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     ) : (
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     )}
@@ -1271,23 +1321,15 @@ function AudionutsUAGUI() {
                   <span className={`text-sm font-medium ${
                     descFileError 
                       ? isDarkMode ? 'text-red-300' : 'text-red-700'
-                      : descFilePath 
-                        ? isDarkMode ? 'text-green-300' : 'text-green-700'
-                        : isDarkMode ? 'text-yellow-300' : 'text-yellow-700'
+                      : isDarkMode ? 'text-yellow-300' : 'text-yellow-700'
                   }`}>
                     {descFileError 
                       ? 'Invalid description file path' 
-                      : descFilePath 
-                        ? 'Description file selected' 
-                        : 'Select a description file from the left panel or enter a path'}
+                      : 'Select a description file from the left panel or enter a path'}
                   </span>
                 </div>
-                {descFilePath && (
-                  <p className={`text-xs mt-1 break-all font-mono ${
-                    descFileError 
-                      ? isDarkMode ? 'text-red-400' : 'text-red-600'
-                      : isDarkMode ? 'text-green-400' : 'text-green-600'
-                  }`}>
+                {descFilePath && descFileError && (
+                  <p className={`text-xs mt-1 break-all font-mono ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
                     {descFilePath}
                   </p>
                 )}
@@ -1329,7 +1371,7 @@ function AudionutsUAGUI() {
         <div className={`flex-1 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'} p-4 flex flex-col min-h-0 overflow-hidden`}>
           <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col min-h-0">
             <div className="flex items-center gap-2 mb-3 flex-shrink-0">
-              <TerminalIcon />
+              <span className={isDarkMode ? 'text-white' : 'text-gray-800'}><TerminalIcon /></span>
               <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Execution Output</h3>
               {isExecuting && (
                 <span className="ml-auto text-sm text-green-400 animate-pulse">● Running</span>
