@@ -413,15 +413,33 @@ class SSD(COMMON):
         return True
 
     async def validate_cookies(self, meta):
-        if not self.cookie_file or not os.path.exists(self.cookie_file): return False
-        try:
-            with open(self.cookie_file, 'r') as f: cookie_str = f.read().strip()
-            self.session.cookies.update({k.strip(): v.strip() for k, v in (p.split('=', 1) for p in cookie_str.split(';') if '=' in p)})
-        except Exception: return False
+        cookie_str = await self._load_cookie_header(meta)
+        if not cookie_str:
+            return False
         try:
             response = await self.session.get("https://springsunday.net/upload.php", timeout=10, follow_redirects=False)
             return response.status_code == 200
         except httpx.RequestError: return False
+
+    async def _load_cookie_header(self, meta):
+        if not self.cookie_file or not os.path.exists(self.cookie_file):
+            return ""
+        try:
+            with open(self.cookie_file, 'r', encoding='utf-8') as f:
+                cookie_str = f.read().strip()
+            if not cookie_str:
+                return ""
+            if "\t" in cookie_str or cookie_str.startswith("# Netscape"):
+                common = COMMON(config=self.config)
+                cookies = await common.parseCookieFile(self.cookie_file)
+                cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
+            self.session.cookies.update({
+                k.strip(): v.strip()
+                for k, v in (p.split('=', 1) for p in cookie_str.split(';') if '=' in p)
+            })
+            return cookie_str
+        except Exception:
+            return ""
 
     async def search_existing(self, meta, disctype): return []
     
@@ -514,7 +532,10 @@ class SSD(COMMON):
             return False
             
         try:
-            with open(self.cookie_file, 'r') as f: cookie_str = f.read().strip()
+            cookie_str = await self._load_cookie_header(meta)
+            if not cookie_str:
+                meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "Cookie file empty or invalid"}
+                return False
             command = ["curl", "--silent", "--output", "/dev/null", "--write-out", "%{redirect_url}", self.upload_url]
             command.extend(["-H", f"Cookie: {cookie_str}"])
             command.extend(["-H", f"User-Agent: {self.session.headers.get('User-Agent')}"])
