@@ -1475,31 +1475,33 @@ function AudionutsUAGUI() {
                 
                 {/* Collapsible Section Content */}
                 {!collapsedSections.has(cat.title) && (
-                  <div className={`px-3 pb-3 space-y-2 ${isDarkMode ? 'border-t border-gray-700' : 'border-t border-gray-200'}`}>
-                    {cat.args.map((a) => (
-                      <div
-                        key={a.label}
-                        className={`w-full p-2 rounded-lg border ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <button
-                            onClick={() => addArgument(a.label)}
-                            disabled={isExecuting}
-                            className={`px-3 py-1 text-sm font-mono rounded-md border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white hover:bg-purple-600 hover:text-white' : 'bg-white border-gray-200 text-gray-800 hover:bg-purple-600 hover:text-white'} transition-colors`}
-                          >
-                            {a.label}
-                          </button>
-                          <div className="flex-1 text-right">
-                            {a.placeholder && (
-                              <div className={`text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-500'} font-mono`}>{a.placeholder}</div>
-                            )}
+                  <div className={`px-3 pb-3 pt-2 ${isDarkMode ? 'border-t border-gray-700' : 'border-t border-gray-200'}`}>
+                    <div className="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-2">
+                      {cat.args.map((a) => (
+                        <div
+                          key={a.label}
+                          className={`w-full p-2 rounded-lg border ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <button
+                              onClick={() => addArgument(a.label)}
+                              disabled={isExecuting}
+                              className={`px-3 py-1 text-sm font-mono rounded-md border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white hover:bg-purple-600 hover:text-white' : 'bg-white border-gray-200 text-gray-800 hover:bg-purple-600 hover:text-white'} transition-colors`}
+                            >
+                              {a.label}
+                            </button>
+                            <div className="flex-1 text-right">
+                              {a.placeholder && (
+                                <div className={`text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-500'} font-mono`}>{a.placeholder}</div>
+                              )}
+                            </div>
                           </div>
+                          {a.description && (
+                            <div className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{a.description}</div>
+                          )}
                         </div>
-                        {a.description && (
-                          <div className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{a.description}</div>
-                        )}
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
