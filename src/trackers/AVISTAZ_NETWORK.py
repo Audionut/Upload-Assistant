@@ -801,7 +801,12 @@ class AZTrackerBase:
         # https://avistaz.to/guides/how-to-properly-titlename-a-torrent
         # https://cinemaz.to/guides/how-to-properly-titlename-a-torrent
         # https://privatehd.to/rules/upload-rules
-        upload_name: str = str(meta.get('name', '')).replace(meta['aka'], '').replace('Dubbed', '').replace('Dual-Audio', '')
+        aka_name = meta.get("aka") or ""
+        manual_episode_title = meta.get("manual_episode_title") or ""
+        daily_episode_title = meta.get("daily_episode_title") or ""
+        upload_name: str = (
+            str(meta.get("name", "")).replace(aka_name, "").replace("Dubbed", "").replace("Dual-Audio", "").replace(manual_episode_title, "").replace(daily_episode_title, "")
+        )
 
         if self.tracker == 'PHD':
             forbidden_terms = [
