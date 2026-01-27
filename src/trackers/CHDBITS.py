@@ -17,6 +17,7 @@ class CHDBITS():
         self.tracker = 'CHDBITS'
         self.source_flag = 'CHDBITS'
         self.passkey = str(config['TRACKERS'].get('CHDBITS', {}).get('passkey', '')).strip()
+        self.torrent_url = "https://ptchdbits.co/details.php?id="
         self.meta_script = str(config['TRACKERS'].get('CHDBITS', {}).get('meta_script', '')).strip()
         self.meta_timeout = int(config['TRACKERS'].get('CHDBITS', {}).get('meta_timeout', 30))
         self.signature = None
@@ -178,7 +179,6 @@ class CHDBITS():
                 
                 if success_match:
                     new_id = success_match.group(1)
-                    console.print(f"[green]Uploaded to CHDBITS! [yellow]https://ptchdbits.co/details.php?id={new_id}[/yellow][/green]")
                     
                     # 必须更新状态，否则主程序 trackerhandle.py 会认为失败
                     if "tracker_status" not in meta: meta["tracker_status"] = {}
