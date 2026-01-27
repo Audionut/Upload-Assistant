@@ -349,7 +349,7 @@ class GPW:
 
         media_type = str(meta.get("type", "")).lower()
         tag = str(meta.get("tag", "")).strip().lower()
-        if media_type == "remux" and tag == "-hdt" or tag == "-frds":
+        if media_type == "remux" and tag in ("-hdt", "-frds"):
             console.print(f"{self.tracker}: Remuxes from {meta['tag']} are not allowed on {self.tracker}")
             return False
         if media_type == "webdl" and tag == "-evo":
