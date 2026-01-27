@@ -67,6 +67,15 @@ class HDSKY:
                         text = row.select_one('a[href^="details.php?id="]')
                         if text and text.attrs.get('title'):
                             dupes.append(text.attrs.get('title'))
+                    if not dupes:
+                        for link in soup.select('a[href^="details.php?id="]'):
+                            title = link.attrs.get('title') or link.get_text(strip=True)
+                            if title:
+                                dupes.append(title)
+                            else:
+                                match = re.search(r'id=(\d+)', link.get('href', ''))
+                                if match:
+                                    dupes.append(f"details.php?id={match.group(1)}")
         except Exception:
             pass
         return dupes
