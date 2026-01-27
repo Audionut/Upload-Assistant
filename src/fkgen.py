@@ -7,7 +7,12 @@ from bs4 import BeautifulSoup
 
 
 class DoubanMovieGenerator:
-    def __init__(self, movie_url: str, douban_cookie: str | None = None) -> None:
+    def __init__(
+        self,
+        movie_url: str,
+        douban_cookie: str | None = None,
+        **_unused: Any,
+    ) -> None:
         self.movie_url = movie_url
         self.douban_cookie = douban_cookie or ""
         self.movie_info: dict[str, Any] = {}
