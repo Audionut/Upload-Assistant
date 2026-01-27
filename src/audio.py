@@ -601,7 +601,9 @@ def dts_core_additional_check(meta: Meta) -> None:
                                     track_one.get("Language"))
             track_two_properties = (track_two.get("Duration"), track_two.get("FrameRate"), track_two.get("FrameCount"),
                                     track_two.get("Language"))
-            if track_one_is_dts_hd_ma and track_two_is_lossy_dts and track_one_properties == track_two_properties:
+            # Ensure at least one property is non-None to avoid matching on empty metadata
+            has_meaningful_properties = any(p is not None for p in track_one_properties)
+            if track_one_is_dts_hd_ma and track_two_is_lossy_dts and has_meaningful_properties and track_one_properties == track_two_properties:
                 if meta["debug"]:
                     console.print(f"[yellow]DEBUG: Detected potential DTS core duplicate between tracks {track_one_index} and {track_two_index}, matched on properties: (Duration={track_one.get('Duration')}, FrameRate={track_one.get('FrameRate')}, FrameCount={track_one.get('FrameCount')}, Language={track_one.get('Language')})[/yellow]")
                 if not warned_once:
