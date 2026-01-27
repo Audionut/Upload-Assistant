@@ -56,7 +56,7 @@ class HDSKY:
         imdb = f"tt{imdb_id_raw.zfill(7)}" if imdb_id_raw.isdigit() and int(imdb_id_raw) != 0 else ""
         if not imdb:
             return []
-        search_url = f"https://hdsky.me/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdb}&search_area=4&search_mode=0"
+        search_url = f"https://hdsky.me/torrents.php?search={imdb}&search_area=4&search_mode=0"
         try:
             async with httpx.AsyncClient(cookies=cookies, timeout=15.0) as client:
                 r = await client.get(search_url)
