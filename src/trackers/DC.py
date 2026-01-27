@@ -1,5 +1,4 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import os
 from typing import Any, Optional, cast
 
 import aiofiles
@@ -210,14 +209,23 @@ class DC:
         Scene uploads should use the scene name.
         Scene uploads should also have "[UNRAR]" in the name, as the UA only uploads unzipped files, which are considered "altered".
         https://digitalcore.club/forum/17/topic/1051/uploading-for-beginners
+
+        Mod mentioned that adding [UNRAR] is unnecessary, but according to my tests, their system does not accept it if there is already a release with the same title.
+        Mod also mentioned that metadata-based titles are acceptable.
+        https://digitalcore.club/forum/6/topic/2810/clarification-needed-p2p-non-scene-torrent-naming-conventions
         """
-        if meta.get("scene_name", ""):
-            dc_name = f"{meta.get('scene_name')} [UNRAR]"
-        else:
-            dc_name = meta["uuid"]
-            base, ext = os.path.splitext(dc_name)
-            if ext.lower() in {".mkv", ".mp4", ".avi", ".ts"}:
-                dc_name = base
+        scene_name = meta.get("scene_name") or ""
+        clean_name = meta.get("clean_name") or ""
+
+        dc_name = scene_name if scene_name else clean_name
+        # T1)  Acceptable characters are as follows:
+        #         ABCDEFGHIJKLMNOPQRSTUVWXYZ
+        #         abcdefghijklmnopqrstuvwxyz
+        #         0123456789 . -
+        # https://scenerules.org/html/2014_BLURAY.html
+        dc_name = "".join(c for c in dc_name if c.isalnum() or c in (" ", ".", "-"))
+        if scene_name:
+            dc_name += " [UNRAR]"
 
         return dc_name
 
