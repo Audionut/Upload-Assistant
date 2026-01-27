@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import unicodedata
 from typing import Any, Optional, cast
 
 import aiofiles
@@ -10,9 +11,10 @@ from src.get_desc import DescriptionBuilder
 from src.rehostimages import RehostImagesManager
 from src.trackers.COMMON import COMMON
 
-
+Meta = dict[str, Any]
+Config = dict[str, Any]
 class DC:
-    def __init__(self, config: dict[str, Any]):
+    def __init__(self, config: Config):
         self.config = config
         self.common = COMMON(config)
         self.rehost_images_manager = RehostImagesManager(config)
@@ -25,7 +27,7 @@ class DC:
         self.api_key = self.config['TRACKERS'][self.tracker].get('api_key')
         self.session = httpx.AsyncClient(headers={'X-API-KEY': self.api_key}, timeout=30.0)
 
-    async def mediainfo(self, meta: dict[str, Any]) -> str:
+    async def mediainfo(self, meta: Meta) -> str:
         if meta.get('is_disc') == 'BDMV':
             mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'])
         else:
@@ -35,7 +37,7 @@ class DC:
 
         return mediainfo
 
-    async def generate_description(self, meta: dict[str, Any]) -> str:
+    async def generate_description(self, meta: Meta) -> str:
         builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts: list[str] = []
 
@@ -128,7 +130,7 @@ class DC:
 
         return description
 
-    async def get_category_id(self, meta: dict[str, Any]) -> Optional[int]:
+    def get_category_id(self, meta: Meta) -> Optional[int]:
         resolution = meta.get('resolution', '')
         category = meta.get('category', '')
         is_disc = meta.get('is_disc', '')
@@ -162,9 +164,9 @@ class DC:
             return category_map[category].get(resolution)
         return None
 
-    async def search_existing(self, meta: dict[str, Any], _) -> list[dict[str, Any]]:
+    async def search_existing(self, meta: Meta, _) -> list[dict[str, Any]]:
         imdb_id = meta.get('imdb_info', {}).get('imdbID')
-        category_id = await self.get_category_id(meta)
+        category_id = self.get_category_id(meta)
         if not imdb_id:
             console.print(f'[bold yellow]Cannot perform search on {self.tracker}: IMDb ID not found in metadata.[/bold yellow]')
             return []
@@ -203,7 +205,7 @@ class DC:
 
         return []
 
-    async def edit_name(self, meta: dict[str, Any]) -> str:
+    async def edit_name(self, meta: Meta) -> str:
         """
         Edits the name according to DC's naming conventions.
         Scene uploads should use the scene name.
@@ -223,13 +225,14 @@ class DC:
         #         abcdefghijklmnopqrstuvwxyz
         #         0123456789 . -
         # https://scenerules.org/html/2014_BLURAY.html
-        dc_name = "".join(c for c in dc_name if c.isalnum() or c in (" ", ".", "-"))
+        dc_name = unicodedata.normalize("NFD", dc_name)
+        dc_name = "".join(c for c in dc_name if c.isascii() and (c.isalnum() or c in (" ", ".", "-")))
         if scene_name:
             dc_name += " [UNRAR]"
 
         return dc_name
 
-    async def check_image_hosts(self, meta: dict[str, Any]) -> None:
+    async def check_image_hosts(self, meta: Meta) -> None:
         url_host_mapping = {
             'ibb.co': 'imgbb',
             'imgbox.com': 'imgbox',
@@ -248,25 +251,25 @@ class DC:
         )
         return
 
-    async def fetch_data(self, meta: dict[str, Any]) -> dict[str, Any]:
+    async def fetch_data(self, meta: Meta) -> dict[str, Any]:
         anon = '1' if meta['anon'] or self.config['TRACKERS'][self.tracker].get('anon', False) else '0'
 
         data = {
-            'category': await self.get_category_id(meta),
-            'imdbId': meta.get('imdb_info', {}).get('imdbID', ''),
-            'nfo': await self.generate_description(meta),
-            'mediainfo': await self.mediainfo(meta),
-            'reqid': '0',
-            'section': 'new',
-            'frileech': '1',
-            'anonymousUpload': anon,
-            'p2p': '0',
-            'unrar': '1',
+            "category": self.get_category_id(meta),
+            "imdbId": meta.get("imdb_info", {}).get("imdbID", ""),
+            "nfo": await self.generate_description(meta),
+            "mediainfo": await self.mediainfo(meta),
+            "reqid": "0",
+            "section": "new",
+            "frileech": "1",
+            "anonymousUpload": anon,
+            "p2p": "0",
+            "unrar": "1",
         }
 
         return data
 
-    async def upload(self, meta: dict[str, Any], _) -> bool:
+    async def upload(self, meta: Meta, _) -> bool:
         data = await self.fetch_data(meta)
         torrent_title = await self.edit_name(meta)
         response = None
