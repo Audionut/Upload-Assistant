@@ -225,6 +225,7 @@ class DC:
         #         abcdefghijklmnopqrstuvwxyz
         #         0123456789 . -
         # https://scenerules.org/html/2014_BLURAY.html
+        dc_name = dc_name.replace("DD+", "DDP").replace("DTS:", "DTS-")
         dc_name = unicodedata.normalize("NFD", dc_name)
         dc_name = "".join(c for c in dc_name if c.isascii() and (c.isalnum() or c in (" ", ".", "-")))
         if scene_name:
