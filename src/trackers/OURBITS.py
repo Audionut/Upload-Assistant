@@ -22,6 +22,7 @@ class OURBITS:
         self.tracker = 'OURBITS'
         self.source_flag = 'OURBITS'
         self.passkey = str(config['TRACKERS'].get('OURBITS', {}).get('passkey', '')).strip()
+        self.torrent_url = "https://ourbits.club/details.php?id="
         self.announce_url = str(
             config['TRACKERS'].get('OURBITS', {}).get('announce_url', 'https://ourbits.club/announce.php')
         ).strip()
@@ -267,7 +268,6 @@ class OURBITS:
                 
                 if success_match and success_match.group(1) != "52027":
                     new_id = success_match.group(1)
-                    console.print(f"[green]Uploaded to OURBITS! [yellow]https://ourbits.club/details.php?id={new_id}[/yellow][/green]")
                     
                     meta["tracker_status"][self.tracker] = {"upload": True, "success": True, "torrent_id": new_id, "status_message": "Success"}
                     await self.download_new_torrent(new_id, torrent_path, meta)
