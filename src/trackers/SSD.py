@@ -44,6 +44,10 @@ class SSD(COMMON):
         self.resolution_map = {'2160p': '1', '1080p': '2', '1080i': '3', '720p': '4', 'SD': '5', 'Other': '99'}
         self.category_map = {'MOVIE': '501', 'TV_SERIES': '502', 'DOCS': '503', 'TV_SHOWS': '505', 'SPORTS': '506', 'MV': '507', 'MUSIC': '508', 'AUDIO': '510', 'OTHER': '509'}
 
+    def _log(self, meta, message):
+        if meta.get('debug', False):
+            print(message)
+
     async def edit_torrent(self, meta, tracker, source_flag):
         edited_torrent_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], f"[{tracker}].torrent")
         decoded_torrent = None
@@ -62,20 +66,20 @@ class SSD(COMMON):
                         if torrent.name == target_name:
                             content_path_in_qb = os.path.join(torrent.save_path, torrent.name)
                             if os.path.normpath(content_path_in_qb) == os.path.normpath(user_input_path):
-                                print(f"[{self.tracker}] ✅ 在 qb 中找到完美匹配的种子，正在导出...")
+                                self._log(meta, f"[{self.tracker}] ✅ 在 qb 中找到完美匹配的种子，正在导出...")
                                 torrent_content = qbt_client.torrents_export(torrent_hash=torrent.hash)
                                 decoded_torrent = bencodepy.decode(torrent_content)
                                 break
             except Exception as e:
-                print(f"[{self.tracker}] 在 qb 中查找种子时出错: {e}")
+                self._log(meta, f"[{self.tracker}] 在 qb 中查找种子时出错: {e}")
             finally:
                 if qbt_client and qbt_client.is_logged_in:
                     qbt_client.auth_log_out()
         if not decoded_torrent:
-            print(f"[{self.tracker}] 未在 qb 中找到匹配种子，回退到使用 BASE.torrent。")
+            self._log(meta, f"[{self.tracker}] 未在 qb 中找到匹配种子，回退到使用 BASE.torrent。")
             base_torrent_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], 'BASE.torrent')
             if not os.path.exists(base_torrent_path):
-                print(f"[{self.tracker}] ❌ 错误：BASE.torrent 文件也不存在，无法编辑。")
+                self._log(meta, f"[{self.tracker}] ❌ 错误：BASE.torrent 文件也不存在，无法编辑。")
                 return False
             with open(base_torrent_path, 'rb') as f:
                 decoded_torrent = bencodepy.decode(f.read())
@@ -106,9 +110,9 @@ class SSD(COMMON):
 
     async def _get_fkgen_data(self, meta, douban_link):
         if not douban_link:
-            print(f"[{self.tracker}] -> 警告：没有提供豆瓣链接，无法获取信息。")
+            self._log(meta, f"[{self.tracker}] -> 警告：没有提供豆瓣链接，无法获取信息。")
             return
-        print(f"[{self.tracker}] 正在从豆瓣链接获取详细信息 (使用fkgen)...")
+        self._log(meta, f"[{self.tracker}] 正在从豆瓣链接获取详细信息 (使用fkgen)...")
         try:
             tracker_config = self.config['TRACKERS'].get(self.tracker, {})
             generator = DoubanMovieGenerator(douban_link)
@@ -118,11 +122,11 @@ class SSD(COMMON):
             self.fkgen_data = generator.movie_info
 
             if self.fkgen_data and self.fkgen_data.get("names"):
-                print(f"[{self.tracker}]   ✅ 从fkgen获取信息成功!")
+                self._log(meta, f"[{self.tracker}]   ✅ 从fkgen获取信息成功!")
             else:
                 raise ValueError("fkgen未能成功解析出有效数据。")
         except Exception as e:
-            print(f"[{self.tracker}]   ❌ 使用fkgen获取信息时失败: {e}")
+            self._log(meta, f"[{self.tracker}]   ❌ 使用fkgen获取信息时失败: {e}")
             self.fkgen_data = {}
 
     # ==================== NEW UNIFIED FUNCTION ====================
@@ -132,7 +136,7 @@ class SSD(COMMON):
         fkgen_lock_path = os.path.join(tmp_folder, "NP_fkgen.lock")
 
         while os.path.exists(fkgen_lock_path):
-            print(f"[{self.tracker}] 检测到fkgen信息正在被其他任务获取，等待中...")
+            self._log(meta, f"[{self.tracker}] 检测到fkgen信息正在被其他任务获取，等待中...")
             await asyncio.sleep(1)
 
         if os.path.exists(fkgen_cache_path):
@@ -140,10 +144,10 @@ class SSD(COMMON):
                 with open(fkgen_cache_path, "r", encoding="utf-8") as f:
                     self.fkgen_data = json.load(f)
                 if self.fkgen_data and self.fkgen_data.get("names"):
-                    print(f"[{self.tracker}] ✅ 成功读取共享的fkgen缓存。")
+                    self._log(meta, f"[{self.tracker}] ✅ 成功读取共享的fkgen缓存。")
                     return True
             except (json.JSONDecodeError, FileNotFoundError):
-                print(f"[{self.tracker}] ⚠️ 缓存文件读取失败，将重新获取。")
+                self._log(meta, f"[{self.tracker}] ⚠️ 缓存文件读取失败，将重新获取。")
                 self.fkgen_data = {}
         
         try:
@@ -170,10 +174,10 @@ class SSD(COMMON):
             if self.fkgen_data and self.fkgen_data.get("names"):
                 with open(fkgen_cache_path, "w", encoding="utf-8") as f:
                     json.dump(self.fkgen_data, f, ensure_ascii=False, indent=4)
-                print(f"[{self.tracker}] fkgen数据已成功获取并写入缓存 NP_fkgen.json。")
+                self._log(meta, f"[{self.tracker}] fkgen数据已成功获取并写入缓存 NP_fkgen.json。")
                 return True
             else:
-                print(f"[{self.tracker}] ❌ fkgen信息获取失败，无法继续。")
+                self._log(meta, f"[{self.tracker}] ❌ fkgen信息获取失败，无法继续。")
                 return False
         finally:
             if os.path.exists(fkgen_lock_path):
@@ -240,18 +244,18 @@ class SSD(COMMON):
                 with open(poster_cache_path, "r", encoding="utf-8") as f:
                     poster_url = f.read().strip()
                 if poster_url.startswith("http"):
-                    print(f"[{self.tracker}] ✅ 成功读取由其他任务生成的海报缓存: {poster_url}")
+                    self._log(meta, f"[{self.tracker}] ✅ 成功读取由其他任务生成的海报缓存: {poster_url}")
                     return poster_url
             except Exception as e:
-                print(f"[{self.tracker}] ⚠️ 读取已存在的海报缓存文件时出错 ({e})，将尝试重新处理。")
+                self._log(meta, f"[{self.tracker}] ⚠️ 读取已存在的海报缓存文件时出错 ({e})，将尝试重新处理。")
 
-        print(f"[{self.tracker}] 开始处理海报（下载与上传）...")
+        self._log(meta, f"[{self.tracker}] 开始处理海报（下载与上传）...")
         try:
             with open(poster_lock_path, 'w') as f: f.write('locked')
             
             original_poster_url = self.fkgen_data.get('image_url', '')
             if not original_poster_url:
-                print(f"[{self.tracker}]   - 未在 fkgen 信息中找到原始海报链接。")
+                self._log(meta, f"[{self.tracker}]   - 未在 fkgen 信息中找到原始海报链接。")
                 return meta.get('poster', '')
 
             if 'doubanio.com' in original_poster_url:
@@ -269,9 +273,9 @@ class SSD(COMMON):
                     response.raise_for_status()
                     with open(local_poster_path, 'wb') as f:
                         async for chunk in response.aiter_bytes(): f.write(chunk)
-                print(f"[{self.tracker}]   - ✅ 海报下载成功。")
+                self._log(meta, f"[{self.tracker}]   - ✅ 海报下载成功。")
             except Exception as e:
-                print(f"[{self.tracker}]   - ❌ 下载海报时出错: {e}")
+                self._log(meta, f"[{self.tracker}]   - ❌ 下载海报时出错: {e}")
                 return meta.get('poster', '')
 
             new_poster_url = await asyncio.to_thread(image777.upload_image, local_poster_path)
@@ -279,11 +283,11 @@ class SSD(COMMON):
             
             if final_url:
                 with open(poster_cache_path, "w", encoding="utf-8") as f: f.write(final_url)
-                print(f"[{self.tracker}] 海报链接已写入 NP_poster.txt。")
-                print(f"[{self.tracker}] ✅ 海报处理完成！新链接: {final_url}")
+                self._log(meta, f"[{self.tracker}] 海报链接已写入 NP_poster.txt。")
+                self._log(meta, f"[{self.tracker}] ✅ 海报处理完成！新链接: {final_url}")
                 return final_url
             else:
-                print(f"[{self.tracker}]   - ❌ 上传到图床失败或未获取到有效链接。")
+                self._log(meta, f"[{self.tracker}]   - ❌ 上传到图床失败或未获取到有效链接。")
                 return original_poster_url
         finally:
             if os.path.exists(poster_lock_path):
@@ -382,23 +386,34 @@ class SSD(COMMON):
                     if content.strip():
                         parts.append(content.strip())
                 except Exception as e: 
-                    print(f"[{self.tracker}] 读取 DESCRIPTION.txt 文件时出错: {e}")
+                    self._log(meta, f"[{self.tracker}] 读取 DESCRIPTION.txt 文件时出错: {e}")
         
         return "\n\n".join(parts)
 
     async def _add_to_qbittorrent(self, meta, torrent_id, upload_limit_kib=-1):
-        if not self.passkey: print(f"[{self.tracker}] ❌ 错误：未在 config.py 的 SSD 配置中找到 'passkey'。"); return
+        if not self.passkey:
+            self._log(meta, f"[{self.tracker}] ❌ 错误：未在 config.py 的 SSD 配置中找到 'passkey'。")
+            return
         download_link = f"https://springsunday.net/download.php?id={torrent_id}&passkey={self.passkey}&https=1"
-        try: from qbittorrentapi import Client
-        except ImportError: print(f"[{self.tracker}] ❌ 错误：缺少 'qbittorrent-api' 库。"); return
+        try:
+            from qbittorrentapi import Client
+        except ImportError:
+            self._log(meta, f"[{self.tracker}] ❌ 错误：缺少 'qbittorrent-api' 库。")
+            return
         client_config = self.config.get('TORRENT_CLIENTS', {}).get('qbittorrent', {})
-        if not client_config: print(f"[{self.tracker}] ❌ 错误：在 config.py 中未找到名为 'qbittorrent' 的客户端配置。"); return
+        if not client_config:
+            self._log(meta, f"[{self.tracker}] ❌ 错误：在 config.py 中未找到名为 'qbittorrent' 的客户端配置。")
+            return
         qbt_url, qbt_port, qbt_user, qbt_pass = (client_config.get(k) for k in ['qbit_url', 'qbit_port', 'qbit_user', 'qbit_pass'])
-        if not all([qbt_url, qbt_port, qbt_user, qbt_pass]): print(f"[{self.tracker}] ❌ 错误：qBittorrent 客户端配置不完整。"); return
+        if not all([qbt_url, qbt_port, qbt_user, qbt_pass]):
+            self._log(meta, f"[{self.tracker}] ❌ 错误：qBittorrent 客户端配置不完整。")
+            return
         try:
             qbt_client = Client(host=f"{qbt_url}:{qbt_port}", username=qbt_user, password=qbt_pass)
             qbt_client.auth_log_in()
-        except Exception as e: print(f"[{self.tracker}] ❌ 连接到 qBittorrent 失败: {e}"); return
+        except Exception as e:
+            self._log(meta, f"[{self.tracker}] ❌ 连接到 qBittorrent 失败: {e}")
+            return
         try:
             user_input_path = meta.get('path')
             if not user_input_path: qbt_client.auth_log_out(); return
@@ -406,9 +421,12 @@ class SSD(COMMON):
             if not save_path: save_path = "/"
             if not os.path.isdir(save_path): qbt_client.auth_log_out(); return
             result = qbt_client.torrents_add(urls=download_link, save_path=save_path, skip_checking=True, is_paused=False, upload_limit=upload_limit_kib * 1024)
-            if result == "Ok.": print(f"[{self.tracker}] ✅ 种子已成功添加到 qBittorrent。")
-            else: print(f"[{self.tracker}] ❌ 添加到 qBittorrent 失败，客户端返回: {result}")
-        except Exception as e: print(f"[{self.tracker}] ❌ 添加种子到 qBittorrent 时发生错误: {e}")
+            if result == "Ok.":
+                self._log(meta, f"[{self.tracker}] ✅ 种子已成功添加到 qBittorrent。")
+            else:
+                self._log(meta, f"[{self.tracker}] ❌ 添加到 qBittorrent 失败，客户端返回: {result}")
+        except Exception as e:
+            self._log(meta, f"[{self.tracker}] ❌ 添加种子到 qBittorrent 时发生错误: {e}")
         finally: qbt_client.auth_log_out()
 
     async def validate_credentials(self, meta):
@@ -497,7 +515,7 @@ class SSD(COMMON):
         return edited_name
 
     async def upload(self, meta, disctype):
-        print(f"[{self.tracker}] 开始处理上传任务...")
+        self._log(meta, f"[{self.tracker}] 开始处理上传任务...")
         if not self.cookie_file or not os.path.exists(self.cookie_file):
             meta['tracker_status'][self.tracker] = {
                 'status': 'failed',
@@ -575,8 +593,8 @@ class SSD(COMMON):
             
             if result.returncode == 0 and 'details.php?id=' in final_url:
                 if meta.get('debug', False):
-                    print(f"[{self.tracker}] ✅ 上传成功！")
-                    print(f"[{self.tracker}] 种子详情页: {final_url}")
+                    self._log(meta, f"[{self.tracker}] ✅ 上传成功！")
+                    self._log(meta, f"[{self.tracker}] 种子详情页: {final_url}")
                 torrent_id = re.search(r'id=(\d+)', final_url).group(1) if re.search(r'id=(\d+)', final_url) else None
                 meta['tracker_status'][self.tracker] = {
                     'status': 'success',
@@ -586,13 +604,13 @@ class SSD(COMMON):
                 }
                 
                 if meta.get('debug', False):
-                    print(f"[{self.tracker}] 🚧 DEBUG模式：跳过将种子添加到 qBittorrent 的步骤。")
+                    self._log(meta, f"[{self.tracker}] 🚧 DEBUG模式：跳过将种子添加到 qBittorrent 的步骤。")
                 elif torrent_id:
                     upload_limit_kib = 112640 
                     await self._add_to_qbittorrent(meta, torrent_id, upload_limit_kib)
                 return True
             else:
-                print(f"[{self.tracker}] ❌ 上传失败。")
+                self._log(meta, f"[{self.tracker}] ❌ 上传失败。")
                 meta['tracker_status'][self.tracker] = {
                     'status': 'failed',
                     'status_message': 'Upload failed',
@@ -601,7 +619,7 @@ class SSD(COMMON):
                 return False
         except Exception as e:
             error_message = f"执行 curl 命令时发生 Python 错误: {e}"
-            print(f"[{self.tracker}] ❌ {error_message}")
+            self._log(meta, f"[{self.tracker}] ❌ {error_message}")
             meta['tracker_status'][self.tracker] = {
                 'status': 'failed',
                 'status_message': 'Upload failed',
