@@ -111,10 +111,9 @@ class SSD(COMMON):
         print(f"[{self.tracker}] 正在从豆瓣链接获取详细信息 (使用fkgen)...")
         try:
             tracker_config = self.config['TRACKERS'].get(self.tracker, {})
-            generator = DoubanMovieGenerator(
-                movie_url=douban_link,
-                douban_cookie=str(tracker_config.get('douban_cookie', '')).strip(),
-            )
+            generator = DoubanMovieGenerator(douban_link)
+            if hasattr(generator, "douban_cookie"):
+                generator.douban_cookie = str(tracker_config.get('douban_cookie', '')).strip()
             generator.parse()
             self.fkgen_data = generator.movie_info
 
