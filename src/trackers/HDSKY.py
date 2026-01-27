@@ -18,6 +18,7 @@ class HDSKY:
         self.tracker = 'HDSKY'
         self.source_flag = 'HDSKY'
         self.passkey = str(config['TRACKERS'].get('HDSKY', {}).get('passkey', '')).strip()
+        self.torrent_url = "https://hdsky.me/details.php?id="
         self.announce_url = str(
             config['TRACKERS'].get('HDSKY', {}).get('announce_url', 'https://tracker.hdsky.me/announce.php')
         ).strip()
@@ -55,7 +56,7 @@ class HDSKY:
         imdb = f"tt{imdb_id_raw.zfill(7)}" if imdb_id_raw.isdigit() and int(imdb_id_raw) != 0 else ""
         if not imdb:
             return []
-        search_url = f"https://hdsky.me/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdb}&search_area=4&search_mode=0"
+        search_url = f"https://hdsky.me/torrents.php?search={imdb}&search_area=4&search_mode=0"
         try:
             async with httpx.AsyncClient(cookies=cookies, timeout=15.0) as client:
                 r = await client.get(search_url)
@@ -285,14 +286,14 @@ class HDSKY:
                 resp = await client.post("https://hdsky.me/takeupload.php", data=data, files=files)
 
                 success_match = None
-                if "details.php?id=" in str(resp.url):
-                    success_match = re.search(r"id=(\d+)", str(resp.url))
+                resp_url = str(resp.url)
+                if "details.php?id=" in resp_url and "userdetails.php" not in resp_url:
+                    success_match = re.search(r"details\.php\?id=(\d+)", resp_url)
                 if not success_match and "details.php?id=" in resp.text:
                     success_match = re.search(r"details\.php\?id=(\d+)", resp.text)
 
                 if success_match:
                     new_id = success_match.group(1)
-                    console.print(f"[green]Uploaded to HDSKY! [yellow]https://hdsky.me/details.php?id={new_id}[/yellow][/green]")
                     if "tracker_status" not in meta:
                         meta["tracker_status"] = {}
                     meta["tracker_status"][self.tracker] = {"upload": True, "torrent_id": new_id, "status_message": "Success"}
@@ -300,11 +301,17 @@ class HDSKY:
                     return True
 
                 if "该种子已存在" in resp.text:
-                    existing_link = re.search(r'https://hdsky\.me/details\.php\?id=\d+', resp.text)
-                    link_str = existing_link.group(0) if existing_link else "未知链接"
-                    console.print(f"[bold red]错误：该种子已在 HDSKY 存在！[/bold red]")
-                    console.print(f"[red]已有种子链接: [yellow]{link_str}[/yellow][/red]")
-                    return False
+                    dupe_match = re.search(r"details\.php\?id=(\d+)", resp.text)
+                    dupe_id = dupe_match.group(1) if dupe_match else ""
+                    if "tracker_status" not in meta:
+                        meta["tracker_status"] = {}
+                    meta["tracker_status"][self.tracker] = {
+                        "upload": False,
+                        "success": True,
+                        "torrent_id": dupe_id,
+                        "status_message": "Duplicate",
+                    }
+                    return True
 
                 error_log = f"{meta['base_dir']}/tmp/HDSKY_ERROR.html"
                 with open(error_log, 'w', encoding='utf-8') as ef:
