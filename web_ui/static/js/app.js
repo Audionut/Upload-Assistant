@@ -112,8 +112,8 @@ const argumentCategories = [
   {
     title: "Description / NFO",
     args: [
-      { label: "--desclink", placeholder: "URL", description: "Custom description link" },
-      { label: "--descfile", placeholder: "PATH", description: "Custom description file" },
+      { label: "--desclink", placeholder: "URL", description: "Link to pastebin/hastebin with description" },
+      { label: "--descfile", placeholder: "PATH", description: "Path to description file (.txt, .nfo, .md)" },
       { label: "--nfo", description: "Use .nfo for description" }
     ]
   },
@@ -302,6 +302,13 @@ const ExpandAllIcon = () => (
   </svg>
 );
 
+const SpinnerIcon = () => (
+  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  </svg>
+);
+
 function AudionutsUAGUI() {
   const API_BASE = window.location.origin + '/api';
   // Derive an application base path from the API base so links work under subpath deployments
@@ -328,10 +335,186 @@ function AudionutsUAGUI() {
   const [argSearchFilter, setArgSearchFilter] = useState('');
   const [collapsedSections, setCollapsedSections] = useState(new Set());
   
+  // Folder loading states
+  const [loadingFolders, setLoadingFolders] = useState(new Set());
+  
+  // Description file/link states
+  const [descDirectories, setDescDirectories] = useState([]);
+  const [descExpandedFolders, setDescExpandedFolders] = useState(new Set());
+  const [descLoadingFolders, setDescLoadingFolders] = useState(new Set());
+  const [descLinkError, setDescLinkError] = useState('');
+  const [descFileError, setDescFileError] = useState('');
+  const [descBrowserCollapsed, setDescBrowserCollapsed] = useState(false);
+  const [descLinkFocused, setDescLinkFocused] = useState(false);
+  
   const richOutputRef = useRef(null);
   const lastFullHashRef = useRef('');
   const inputRef = useRef(null);
   const sseAbortControllerRef = useRef(null);
+  
+  // Detect if --descfile or --desclink is present in arguments
+  const hasDescFile = customArgs.includes('--descfile');
+  const hasDescLink = customArgs.includes('--desclink');
+  
+  // URL validation helper - accepts any HTTP/HTTPS URL (server fetches and parses any URL)
+  const isValidUrl = (string) => {
+    try {
+      const url = new URL(string);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch (_) {
+      return false;
+    }
+  };
+  
+  // Path validation helper - checks if string looks like a valid file path
+  const isValidDescFilePath = (path) => {
+    if (!path || path.trim() === '') return { valid: false, error: '' };
+    
+    const trimmed = path.trim();
+    
+    // Check for valid description file extensions
+    const validExtensions = ['.txt', '.nfo', '.md'];
+    const hasValidExt = validExtensions.some(ext => trimmed.toLowerCase().endsWith(ext));
+    
+    // Check if it looks like a path (has separators or starts with drive letter/root)
+    const hasPathSeparator = trimmed.includes('/') || trimmed.includes('\\');
+    const startsWithRoot = /^[a-zA-Z]:/.test(trimmed) || trimmed.startsWith('/') || trimmed.startsWith('\\');
+    const looksLikePath = hasPathSeparator || startsWithRoot;
+    
+    if (!looksLikePath) {
+      return { 
+        valid: false, 
+        error: 'Path should be a full file path (e.g., /path/to/desc.txt or C:\\path\\desc.txt)' 
+      };
+    }
+    
+    if (!hasValidExt) {
+      return { 
+        valid: false, 
+        error: 'File should have a valid extension (.txt, .nfo, or .md)' 
+      };
+    }
+    
+    return { valid: true, error: '' };
+  };
+  
+  // Extract value from argument string (e.g., --descfile "path" or --desclink "url")
+  // Supports both space-separated (--arg "value") and equals-separated (--arg="value") formats
+  const extractArgValue = (args, argName) => {
+    // First try equals-separated format: --argname="value" or --argname='value' or --argname=value
+    const equalsRegex = new RegExp(`${argName}=(?:"([^"]+)"|'([^']+)'|([^\\s]+))`, 'i');
+    const equalsMatch = args.match(equalsRegex);
+    if (equalsMatch) {
+      const val = equalsMatch[1] || equalsMatch[2] || equalsMatch[3] || '';
+      // Double-check: don't return values that look like arguments
+      if (val.startsWith('--')) return '';
+      return val.trim();
+    }
+    
+    // Then try space-separated format: --argname "value" or --argname 'value' or --argname value
+    const spaceRegex = new RegExp(`${argName}\\s+(?:"([^"]+)"|'([^']+)'|([^\\s-][^\\s]*|(?!--)[^\\s]+))`, 'i');
+    const spaceMatch = args.match(spaceRegex);
+    if (spaceMatch) {
+      const val = spaceMatch[1] || spaceMatch[2] || spaceMatch[3] || '';
+      // Double-check: don't return values that look like arguments
+      if (val.startsWith('--')) return '';
+      return val.trim();
+    }
+    return '';
+  };
+  
+  // Update argument value in string
+  // Supports both space-separated (--arg "value") and equals-separated (--arg="value") formats
+  const updateArgValue = (args, argName, value) => {
+    // Check if argument exists
+    if (!args.includes(argName)) {
+      return args;
+    }
+    
+    // Check which format is being used
+    const hasEqualsFormat = new RegExp(`${argName}=`, 'i').test(args);
+    const hasSpaceValue = new RegExp(`${argName}\\s+(?:"[^"]*"|'[^']*'|(?!--)[^\\s]+)`, 'i').test(args);
+    
+    // If value is empty, remove the value but keep the flag
+    if (!value) {
+      if (hasEqualsFormat) {
+        // Remove equals-format value: --arg="value" or --arg='value' or --arg=value
+        return args.replace(new RegExp(`(${argName})=(?:"[^"]*"|'[^']*'|[^\\s]*)`, 'i'), '$1');
+      } else if (hasSpaceValue) {
+        // Remove space-format value
+        return args.replace(new RegExp(`(${argName})\\s+(?:"[^"]*"|'[^']*'|(?!--)[^\\s]+)`, 'i'), '$1');
+      }
+      return args;
+    }
+    
+    // Quote the value if it contains spaces
+    const quotedValue = value.includes(' ') ? `"${value}"` : `"${value}"`;
+    
+    if (hasEqualsFormat) {
+      // Replace equals-format value: --arg="value" or --arg='value' or --arg=value
+      return args.replace(new RegExp(`(${argName})=(?:"[^"]*"|'[^']*'|[^\\s]*)`, 'i'), `$1=${quotedValue}`);
+    } else if (hasSpaceValue) {
+      // Replace space-format value
+      return args.replace(new RegExp(`(${argName})\\s+(?:"[^"]*"|'[^']*'|(?!--)[^\\s]+)`, 'i'), `$1 ${quotedValue}`);
+    } else {
+      // Add value after the flag (no existing value)
+      return args.replace(new RegExp(`(${argName})(\\s|$)`, 'i'), `$1 ${quotedValue}$2`);
+    }
+  };
+  
+  // Get current values from args
+  const descFilePath = extractArgValue(customArgs, '--descfile');
+  const descLinkUrl = extractArgValue(customArgs, '--desclink');
+  
+  // Validate desclink URL when it changes
+  useEffect(() => {
+    if (hasDescLink && descLinkUrl) {
+      if (!isValidUrl(descLinkUrl)) {
+        setDescLinkError('Please enter a valid paste URL (pastebin, hastebin, etc.)');
+      } else {
+        setDescLinkError('');
+      }
+    } else {
+      setDescLinkError('');
+    }
+  }, [descLinkUrl, hasDescLink]);
+  
+  // Validate descfile path when it changes and auto-collapse when valid
+  useEffect(() => {
+    if (hasDescFile && descFilePath) {
+      const validation = isValidDescFilePath(descFilePath);
+      setDescFileError(validation.error);
+      // Auto-collapse when valid file is selected
+      if (validation.valid) {
+        setDescBrowserCollapsed(true);
+      }
+    } else {
+      setDescFileError('');
+    }
+  }, [descFilePath, hasDescFile]);
+  
+  // Reset description browser when argument is removed
+  useEffect(() => {
+    if (!hasDescFile) {
+      setDescDirectories([]);
+      setDescExpandedFolders(new Set());
+      setDescFileError('');
+      setDescBrowserCollapsed(false);
+    }
+    if (!hasDescLink) {
+      setDescLinkError('');
+    }
+  }, [hasDescFile, hasDescLink]);
+  
+  // Update descfile in args
+  const updateDescFile = (path) => {
+    setCustomArgs(prev => updateArgValue(prev, '--descfile', path));
+  };
+  
+  // Update desclink in args
+  const updateDescLink = (url) => {
+    setCustomArgs(prev => updateArgValue(prev, '--desclink', url));
+  };
 
   const appendHtmlFragment = (rawHtml) => {
     const container = richOutputRef.current;
@@ -404,6 +587,83 @@ function AudionutsUAGUI() {
       console.error('Failed to load browse roots:', error);
     }
   };
+  
+  // Load description file browser roots
+  const loadDescBrowseRoots = async () => {
+    try {
+      const response = await apiFetch(`${API_BASE}/browse_roots`);
+      const data = await response.json();
+
+      if (data.success && data.items) {
+        setDescDirectories(data.items);
+        setDescExpandedFolders(new Set());
+      }
+    } catch (error) {
+      console.error('Failed to load desc browse roots:', error);
+    }
+  };
+  
+  // Load description folder contents
+  const loadDescFolderContents = async (path) => {
+    try {
+      const response = await apiFetch(`${API_BASE}/browse?path=${encodeURIComponent(path)}&filter=desc`);
+      const data = await response.json();
+      
+      if (data.success && data.items) {
+        updateDescDirectoryTree(path, data.items);
+      }
+    } catch (error) {
+      console.error('Failed to load desc folder:', error);
+    }
+  };
+  
+  // Update description directory tree
+  const updateDescDirectoryTree = (path, items) => {
+    const updateTree = (nodes) => {
+      return nodes.map(node => {
+        if (node.path === path) {
+          return { ...node, children: items };
+        } else if (node.children) {
+          return { ...node, children: updateTree(node.children) };
+        }
+        return node;
+      });
+    };
+    
+    setDescDirectories((prev) => updateTree(prev));
+  };
+  
+  // Toggle description folder
+  const toggleDescFolder = async (path) => {
+    const newExpanded = new Set(descExpandedFolders);
+
+    if (newExpanded.has(path)) {
+      newExpanded.delete(path);
+      setDescExpandedFolders(newExpanded);
+    } else {
+      newExpanded.add(path);
+      setDescExpandedFolders(newExpanded);
+      
+      // Show loading indicator while fetching
+      setDescLoadingFolders(prev => new Set(prev).add(path));
+      try {
+        await loadDescFolderContents(path);
+      } finally {
+        setDescLoadingFolders(prev => {
+          const next = new Set(prev);
+          next.delete(path);
+          return next;
+        });
+      }
+    }
+  };
+  
+  // Load desc roots when --descfile is added
+  useEffect(() => {
+    if (hasDescFile && descDirectories.length === 0) {
+      loadDescBrowseRoots();
+    }
+  }, [hasDescFile]);
   useEffect(() => {
     storage.set(THEME_KEY, isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
@@ -436,12 +696,23 @@ function AudionutsUAGUI() {
     
     if (newExpanded.has(path)) {
       newExpanded.delete(path);
+      setExpandedFolders(newExpanded);
     } else {
       newExpanded.add(path);
-      await loadFolderContents(path);
+      setExpandedFolders(newExpanded);
+      
+      // Show loading indicator while fetching
+      setLoadingFolders(prev => new Set(prev).add(path));
+      try {
+        await loadFolderContents(path);
+      } finally {
+        setLoadingFolders(prev => {
+          const next = new Set(prev);
+          next.delete(path);
+          return next;
+        });
+      }
     }
-    
-    setExpandedFolders(newExpanded);
   };
 
   const loadFolderContents = async (path) => {
@@ -473,47 +744,134 @@ function AudionutsUAGUI() {
   };
 
   const renderFileTree = (items, level = 0) => {
-    return items.map((item, idx) => (
-      <div key={idx}>
-        <div
-          className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
-            selectedPath === item.path 
-              ? isDarkMode 
-                ? 'bg-purple-900 border-l-4 border-purple-500' 
-                : 'bg-blue-100 border-l-4 border-blue-500'
-              : isDarkMode
-                ? 'hover:bg-gray-700'
-                : 'hover:bg-gray-100'
-          }`}
-          style={{ paddingLeft: `${level * 20 + 12}px` }}
-          onClick={() => {
-            if (item.type === 'folder') {
-              toggleFolder(item.path);
-            }
-            setSelectedPath(item.path);
-            setSelectedName(item.name);
-          }}
-        >
-          <span className="text-yellow-600">
-            {item.type === 'folder' ? (
-              expandedFolders.has(item.path) ? <FolderOpenIcon /> : <FolderIcon />
-            ) : (
-              <span className="text-blue-600"><FileIcon /></span>
-            )}
-          </span>
-          <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>{item.name}</span>
+    return items.map((item, idx) => {
+      const isLoading = item.type === 'folder' && loadingFolders.has(item.path);
+      return (
+        <div key={idx}>
+          <div
+            className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+              selectedPath === item.path 
+                ? isDarkMode 
+                  ? 'bg-purple-900 border-l-4 border-purple-500' 
+                  : 'bg-blue-100 border-l-4 border-blue-500'
+                : isDarkMode
+                  ? 'hover:bg-gray-700'
+                  : 'hover:bg-gray-100'
+            }`}
+            style={{ paddingLeft: `${level * 20 + 12}px` }}
+            onClick={() => {
+              if (item.type === 'folder') {
+                toggleFolder(item.path);
+              }
+              setSelectedPath(item.path);
+              setSelectedName(item.name);
+            }}
+          >
+            <span className={`flex-shrink-0 ${isLoading ? 'text-purple-500' : 'text-yellow-600'}`}>
+              {item.type === 'folder' ? (
+                isLoading ? <SpinnerIcon /> : (expandedFolders.has(item.path) ? <FolderOpenIcon /> : <FolderIcon />)
+              ) : (
+                <span className="text-blue-600"><FileIcon /></span>
+              )}
+            </span>
+            <div className="flex flex-col min-w-0">
+              <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-700'} truncate`}>
+                {item.name}
+                {isLoading && <span className={`ml-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading...</span>}
+              </span>
+              {item.subtitle && (
+                <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} truncate`} title={item.subtitle}>{item.subtitle}</span>
+              )}
+            </div>
+          </div>
+          {item.type === 'folder' && expandedFolders.has(item.path) && item.children && item.children.length > 0 && (
+            <div>{renderFileTree(item.children, level + 1)}</div>
+          )}
         </div>
-        {item.type === 'folder' && expandedFolders.has(item.path) && item.children && item.children.length > 0 && (
-          <div>{renderFileTree(item.children, level + 1)}</div>
-        )}
-      </div>
-    ));
+      );
+    });
+  };
+  
+  // Render description file tree
+  const renderDescFileTree = (items, level = 0) => {
+    return items.map((item, idx) => {
+      const isLoading = item.type === 'folder' && descLoadingFolders.has(item.path);
+      return (
+        <div key={idx}>
+          <div
+            className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+              descFilePath === item.path 
+                ? isDarkMode 
+                  ? 'bg-green-900 border-l-4 border-green-500' 
+                  : 'bg-green-100 border-l-4 border-green-500'
+                : isDarkMode
+                  ? 'hover:bg-gray-700'
+                  : 'hover:bg-gray-100'
+            }`}
+            style={{ paddingLeft: `${level * 20 + 12}px` }}
+            onClick={() => {
+              if (item.type === 'folder') {
+                toggleDescFolder(item.path);
+              } else {
+                // Update the argument directly with the selected file path
+                updateDescFile(item.path);
+              }
+            }}
+          >
+            <span className={`flex-shrink-0 ${isLoading ? 'text-green-500' : 'text-yellow-600'}`}>
+              {item.type === 'folder' ? (
+                isLoading ? <SpinnerIcon /> : (descExpandedFolders.has(item.path) ? <FolderOpenIcon /> : <FolderIcon />)
+              ) : (
+                <span className="text-green-600"><FileIcon /></span>
+              )}
+            </span>
+            <div className="flex flex-col min-w-0">
+              <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-700'} truncate`}>
+                {item.name}
+                {isLoading && <span className={`ml-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading...</span>}
+              </span>
+              {item.subtitle && (
+                <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} truncate`} title={item.subtitle}>{item.subtitle}</span>
+              )}
+            </div>
+          </div>
+          {item.type === 'folder' && descExpandedFolders.has(item.path) && item.children && item.children.length > 0 && (
+            <div>{renderDescFileTree(item.children, level + 1)}</div>
+          )}
+        </div>
+      );
+    });
   };
 
   const executeCommand = async () => {
     if (!selectedPath) {
       appendSystemMessage('✗ Please select a file or folder first', 'error');
       return;
+    }
+    
+    // Validate --descfile: must have a valid description file path
+    if (hasDescFile) {
+      if (!descFilePath) {
+        appendSystemMessage('✗ Please select or enter a description file path when using --descfile', 'error');
+        return;
+      }
+      const pathValidation = isValidDescFilePath(descFilePath);
+      if (!pathValidation.valid) {
+        appendSystemMessage(`✗ Invalid description file: ${pathValidation.error}`, 'error');
+        return;
+      }
+    }
+    
+    // Validate --desclink: must have a valid URL
+    if (hasDescLink) {
+      if (!descLinkUrl) {
+        appendSystemMessage('✗ Please enter a description URL when using --desclink', 'error');
+        return;
+      }
+      if (!isValidUrl(descLinkUrl)) {
+        appendSystemMessage('✗ Please enter a valid paste URL for --desclink (pastebin, hastebin, etc.)', 'error');
+        return;
+      }
     }
 
     const rootContainer = richOutputRef.current;
@@ -814,9 +1172,98 @@ function AudionutsUAGUI() {
             File Browser
           </h2>
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className={`${hasDescFile && !descBrowserCollapsed ? 'flex-1 max-h-[50%]' : 'flex-1'} overflow-y-auto`}>
           {renderFileTree(directories)}
         </div>
+        
+        {/* Description File Browser - shown when --descfile is in args */}
+        {hasDescFile && (
+          <>
+            <div 
+              className={`p-4 border-t ${!descBrowserCollapsed ? 'border-b' : ''} ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50'} ${descBrowserCollapsed ? 'cursor-pointer' : ''}`}
+              onClick={descBrowserCollapsed ? () => setDescBrowserCollapsed(false) : undefined}
+            >
+              <div className="flex items-center justify-between">
+                <h2 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'} flex items-center gap-2`}>
+                  <FileIcon />
+                  Description File
+                  {descBrowserCollapsed && descFilePath && !descFileError && (
+                    <span className="text-green-500 ml-1">
+                      <svg className="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </span>
+                  )}
+                </h2>
+                {descBrowserCollapsed ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDescBrowserCollapsed(false); }}
+                    className={`p-1 rounded ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                    title="Expand browser"
+                  >
+                    <ChevronDownIcon />
+                  </button>
+                ) : descFilePath && !descFileError && (
+                  <button
+                    onClick={() => setDescBrowserCollapsed(true)}
+                    className={`p-1 rounded ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                    title="Collapse browser"
+                  >
+                    <ChevronRightIcon />
+                  </button>
+                )}
+              </div>
+              {descBrowserCollapsed && descFilePath ? (
+                <div className="flex items-center gap-2 mt-2">
+                  <p className={`text-xs ${descFileError ? (isDarkMode ? 'text-red-400' : 'text-red-600') : (isDarkMode ? 'text-green-400' : 'text-green-700')} break-all font-mono flex-1`}>{descFilePath}</p>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); updateDescFile(''); setDescBrowserCollapsed(false); }}
+                    className={`p-1 rounded ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                    title="Clear selection"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ) : !descBrowserCollapsed && (
+                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Select a .txt, .nfo, or .md file
+                </p>
+              )}
+            </div>
+            {!descBrowserCollapsed && (
+              <>
+                <div className="flex-1 overflow-y-auto">
+                  {descDirectories.length > 0 ? (
+                    renderDescFileTree(descDirectories)
+                  ) : (
+                    <div className={`p-4 text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      <p className="text-sm">Loading description files...</p>
+                    </div>
+                  )}
+                </div>
+                {descFilePath && (
+                  <div className={`p-3 border-t ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-green-50'}`}>
+                    <p className={`text-xs font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-1`}>Selected Description:</p>
+                    <div className="flex items-center gap-2">
+                      <p className={`text-xs ${isDarkMode ? 'text-green-400' : 'text-green-700'} break-all font-mono flex-1`}>{descFilePath}</p>
+                      <button
+                        onClick={() => updateDescFile('')}
+                        className={`p-1 rounded ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                        title="Clear selection"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
       </div>
 
       {/* Resize Handle */}
@@ -895,6 +1342,81 @@ function AudionutsUAGUI() {
                 disabled={isExecuting}
               />
             </div>
+            
+            {/* Description Link URL Input - shown when --desclink is in args */}
+            {/* Hide when valid URL and not focused; show when empty, focused, or invalid */}
+            {hasDescLink && (!descLinkUrl || descLinkFocused || descLinkError) && (
+              <div className="space-y-2">
+                <label className={`text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'} flex items-center gap-2`}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  Description Link URL (pastebin, hastebin, etc.):
+                </label>
+                <input
+                  type="url"
+                  value={descLinkUrl}
+                  onChange={(e) => updateDescLink(e.target.value)}
+                  onFocus={() => setDescLinkFocused(true)}
+                  onBlur={() => setDescLinkFocused(false)}
+                  placeholder="https://pastebin.com/abc123"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
+                    descLinkError 
+                      ? 'border-red-500 focus:ring-red-500' 
+                      : isDarkMode 
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                        : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                  disabled={isExecuting}
+                />
+                {descLinkError && (
+                  <p className="text-xs text-red-500 mt-1">{descLinkError}</p>
+                )}
+                {descLinkUrl && !descLinkError && (
+                  <p className="text-xs text-green-500 mt-1">Valid paste URL</p>
+                )}
+              </div>
+            )}
+            
+            {/* Description File Status - only show on error or when no file selected */}
+            {hasDescFile && (descFileError || !descFilePath) && (
+              <div className={`p-3 rounded-lg ${
+                descFileError 
+                  ? isDarkMode ? 'bg-red-900 border border-red-700' : 'bg-red-50 border border-red-200'
+                  : isDarkMode ? 'bg-yellow-900 border border-yellow-700' : 'bg-yellow-50 border border-yellow-200'
+              }`}>
+                <div className="flex items-center gap-2">
+                  <svg className={`w-4 h-4 ${
+                    descFileError ? 'text-red-500' : 'text-yellow-500'
+                  }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {descFileError ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    )}
+                  </svg>
+                  <span className={`text-sm font-medium ${
+                    descFileError 
+                      ? isDarkMode ? 'text-red-300' : 'text-red-700'
+                      : isDarkMode ? 'text-yellow-300' : 'text-yellow-700'
+                  }`}>
+                    {descFileError 
+                      ? 'Invalid description file path' 
+                      : 'Select a description file from the left panel or enter a path'}
+                  </span>
+                </div>
+                {descFilePath && descFileError && (
+                  <p className={`text-xs mt-1 break-all font-mono ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                    {descFilePath}
+                  </p>
+                )}
+                {descFileError && (
+                  <p className={`text-xs mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                    {descFileError}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Execute Button */}
             <div className="flex gap-2">
@@ -926,7 +1448,7 @@ function AudionutsUAGUI() {
         <div className={`flex-1 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'} p-4 flex flex-col min-h-0 overflow-hidden`}>
           <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col min-h-0">
             <div className="flex items-center gap-2 mb-3 flex-shrink-0">
-              <TerminalIcon />
+              <span className={isDarkMode ? 'text-white' : 'text-gray-800'}><TerminalIcon /></span>
               <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Execution Output</h3>
               {isExecuting && (
                 <span className="ml-auto text-sm text-green-400 animate-pulse">● Running</span>
