@@ -2716,7 +2716,54 @@ def execute_command():
         return jsonify({"error": "Forbidden (invalid token)", "success": False}), 403
 
     try:
-        data = request.json
+        # Prefer a silent JSON parse to avoid Werkzeug raising on malformed
+        # payloads. If parsing fails, try form data or a few tolerant
+        # fallbacks to extract common fields (path, args, session_id).
+        data = None
+        try:
+            data = request.get_json(silent=True)
+        except Exception:
+            data = None
+
+        if not data:
+            # Try standard form-encoded body first
+            try:
+                if request.form:
+                    data = request.form.to_dict()
+            except Exception:
+                data = None
+
+        if not data:
+            # As a last resort attempt to parse raw body text that may be
+            # produced by shells which strip quoting or backslashes. We
+            # attempt a few conservative transforms rather than executing
+            # arbitrary code: 1) normalize single quotes to double quotes,
+            # 2) quote unquoted object keys, then try json.loads. If that
+            # fails, fall back to simple regex extraction of `path` and
+            # `session_id` values.
+            try:
+                raw = (request.get_data(as_text=True) or "").strip()
+                if raw:
+                    # Quick normalization: single -> double quotes
+                    candidate = raw.replace("'", '"')
+                    # Quote unquoted keys like: {path:...} -> {"path":...}
+                    candidate = re.sub(r'([\{\s,])([A-Za-z0-9_]+)\s*:', r'\1"\2":', candidate)
+                    try:
+                        data = json.loads(candidate)
+                    except Exception:
+                        # Regex extraction fallback for minimal fields
+                        d: dict[str, str] = {}
+                        m_path = re.search(r'path\s*[:=]\s*["\']?([^"\'\},]+)', raw)
+                        m_sess = re.search(r'session_id\s*[:=]\s*["\']?([^"\'\},]+)', raw)
+                        if m_path:
+                            d['path'] = m_path.group(1)
+                        if m_sess:
+                            d['session_id'] = m_sess.group(1)
+                        if d:
+                            data = d
+            except Exception:
+                data = None
+
         if not data:
             return jsonify({"error": "No JSON data received", "success": False}), 400
 
