@@ -43,7 +43,6 @@ Note: container-side paths are important — `UA_BROWSE_ROOTS` must reference th
 
 ## Docker Compose snippet (recommended)
 
-
 Include the following in your `docker-compose.yml` as a starting point (adjust host paths and network):
 
 ```yaml

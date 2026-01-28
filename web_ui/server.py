@@ -138,7 +138,6 @@ def _assert_safe_resolved_path(path: str) -> None:
     if not allowed:
         raise ValueError("Path outside allowed roots")
 
-
 Flask = cast(Any, Flask)
 Response = cast(Any, Response)
 jsonify = cast(Any, jsonify)
@@ -2603,6 +2602,7 @@ def api_tokens():
 def browse_path():
     """Browse filesystem paths"""
     requested = request.args.get("path", "")
+    file_filter = request.args.get("filter", "video")  # 'video' or 'desc'
     try:
         path = _resolve_browse_path(requested)
     except ValueError as e:
@@ -2664,11 +2664,16 @@ def browse_path():
                 try:
                     is_dir = os.path.isdir(full_path)
 
-                    # Skip files that are not supported video formats
+                    # Skip files based on filter type
                     if not is_dir:
                         _, ext = os.path.splitext(item.lower())
-                        if ext not in SUPPORTED_VIDEO_EXTS:
-                            continue
+                        if file_filter == "desc":
+                            if ext not in SUPPORTED_DESC_EXTS:
+                                continue
+                        else:
+                            # Default to video filter
+                            if ext not in SUPPORTED_VIDEO_EXTS:
+                                continue
 
                     items.append({"name": item, "path": full_path, "type": "folder" if is_dir else "file", "children": [] if is_dir else None})
                 except (PermissionError, OSError):

@@ -215,7 +215,6 @@ The following endpoints via a valid web session.
   - payload: {"id": "`<token_id>`"}
   - Response: {"success": true}
 
-
 ---
 
 Notes & security model summary:

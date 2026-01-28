@@ -112,8 +112,8 @@ const argumentCategories = [
   {
     title: "Description / NFO",
     args: [
-      { label: "--desclink", placeholder: "PASTE_URL", description: "Link to pastebin/hastebin with description" },
-      { label: "--descfile", placeholder: "FILE_PATH", description: "Path to description file (.txt, .nfo, .md)" },
+      { label: "--desclink", placeholder: "URL", description: "Link to pastebin/hastebin with description" },
+      { label: "--descfile", placeholder: "PATH", description: "Path to description file (.txt, .nfo, .md)" },
       { label: "--nfo", description: "Use .nfo for description" }
     ]
   },
@@ -334,6 +334,7 @@ function AudionutsUAGUI() {
   const [descLinkError, setDescLinkError] = useState('');
   const [descFileError, setDescFileError] = useState('');
   const [descBrowserCollapsed, setDescBrowserCollapsed] = useState(false);
+  const [descLinkFocused, setDescLinkFocused] = useState(false);
   
   const richOutputRef = useRef(null);
   const lastFullHashRef = useRef('');
@@ -570,7 +571,7 @@ function AudionutsUAGUI() {
   // Load description folder contents
   const loadDescFolderContents = async (path) => {
     try {
-      const response = await apiFetch(`${API_BASE}/browse_desc?path=${encodeURIComponent(path)}`);
+      const response = await apiFetch(`${API_BASE}/browse?path=${encodeURIComponent(path)}&filter=desc`);
       const data = await response.json();
       
       if (data.success && data.items) {
@@ -1264,7 +1265,8 @@ function AudionutsUAGUI() {
             </div>
             
             {/* Description Link URL Input - shown when --desclink is in args */}
-            {hasDescLink && (
+            {/* Hide when valid URL and not focused; show when empty, focused, or invalid */}
+            {hasDescLink && (!descLinkUrl || descLinkFocused || descLinkError) && (
               <div className="space-y-2">
                 <label className={`text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'} flex items-center gap-2`}>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1276,6 +1278,8 @@ function AudionutsUAGUI() {
                   type="url"
                   value={descLinkUrl}
                   onChange={(e) => updateDescLink(e.target.value)}
+                  onFocus={() => setDescLinkFocused(true)}
+                  onBlur={() => setDescLinkFocused(false)}
                   placeholder="https://pastebin.com/abc123"
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
                     descLinkError 
