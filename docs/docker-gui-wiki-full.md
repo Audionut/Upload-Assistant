@@ -6,8 +6,7 @@ This guide explains how to run the Upload Assistant WebUI inside Docker (includi
 
 ## Quick summary
 
-- Persist the WebUI configuration and session data by mounting a host `data` folder into `/Upload-Assistant/data` inside the container.
- - Persist the WebUI configuration and session data by mounting a host `data` folder into `/Upload-Assistant/data` inside the container, or mount a directory to the container XDG config location.
+- Persist the WebUI configuration and session data by mounting a host `data` folder into `/Upload-Assistant/data` inside the container, or mount a directory to the container XDG config location.
 - Provide a stable session secret via `SESSION_SECRET` or `SESSION_SECRET_FILE` so encrypted credentials remain decryptable after restarts.
 - Ensure `UA_BROWSE_ROOTS` lists the container-side mount paths the WebUI may browse (must match your `volumes` mounts).
 
@@ -21,6 +20,8 @@ This guide explains how to run the Upload Assistant WebUI inside Docker (includi
 - `UA_WEBUI_CORS_ORIGINS` — optional CORS origins, comma-separated.
 
 Note: When running inside a container the WebUI prefers the per-user XDG/AppData config directory for storing `session_secret` and `webui_auth.json` (it respects `XDG_CONFIG_HOME` on Unix-like systems or `APPDATA` on Windows). By default that will be `/root/.config/upload-assistant` inside the container. If you prefer the repository `data/` path, set `SESSION_SECRET_FILE` to a path you mount into the container (for example `/Upload-Assistant/data/session_secret`).
+
+- The `session_secret` if specified, should be a 64 byte string.
 
 --
 
@@ -42,6 +43,7 @@ Note: container-side paths are important — `UA_BROWSE_ROOTS` must reference th
 
 ## Docker Compose snippet (recommended)
 
+
 Include the following in your `docker-compose.yml` as a starting point (adjust host paths and network):
 
 ```yaml
@@ -58,10 +60,11 @@ services:
       # Map host port to container port (change for host-only binding if desired)
       - "5000:5000"
     volumes:
-      - /host/path/Upload-Assistant/data:/Upload-Assistant/data:rw
-      - /host/path/Upload-Assistant/data/sessions:/Upload-Assistant/data/sessions:rw
-      - /host/path/Upload-Assistant/tmp:/Upload-Assistant/tmp:rw
-      - /host/torrents:/data/torrents:rw
+      - /path/to/torrents/:/data/torrents/:rw #map this to qbit download location, map exactly as qbittorent template on both sides.
+      - /mnt/user/appdata/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw # Optional: will be created automatically if missing
+      - /mnt/user/appdata/qBittorrent/data/BT_backup/:/torrent_storage_dir:rw #map this to your qbittorrent bt_backup
+      - /mnt/user/appdata/Upload-Assistant/tmp/:/Upload-Assistant/tmp:rw #map this to your /tmp folder.
+      - /mnt/user/appdata/Upload-Assistant/webui-auth:/root/.config/upload-assistant:rw # persist web UI session auth config
     networks:
       - appnet
 

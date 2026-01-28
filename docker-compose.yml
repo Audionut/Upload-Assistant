@@ -11,11 +11,11 @@ services:
       # including devices outside your network if your router/reverse proxy allows it.
       - "127.0.0.1:5000:5000"
     environment:
-      # Required: allowlisted roots the Web UI is allowed to browse/execute within
+      # Required if not using paths from terminal: allowlisted roots the Web UI is allowed to browse/execute within
       - UA_BROWSE_ROOTS=/data/torrents,/Upload-Assistant/tmp
       # Optional: set secret key as key, or use file variant to read from a file. (minimum 32 bytes)
-      # - ENV_SESSION_SECRET = "SESSION_SECRET"
-      # - ENV_SESSION_SECRET_FILE = "SESSION_SECRET_FILE"
+      # - ENV_SESSION_SECRET="SESSION_SECRET"
+      # - ENV_SESSION_SECRET_FILE="SESSION_SECRET_FILE"
       # Optional: only needed if you serve the UI from a different origin/domain.
       # - UA_WEBUI_CORS_ORIGINS=https://your-ui-host
     entrypoint: /bin/bash

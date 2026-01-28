@@ -26,6 +26,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.security import safe_join
+from werkzeug.utils import secure_filename
 
 import web_ui.auth as auth_mod
 from flask_session import Session
@@ -78,6 +79,65 @@ def _cfg_delete(name: str) -> None:
     with contextlib.suppress(Exception):
         if p.exists():
             p.unlink()
+
+
+def _sanitize_relpath(rel: str) -> str:
+    """Sanitize a relative path coming from user input.
+
+    Splits the path into components, rejects empty/parent segments and
+    normalizes each component with Werkzeug's `secure_filename`. Returns a
+    path using the OS separator. Raises ValueError for unsafe input.
+    """
+    if rel == "" or rel == ".":
+        return rel
+
+    if "\x00" in rel:
+        raise ValueError("Invalid path")
+
+    # Split on both forward and backward slashes to support Windows/posix
+    parts = re.split(r"[\\/]+", rel)
+    clean_parts: list[str] = []
+    for p in parts:
+        if not p or p == "." or p == "..":
+            raise ValueError("Invalid path component")
+        safe = secure_filename(p)
+        if not safe:
+            raise ValueError("Invalid path component")
+        clean_parts.append(safe)
+
+    return os.sep.join(clean_parts)
+
+
+def _assert_safe_resolved_path(path: str) -> None:
+    """Assert that a resolved path is safe and within configured browse roots.
+
+    Raises ValueError if the path is unsafe. This provides an explicit,
+    local check at call sites to satisfy static analysis tools.
+    """
+    if not path or "\x00" in path:
+        raise ValueError("Invalid path")
+
+    # Ensure absolute and normalized
+    abs_path = os.path.abspath(path)
+    real_path = os.path.realpath(abs_path)
+
+    roots = _get_browse_roots()
+    if not roots:
+        # If no roots configured, be conservative and disallow.
+        raise ValueError("Browsing is not configured")
+
+    allowed = False
+    for root in roots:
+        root_abs = os.path.abspath(root)
+        root_real = os.path.realpath(root_abs)
+        safe_root_prefix = root_real if root_real.endswith(os.sep) else (root_real + os.sep)
+        if real_path == root_real or real_path.startswith(safe_root_prefix):
+            allowed = True
+            break
+
+    if not allowed:
+        raise ValueError("Path outside allowed roots")
+
 
 Flask = cast(Any, Flask)
 Response = cast(Any, Response)
@@ -594,8 +654,26 @@ def _token_is_valid(token: str) -> bool:
 
 
 def _validate_upload_assistant_args(args: list[str]) -> list[str]:
-    """Validate and return upload-assistant arguments. Currently a pass-through."""
-    return args
+    """Validate upload-assistant arguments to avoid command-injection.
+
+    Rejects arguments containing nulls, newlines, or common shell metacharacters.
+    Returns the original args if they pass validation, otherwise raises ValueError.
+    """
+    if not isinstance(args, list):
+        raise ValueError("Invalid args")
+    safe_args: list[str] = []
+    # Disallow characters that enable shell injection or command chaining.
+    forbidden = set(";&|$`><*?~!\n\r\x00")
+    for a in args:
+        if not isinstance(a, str):
+            raise ValueError("Invalid arg type")
+        if any(ch in a for ch in forbidden):
+            raise ValueError("Invalid characters in arg")
+        # Disallow arguments that are just parent-directory references
+        if a == ".." or a == ".":
+            raise ValueError("Invalid arg")
+        safe_args.append(a)
+    return safe_args
 
 
 def _get_bearer_from_header() -> Optional[str]:
@@ -1594,6 +1672,15 @@ def _resolve_user_path(
                     # Different drive on Windows.
                     continue
 
+                # Sanitize the relative path components to defend against
+                # path-injection (e.g. ../../../, absolute segments, nulls).
+                # We reject components that resolve to '.' or '..' and use
+                # Werkzeug's `secure_filename` to normalize each path segment.
+                try:
+                    rel = _sanitize_relpath(rel)
+                except ValueError:
+                    continue
+
                 if rel == os.pardir or rel.startswith(os.pardir + os.sep) or os.path.isabs(rel):
                     continue
 
@@ -1629,13 +1716,19 @@ def _resolve_user_path(
         if not expanded:
             candidate_norm = os.path.normpath(matched_root)
         else:
-            joined = safe_join(matched_root, expanded)
+            # Sanitize the incoming expanded path before joining.
+            try:
+                sanitized_expanded = _sanitize_relpath(expanded)
+            except ValueError as err:
+                raise ValueError('Browsing this path is not allowed') from err
+
+            joined = safe_join(matched_root, sanitized_expanded)
 
             # Windows fallback: safe_join uses posixpath internally and returns
             # None for Windows backslash paths. Fall back to manual validation
             # and os.path.join. The commonpath check below provides additional security.
             if joined is None and sys.platform == 'win32':
-                expanded_norm = os.path.normpath(expanded)
+                expanded_norm = os.path.normpath(sanitized_expanded)
                 if expanded_norm == os.pardir or expanded_norm.startswith(os.pardir + os.sep) or os.path.isabs(expanded_norm):
                     raise ValueError('Browsing this path is not allowed')
                 joined = os.path.join(matched_root, expanded_norm)
@@ -1658,13 +1751,36 @@ def _resolve_user_path(
 
     candidate = candidate_real
 
-    if require_exists and not os.path.exists(candidate):
+    # Additional explicit validation before using `candidate` in filesystem
+    # operations. This defends against accidental use of unvalidated
+    # user-controlled data (helps static analysis tools and provides a
+    # clear guard at the call site).
+    if '\x00' in candidate:
+        raise ValueError("Browsing this path is not allowed")
+
+    # Ensure the resolved candidate path is within the resolved root path.
+    safe_root_prefix = root_real if root_real.endswith(os.sep) else (root_real + os.sep)
+    if not (candidate == root_real or candidate.startswith(safe_root_prefix)):
+        raise ValueError("Browsing this path is not allowed")
+
+    # Extra explicit assertion for static analysis and defense-in-depth:
+    # ensure the resolved candidate is within allowed browse roots.
+    try:
+        _assert_safe_resolved_path(candidate)
+    except ValueError as err:
+        raise ValueError("Browsing this path is not allowed") from err
+
+    # Use an explicitly-named, normalized `safe_candidate` for filesystem
+    # operations so static analyzers can see the sanitized value being used.
+    safe_candidate = os.path.realpath(candidate)
+
+    if require_exists and not os.path.exists(safe_candidate):
         raise ValueError("Path does not exist")
 
-    if require_dir and not os.path.isdir(candidate):
+    if require_dir and not os.path.isdir(safe_candidate):
         raise ValueError("Not a directory")
 
-    return candidate
+    return safe_candidate
 
 
 def _resolve_browse_path(user_path: Union[str, None]) -> str:
@@ -2494,17 +2610,57 @@ def browse_path():
         console.print(f"Path resolution error for requested {requested!r}: {e}", markup=False)
         return jsonify({"error": "Invalid path specified", "success": False}), 400
 
-    console.print(f"Browsing path: {path}", markup=False)
+    # Explicitly assert the resolved path is within allowed browse roots.
+    try:
+        _assert_safe_resolved_path(path)
+    except ValueError:
+        console.print(f"Path failed safety check: {requested!r}", markup=False)
+        return jsonify({"error": "Invalid path specified", "success": False}), 400
+
+    # Defensive sanity checks before using `path` in filesystem operations.
+    safe_path = os.path.abspath(path)
+    if '\x00' in safe_path:
+        console.print("Path contains invalid characters", markup=False)
+        return jsonify({"error": "Invalid path specified", "success": False}), 400
+    if not os.path.isdir(safe_path):
+        console.print("Requested path is not a directory", markup=False)
+        return jsonify({"error": "Invalid path specified", "success": False}), 400
+
+    console.print("Browsing path allowed", markup=False)
 
     try:
         items: list[BrowseItem] = []
         try:
-            for item in sorted(os.listdir(path)):
+            # `safe_path` was computed above; perform an explicit realpath
+            # containment check using stdlib functions so static analyzers
+            # can reason about the safety of the listing operation.
+            real_safe = os.path.realpath(safe_path)
+            allowed = False
+            for root in _get_browse_roots():
+                root_real = os.path.realpath(os.path.abspath(root))
+                try:
+                    if os.path.commonpath([real_safe, root_real]) == root_real:
+                        allowed = True
+                        break
+                except ValueError:
+                    # Different drives on Windows - not allowed
+                    continue
+            if not allowed:
+                console.print(f"Path failed containment check before listing: {safe_path!r}", markup=False)
+                return jsonify({"error": "Invalid path specified", "success": False}), 400
+
+            for item in sorted(os.listdir(safe_path)):
                 # Skip hidden files
                 if item.startswith("."):
                     continue
-
-                full_path = os.path.join(path, item)
+                full_path = os.path.join(safe_path, item)
+                # Explicitly assert each resolved child path is safe. If the
+                # assertion fails for a specific entry, skip it rather than
+                # failing the whole browse operation.
+                try:
+                    _assert_safe_resolved_path(full_path)
+                except ValueError:
+                    continue
                 try:
                     is_dir = os.path.isdir(full_path)
 
@@ -2546,73 +2702,6 @@ def browse_path():
         return jsonify({"error": "Error browsing path", "success": False}), 500
 
 
-@app.route("/api/browse_desc")
-def browse_desc_path():
-    """Browse filesystem paths for description files (txt, nfo, md)
-    
-    Shows all folders (for navigation) and only description files.
-    """
-    requested = request.args.get("path", "")
-    try:
-        path = _resolve_browse_path(requested)
-    except ValueError as e:
-        # Log details server-side, but avoid leaking paths/internal details to clients.
-        console.print(f"Path resolution error for requested {requested!r}: {e}", markup=False)
-        return jsonify({"error": "Invalid path specified", "success": False}), 400
-
-    console.print(f"Browsing description files path: {path}", markup=False)
-
-    try:
-        items: list[BrowseItem] = []
-        try:
-            for item in sorted(os.listdir(path)):
-                # Skip hidden files
-                if item.startswith("."):
-                    continue
-
-                full_path = os.path.join(path, item)
-                try:
-                    is_dir = os.path.isdir(full_path)
-
-                    # Always show folders for navigation
-                    # For files, only show supported description formats
-                    if not is_dir:
-                        _, ext = os.path.splitext(item.lower())
-                        if ext not in SUPPORTED_DESC_EXTS:
-                            continue
-
-                    items.append({"name": item, "path": full_path, "type": "folder" if is_dir else "file", "children": [] if is_dir else None})
-                except (PermissionError, OSError):
-                    continue
-
-            console.print(f"Found {len(items)} description items in {path}", markup=False)
-
-        except PermissionError:
-            console.print(f"Error: Permission denied: {path}", markup=False)
-            return jsonify({"error": "Permission denied", "success": False}), 403
-
-        # If caller used a bearer token, require it to be valid. Valid bearer
-        # tokens are allowed without CSRF since they are intended for programmatic
-        # access. Otherwise require an authenticated web session + CSRF + same-origin.
-        bearer = _get_bearer_from_header()
-        if bearer:
-            if not _token_is_valid(bearer):
-                return jsonify({"success": False, "error": "Forbidden (invalid token)"}), 403
-        else:
-            # Require session-based callers to be authenticated and provide CSRF + Origin
-            if not _is_authenticated():
-                return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
-            if not _verify_csrf_header() or not _verify_same_origin():
-                return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
-
-        return jsonify({"items": items, "success": True, "path": path, "count": len(items)})
-
-    except Exception as e:
-        console.print(f"Error browsing description files {path}: {e}", markup=False)
-        console.print(traceback.format_exc(), markup=False)
-        return jsonify({"error": "Error browsing path", "success": False}), 500
-
-
 @app.route("/api/execute", methods=["POST", "OPTIONS"])
 @limiter.limit("100 per hour", key_func=_rate_limit_key_func)
 def execute_command():
@@ -2631,7 +2720,66 @@ def execute_command():
         return jsonify({"error": "Forbidden (invalid token)", "success": False}), 403
 
     try:
-        data = request.json
+        # Prefer a silent JSON parse to avoid Werkzeug raising on malformed
+        # payloads. If parsing fails, try form data or a few tolerant
+        # fallbacks to extract common fields (path, args, session_id).
+        data = None
+        try:
+            data = request.get_json(silent=True)
+        except Exception:
+            data = None
+
+        if not data:
+            # Try standard form-encoded body first
+            try:
+                if request.form:
+                    data = request.form.to_dict()
+            except Exception:
+                data = None
+
+        if not data:
+            # As a last resort attempt to parse raw body text that may be
+            # produced by shells which strip quoting or backslashes. We
+            # attempt a few conservative transforms rather than executing
+            # arbitrary code: 1) normalize single quotes to double quotes,
+            # 2) quote unquoted object keys, then try json.loads. If that
+            # fails, fall back to simple regex extraction of `path` and
+            # `session_id` values.
+            try:
+                raw = (request.get_data(as_text=True) or "").strip()
+                if raw:
+                    # Quick normalization: single -> double quotes
+                    candidate = raw.replace("'", '"')
+                    # Quote unquoted keys like: {path:...} -> {"path":...}
+                    candidate = re.sub(r'([\{\s,])([A-Za-z0-9_]+)\s*:', r'\1"\2":', candidate)
+                    try:
+                        data = json.loads(candidate)
+                    except Exception:
+                        # Regex extraction fallback for minimal fields
+                        d: dict[str, str] = {}
+                        m_path = re.search(r'path\s*[:=]\s*["\']?([^"\'\},]+)', raw)
+                        m_sess = re.search(r'session_id\s*[:=]\s*["\']?([^"\'\},]+)', raw)
+                        m_args = re.search(r'args\s*[:=]\s*["\']?([^"\'\}]+)', raw)
+                        if m_path:
+                            d['path'] = m_path.group(1)
+                        if m_sess:
+                            d['session_id'] = m_sess.group(1)
+                        if m_args:
+                            # Trim any trailing quote/comma characters and preserve spacing
+                            raw_args = m_args.group(1).strip()
+                            # Defensive: some shells or quoting can produce a
+                            # concatenated fragment like `--debug,session_id:...`.
+                            # Strip any trailing `,session_id` fragment or any
+                            # comma followed by a session_id key so args remain
+                            # clean.
+                            raw_args = re.split(r',\s*(?:"?session_id|session_id)\b', raw_args)[0]
+                            raw_args = raw_args.rstrip(',').strip().strip('"').strip("'")
+                            d['args'] = raw_args
+                        if d:
+                            data = d
+            except Exception:
+                data = None
+
         if not data:
             return jsonify({"error": "No JSON data received", "success": False}), 400
 
@@ -2658,6 +2806,15 @@ def execute_command():
                 # Build command to run upload.py directly
                 validated_path = _resolve_user_path(path, require_exists=True, require_dir=False)
 
+                # Additional explicit assertion for static analysis: ensure the
+                # resolved path is within allowed browse roots and contains no
+                # invalid characters before using it in commands/subprocesses.
+                try:
+                    _assert_safe_resolved_path(validated_path)
+                except ValueError:
+                    yield f"data: {json.dumps({'type': 'error', 'data': 'Invalid execution path'})}\n\n"
+                    return
+
                 base_dir = Path(__file__).parent.parent
                 upload_script = str(base_dir / "upload.py")
                 command = [sys.executable, "-u", upload_script, validated_path]
@@ -2667,7 +2824,13 @@ def execute_command():
                     import shlex
 
                     parsed_args = shlex.split(args)
-                    command.extend(_validate_upload_assistant_args(parsed_args))
+                    try:
+                        validated_args = _validate_upload_assistant_args(parsed_args)
+                    except ValueError as err:
+                        console.print(f"Invalid execution arguments: {err}", markup=False)
+                        yield f"data: {json.dumps({'type': 'error', 'data': 'Invalid execution arguments'})}\n\n"
+                        return
+                    command.extend(validated_args)
 
                 command_str = subprocess.list2cmdline(command)
                 console.print(f"Running: {command_str}", markup=False)
@@ -3043,6 +3206,52 @@ def execute_command():
                     env["PYTHONUNBUFFERED"] = "1"
                     env["PYTHONIOENCODING"] = "utf-8"
                     # Disable Python output buffering
+
+                    # Sanity-check the working directory used for the subprocess.
+                    # `base_dir` is computed from the application `__file__`, but
+                    # perform lightweight validation to satisfy static analysis
+                    # tools and ensure we do not pass uncontrolled input here.
+                    if '\x00' in str(base_dir) or not str(base_dir):
+                        raise ValueError("Invalid execution directory")
+                    if not os.path.isabs(str(base_dir)):
+                        base_dir = os.path.abspath(str(base_dir))
+
+                    # Extra validation for the constructed command to guard
+                    # against command-injection and to make validation explicit
+                    # for static analysis tools.
+                    try:
+                        # Ensure command is a list of strings
+                        if not isinstance(command, list) or not all(isinstance(a, str) for a in command):
+                            raise ValueError("Invalid command")
+
+                        # Re-assert the execution path is safe
+                        try:
+                            _assert_safe_resolved_path(command[3] if len(command) > 3 else command[-1])
+                        except Exception:
+                            # Fallback: validated_path is expected at position 3 for subprocess
+                            try:
+                                _assert_safe_resolved_path(validated_path)
+                            except Exception as err:
+                                raise ValueError("Invalid execution path") from err
+
+                        # Ensure the upload_script is the expected script under the repo
+                        try:
+                            expected_script = os.path.realpath(str(Path(base_dir) / "upload.py"))
+                            script_real = os.path.realpath(str(command[2]))
+                            if script_real != expected_script:
+                                raise ValueError("Invalid script path")
+                        except IndexError as err:
+                            raise ValueError("Invalid command structure") from err
+
+                        # Disallow shell metacharacters in any argument
+                        forbidden = set(";&|$`><*?~!\n\r\x00")
+                        for a in command:
+                            if any(ch in a for ch in forbidden):
+                                raise ValueError("Invalid characters in command argument")
+                    except Exception as err:
+                        console.print(f"Refusing to run unsafe command: {err}", markup=False)
+                        yield f"data: {json.dumps({'type': 'error', 'data': 'Unsafe execution request'})}\n\n"
+                        return
 
                     process = subprocess.Popen(  # lgtm[py/command-line-injection]
                         command,
