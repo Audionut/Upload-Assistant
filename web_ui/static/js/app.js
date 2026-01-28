@@ -388,45 +388,65 @@ function AudionutsUAGUI() {
   };
   
   // Extract value from argument string (e.g., --descfile "path" or --desclink "url")
+  // Supports both space-separated (--arg "value") and equals-separated (--arg="value") formats
   const extractArgValue = (args, argName) => {
-    // Match --argname "value" or --argname 'value' or --argname value (but not another --arg)
-    const regex = new RegExp(`${argName}\\s+(?:"([^"]+)"|'([^']+)'|([^\\s-][^\\s]*|(?!--)[^\\s]+))`, 'i');
-    const match = args.match(regex);
-    if (match) {
-      const val = match[1] || match[2] || match[3] || '';
+    // First try equals-separated format: --argname="value" or --argname='value' or --argname=value
+    const equalsRegex = new RegExp(`${argName}=(?:"([^"]+)"|'([^']+)'|([^\\s]+))`, 'i');
+    const equalsMatch = args.match(equalsRegex);
+    if (equalsMatch) {
+      const val = equalsMatch[1] || equalsMatch[2] || equalsMatch[3] || '';
       // Double-check: don't return values that look like arguments
       if (val.startsWith('--')) return '';
-      return val;
+      return val.trim();
+    }
+    
+    // Then try space-separated format: --argname "value" or --argname 'value' or --argname value
+    const spaceRegex = new RegExp(`${argName}\\s+(?:"([^"]+)"|'([^']+)'|([^\\s-][^\\s]*|(?!--)[^\\s]+))`, 'i');
+    const spaceMatch = args.match(spaceRegex);
+    if (spaceMatch) {
+      const val = spaceMatch[1] || spaceMatch[2] || spaceMatch[3] || '';
+      // Double-check: don't return values that look like arguments
+      if (val.startsWith('--')) return '';
+      return val.trim();
     }
     return '';
   };
   
   // Update argument value in string
+  // Supports both space-separated (--arg "value") and equals-separated (--arg="value") formats
   const updateArgValue = (args, argName, value) => {
     // Check if argument exists
     if (!args.includes(argName)) {
       return args;
     }
     
-    // If value is empty, just leave the flag without value
+    // Check which format is being used
+    const hasEqualsFormat = new RegExp(`${argName}=`, 'i').test(args);
+    const hasSpaceValue = new RegExp(`${argName}\\s+(?:"[^"]*"|'[^']*'|(?!--)[^\\s]+)`, 'i').test(args);
+    
+    // If value is empty, remove the value but keep the flag
     if (!value) {
-      // Remove any existing value after the flag, but don't capture other --arguments
-      // Match quoted values or non-whitespace that doesn't start with --
-      return args.replace(new RegExp(`(${argName})\\s+(?:"[^"]*"|'[^']*'|(?!--)[^\\s]+)`, 'i'), '$1')
-                 .replace(new RegExp(`(${argName})\\s*$`, 'i'), '$1');
+      if (hasEqualsFormat) {
+        // Remove equals-format value: --arg="value" or --arg='value' or --arg=value
+        return args.replace(new RegExp(`(${argName})=(?:"[^"]*"|'[^']*'|[^\\s]*)`, 'i'), '$1');
+      } else if (hasSpaceValue) {
+        // Remove space-format value
+        return args.replace(new RegExp(`(${argName})\\s+(?:"[^"]*"|'[^']*'|(?!--)[^\\s]+)`, 'i'), '$1');
+      }
+      return args;
     }
     
     // Quote the value if it contains spaces
     const quotedValue = value.includes(' ') ? `"${value}"` : `"${value}"`;
     
-    // Check if there's already a value (quoted or unquoted but not starting with --)
-    const hasValue = new RegExp(`${argName}\\s+(?:"[^"]*"|'[^']*'|(?!--)[^\\s]+)`, 'i').test(args);
-    
-    if (hasValue) {
-      // Replace existing value
+    if (hasEqualsFormat) {
+      // Replace equals-format value: --arg="value" or --arg='value' or --arg=value
+      return args.replace(new RegExp(`(${argName})=(?:"[^"]*"|'[^']*'|[^\\s]*)`, 'i'), `$1=${quotedValue}`);
+    } else if (hasSpaceValue) {
+      // Replace space-format value
       return args.replace(new RegExp(`(${argName})\\s+(?:"[^"]*"|'[^']*'|(?!--)[^\\s]+)`, 'i'), `$1 ${quotedValue}`);
     } else {
-      // Add value after the flag
+      // Add value after the flag (no existing value)
       return args.replace(new RegExp(`(${argName})(\\s|$)`, 'i'), `$1 ${quotedValue}$2`);
     }
   };
