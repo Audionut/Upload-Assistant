@@ -116,7 +116,7 @@ class TRACKER_SETUP:
         removed_trackers = set(trackers) - set(valid_trackers)
 
         for tracker in removed_trackers:
-            print(f"Warning: Tracker '{tracker}' is not recognized and will be ignored.")
+            console.print(f"Warning: Tracker '{tracker}' is not recognized and will be ignored.", markup=False)
 
         return valid_trackers
 

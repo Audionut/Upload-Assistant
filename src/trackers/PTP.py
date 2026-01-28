@@ -926,7 +926,7 @@ class PTP:
                             try:
                                 await self.takescreens_manager.disc_screenshots(meta, f"PLAYLIST_{i}", bdinfo, meta['uuid'], meta['base_dir'], use_vs, [], meta.get('ffdebug', False), multi_screens, True)
                             except Exception as e:
-                                print(f"Error during BDMV screenshot capture: {e}")
+                                console.print(f"Error during BDMV screenshot capture: {e}", markup=False)
                             new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png"))]
                         uploaded_images: list[dict[str, Any]] = []
                         if new_screens and not meta.get('skip_imghost_upload', False):
@@ -1006,7 +1006,7 @@ class PTP:
                                 try:
                                     await self.takescreens_manager.disc_screenshots(meta, f"FILE_{i}", each['bdinfo'], meta['uuid'], meta['base_dir'], meta.get('vapoursynth', False), [], meta.get('ffdebug', False), multi_screens, True)
                                 except Exception as e:
-                                    print(f"Error during BDMV screenshot capture: {e}")
+                                    console.print(f"Error during BDMV screenshot capture: {e}", markup=False)
                             new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
                             uploaded_images: list[dict[str, Any]] = []
                             if new_screens and not meta.get('skip_imghost_upload', False):
@@ -1075,7 +1075,7 @@ class PTP:
                                 try:
                                     await self.takescreens_manager.dvd_screenshots(meta, i, multi_screens, True)
                                 except Exception as e:
-                                    print(f"Error during DVD screenshot capture: {e}")
+                                    console.print(f"Error during DVD screenshot capture: {e}", markup=False)
                             new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png"))]
                             uploaded_images: list[dict[str, Any]] = []
                             if new_screens and not meta.get('skip_imghost_upload', False):
@@ -1206,7 +1206,7 @@ class PTP:
                                 await self.takescreens_manager.screenshots(
                                     file, f"FILE_{i}", meta['uuid'], meta['base_dir'], meta, multi_screens, True, "")
                             except Exception as e:
-                                print(f"Error during generic screenshot capture: {e}")
+                                console.print(f"Error during generic screenshot capture: {e}", markup=False)
                         new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
                         if new_screens and not meta.get('skip_imghost_upload', False):
                             uploaded_images, _ = await self.uploadscreens_manager.upload_screens(meta, multi_screens, 1, 0, multi_screens, new_screens, {new_images_key: meta[new_images_key]}, allowed_hosts=self.approved_image_hosts)
@@ -1388,7 +1388,7 @@ class PTP:
             async with aiofiles.open(file_path, encoding="utf-8") as f:
                 desc = await f.read()
         except OSError as e:
-            print(f"File error: {e}")
+            console.print(f"File error: {e}", markup=False)
         ptp_subtitles = self.get_subtitles(meta)
         no_audio_found = False
         english_audio = False

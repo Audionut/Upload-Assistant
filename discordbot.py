@@ -80,26 +80,26 @@ class Bot(commands.Bot):
         for extension in cogs:
             try:
                 await self.load_extension(f'cogs.{extension}')
-                print(f'loaded {extension}')
+                console.print(f'loaded {extension}', markup=False)
             except Exception as e:
                 error = f'{extension}\n {type(e).__name__} : {e}'
-                print(f'failed to load extension {error}')
-            print('-' * 10)
+                console.print(f'failed to load extension {error}', markup=False)
+            console.print('-' * 10, markup=False)
 
     async def on_ready(self) -> None:
         """
         This event is called every time the bot connects or resumes connection.
         """
-        print('-' * 10)
+        console.print('-' * 10, markup=False)
         self.app_info = await self.application_info()
         user = self.user
         if user is None:
             console.print('[red]Discord client user unavailable[/red]')
             return
-        print(f'Logged in as: {user.name}\n'
+        console.print(f'Logged in as: {user.name}\n'
               f'Using discord.py version: {discord.__version__}\n'
-              f'Owner: {self.app_info.owner}\n')
-        print('-' * 10)
+              f'Owner: {self.app_info.owner}\n', markup=False)
+        console.print('-' * 10, markup=False)
         channel = self.get_channel(int(self.config['DISCORD']['discord_channel_id']))
         if channel and isinstance(channel, discord.abc.Messageable):
             await channel.send(f'{user.name} is now online')

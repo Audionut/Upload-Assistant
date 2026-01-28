@@ -34,6 +34,7 @@ exclude_dirs:
   - .git
   - __pycache__
   - data
+  - tests
   - docs
 
 # Test files to exclude

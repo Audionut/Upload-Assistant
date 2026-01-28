@@ -332,7 +332,7 @@ class HDS:
                 return results
 
             except Exception as e:
-                print(f'An error occurred while fetching requests: {e}')
+                console.print(f'An error occurred while fetching requests: {e}', markup=False)
                 return []
 
     async def get_data(self, meta: Meta) -> dict[str, Any]:

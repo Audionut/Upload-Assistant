@@ -1,6 +1,7 @@
 [tool.ruff]
 line-length = 176
 target-version = "py39"
+exclude = ["tests"]
 
 [tool.ruff.lint]
 select = [
@@ -26,7 +27,7 @@ select = [
   # Async (if applicable)
   "ASYNC",
 ]
-ignore = ["E501"]
+ignore = ["E501", "UP045"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["cogs", "data", "src", "web_ui"]

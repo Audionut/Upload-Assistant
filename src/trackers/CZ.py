@@ -18,7 +18,7 @@ class CZ(AZTrackerBase):
         self.torrent_url = f'{self.base_url}/torrent/'
         self.requests_url = f'{self.base_url}/requests'
 
-    async def rules(self, meta: dict[str, Any]) -> str:
+    def rules(self, meta: dict[str, Any]) -> str:
         warnings: list[str] = []
 
         # This also checks the rule 'FANRES content is not allowed'

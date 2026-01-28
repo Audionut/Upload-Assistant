@@ -299,14 +299,14 @@ async def get_edition(video: str, bdinfo: Optional[dict[str, Any]], filelist: li
                 edition_value: Any = guessit_fn(bdinfo['label']).get('edition', '')
             except Exception as e:
                 if meta['debug']:
-                    print(f"BDInfo Edition Guess Error: {e}")
+                    console.print(f"BDInfo Edition Guess Error: {e}", markup=False)
                 edition_value = ""
         else:
             try:
                 edition_value = guess.get('edition', "")
             except Exception as e:
                 if meta['debug']:
-                    print(f"Video Edition Guess Error: {e}")
+                    console.print(f"Video Edition Guess Error: {e}", markup=False)
                 edition_value = ""
 
         edition = " ".join(str(e) for e in cast(list[Any], edition_value)) if isinstance(edition_value, list) else str(edition_value or "")

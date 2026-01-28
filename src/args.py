@@ -41,6 +41,7 @@ Common options:
   -t, --type                 Type (disc, remux, encode, webdl, etc.)
   --source                   Source (Blu-ray, BluRay, DVD, WEBDL, etc.)
   -comps, --comparison       Use comparison images from a folder (input folder path): see -comps_index
+  -webui, --webui            Start the web UI server only (format: host:port, default: 127.0.0.1:5000)
   -debug, --debug            Prints more information, runs everything without actually uploading
 
 Use --help for a full list of options.
@@ -130,7 +131,6 @@ class Args:
         parser.add_argument('-aither', '--aither', nargs=1, required=False, help="Aither torrent id/link", type=str)
         parser.add_argument('-lst', '--lst', nargs=1, required=False, help="LST torrent id/link", type=str)
         parser.add_argument('-oe', '--oe', nargs=1, required=False, help="OE torrent id/link", type=str)
-        parser.add_argument('-tik', '--tik', nargs=1, required=False, help="TIK torrent id/link", type=str)
         parser.add_argument('-hdb', '--hdb', nargs=1, required=False, help="HDB torrent id/link", type=str)
         parser.add_argument('-btn', '--btn', nargs=1, required=False, help="BTN torrent id/link", type=str)
         parser.add_argument('-bhd', '--bhd', nargs=1, required=False, help="BHD torrent_id/link", type=str)
@@ -186,6 +186,7 @@ class Args:
         parser.add_argument('-ua', '--unattended', action='store_true', required=False, help=argparse.SUPPRESS)
         parser.add_argument('-uac', '--unattended_confirm', action='store_true', required=False, help=argparse.SUPPRESS)
         parser.add_argument('-vs', '--vapoursynth', action='store_true', required=False, help="Use vapoursynth for screens (requires vs install)")
+        parser.add_argument('-webui', '--webui', nargs='?', const='127.0.0.1:5000', metavar='HOST:PORT', help="Start the web UI server only (format: host:port, default: 127.0.0.1:5000)")
         parser.add_argument('-dm', '--delete-meta', action='store_true', required=False, dest='delete_meta', help="Delete only meta.json from tmp directory")
         parser.add_argument('-dtmp', '--delete-tmp', action='store_true', required=False, dest='delete_tmp', help="Delete tmp directory for the working file/folder")
         parser.add_argument('-cleanup', '--cleanup', action='store_true', required=False, help="Clean up tmp directory")
@@ -199,14 +200,14 @@ class Args:
         parsed_args: dict[str, Any] = vars(parsed_args_ns)
         # console.print(args)
 
-        # Validation: require either path or site_upload
-        if not parsed_args.get('path') and not parsed_args.get('site_upload'):
-            console.print("[red]Error: Either a path must be provided or --site-upload must be specified.[/red]")
+        # Validation: require either path, site_upload, or webui
+        if not parsed_args.get('path') and not parsed_args.get('site_upload') and not parsed_args.get('webui'):
+            console.print("[red]Error: Either a path must be provided, --site-upload must be specified, or --webui must be specified.[/red]")
             parser.print_help()
             sys.exit(1)
 
         # For site upload mode, provide a dummy path if none given
-        if parsed_args.get('site_upload') and not parsed_args.get('path'):
+        if (parsed_args.get('site_upload') or parsed_args.get('webui')) and not parsed_args.get('path'):
             parsed_args['path'] = ['dummy_path_for_site_upload']
 
         # manual_frames parsing happens after parsed_args are merged into meta
