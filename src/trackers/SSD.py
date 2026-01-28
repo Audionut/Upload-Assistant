@@ -47,6 +47,15 @@ class SSD(COMMON):
         if meta.get('debug', False):
             print(message)
 
+    def _get_cookie_file(self, meta):
+        configured = str(self.cookie_file or "").strip()
+        if configured:
+            return configured
+        base_dir = meta.get('base_dir', '')
+        if base_dir:
+            return os.path.join(base_dir, 'data', 'cookies', f"{self.tracker}.txt")
+        return ""
+
     async def edit_torrent(self, meta, tracker, source_flag):
         edited_torrent_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], f"[{tracker}].torrent")
         decoded_torrent = None
@@ -439,16 +448,17 @@ class SSD(COMMON):
         except httpx.RequestError: return False
 
     async def _load_cookie_header(self, meta):
-        if not self.cookie_file or not os.path.exists(self.cookie_file):
+        cookie_file = self._get_cookie_file(meta)
+        if not cookie_file or not os.path.exists(cookie_file):
             return ""
         try:
-            with open(self.cookie_file, 'r', encoding='utf-8') as f:
+            with open(cookie_file, 'r', encoding='utf-8') as f:
                 cookie_str = f.read().strip()
             if not cookie_str:
                 return ""
             if "\t" in cookie_str or cookie_str.startswith("# Netscape"):
                 common = COMMON(config=self.config)
-                cookies = await common.parseCookieFile(self.cookie_file)
+                cookies = await common.parseCookieFile(cookie_file)
                 cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
             self.session.cookies.update({
                 k.strip(): v.strip()
@@ -460,7 +470,8 @@ class SSD(COMMON):
 
     async def search_existing(self, meta, _disctype):
         dupes = []
-        if not self.cookie_file or not os.path.exists(self.cookie_file):
+        cookie_file = self._get_cookie_file(meta)
+        if not cookie_file or not os.path.exists(cookie_file):
             return []
         imdb_id_raw = str(meta.get('imdb_id', '0')).replace('tt', '').strip()
         imdb = f"tt{imdb_id_raw.zfill(7)}" if imdb_id_raw.isdigit() and int(imdb_id_raw) != 0 else ""
@@ -512,7 +523,8 @@ class SSD(COMMON):
 
     async def upload(self, meta, disctype):
         self._log(meta, f"[{self.tracker}] 开始处理上传任务...")
-        if not self.cookie_file or not os.path.exists(self.cookie_file):
+        cookie_file = self._get_cookie_file(meta)
+        if not cookie_file or not os.path.exists(cookie_file):
             meta['tracker_status'][self.tracker] = {
                 'status': 'failed',
                 'reason': "Cookie file not configured or missing",
