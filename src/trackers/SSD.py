@@ -2,7 +2,6 @@ import os
 import httpx
 import json
 import re
-from urllib.parse import quote
 from bs4 import BeautifulSoup
 import bencodepy
 import cli_ui
@@ -10,8 +9,6 @@ import subprocess
 import shlex
 import asyncio
 
-from src.fkgen import DoubanMovieGenerator
-from src import image777
 from src.trackers.COMMON import COMMON
 
 
@@ -34,7 +31,6 @@ class SSD(COMMON):
         self.torrent_url = 'https://springsunday.net/details.php?id='
         self.banned_groups = []
 
-        self.fkgen_data = {}
         self.imdb_id_with_prefix = None
         self.douban_url = ""
         
@@ -144,91 +140,33 @@ class SSD(COMMON):
             pass
         return result
 
-    async def _get_fkgen_data(self, meta, douban_link):
-        if not douban_link:
-            self._log(meta, f"[{self.tracker}] -> 警告：没有提供豆瓣链接，无法获取信息。")
-            return
-        self._log(meta, f"[{self.tracker}] 正在从豆瓣链接获取详细信息 (使用fkgen)...")
-        try:
-            tracker_config = self.config['TRACKERS'].get(self.tracker, {})
-            generator = DoubanMovieGenerator(douban_link)
-            if hasattr(generator, "douban_cookie"):
-                generator.douban_cookie = str(tracker_config.get('douban_cookie', '')).strip()
-            generator.parse()
-            self.fkgen_data = generator.movie_info
-
-            if self.fkgen_data and self.fkgen_data.get("names"):
-                self._log(meta, f"[{self.tracker}]   ✅ 从fkgen获取信息成功!")
-            else:
-                raise ValueError("fkgen未能成功解析出有效数据。")
-        except Exception as e:
-            self._log(meta, f"[{self.tracker}]   ❌ 使用fkgen获取信息时失败: {e}")
-            self.fkgen_data = {}
-
-    # ==================== NEW UNIFIED FUNCTION ====================
-    async def _get_and_cache_fkgen_data(self, meta):
-        tmp_folder = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
-        fkgen_cache_path = os.path.join(tmp_folder, "NP_fkgen.json")
-        fkgen_lock_path = os.path.join(tmp_folder, "NP_fkgen.lock")
+    async def _resolve_douban_link(self, meta):
         self.douban_url = ""
+        douban_link, is_manual_mode = "", False
+        if meta.get('category') == 'TV' and re.search(r'[Ss]0*([2-9]|[1-9][0-9])', meta.get('name', '')):
+            is_manual_mode, season_num = True, re.search(r'[Ss](\d+)', meta.get('name', '')).group(1)
+            cli_ui.info_section(f"[{self.tracker}] 非第一季剧集手动干预")
+            cli_ui.info(f"检测到季数为 S{int(season_num):02}。为确保准确性，请手动提供豆瓣链接。")
+            douban_link = cli_ui.ask_string("请输入正确的豆瓣链接:", default="").strip()
 
-        while os.path.exists(fkgen_lock_path):
-            self._log(meta, f"[{self.tracker}] 检测到fkgen信息正在被其他任务获取，等待中...")
-            await asyncio.sleep(1)
-
-        if os.path.exists(fkgen_cache_path):
-            try:
-                with open(fkgen_cache_path, "r", encoding="utf-8") as f:
-                    self.fkgen_data = json.load(f)
-                if self.fkgen_data and self.fkgen_data.get("names"):
-                    self._log(meta, f"[{self.tracker}] ✅ 成功读取共享的fkgen缓存。")
-                    return True
-            except (json.JSONDecodeError, FileNotFoundError):
-                self._log(meta, f"[{self.tracker}] ⚠️ 缓存文件读取失败，将重新获取。")
-                self.fkgen_data = {}
-        
-        try:
-            with open(fkgen_lock_path, 'w') as f: f.write('locked')
-            
-            douban_link, is_manual_mode = "", False
-            if meta.get('category') == 'TV' and re.search(r'[Ss]0*([2-9]|[1-9][0-9])', meta.get('name', '')):
-                is_manual_mode, season_num = True, re.search(r'[Ss](\d+)', meta.get('name', '')).group(1)
-                cli_ui.info_section(f"[{self.tracker}] 非第一季剧集手动干预")
-                cli_ui.info(f"检测到季数为 S{int(season_num):02}。为确保准确性，请手动提供豆瓣链接。")
-                douban_link = cli_ui.ask_string("请输入正确的豆瓣链接:", default="").strip()
-            
-            if not is_manual_mode:
-                ext_meta = await self.get_external_meta(meta)
-                if ext_meta.get("douban_url"):
-                    self.douban_url = ext_meta["douban_url"]
-                    meta['ptgen'] = ext_meta
-                    douban_link = self.douban_url
-                else:
-                    douban_link = await self._get_douban_link_from_imdb(self.imdb_id_with_prefix)
-            
-            if not douban_link:
-                if not is_manual_mode:
-                    cli_ui.info_section(f"[{self.tracker}] 豆瓣链接自动获取失败")
-                    cli_ui.info(f"未能通过 IMDb ID '{self.imdb_id_with_prefix}' 自动找到豆瓣链接。")
-                douban_link = cli_ui.ask_string("请手动输入正确的豆瓣链接 (或直接按回车跳过):", default="").strip()
-            
-            if douban_link:
-                self.douban_url = douban_link
-
-            await self._get_fkgen_data(meta, douban_link)
-            
-            if self.fkgen_data and self.fkgen_data.get("names"):
-                with open(fkgen_cache_path, "w", encoding="utf-8") as f:
-                    json.dump(self.fkgen_data, f, ensure_ascii=False, indent=4)
-                self._log(meta, f"[{self.tracker}] fkgen数据已成功获取并写入缓存 NP_fkgen.json。")
-                return True
+        if not is_manual_mode:
+            ext_meta = await self.get_external_meta(meta)
+            if ext_meta.get("douban_url"):
+                self.douban_url = ext_meta["douban_url"]
+                meta['ptgen'] = ext_meta
+                douban_link = self.douban_url
             else:
-                self._log(meta, f"[{self.tracker}] ❌ fkgen信息获取失败，无法继续。")
-                return False
-        finally:
-            if os.path.exists(fkgen_lock_path):
-                os.remove(fkgen_lock_path)
-    # ==========================================================
+                douban_link = await self._get_douban_link_from_imdb(self.imdb_id_with_prefix)
+
+        if not douban_link:
+            if not is_manual_mode:
+                cli_ui.info_section(f"[{self.tracker}] 豆瓣链接自动获取失败")
+                cli_ui.info(f"未能通过 IMDb ID '{self.imdb_id_with_prefix}' 自动找到豆瓣链接。")
+            douban_link = cli_ui.ask_string("请手动输入正确的豆瓣链接 (或直接按回车跳过):", default="").strip()
+
+        if douban_link:
+            self.douban_url = douban_link
+        return bool(douban_link)
 
     def _split_region_candidates(self, regions):
         if not regions:
@@ -238,7 +176,27 @@ class SSD(COMMON):
             return [part.strip() for part in parts if part.strip()]
         return [str(part).strip() for part in regions if str(part).strip()]
 
-    def _get_region_id_from_fkgen(self, meta=None):
+    def _get_genres(self, meta):
+        genres = meta.get('genres')
+        if not genres:
+            genres = meta.get('imdb_info', {}).get('genres')
+        if not genres:
+            return []
+        if isinstance(genres, list):
+            return [str(item).strip() for item in genres if str(item).strip()]
+        if isinstance(genres, str):
+            parts = re.split(r"[/,|，、;；]", genres)
+            return [part.strip() for part in parts if part.strip()]
+        return []
+
+    def _has_genre(self, genres, targets):
+        lowered = {str(g).lower() for g in genres}
+        for target in targets:
+            if str(target).lower() in lowered:
+                return True
+        return False
+
+    def _get_region_id_from_meta(self, meta=None):
         EUROPE_AMERICA_OCEANIA_SET = {'阿尔巴尼亚', '爱尔兰', '爱沙尼亚', '安道尔', '奥地利', '白俄罗斯', '保加利亚','北马其顿', '比利时', '冰岛', '波黑', '波兰', '丹麦', '德国', '法国','梵地冈', '芬兰', '荷兰', '黑山', '捷克', '克罗地亚', '拉脱维亚', '立陶宛','列支敦士登', '卢森堡', '罗马尼亚', '马耳他', '摩尔多瓦', '摩纳哥', '挪威','葡萄牙', '瑞典', '瑞士', '塞尔维亚', '塞浦路斯', '圣马力诺', '斯洛伐克','斯洛文尼亚', '乌克兰', '西班牙', '希腊', '匈牙利', '意大利', '英国','安提瓜和巴布达', '巴巴多斯', '巴哈马', '巴拿马', '伯利兹', '多米尼加', '多米尼克','格林纳达', '哥斯达黎加', '古巴', '海地', '洪都拉斯', '加拿大', '美国', '墨西哥','尼加拉瓜', '萨尔вадор', '圣基茨和尼维斯', '圣卢西亚', '圣文森特和格林纳丁斯','特立尼达和多巴哥', '危地马拉', '牙买加', '阿根廷', '巴拉圭', '巴西', '秘鲁','玻利维亚', '厄瓜多尔', '哥伦比亚', '圭亚那', '苏里南', '委内瑞拉', '乌拉圭','智利', '捷克斯洛伐克', '澳大利亚', '西德', '新西兰'}
         CHINA_MAINLAND = {'中国大陆', '中国内地', '大陆', '内地', '中国'}
         CHINA_HK = {'中国香港', '香港'}
@@ -263,11 +221,13 @@ class SSD(COMMON):
             'AUS': '4',
             'CAN': '4',
         }
-        movie_regions = self._split_region_candidates(self.fkgen_data.get('countries', []))
+        movie_regions = []
         if meta:
             meta_regions = [
                 meta.get('region'),
                 meta.get('country'),
+                meta.get('imdb_info', {}).get('country'),
+                meta.get('imdb_info', {}).get('country_list'),
                 meta.get('ptgen', {}).get('region'),
                 meta.get('ptgen', {}).get('country'),
             ]
@@ -300,106 +260,26 @@ class SSD(COMMON):
                 return '9'
         return '99'
 
-    def _get_subtitle_from_fkgen(self):
-        names = self.fkgen_data.get('names', {})
-        genres = self.fkgen_data.get('genres', [])
-        trans_name = names.get('translatedTitle', '')
-        original_name = names.get('originalTitle', '')
-        aka_titles = names.get('akaTitles', [])
-        display_title_part = ""
-        is_original_chinese = bool(re.search(r'[\u4e00-\u9fa5]', original_name))
-
-        if is_original_chinese:
-            if trans_name and original_name != trans_name:
-                display_title_part = f"{original_name} / {trans_name}"
-            else:
-                display_title_part = original_name
-        else:
-            all_chinese_titles = []
-            if trans_name and trans_name not in all_chinese_titles:
-                all_chinese_titles.append(trans_name)
-            for title in aka_titles:
-                if title not in all_chinese_titles:
-                    all_chinese_titles.append(title)
-            
-            if all_chinese_titles:
-                display_title_part = ' / '.join(all_chinese_titles)
-            else:
-                display_title_part = original_name
-
-        genre_part = f" | 类型: {' / '.join(genres)}" if genres else ""
-        final_subtitle = f"{display_title_part}{genre_part}".strip()
-        return final_subtitle.replace(" /  |", " |").strip()
+    def _get_small_descr(self, meta):
+        ext_meta = meta.get('ptgen', {}) if isinstance(meta.get('ptgen', {}), dict) else {}
+        trans_titles = ext_meta.get('trans_title', [])
+        if isinstance(trans_titles, str):
+            trans_titles = [trans_titles]
+        trans_titles = [t.strip() for t in trans_titles if str(t).strip()]
+        if trans_titles:
+            return " / ".join(trans_titles)
+        return str(meta.get('title') or meta.get('name', '')).strip()
         
-    async def _get_poster_url(self, meta):
-        tmp_folder = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
-        poster_cache_path = os.path.join(tmp_folder, "NP_poster.txt")
-        poster_lock_path = os.path.join(tmp_folder, "NP_poster.lock")
-
-        while os.path.exists(poster_lock_path):
-            await asyncio.sleep(1)
-
-        if os.path.exists(poster_cache_path):
-            try:
-                with open(poster_cache_path, "r", encoding="utf-8") as f:
-                    poster_url = f.read().strip()
-                if poster_url.startswith("http"):
-                    self._log(meta, f"[{self.tracker}] ✅ 成功读取由其他任务生成的海报缓存: {poster_url}")
-                    return poster_url
-            except Exception as e:
-                self._log(meta, f"[{self.tracker}] ⚠️ 读取已存在的海报缓存文件时出错 ({e})，将尝试重新处理。")
-
-        self._log(meta, f"[{self.tracker}] 开始处理海报（下载与上传）...")
-        try:
-            with open(poster_lock_path, 'w') as f: f.write('locked')
-            
-            original_poster_url = self.fkgen_data.get('image_url', '')
-            if not original_poster_url:
-                self._log(meta, f"[{self.tracker}]   - 未在 fkgen 信息中找到原始海报链接。")
-                return meta.get('poster', '')
-
-            if 'doubanio.com' in original_poster_url:
-                processed_url = original_poster_url.replace('img1.doubanio.com', 'img9.doubanio.com').replace('img3.doubanio.com', 'img9.doubanio.com')
-                url_without_protocol = processed_url.split('//', 1)[-1]
-                download_url = f"https://cache.springsunday.net/{url_without_protocol}"
-            else:
-                download_url = original_poster_url
-            
-            original_filename = os.path.basename(original_poster_url.split('?')[0])
-            local_poster_path = os.path.join(tmp_folder, f"{original_filename}")
-
-            try:
-                async with self.session.stream("GET", download_url, timeout=30) as response:
-                    response.raise_for_status()
-                    with open(local_poster_path, 'wb') as f:
-                        async for chunk in response.aiter_bytes(): f.write(chunk)
-                self._log(meta, f"[{self.tracker}]   - ✅ 海报下载成功。")
-            except Exception as e:
-                self._log(meta, f"[{self.tracker}]   - ❌ 下载海报时出错: {e}")
-                return meta.get('poster', '')
-
-            new_poster_url = await asyncio.to_thread(image777.upload_image, local_poster_path)
-            final_url = new_poster_url if new_poster_url else original_poster_url
-            
-            if final_url:
-                with open(poster_cache_path, "w", encoding="utf-8") as f: f.write(final_url)
-                self._log(meta, f"[{self.tracker}] 海报链接已写入 NP_poster.txt。")
-                self._log(meta, f"[{self.tracker}] ✅ 海报处理完成！新链接: {final_url}")
-                return final_url
-            else:
-                self._log(meta, f"[{self.tracker}]   - ❌ 上传到图床失败或未获取到有效链接。")
-                return original_poster_url
-        finally:
-            if os.path.exists(poster_lock_path):
-                os.remove(poster_lock_path)
-
-    def _get_year_from_fkgen(self):
-        return str(self.fkgen_data.get("year", ""))
+    def _get_year_from_meta(self, meta):
+        year_value = meta.get('year') or meta.get('imdb_info', {}).get('year')
+        return str(year_value) if year_value else ""
 
     def _get_category_id(self, meta):
-        genres = self.fkgen_data.get("genres", [])
-        if "真人秀" in genres: return self.category_map.get('TV_SHOWS')
-        if "纪录片" in genres: return self.category_map.get('DOCS')
+        genres = self._get_genres(meta)
+        if self._has_genre(genres, {"真人秀", "Reality"}):
+            return self.category_map.get('TV_SHOWS')
+        if self._has_genre(genres, {"纪录片", "Documentary"}):
+            return self.category_map.get('DOCS')
         main_category = meta.get('category')
         if main_category == 'MOVIE': return self.category_map.get('MOVIE')
         if main_category == 'TV': return self.category_map.get('TV_SERIES')
@@ -593,10 +473,10 @@ class SSD(COMMON):
         edited_name = re.sub(r'DD\+', 'DDP', base_name, flags=re.IGNORECASE)
         category = meta.get('category')
         if category == 'TV':
-            year_from_fkgen = self._get_year_from_fkgen()
-            if year_from_fkgen:
+            year_from_meta = self._get_year_from_meta(meta)
+            if year_from_meta:
                 season_pattern = re.compile(r'(S\d{2})', re.IGNORECASE)
-                new_name = season_pattern.sub(fr'\g<1>.{year_from_fkgen}', edited_name, count=1)
+                new_name = season_pattern.sub(fr'\g<1>.{year_from_meta}', edited_name, count=1)
                 if new_name != edited_name: edited_name = new_name
         elif category == 'MOVIE':
             imdb_year = str(meta.get('imdb_info', {}).get('year', ""))
@@ -630,15 +510,11 @@ class SSD(COMMON):
         
         self.imdb_id_with_prefix = f"tt{str(imdb_id_num).zfill(7)}"
         
-        if not await self._get_and_cache_fkgen_data(meta):
-            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "fkgen 信息获取失败或无效，上传任务中止。"}
+        if not await self._resolve_douban_link(meta):
+            meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "豆瓣链接获取失败，上传任务中止。"}
             return False
-            
-        douban_link = self.douban_url or (
-            f"https://movie.douban.com/subject/{self.fkgen_data.get('DoubanID')}/"
-            if self.fkgen_data.get('DoubanID')
-            else ""
-        )
+
+        douban_link = self.douban_url
 
         if not await self.edit_torrent(meta, self.tracker, self.source_flag):
             meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "Failed to edit torrent"}
@@ -650,14 +526,14 @@ class SSD(COMMON):
 
         data = {
             'name': ssd_name, 
-            'small_descr': self._get_subtitle_from_fkgen(),
+            'small_descr': self._get_small_descr(meta),
             'url': douban_link or f"https://www.imdb.com/title/{self.imdb_id_with_prefix}/",
             'url_vimages': '\n'.join([img['raw_url'] for img in meta.get('image_list', [])]),
             'url_poster': poster_url,
             'Media_BDInfo': self._get_media_bdinfo(meta), 
             'descr': final_description,
             'type': self._get_category_id(meta), 
-            'source_sel': self._get_region_id_from_fkgen(meta),
+            'source_sel': self._get_region_id_from_meta(meta),
             'medium_sel': self._get_medium_id(ssd_name), 
             'codec_sel': self._get_codec_id(ssd_name),
             'audiocodec_sel': self._get_audiocodec_id(ssd_name), 
@@ -667,7 +543,7 @@ class SSD(COMMON):
         }
         if 'Blu-ray' in ssd_name and meta.get('is_disc') == 'BDMV': data['untouched'] = '1'
         if self._is_pack(meta): data['pack'] = '1'
-        if "动画" in self.fkgen_data.get("genres", []): data['animation'] = '1'
+        if self._has_genre(self._get_genres(meta), {"动画", "Animation"}): data['animation'] = '1'
         if self._has_chinese_subtitle(meta): data['subtitlezh'] = '1'
         
         hdr_string = meta.get('hdr', '').upper()
