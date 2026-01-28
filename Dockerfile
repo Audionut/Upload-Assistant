@@ -6,7 +6,7 @@ RUN apt-get update && \
     git \
     g++ \
     cargo \
-    mktorrent \
+    ffmpeg \
     mediainfo \
     rustc \
     mono-complete \
@@ -41,16 +41,11 @@ COPY . .
 # Download only the required mkbrr binary (requires full repo for src imports)
 RUN python3 -c "from bin.get_mkbrr import MkbrrBinaryManager; MkbrrBinaryManager.download_mkbrr_for_docker()"
 
-# Download ffmpeg builds for Docker (amd/arm)
-RUN python3 -c "from bin.get_ffmpeg_docker import FfmpegBinaryManager; FfmpegBinaryManager.download_ffmpeg_for_docker()"
-
 # Ensure binaries are executable
 RUN find bin/mkbrr -name "mkbrr" -print0 | xargs -0 chmod +x
-RUN find bin/ffmpeg -name "ffmpeg" -print0 | xargs -0 chmod +x
 
 # Enable non-root access while still letting Upload-Assistant tighten permissions at runtime
 RUN chown -R 1000:1000 /Upload-Assistant/bin/mkbrr
-RUN chown -R 1000:1000 /Upload-Assistant/bin/ffmpeg
 RUN chown -R 1000:1000 /Upload-Assistant/bin/MI
 
 # Create tmp directory with appropriate permissions
