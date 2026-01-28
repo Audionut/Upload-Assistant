@@ -197,7 +197,7 @@ class SSD(COMMON):
         return False
 
     def _get_region_id_from_meta(self, meta=None):
-        EUROPE_AMERICA_OCEANIA_SET = {'阿尔巴尼亚', '爱尔兰', '爱沙尼亚', '安道尔', '奥地利', '白俄罗斯', '保加利亚','北马其顿', '比利时', '冰岛', '波黑', '波兰', '丹麦', '德国', '法国','梵地冈', '芬兰', '荷兰', '黑山', '捷克', '克罗地亚', '拉脱维亚', '立陶宛','列支敦士登', '卢森堡', '罗马尼亚', '马耳他', '摩尔多瓦', '摩纳哥', '挪威','葡萄牙', '瑞典', '瑞士', '塞尔维亚', '塞浦路斯', '圣马力诺', '斯洛伐克','斯洛文尼亚', '乌克兰', '西班牙', '希腊', '匈牙利', '意大利', '英国','安提瓜和巴布达', '巴巴多斯', '巴哈马', '巴拿马', '伯利兹', '多米尼加', '多米尼克','格林纳达', '哥斯达黎加', '古巴', '海地', '洪都拉斯', '加拿大', '美国', '墨西哥','尼加拉瓜', '萨尔вадор', '圣基茨和尼维斯', '圣卢西亚', '圣文森特和格林纳丁斯','特立尼达和多巴哥', '危地马拉', '牙买加', '阿根廷', '巴拉圭', '巴西', '秘鲁','玻利维亚', '厄瓜多尔', '哥伦比亚', '圭亚那', '苏里南', '委内瑞拉', '乌拉圭','智利', '捷克斯洛伐克', '澳大利亚', '西德', '新西兰'}
+        EUROPE_AMERICA_OCEANIA_SET = {'阿尔巴尼亚', '爱尔兰', '爱沙尼亚', '安道尔', '奥地利', '白俄罗斯', '保加利亚', '北马其顿', '比利时', '冰岛', '波黑', '波兰', '丹麦', '德国', '法国', '梵蒂冈', '芬兰', '荷兰', '黑山', '捷克', '克罗地亚', '拉脱维亚', '立陶宛', '列支敦士登', '卢森堡', '罗马尼亚', '马耳他', '摩尔多瓦', '摩纳哥', '挪威', '葡萄牙', '瑞典', '瑞士', '塞尔维亚', '塞浦路斯', '圣马力诺', '斯洛伐克', '斯洛文尼亚', '乌克兰', '西班牙', '希腊', '匈牙利', '意大利', '英国', '安提瓜和巴布达', '巴巴多斯', '巴哈马', '巴拿马', '伯利兹', '多米尼加', '多米尼克', '格林纳达', '哥斯达黎加', '古巴', '海地', '洪都拉斯', '加拿大', '美国', '墨西哥', '尼加拉瓜', '萨尔瓦多', '圣基茨和尼维斯', '圣卢西亚', '圣文森特和格林纳丁斯', '特立尼达和多巴哥', '危地马拉', '牙买加', '阿根廷', '巴拉圭', '巴西', '秘鲁', '玻利维亚', '厄瓜多尔', '哥伦比亚', '圭亚那', '苏里南', '委内瑞拉', '乌拉圭', '智利', '捷克斯洛伐克', '澳大利亚', '西德', '新西兰'}
         CHINA_MAINLAND = {'中国大陆', '中国内地', '大陆', '内地', '中国'}
         CHINA_HK = {'中国香港', '香港'}
         CHINA_TW = {'中国台湾', '台湾'}
@@ -233,6 +233,19 @@ class SSD(COMMON):
             ]
             for meta_region in meta_regions:
                 movie_regions.extend(self._split_region_candidates(meta_region))
+        western_keywords = {
+            'albania', 'ireland', 'estonia', 'andorra', 'austria', 'belarus', 'bulgaria', 'north macedonia',
+            'macedonia', 'belgium', 'iceland', 'bosnia', 'poland', 'denmark', 'germany', 'france', 'vatican',
+            'finland', 'netherlands', 'montenegro', 'czech', 'croatia', 'latvia', 'lithuania', 'liechtenstein',
+            'luxembourg', 'romania', 'malta', 'moldova', 'monaco', 'norway', 'portugal', 'sweden', 'switzerland',
+            'serbia', 'cyprus', 'san marino', 'slovakia', 'slovenia', 'ukraine', 'spain', 'greece', 'hungary',
+            'italy', 'united kingdom', 'uk', 'britain', 'england', 'scotland', 'wales', 'antigua', 'barbados',
+            'bahamas', 'panama', 'belize', 'dominican', 'grenada', 'costa rica', 'cuba', 'haiti', 'honduras',
+            'canada', 'united states', 'usa', 'mexico', 'nicaragua', 'el salvador', 'saint kitts', 'saint lucia',
+            'saint vincent', 'trinidad', 'guatemala', 'jamaica', 'argentina', 'paraguay', 'brazil', 'peru',
+            'bolivia', 'ecuador', 'colombia', 'guyana', 'suriname', 'venezuela', 'uruguay', 'chile',
+            'czechoslovakia', 'australia', 'west germany', 'new zealand',
+        }
         for region in movie_regions:
             region = region.strip()
             if not region:
@@ -241,6 +254,9 @@ class SSD(COMMON):
             if upper_region in REGION_CODE_MAP:
                 return REGION_CODE_MAP[upper_region]
             if region in EUROPE_AMERICA_OCEANIA_SET:
+                return '4'
+            lower_region = region.lower()
+            if any(keyword in lower_region for keyword in western_keywords):
                 return '4'
             if region in CHINA_HK:
                 return '2'
@@ -521,7 +537,7 @@ class SSD(COMMON):
             return False
             
         ssd_name = self.edit_name(meta)
-        poster_url = meta.get('rehosted_poster') or meta.get('poster') or ""
+        poster_url = ""
         final_description = self._get_final_description(meta)
 
         data = {
