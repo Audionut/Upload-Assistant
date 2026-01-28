@@ -28,12 +28,15 @@ class SSD(COMMON):
         self.anon = tracker_config.get('anon', True)
         self.offer = tracker_config.get('offer', True)
         self.passkey = tracker_config.get('passkey')
+        self.meta_script = str(tracker_config.get('meta_script', '')).strip()
+        self.meta_timeout = int(tracker_config.get('meta_timeout', 30))
         self.upload_url = 'https://springsunday.net/takeupload.php'
         self.torrent_url = 'https://springsunday.net/details.php?id='
         self.banned_groups = []
 
         self.fkgen_data = {}
         self.imdb_id_with_prefix = None
+        self.douban_url = ""
         
         self.session = httpx.AsyncClient()
         self.session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'})
@@ -108,6 +111,39 @@ class SSD(COMMON):
         except Exception:
             return None
 
+    async def get_external_meta(self, meta):
+        result = {"bbcode": "", "trans_title": [], "douban_url": ""}
+        if not self.meta_script:
+            return result
+        imdb_id = str(meta.get('imdb_id', '')).strip()
+        arg = f"tt{imdb_id.replace('tt', '').zfill(7)}" if imdb_id and imdb_id != '0' else meta.get("douban_url")
+        if not arg:
+            return result
+        try:
+            cmdline = shlex.split(self.meta_script) + [str(arg).strip()]
+            proc = await asyncio.create_subprocess_exec(
+                *cmdline,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=self.meta_timeout)
+            output = stdout.decode('utf-8').strip()
+            if output:
+                result["bbcode"] = output
+                m = re.search(r'^[ \t]*◎译　　名[ \t　]+(.+)$', output, flags=re.M)
+                if m:
+                    result["trans_title"] = [
+                        p.strip()
+                        for p in re.split(r'\s*/\s*', m.group(1).strip())
+                        if p.strip()
+                    ]
+                douban_match = re.search(r"https?://(?:movie\.)?douban\.com/subject/\d+/?", output)
+                if douban_match:
+                    result["douban_url"] = douban_match.group(0)
+        except Exception:
+            pass
+        return result
+
     async def _get_fkgen_data(self, meta, douban_link):
         if not douban_link:
             self._log(meta, f"[{self.tracker}] -> 警告：没有提供豆瓣链接，无法获取信息。")
@@ -134,6 +170,7 @@ class SSD(COMMON):
         tmp_folder = os.path.join(meta['base_dir'], 'tmp', meta['uuid'])
         fkgen_cache_path = os.path.join(tmp_folder, "NP_fkgen.json")
         fkgen_lock_path = os.path.join(tmp_folder, "NP_fkgen.lock")
+        self.douban_url = ""
 
         while os.path.exists(fkgen_lock_path):
             self._log(meta, f"[{self.tracker}] 检测到fkgen信息正在被其他任务获取，等待中...")
@@ -161,7 +198,13 @@ class SSD(COMMON):
                 douban_link = cli_ui.ask_string("请输入正确的豆瓣链接:", default="").strip()
             
             if not is_manual_mode:
-                douban_link = await self._get_douban_link_from_imdb(self.imdb_id_with_prefix)
+                ext_meta = await self.get_external_meta(meta)
+                if ext_meta.get("douban_url"):
+                    self.douban_url = ext_meta["douban_url"]
+                    meta['ptgen'] = ext_meta
+                    douban_link = self.douban_url
+                else:
+                    douban_link = await self._get_douban_link_from_imdb(self.imdb_id_with_prefix)
             
             if not douban_link:
                 if not is_manual_mode:
@@ -169,6 +212,9 @@ class SSD(COMMON):
                     cli_ui.info(f"未能通过 IMDb ID '{self.imdb_id_with_prefix}' 自动找到豆瓣链接。")
                 douban_link = cli_ui.ask_string("请手动输入正确的豆瓣链接 (或直接按回车跳过):", default="").strip()
             
+            if douban_link:
+                self.douban_url = douban_link
+
             await self._get_fkgen_data(meta, douban_link)
             
             if self.fkgen_data and self.fkgen_data.get("names"):
@@ -588,7 +634,11 @@ class SSD(COMMON):
             meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "fkgen 信息获取失败或无效，上传任务中止。"}
             return False
             
-        douban_link = f"https://movie.douban.com/subject/{self.fkgen_data.get('DoubanID')}/" if self.fkgen_data.get('DoubanID') else ""
+        douban_link = self.douban_url or (
+            f"https://movie.douban.com/subject/{self.fkgen_data.get('DoubanID')}/"
+            if self.fkgen_data.get('DoubanID')
+            else ""
+        )
 
         if not await self.edit_torrent(meta, self.tracker, self.source_flag):
             meta['tracker_status'][self.tracker] = {'status': 'failed', 'reason': "Failed to edit torrent"}
