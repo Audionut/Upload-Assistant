@@ -9,8 +9,15 @@ let localCsrf = null;
 const loadLocalCsrf = async (force = false) => {
   if (localCsrf && !force) return;
 
+  let apiBase = '';
+  if (typeof window !== 'undefined' && window.location) {
+    apiBase = window.location.origin + '/api';
+  } else {
+    apiBase = '/api';
+  }
+
   try {
-    const r = await fetch('/api/csrf_token', { credentials: 'same-origin' });
+    const r = await fetch(`${apiBase}/csrf_token`, { credentials: 'same-origin' });
     if (!r.ok) return;
     const d = await r.json();
     localCsrf = d && d.csrf_token ? String(d.csrf_token) : null;
