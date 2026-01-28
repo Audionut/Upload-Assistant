@@ -473,6 +473,9 @@ class Prep:
                 meta['valid_mi'] = False
                 await asyncio.sleep(2)
 
+        mediainfo_tracks = meta.get("mediainfo", {}).get("media", {}).get("track") or []
+        meta["has_multiple_default_subtitle_tracks"] = len([track for track in mediainfo_tracks if track["@type"] == "Text" and track["Default"] == "Yes"]) > 1
+
         # Check if there's a language restriction
         if meta['has_languages'] is not None and not meta.get('emby', False):
             try:
