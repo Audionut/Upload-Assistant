@@ -389,11 +389,14 @@ function AudionutsUAGUI() {
   
   // Extract value from argument string (e.g., --descfile "path" or --desclink "url")
   const extractArgValue = (args, argName) => {
-    // Match --argname "value" or --argname 'value' or --argname value
-    const regex = new RegExp(`${argName}\\s+(?:"([^"]+)"|'([^']+)'|(\\S+))`, 'i');
+    // Match --argname "value" or --argname 'value' or --argname value (but not another --arg)
+    const regex = new RegExp(`${argName}\\s+(?:"([^"]+)"|'([^']+)'|([^\\s-][^\\s]*|(?!--)[^\\s]+))`, 'i');
     const match = args.match(regex);
     if (match) {
-      return match[1] || match[2] || match[3] || '';
+      const val = match[1] || match[2] || match[3] || '';
+      // Double-check: don't return values that look like arguments
+      if (val.startsWith('--')) return '';
+      return val;
     }
     return '';
   };
@@ -407,20 +410,21 @@ function AudionutsUAGUI() {
     
     // If value is empty, just leave the flag without value
     if (!value) {
-      // Remove any existing value after the flag
-      return args.replace(new RegExp(`(${argName})\\s+(?:"[^"]*"|'[^']*'|\\S+)`, 'i'), '$1')
+      // Remove any existing value after the flag, but don't capture other --arguments
+      // Match quoted values or non-whitespace that doesn't start with --
+      return args.replace(new RegExp(`(${argName})\\s+(?:"[^"]*"|'[^']*'|(?!--)[^\\s]+)`, 'i'), '$1')
                  .replace(new RegExp(`(${argName})\\s*$`, 'i'), '$1');
     }
     
     // Quote the value if it contains spaces
     const quotedValue = value.includes(' ') ? `"${value}"` : `"${value}"`;
     
-    // Check if there's already a value
-    const hasValue = new RegExp(`${argName}\\s+(?:"[^"]*"|'[^']*'|\\S+)`, 'i').test(args);
+    // Check if there's already a value (quoted or unquoted but not starting with --)
+    const hasValue = new RegExp(`${argName}\\s+(?:"[^"]*"|'[^']*'|(?!--)[^\\s]+)`, 'i').test(args);
     
     if (hasValue) {
       // Replace existing value
-      return args.replace(new RegExp(`(${argName})\\s+(?:"[^"]*"|'[^']*'|\\S+)`, 'i'), `$1 ${quotedValue}`);
+      return args.replace(new RegExp(`(${argName})\\s+(?:"[^"]*"|'[^']*'|(?!--)[^\\s]+)`, 'i'), `$1 ${quotedValue}`);
     } else {
       // Add value after the flag
       return args.replace(new RegExp(`(${argName})(\\s|$)`, 'i'), `$1 ${quotedValue}$2`);
