@@ -26,7 +26,6 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.security import safe_join
-from werkzeug.utils import secure_filename
 
 import web_ui.auth as auth_mod
 from flask_session import Session
@@ -85,7 +84,7 @@ def _sanitize_relpath(rel: str) -> str:
     """Sanitize a relative path coming from user input.
 
     Splits the path into components, rejects empty/parent segments and
-    normalizes each component with Werkzeug's `secure_filename`. Returns a
+    validates each component for unsafe/control characters. Returns a
     path using the OS separator. Raises ValueError for unsafe input.
     """
     if rel == "" or rel == ".":
@@ -100,10 +99,14 @@ def _sanitize_relpath(rel: str) -> str:
     for p in parts:
         if not p or p == "." or p == "..":
             raise ValueError("Invalid path component")
-        safe = secure_filename(p)
-        if not safe:
+        # Reject NUL/control characters which are unsafe in file names.
+        if re.search(r"[\x00-\x1f]", p):
             raise ValueError("Invalid path component")
-        clean_parts.append(safe)
+        # Reject path-separator characters
+        if '/' in p or '\\' in p:
+            raise ValueError("Invalid path component")
+
+        clean_parts.append(p)
 
     return os.sep.join(clean_parts)
 
