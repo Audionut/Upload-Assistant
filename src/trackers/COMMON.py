@@ -10,6 +10,7 @@ from typing import Any, Callable, Optional, Union, cast
 
 import aiofiles
 import bencodepy
+import cli_ui
 import click
 import httpx
 import langcodes
@@ -632,13 +633,13 @@ class COMMON:
                         return tmdb, imdb, tvdb, mal, description, category, infohash, imagelist, file_name
                     else:
                         console.print("[cyan]Do you want to edit, discard or keep the description?[/cyan]")
-                        edit_choice = input("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is:")
+                        edit_choice = cli_ui.ask_string("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is:")
 
-                        if edit_choice.lower() == 'e':
+                        if (edit_choice or "").lower() == 'e':
                             edited_description = click.edit(description)
                             if edited_description:
                                 description = edited_description.strip()
-                        elif edit_choice.lower() == 'd':
+                        elif (edit_choice or "").lower() == 'd':
                             description = None
                             console.print("[yellow]Description discarded.[/yellow]")
                         else:
