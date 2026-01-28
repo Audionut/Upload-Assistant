@@ -184,20 +184,74 @@ class SSD(COMMON):
                 os.remove(fkgen_lock_path)
     # ==========================================================
 
-    def _get_region_id_from_fkgen(self):
+    def _split_region_candidates(self, regions):
+        if not regions:
+            return []
+        if isinstance(regions, str):
+            parts = re.split(r"[/,|，、;；]", regions)
+            return [part.strip() for part in parts if part.strip()]
+        return [str(part).strip() for part in regions if str(part).strip()]
+
+    def _get_region_id_from_fkgen(self, meta=None):
         EUROPE_AMERICA_OCEANIA_SET = {'阿尔巴尼亚', '爱尔兰', '爱沙尼亚', '安道尔', '奥地利', '白俄罗斯', '保加利亚','北马其顿', '比利时', '冰岛', '波黑', '波兰', '丹麦', '德国', '法国','梵地冈', '芬兰', '荷兰', '黑山', '捷克', '克罗地亚', '拉脱维亚', '立陶宛','列支敦士登', '卢森堡', '罗马尼亚', '马耳他', '摩尔多瓦', '摩纳哥', '挪威','葡萄牙', '瑞典', '瑞士', '塞尔维亚', '塞浦路斯', '圣马力诺', '斯洛伐克','斯洛文尼亚', '乌克兰', '西班牙', '希腊', '匈牙利', '意大利', '英国','安提瓜和巴布达', '巴巴多斯', '巴哈马', '巴拿马', '伯利兹', '多米尼加', '多米尼克','格林纳达', '哥斯达黎加', '古巴', '海地', '洪都拉斯', '加拿大', '美国', '墨西哥','尼加拉瓜', '萨尔вадор', '圣基茨和尼维斯', '圣卢西亚', '圣文森特和格林纳丁斯','特立尼达和多巴哥', '危地马拉', '牙买加', '阿根廷', '巴拉圭', '巴西', '秘鲁','玻利维亚', '厄瓜多尔', '哥伦比亚', '圭亚那', '苏里南', '委内瑞拉', '乌拉圭','智利', '捷克斯洛伐克', '澳大利亚', '西德', '新西兰'}
-        movie_regions = self.fkgen_data.get('countries', [])
-        if not movie_regions: return '99'
+        CHINA_MAINLAND = {'中国大陆', '中国内地', '大陆', '内地', '中国'}
+        CHINA_HK = {'中国香港', '香港'}
+        CHINA_TW = {'中国台湾', '台湾'}
+        JAPAN = {'日本', 'Japan'}
+        KOREA = {'韩国', 'Korea', 'South Korea'}
+        INDIA = {'印度', 'India'}
+        RUSSIA = {'俄罗斯', '苏联', 'Russia', 'USSR'}
+        THAILAND = {'泰国', 'Thailand'}
+        REGION_CODE_MAP = {
+            'CHN': '1',
+            'HKG': '2',
+            'TWN': '3',
+            'JPN': '5',
+            'KOR': '6',
+            'IND': '7',
+            'RUS': '8',
+            'THA': '9',
+            'USA': '4',
+            'GBR': '4',
+            'EUR': '4',
+            'AUS': '4',
+            'CAN': '4',
+        }
+        movie_regions = self._split_region_candidates(self.fkgen_data.get('countries', []))
+        if meta:
+            meta_regions = [
+                meta.get('region'),
+                meta.get('country'),
+                meta.get('ptgen', {}).get('region'),
+                meta.get('ptgen', {}).get('country'),
+            ]
+            for meta_region in meta_regions:
+                movie_regions.extend(self._split_region_candidates(meta_region))
         for region in movie_regions:
-            if region in EUROPE_AMERICA_OCEANIA_SET: return '4'
-            if region == '中国香港': return '2'
-            if region == '中国大陆': return '1'
-            if region == '中国台湾': return '3'
-            if region == '日本': return '5'
-            if region == '韩国': return '6'
-            if region == '印度': return '7'
-            if region == '俄罗斯' or region == '苏联': return '8'
-            if region == '泰国': return '9'
+            region = region.strip()
+            if not region:
+                continue
+            upper_region = region.upper()
+            if upper_region in REGION_CODE_MAP:
+                return REGION_CODE_MAP[upper_region]
+            if region in EUROPE_AMERICA_OCEANIA_SET:
+                return '4'
+            if region in CHINA_HK:
+                return '2'
+            if region in CHINA_MAINLAND:
+                return '1'
+            if region in CHINA_TW:
+                return '3'
+            if region in JAPAN:
+                return '5'
+            if region in KOREA:
+                return '6'
+            if region in INDIA:
+                return '7'
+            if region in RUSSIA:
+                return '8'
+            if region in THAILAND:
+                return '9'
         return '99'
 
     def _get_subtitle_from_fkgen(self):
@@ -541,7 +595,7 @@ class SSD(COMMON):
             return False
             
         ssd_name = self.edit_name(meta)
-        poster_url = await self._get_poster_url(meta)
+        poster_url = meta.get('rehosted_poster') or meta.get('poster') or ""
         final_description = self._get_final_description(meta)
 
         data = {
@@ -553,7 +607,7 @@ class SSD(COMMON):
             'Media_BDInfo': self._get_media_bdinfo(meta), 
             'descr': final_description,
             'type': self._get_category_id(meta), 
-            'source_sel': self._get_region_id_from_fkgen(),
+            'source_sel': self._get_region_id_from_fkgen(meta),
             'medium_sel': self._get_medium_id(ssd_name), 
             'codec_sel': self._get_codec_id(ssd_name),
             'audiocodec_sel': self._get_audiocodec_id(ssd_name), 
