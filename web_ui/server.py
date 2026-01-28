@@ -827,13 +827,14 @@ def _debug_process_snapshot(session_id: Optional[str] = None) -> dict[str, Any]:
         return {"error": "failed to build snapshot"}
 
 
-class BrowseItem(TypedDict):
+class BrowseItem(TypedDict, total=False):
     """Serialized representation of an entry returned by the browse API."""
 
     name: str
     path: str
     type: Literal["folder", "file"]
     children: Union[list["BrowseItem"], None]
+    subtitle: str  # Optional hint  (eg, when parent path when names collide)
 
 
 class ConfigItem(TypedDict, total=False):
@@ -2304,10 +2305,32 @@ def browse_roots():
     if not roots:
         return jsonify({"error": "Browsing is not configured", "success": False}), 400
 
+    # First pass: collect all display names to detect duplicates
+    name_to_roots: dict[str, list[str]] = {}
+    for root in roots:
+        display_name = os.path.basename(root.rstrip(os.sep)) or root
+        if display_name not in name_to_roots:
+            name_to_roots[display_name] = []
+        name_to_roots[display_name].append(root)
+
+    # Second pass: build items with subtitles when needed
     items: list[BrowseItem] = []
     for root in roots:
         display_name = os.path.basename(root.rstrip(os.sep)) or root
-        items.append({"name": display_name, "path": root, "type": "folder", "children": []})
+        item: BrowseItem = {"name": display_name, "path": root, "type": "folder", "children": []}
+
+        # Add subtitle if multiple roots share the same folder name
+        if len(name_to_roots.get(display_name, [])) > 1:
+            # Show parent path or drive letter
+            parent = os.path.dirname(root.rstrip(os.sep))
+            if parent:
+                # On Windows, show drive letter + parent; on Unix, show parent path
+                item["subtitle"] = parent
+            else:
+                # Fallback to full path if no parent (e.g., drive root)
+                item["subtitle"] = root
+
+        items.append(item)
 
     # If caller used a bearer token, require it to be valid.
     bearer = _get_bearer_from_header()

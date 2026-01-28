@@ -302,6 +302,13 @@ const ExpandAllIcon = () => (
   </svg>
 );
 
+const SpinnerIcon = () => (
+  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  </svg>
+);
+
 function AudionutsUAGUI() {
   const API_BASE = window.location.origin + '/api';
   // Derive an application base path from the API base so links work under subpath deployments
@@ -328,9 +335,13 @@ function AudionutsUAGUI() {
   const [argSearchFilter, setArgSearchFilter] = useState('');
   const [collapsedSections, setCollapsedSections] = useState(new Set());
   
+  // Folder loading states
+  const [loadingFolders, setLoadingFolders] = useState(new Set());
+  
   // Description file/link states
   const [descDirectories, setDescDirectories] = useState([]);
   const [descExpandedFolders, setDescExpandedFolders] = useState(new Set());
+  const [descLoadingFolders, setDescLoadingFolders] = useState(new Set());
   const [descLinkError, setDescLinkError] = useState('');
   const [descFileError, setDescFileError] = useState('');
   const [descBrowserCollapsed, setDescBrowserCollapsed] = useState(false);
@@ -625,15 +636,26 @@ function AudionutsUAGUI() {
   // Toggle description folder
   const toggleDescFolder = async (path) => {
     const newExpanded = new Set(descExpandedFolders);
-    
+
     if (newExpanded.has(path)) {
       newExpanded.delete(path);
+      setDescExpandedFolders(newExpanded);
     } else {
       newExpanded.add(path);
-      await loadDescFolderContents(path);
+      setDescExpandedFolders(newExpanded);
+      
+      // Show loading indicator while fetching
+      setDescLoadingFolders(prev => new Set(prev).add(path));
+      try {
+        await loadDescFolderContents(path);
+      } finally {
+        setDescLoadingFolders(prev => {
+          const next = new Set(prev);
+          next.delete(path);
+          return next;
+        });
+      }
     }
-    
-    setDescExpandedFolders(newExpanded);
   };
   
   // Load desc roots when --descfile is added
@@ -674,12 +696,23 @@ function AudionutsUAGUI() {
     
     if (newExpanded.has(path)) {
       newExpanded.delete(path);
+      setExpandedFolders(newExpanded);
     } else {
       newExpanded.add(path);
-      await loadFolderContents(path);
+      setExpandedFolders(newExpanded);
+      
+      // Show loading indicator while fetching
+      setLoadingFolders(prev => new Set(prev).add(path));
+      try {
+        await loadFolderContents(path);
+      } finally {
+        setLoadingFolders(prev => {
+          const next = new Set(prev);
+          next.delete(path);
+          return next;
+        });
+      }
     }
-    
-    setExpandedFolders(newExpanded);
   };
 
   const loadFolderContents = async (path) => {
@@ -711,81 +744,103 @@ function AudionutsUAGUI() {
   };
 
   const renderFileTree = (items, level = 0) => {
-    return items.map((item, idx) => (
-      <div key={idx}>
-        <div
-          className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
-            selectedPath === item.path 
-              ? isDarkMode 
-                ? 'bg-purple-900 border-l-4 border-purple-500' 
-                : 'bg-blue-100 border-l-4 border-blue-500'
-              : isDarkMode
-                ? 'hover:bg-gray-700'
-                : 'hover:bg-gray-100'
-          }`}
-          style={{ paddingLeft: `${level * 20 + 12}px` }}
-          onClick={() => {
-            if (item.type === 'folder') {
-              toggleFolder(item.path);
-            }
-            setSelectedPath(item.path);
-            setSelectedName(item.name);
-          }}
-        >
-          <span className="text-yellow-600">
-            {item.type === 'folder' ? (
-              expandedFolders.has(item.path) ? <FolderOpenIcon /> : <FolderIcon />
-            ) : (
-              <span className="text-blue-600"><FileIcon /></span>
-            )}
-          </span>
-          <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>{item.name}</span>
+    return items.map((item, idx) => {
+      const isLoading = item.type === 'folder' && loadingFolders.has(item.path);
+      return (
+        <div key={idx}>
+          <div
+            className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+              selectedPath === item.path 
+                ? isDarkMode 
+                  ? 'bg-purple-900 border-l-4 border-purple-500' 
+                  : 'bg-blue-100 border-l-4 border-blue-500'
+                : isDarkMode
+                  ? 'hover:bg-gray-700'
+                  : 'hover:bg-gray-100'
+            }`}
+            style={{ paddingLeft: `${level * 20 + 12}px` }}
+            onClick={() => {
+              if (item.type === 'folder') {
+                toggleFolder(item.path);
+              }
+              setSelectedPath(item.path);
+              setSelectedName(item.name);
+            }}
+          >
+            <span className={`flex-shrink-0 ${isLoading ? 'text-purple-500' : 'text-yellow-600'}`}>
+              {item.type === 'folder' ? (
+                isLoading ? <SpinnerIcon /> : (expandedFolders.has(item.path) ? <FolderOpenIcon /> : <FolderIcon />)
+              ) : (
+                <span className="text-blue-600"><FileIcon /></span>
+              )}
+            </span>
+            <div className="flex flex-col min-w-0">
+              <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-700'} truncate`}>
+                {item.name}
+                {isLoading && <span className={`ml-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading...</span>}
+              </span>
+              {item.subtitle && (
+                <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} truncate`} title={item.subtitle}>{item.subtitle}</span>
+              )}
+            </div>
+          </div>
+          {item.type === 'folder' && expandedFolders.has(item.path) && item.children && item.children.length > 0 && (
+            <div>{renderFileTree(item.children, level + 1)}</div>
+          )}
         </div>
-        {item.type === 'folder' && expandedFolders.has(item.path) && item.children && item.children.length > 0 && (
-          <div>{renderFileTree(item.children, level + 1)}</div>
-        )}
-      </div>
-    ));
+      );
+    });
   };
   
   // Render description file tree
   const renderDescFileTree = (items, level = 0) => {
-    return items.map((item, idx) => (
-      <div key={idx}>
-        <div
-          className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
-            descFilePath === item.path 
-              ? isDarkMode 
-                ? 'bg-green-900 border-l-4 border-green-500' 
-                : 'bg-green-100 border-l-4 border-green-500'
-              : isDarkMode
-                ? 'hover:bg-gray-700'
-                : 'hover:bg-gray-100'
-          }`}
-          style={{ paddingLeft: `${level * 20 + 12}px` }}
-          onClick={() => {
-            if (item.type === 'folder') {
-              toggleDescFolder(item.path);
-            } else {
-              // Update the argument directly with the selected file path
-              updateDescFile(item.path);
-            }
-          }}
-        >
-          <span className="text-yellow-600">
-            {item.type === 'folder' ? (
-              descExpandedFolders.has(item.path) ? <FolderOpenIcon /> : <FolderIcon />
-            ) : (
-              <span className="text-green-600"><FileIcon /></span>
-            )}
-          </span>
-          <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>{item.name}</span>
+    return items.map((item, idx) => {
+      const isLoading = item.type === 'folder' && descLoadingFolders.has(item.path);
+      return (
+        <div key={idx}>
+          <div
+            className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+              descFilePath === item.path 
+                ? isDarkMode 
+                  ? 'bg-green-900 border-l-4 border-green-500' 
+                  : 'bg-green-100 border-l-4 border-green-500'
+                : isDarkMode
+                  ? 'hover:bg-gray-700'
+                  : 'hover:bg-gray-100'
+            }`}
+            style={{ paddingLeft: `${level * 20 + 12}px` }}
+            onClick={() => {
+              if (item.type === 'folder') {
+                toggleDescFolder(item.path);
+              } else {
+                // Update the argument directly with the selected file path
+                updateDescFile(item.path);
+              }
+            }}
+          >
+            <span className={`flex-shrink-0 ${isLoading ? 'text-green-500' : 'text-yellow-600'}`}>
+              {item.type === 'folder' ? (
+                isLoading ? <SpinnerIcon /> : (descExpandedFolders.has(item.path) ? <FolderOpenIcon /> : <FolderIcon />)
+              ) : (
+                <span className="text-green-600"><FileIcon /></span>
+              )}
+            </span>
+            <div className="flex flex-col min-w-0">
+              <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-700'} truncate`}>
+                {item.name}
+                {isLoading && <span className={`ml-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading...</span>}
+              </span>
+              {item.subtitle && (
+                <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} truncate`} title={item.subtitle}>{item.subtitle}</span>
+              )}
+            </div>
+          </div>
+          {item.type === 'folder' && descExpandedFolders.has(item.path) && item.children && item.children.length > 0 && (
+            <div>{renderDescFileTree(item.children, level + 1)}</div>
+          )}
         </div>
-        {item.type === 'folder' && descExpandedFolders.has(item.path) && item.children && item.children.length > 0 && (
-          <div>{renderDescFileTree(item.children, level + 1)}</div>
-        )}
-      </div>
-    ));
+      );
+    });
   };
 
   const executeCommand = async () => {
