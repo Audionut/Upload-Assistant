@@ -6,13 +6,11 @@ from typing import Any, Optional, cast
 from urllib.parse import urlparse
 
 import aiofiles
-import cli_ui
 import httpx
 from bs4 import BeautifulSoup
 from unidecode import unidecode
 
 from src.console import console
-from src.cookie_auth import CookieValidator
 from src.exceptions import *  # noqa #F405
 from src.trackers.COMMON import COMMON
 
@@ -26,16 +24,9 @@ class TTG:
         self.config: Config = config
         self.tracker = 'TTG'
         self.source_flag = 'TTG'
-        self.username = str(config['TRACKERS']['TTG'].get('username', '')).strip()
-        self.password = str(config['TRACKERS']['TTG'].get('password', '')).strip()
-        self.passid = str(config['TRACKERS']['TTG'].get('login_question', '0')).strip()
-        self.passan = str(config['TRACKERS']['TTG'].get('login_answer', '')).strip()
-        self.uid = str(config['TRACKERS']['TTG'].get('user_id', '')).strip()
         self.passkey = str(config['TRACKERS']['TTG'].get('announce_url', '')).strip().split('/')[-1]
         self.signature = None
         self.banned_groups = [""]
-
-        self.cookie_validator = CookieValidator(config)
 
     async def edit_name(self, meta: Meta) -> str:
         ttg_name = str(meta.get('name', ''))
@@ -186,9 +177,8 @@ class TTG:
             await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True  # Debug mode - simulated success
         else:
-            cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.json")
-            raw_cookies = self.cookie_validator._load_cookies_dict_secure(cookiefile)  # type: ignore[reportPrivateUsage]
-            cookies = {name: str(data.get('value', '')) for name, data in raw_cookies.items()}
+            cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.txt")
+            cookies = await common.parseCookieFile(cookiefile)
             async with httpx.AsyncClient(cookies=cookies, follow_redirects=True, timeout=60.0) as client:
                 up = await client.post(url=url, data=data, files=files)
 
@@ -212,11 +202,12 @@ class TTG:
 
     async def search_existing(self, meta: Meta, _disctype: str) -> list[str]:
         dupes: list[str] = []
-        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.json")
+        common = COMMON(config=self.config)
+        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.txt")
         if not os.path.exists(cookiefile):
-            console.print("[bold red]Cookie file not found: TTG.json")
+            console.print("[bold red]Cookie file not found: TTG.txt")
             return []
-        cookies = self.cookie_validator._load_cookies_dict_secure(cookiefile)  # type: ignore[reportPrivateUsage]
+        cookies = await common.parseCookieFile(cookiefile)
 
         imdb = f"imdb{meta.get('imdb')}" if int(meta.get('imdb_id', 0) or 0) != 0 else ""
         if meta.get('is_disc', '') == "BDMV":
@@ -256,28 +247,21 @@ class TTG:
         return dupes
 
     async def validate_credentials(self, meta: Meta) -> bool:
-        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.pkl")
+        cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.txt")
         if not os.path.exists(cookiefile):
-            await self.login(cookiefile)
+            console.print('[red]Cookie file not found for TTG. Please export cookies to data/cookies/TTG.txt')
+            return False
         vcookie = await self.validate_cookies(meta, cookiefile)
         if vcookie is not True:
-            console.print('[red]Failed to validate cookies. Please confirm that the site is up and your passkey is valid.')
-            recreate = cli_ui.ask_yes_no("Log in again and create new session?")
-            if recreate is True:
-                if os.path.exists(cookiefile):
-                    os.remove(cookiefile)
-                await self.login(cookiefile)
-                vcookie = await self.validate_cookies(meta, cookiefile)
-                return vcookie
-            else:
-                return False
+            console.print('[red]Failed to validate cookies. Please confirm that the site is up and your cookies are valid.')
+            return False
         return True
 
     async def validate_cookies(self, meta: Meta, cookiefile: str) -> bool:
+        common = COMMON(config=self.config)
         url = "https://totheglory.im"
         if os.path.exists(cookiefile):
-            raw_cookies = self.cookie_validator._load_cookies_dict_secure(cookiefile)  # type: ignore[reportPrivateUsage]
-            cookies = {name: str(data.get('value', '')) for name, data in raw_cookies.items()}
+            cookies = await common.parseCookieFile(cookiefile)
             async with httpx.AsyncClient(cookies=cookies, timeout=30.0, follow_redirects=True) as client:
                 resp = await client.get(url=url)
                 if meta.get('debug'):
@@ -286,41 +270,6 @@ class TTG:
                 return resp.text.find('''<a href="/logout.php">Logout</a>''') != -1
         else:
             return False
-
-    async def login(self, cookiefile: str) -> None:
-        url = "https://totheglory.im/takelogin.php"
-        data: dict[str, Any] = {
-            'username': self.username,
-            'password': self.password,
-            'passid': self.passid,
-            'passan': self.passan
-        }
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            response = await client.post(url, data=data)
-            await asyncio.sleep(0.5)
-            if str(response.url).endswith('2fa.php'):
-                soup = BeautifulSoup(response.text, 'html.parser')
-                token_input = soup.find('input', {'name': 'authenticity_token'})
-                auth_token = token_input.get('value') if token_input else None
-                if not auth_token:
-                    raise UploadException('Missing authenticity token during TTG login', 'red')  # noqa #F405
-                two_factor_data = {
-                    'otp': console.input('[yellow]TTG 2FA Code: '),
-                    'authenticity_token': auth_token,
-                    'uid': self.uid
-                }
-                two_factor_url = "https://totheglory.im/take2fa.php"
-                response = await client.post(two_factor_url, data=two_factor_data)
-                await asyncio.sleep(0.5)
-            if str(response.url).endswith('my.php'):
-                console.print('[green]Successfully logged into TTG')
-                self.cookie_validator._save_cookies_secure(client.cookies.jar, cookiefile)  # type: ignore[reportPrivateUsage]
-            else:
-                console.print('[bold red]Something went wrong')
-                await asyncio.sleep(1)
-                console.print(response.text)
-                console.print(response.url)
-        return
 
     async def edit_desc(self, meta: Meta) -> None:
         async with aiofiles.open(
