@@ -16,7 +16,7 @@ python upload.py "/path/to/folder" "/another/path" --webui 127.0.0.1:8080
 - Other optional environment variables used by the Web UI:
 	- `UA_WEBUI_USE_SUBPROCESS` — if set (non-empty) the server will run uploads in a subprocess rather than in-process (affects interactive behavior and Rich output recording).
 	- `UA_WEBUI_CORS_ORIGINS` — comma-separated list of allowed origins for `/api/*` when remote clients need cross-origin access.
-	- `SESSION_SECRET` or `SESSION_SECRET_FILE` — provide a stable session secret (recommended for persistent deployments).
+	- `SESSION_SECRET` or `SESSION_SECRET_FILE` — provide a stable session secret (recommended for persistent deployments (permission handling needed)).
 
 Notes:
 - The server enforces that browse roots only the only configured roots (it will not expose arbitrary filesystem locations). Paths supplied on the command line or via `UA_BROWSE_ROOTS` are normalized and validated by the server before being exposed.
@@ -72,7 +72,7 @@ Notes:
 Use this checklist when deploying the Web UI to reduce risk and harden the runtime:
 
 - **Bind to localhost by default:** set `UA_WEBUI_HOST=127.0.0.1` unless you intentionally need network access; expose via an authenticated reverse proxy when remote access is required.
-- **Prefer managed secrets:** provide `SESSION_SECRET`, `SESSION_SECRET_FILE`, via environment variables when possible.
+- **Prefer managed secrets:** provide `SESSION_SECRET`, `SESSION_SECRET_FILE`, via environment variables when possible. Ensure any file/directory has the correct permissions.
 - **Restrict `UA_BROWSE_ROOTS`:** list only the absolute paths required for upload/browse operations and mount volumes read-only where feasible.
 - **Run unprivileged:** do not run the Web UI as root; restrict filesystem permissions so the server user cannot write to unrelated user data or system locations.
 - **Network controls:** firewall host ports, avoid automatic UPnP/port-forwarding, and publish ports only on necessary interfaces.

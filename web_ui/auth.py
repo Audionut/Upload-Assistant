@@ -71,7 +71,13 @@ def get_config_dir() -> Path:
         # Unix-like: prefer XDG_CONFIG_HOME if set, otherwise ~/.config
         xdg = os.environ.get("XDG_CONFIG_HOME")
         base = Path(xdg) if xdg else (Path.home() / ".config")
-        return base / "upload-assistant"
+        # Defensive: if computed base is invalid/unwritable (e.g. Path.home() returns root
+        # or the process lacks permissions), fall back to the repository data dir
+        try:
+            (base / "upload-assistant").mkdir(parents=True, exist_ok=True)
+            return base / "upload-assistant"
+        except Exception:
+            return repo_dir
 
     # Windows: prefer roaming AppData (per-user persistent config)
     if os.name == "nt":
@@ -80,11 +86,24 @@ def get_config_dir() -> Path:
     # Unix-like: prefer XDG_CONFIG_HOME, fall back to repo data/config or ~/.config/upload-assistant
     xdg = os.environ.get("XDG_CONFIG_HOME")
     if xdg:
-        return Path(xdg) / "upload-assistant"
+        try:
+            p = Path(xdg) / "upload-assistant"
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+        except Exception:
+            # Fall through to repo/data or home-based fallback
+            pass
     # fallback to repository data/config when available (developer mode)
     if repo_dir.exists():
         return repo_dir
-    return Path.home() / ".config" / "upload-assistant"
+    # Final fallback: try to create ~/.config/upload-assistant, but if that
+    # fails, fall back to repo_dir to avoid attempting to write to '/.config'.
+    try:
+        home_cfg = Path.home() / ".config" / "upload-assistant"
+        home_cfg.mkdir(parents=True, exist_ok=True)
+        return home_cfg
+    except Exception:
+        return repo_dir
 
 
 def load_session_secret() -> bytes:
