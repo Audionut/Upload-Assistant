@@ -2106,15 +2106,6 @@ function SecurityTab({ isDarkMode }) {
               )}
             </div>
           </div>
-
-          {isDarkMode && (
-            <div className="mt-3 p-3 rounded text-sm bg-gray-900 border-gray-700">
-              <div className="font-medium mb-1">Docker persistence</div>
-              <div className="text-xs text-gray-400">
-                Persist a token in Docker by setting the environment variable <code className="px-1 py-0.5 rounded bg-gray-700">UA_TOKEN</code> to the raw token, then restart the container.
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
