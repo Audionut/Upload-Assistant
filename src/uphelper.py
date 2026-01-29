@@ -66,7 +66,7 @@ class UploadHelper:
                 console.print(f"[bold yellow]{tracker_name} applies a naming change for this release: [green]{display_name}[/green][/bold yellow]")
 
             trumpable_text = None
-            if meta.get('trumpable_id') or meta.get('matched_episode_ids', []):
+            if meta.get('trumpable_id') or (meta.get('season_pack_contains_episode') and meta.get(f'{tracker_name}_matched_episode_ids', [])):
                 trumpable_dupes = [
                     entry
                     for entry in dupes_list
@@ -75,8 +75,8 @@ class UploadHelper:
                 if trumpable_dupes:
                     trumpable_text = "\n".join(_format_dupe(d) for d in trumpable_dupes)
                     console.print("[bold red]Trumpable found![/bold red]")
-                elif meta.get('matched_episode_ids', []):
-                    matched_episodes = cast(list[DupeEntry], meta.get('matched_episode_ids', []))
+                elif meta.get('season_pack_contains_episode') and meta.get(f'{tracker_name}_matched_episode_ids', []):
+                    matched_episodes = cast(list[DupeEntry], meta.get(f'{tracker_name}_matched_episode_ids', []))
                     user_tag = str(meta.get('tag', '')).lstrip('-').lower()  # Remove leading dash for comparison
 
                     # Try to find a release with matching tag
@@ -104,7 +104,7 @@ class UploadHelper:
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))) and not meta.get('ask_dupe', False):
                 dupe_text = "\n".join(_format_dupe(d) for d in dupes_list)
 
-                if trumpable_text and (meta.get('trumpable_id') or meta.get('matched_episode_ids', [])):
+                if trumpable_text and (meta.get('trumpable_id') or (meta.get('season_pack_contains_episode') and meta.get(f'{tracker_name}_matched_episode_ids', []))):
                     console.print(f"[bold cyan]{trumpable_text}[/bold cyan]")
                     console.print("[yellow]Please check the trumpable entries above to see if you want to upload[/yellow]")
                     console.print("[yellow]You will have the option to report the trumpable torrent if you upload.[/yellow]")
@@ -126,14 +126,14 @@ class UploadHelper:
                                 # For season packs: individual episodes are only in dupes for trumping purposes.
                                 # If user declines to trump, filter them out so they aren't shown as "potential dupes"
                                 # (they wouldn't match season/episode anyway).
-                                if meta.get('tv_pack') and meta.get('matched_episode_ids', []):
-                                    matched_ids = {ep.get('id') for ep in meta.get('matched_episode_ids', []) if ep.get('id')}
+                                if meta.get('tv_pack') and meta.get('season_pack_contains_episode') and meta.get(f'{tracker_name}_matched_episode_ids', []):
+                                    matched_ids = {ep.get('id') for ep in meta.get(f'{tracker_name}_matched_episode_ids', []) if ep.get('id')}
                                     dupes_list = [
                                         d for d in dupes_list
                                         if not (isinstance(d, dict) and d.get('id') in matched_ids)
                                     ]
-                                    # Clear matched_episode_ids since we're not trumping
-                                    meta['matched_episode_ids'] = []
+                                    # Clear tracker-specific matched_episode_ids since we're not trumping
+                                    meta[f'{tracker_name}_matched_episode_ids'] = []
                         except EOFError:
                             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                             await cleanup_manager.cleanup()

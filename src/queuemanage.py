@@ -9,6 +9,7 @@ from collections.abc import Mapping, MutableMapping, Sequence
 from pathlib import Path
 from typing import Any, Optional, Union, cast
 
+import cli_ui
 import click
 from rich.markdown import Markdown
 from rich.style import Style
@@ -474,7 +475,8 @@ class QueueManager:
 
                     if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                         console.print("[yellow]Do you want to update the queue log, edit, discard, or keep the existing queue?[/yellow]")
-                        edit_choice = input("Enter 'u' to update, 'a' to add specific new files, 'e' to edit, 'd' to discard, or press Enter to keep it as is: ").strip().lower()
+                        edit_choice_raw = cli_ui.ask_string("Enter 'u' to update, 'a' to add specific new files, 'e' to edit, 'd' to discard, or press Enter to keep it as is: ")
+                        edit_choice = (edit_choice_raw or "").strip().lower()
 
                         if edit_choice == 'u':
                             queue = current_files
@@ -485,7 +487,8 @@ class QueueManager:
                             console.print("[yellow]Select which new files to add (comma-separated numbers):[/yellow]")
                             for idx, file in enumerate(sorted(new_files), 1):
                                 console.print(f"  {idx}. {file}")
-                            selected = input("Enter numbers (e.g., 1,3,5): ").strip()
+                            selected_raw = cli_ui.ask_string("Enter numbers (e.g., 1,3,5): ")
+                            selected = (selected_raw or "").strip()
                             try:
                                 indices = [int(x) for x in selected.split(',') if x.strip().isdigit()]
                                 selected_files = [file for i, file in enumerate(sorted(new_files), 1) if i in indices]
@@ -526,7 +529,8 @@ class QueueManager:
                     console.print("[green]No changes detected in the queue.[/green]")
                     if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                         console.print("[yellow]Do you want to edit, discard, or keep the existing queue?[/yellow]")
-                        edit_choice = input("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is: ").strip().lower()
+                        edit_choice_raw = cli_ui.ask_string("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is: ")
+                        edit_choice = (edit_choice_raw or "").strip().lower()
 
                         if edit_choice == 'e':
                             edited_content = click.edit(json.dumps(existing_queue, indent=4))
@@ -561,7 +565,8 @@ class QueueManager:
                 console.print(f"[cyan]A new queue log file will be created:[/cyan] [green]{log_file}[/green]")
                 console.print(f"[cyan]The new queue will contain {len(queue)} items.[/cyan]")
                 console.print("[cyan]Do you want to edit the initial queue before saving?[/cyan]")
-                edit_choice = input("Enter 'e' to edit, or press Enter to save as is: ").strip().lower()
+                edit_choice_raw = cli_ui.ask_string("Enter 'e' to edit, or press Enter to save as is: ")
+                edit_choice = (edit_choice_raw or "").strip().lower()
 
                 if edit_choice == 'e':
                     edited_content = click.edit(json.dumps(queue, indent=4))

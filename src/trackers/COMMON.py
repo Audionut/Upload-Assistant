@@ -10,6 +10,7 @@ from typing import Any, Callable, Optional, Union, cast
 
 import aiofiles
 import bencodepy
+import cli_ui
 import click
 import httpx
 import langcodes
@@ -632,13 +633,13 @@ class COMMON:
                         return tmdb, imdb, tvdb, mal, description, category, infohash, imagelist, file_name
                     else:
                         console.print("[cyan]Do you want to edit, discard or keep the description?[/cyan]")
-                        edit_choice = input("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is:")
+                        edit_choice = cli_ui.ask_string("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is:")
 
-                        if edit_choice.lower() == 'e':
+                        if (edit_choice or "").lower() == 'e':
                             edited_description = click.edit(description)
                             if edited_description:
                                 description = edited_description.strip()
-                        elif edit_choice.lower() == 'd':
+                        elif (edit_choice or "").lower() == 'd':
                             description = None
                             console.print("[yellow]Description discarded.[/yellow]")
                         else:
@@ -1197,3 +1198,19 @@ class COMMON:
             console.print_exception()
             console.print(f"[red]Error checking language requirements: {e}[/red]")
             return False
+
+    async def save_html_file(self, meta: dict[str, Any], tracker: str, text: str = "", file_name: str = "") -> str:
+        """
+        Save provided text as an HTML file.
+
+        :param tracker: Name of the tracker for naming the file.
+        :param text: The HTML content to save.
+        :param file_name: Optional custom file name (without extension).
+        :return: Path to the saved HTML file.
+        :rtype: str
+        """
+        html_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]{file_name}.html"
+        os.makedirs(os.path.dirname(html_path), exist_ok=True)
+        async with aiofiles.open(html_path, "w", encoding="utf-8") as f:
+            await f.write(text)
+        return html_path

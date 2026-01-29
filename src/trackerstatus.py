@@ -126,7 +126,7 @@ class TrackerStatusManager:
                     if ('skipping' not in local_meta or local_meta['skipping'] is None) and not local_tracker_status['skipped']:
                         dupes = cast(list[Any], await dupe_checker.filter_dupes(dupes, local_meta, tracker_name))
 
-                        matched_episode_ids = local_meta.get('matched_episode_ids', [])
+                        matched_episode_ids = local_meta.get(f'{tracker_name}_matched_episode_ids', [])
                         trumpable_id = local_meta.get('trumpable_id')
                         cross_seed_key = f'{tracker_name}_cross_seed'
                         cross_seed_value = local_meta.get(cross_seed_key) if cross_seed_key in local_meta else None
@@ -134,7 +134,7 @@ class TrackerStatusManager:
                         # Only shared-state writes go under the lock
                         async with meta_lock:
                             if matched_episode_ids:
-                                meta['matched_episode_ids'] = matched_episode_ids
+                                meta[f'{tracker_name}_matched_episode_ids'] = matched_episode_ids
                             if trumpable_id:
                                 meta['trumpable_id'] = trumpable_id
                             if cross_seed_key in local_meta:
@@ -206,8 +206,10 @@ class TrackerStatusManager:
                             if display_name is not None and display_name != "" and display_name != meta['name']:
                                 console.print(f"[bold yellow]{tracker_name} applies a naming change for this release: [green]{display_name}[/green][/bold yellow]")
                             try:
-                                edit_choice = "y" if local_meta['unattended'] else input("Enter 'y' to upload, or press enter to skip uploading:")
-                                if edit_choice.lower() == 'y':
+                                edit_choice = cli_ui.ask_string(
+                                    "Enter 'y' to upload, or press enter to skip uploading:"
+                                )
+                                if (edit_choice or "").lower() == 'y':
                                     local_tracker_status['upload'] = True
                                     successful_trackers += 1
                                 else:
@@ -272,7 +274,7 @@ class TrackerStatusManager:
                 upload_status = 'Yes' if status['upload'] else 'No'
                 console.print(f"Tracker: {t_name} | Banned: {banned_status} | Skipped: {skipped_status} | Dupe: {dupe_status} | [yellow]Upload:[/yellow] {upload_status}")
             console.print(f"\n[bold]Trackers Passed all Checks:[/bold] {successful_trackers}")
-            print()
+            console.print("", markup=False)
             console.print("[bold red]DEBUG MODE does not upload to sites")
 
         meta['tracker_status'] = tracker_status

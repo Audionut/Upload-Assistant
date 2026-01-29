@@ -92,10 +92,10 @@ class BJS:
                     content = await f.read()
                     data = json.loads(content)
             except json.JSONDecodeError:
-                print(f'Warning: Could not decode JSON from {localized_data_file}')
+                console.print(f'Warning: Could not decode JSON from {localized_data_file}', markup=False)
                 data = {}
             except Exception as e:
-                print(f'Error reading file {localized_data_file}: {e}')
+                console.print(f'Error reading file {localized_data_file}: {e}', markup=False)
                 data = {}
 
         main_ptbr_data = dict(data.get('pt-BR', {})).get('main', {})
@@ -890,13 +890,13 @@ class BJS:
 
             return img_url
         except Exception as e:
-            print(f'Exceção no upload de {filename}: {e}')
+            console.print(f'Exceção no upload de {filename}: {e}', markup=False)
             return None
 
     async def get_cover(self, meta: dict[str, Any]):
         cover_path = self.main_tmdb_data.get('poster_path') or meta.get('tmdb_poster')
         if not cover_path:
-            print('Nenhum poster_path encontrado nos dados do TMDB.')
+            console.print('Nenhum poster_path encontrado nos dados do TMDB.', markup=False)
             return None
 
         cover_tmdb_url = f'https://image.tmdb.org/t/p/w500{cover_path}'
@@ -911,7 +911,7 @@ class BJS:
 
             return await self.img_host(image_bytes, filename)
         except Exception as e:
-            print(f'Falha ao processar pôster da URL {cover_tmdb_url}: {e}')
+            console.print(f'Falha ao processar pôster da URL {cover_tmdb_url}: {e}', markup=False)
             return None
 
     async def get_screenshots(self, meta: dict[str, Any]) -> list[str]:
@@ -935,7 +935,7 @@ class BJS:
                 filename = os.path.basename(urlparse(url).path) or "screenshot.png"
                 return await self.img_host(image_bytes, filename)
             except Exception as e:
-                print(f"Failed to process screenshot from URL {url}: {e}")
+                console.print(f"Failed to process screenshot from URL {url}: {e}", markup=False)
                 return None
 
         results: list[str] = []

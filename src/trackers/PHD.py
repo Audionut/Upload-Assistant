@@ -26,7 +26,7 @@ class PHD(AZTrackerBase):
         self.torrent_url = f'{self.base_url}/torrent/'
         self.requests_url = f'{self.base_url}/requests'
 
-    async def rules(self, meta: Meta) -> str:
+    def rules(self, meta: Meta) -> str:
         warnings: list[str] = []
 
         is_bd_disc = False

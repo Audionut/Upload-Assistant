@@ -5,6 +5,7 @@ Docker-specific script to download DVD-capable MediaInfo binaries for Linux.
 This script downloads specialized MediaInfo CLI and library binaries that
 support DVD IFO/VOB file parsing with language information.
 """
+
 import os
 import platform
 import shutil
@@ -14,6 +15,16 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import requests
+
+try:
+    from src.console import console
+except ImportError:
+    # Fallback for Docker builds where rich is not yet installed
+    class SimpleConsole:
+        def print(self, message: str, markup: bool = False) -> None:  # noqa: ARG002
+            print(message)
+
+    console = SimpleConsole()
 
 MEDIAINFO_VERSION = "23.04"
 MEDIAINFO_CLI_BASE_URL = "https://mediaarea.net/download/binary/mediainfo"
@@ -48,88 +59,82 @@ def get_url(system: str, arch: str, library_type: str = "cli") -> str:
 
 def download_file(url: str, output_path: Path) -> None:
     """Download a file from URL to specified path."""
-    print(f"Downloading: {url}")
+    console.print(f"Downloading: {url}", markup=False)
     response = requests.get(url, stream=True, timeout=60)
     response.raise_for_status()
 
     with open(output_path, "wb") as f:
         for chunk in response.iter_content(chunk_size=8192):
             f.write(chunk)
-    print(f"Downloaded: {output_path.name}")
+    console.print(f"Downloaded: {output_path.name}", markup=False)
 
 
 def extract_linux_binaries(cli_archive: Path, lib_archive: Path, output_dir: Path) -> None:
     """Extract MediaInfo CLI and library from downloaded archives."""
-    print("Extracting MediaInfo binaries...")
+    console.print("Extracting MediaInfo binaries...", markup=False)
 
     # Extract MediaInfo CLI from zip file
-    with zipfile.ZipFile(cli_archive, 'r') as zip_ref:
+    with zipfile.ZipFile(cli_archive, "r") as zip_ref:
         file_list = zip_ref.namelist()
         mediainfo_file = output_dir / "mediainfo"
 
-        print(f"CLI archive contents: {file_list}")
+        console.print(f"CLI archive contents: {file_list}", markup=False)
 
         # Look for the mediainfo binary in the archive
         for member in file_list:
             # Check for symlinks in ZIP files
             info = zip_ref.getinfo(member)
-            perm = (info.external_attr >> 16)
+            perm = info.external_attr >> 16
             if stat.S_ISLNK(perm):
-                print(f"Warning: Skipping symlink: {member}")
+                console.print(f"Warning: Skipping symlink: {member}", markup=False)
                 continue
 
             # Check for absolute paths
             if os.path.isabs(member):
-                print(f"Warning: Skipping absolute path: {member}")
+                console.print(f"Warning: Skipping absolute path: {member}", markup=False)
                 continue
 
             # Check for directory traversal patterns
             if ".." in member or member.startswith("/"):
-                print(f"Warning: Skipping dangerous path: {member}")
+                console.print(f"Warning: Skipping dangerous path: {member}", markup=False)
                 continue
 
-            if member.endswith('/mediainfo') or member == 'mediainfo':
+            if member.endswith("/mediainfo") or member == "mediainfo":
                 zip_ref.extract(member, output_dir.parent)
                 extracted_path = output_dir.parent / member
                 shutil.move(str(extracted_path), str(mediainfo_file))
-                print(f"Extracted CLI binary: {mediainfo_file}")
+                console.print(f"Extracted CLI binary: {mediainfo_file}", markup=False)
                 break
         else:
             raise Exception("MediaInfo CLI binary not found in archive")
 
     # Extract MediaInfo library
-    with zipfile.ZipFile(lib_archive, 'r') as zip_ref:
+    with zipfile.ZipFile(lib_archive, "r") as zip_ref:
         file_list = zip_ref.namelist()
         lib_file = output_dir / "libmediainfo.so.0"
 
-        print(f"Library archive contents: {file_list}")
+        console.print(f"Library archive contents: {file_list}", markup=False)
 
         # Look for the library file in the archive
-        lib_candidates = [
-            "lib/libmediainfo.so.0.0.0",
-            "libmediainfo.so.0.0.0",
-            "libmediainfo.so.0",
-            "MediaInfo/libmediainfo.so.0.0.0",
-            "MediaInfo/lib/libmediainfo.so.0.0.0"
-        ]
+        lib_candidates = ["lib/libmediainfo.so.0.0.0", "libmediainfo.so.0.0.0", "libmediainfo.so.0", "MediaInfo/libmediainfo.so.0.0.0", "MediaInfo/lib/libmediainfo.so.0.0.0"]
 
         for candidate in lib_candidates:
             if candidate in file_list:
                 # Check for symlinks in ZIP files
                 info = zip_ref.getinfo(candidate)
-                perm = (info.external_attr >> 16)
+                perm = info.external_attr >> 16
                 if stat.S_ISLNK(perm):
-                    print(f"Warning: Skipping symlink: {candidate}")
+                    console.print(f"Warning: Skipping symlink: {candidate}", markup=False)
                     continue
 
                 # Check for absolute paths
                 if os.path.isabs(candidate):
-                    print(f"Warning: Skipping absolute path: {candidate}")
+                    console.print(f"Warning: Skipping absolute path: {candidate}", markup=False)
                     continue
 
                 # Check for directory traversal patterns
                 if ".." in candidate or candidate.startswith("/"):
-                    print(f"Warning: Skipping dangerous path: {candidate}")
+                    console.print(f"Warning: Skipping dangerous path: {candidate}", markup=False)
                     continue
 
                 zip_ref.extract(candidate, output_dir.parent)
@@ -138,7 +143,7 @@ def extract_linux_binaries(cli_archive: Path, lib_archive: Path, output_dir: Pat
                 shutil.move(str(extracted_path), str(lib_file))
                 # Set appropriate permissions for library file (readable by all)
                 os.chmod(lib_file, 0o644)
-                print(f"Extracted library: {lib_file}")
+                console.print(f"Extracted library: {lib_file}", markup=False)
                 break
         else:
             raise Exception("MediaInfo library not found in archive")
@@ -154,7 +159,7 @@ def download_dvd_mediainfo_docker():
     system = platform.system().lower()
     machine = platform.machine().lower()
 
-    print(f"System: {system}, Architecture: {machine}")
+    console.print(f"System: {system}, Architecture: {machine}", markup=False)
 
     if system != "linux":
         raise Exception(f"This script is only for Linux containers, got: {system}")
@@ -172,7 +177,7 @@ def download_dvd_mediainfo_docker():
     output_dir = base_dir / "bin" / "MI" / "linux"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Installing DVD MediaInfo to: {output_dir}")
+    console.print(f"Installing DVD MediaInfo to: {output_dir}", markup=False)
 
     cli_file = output_dir / "mediainfo"
     lib_file = output_dir / "libmediainfo.so.0"
@@ -180,10 +185,10 @@ def download_dvd_mediainfo_docker():
 
     # Check if already installed
     if cli_file.exists() and lib_file.exists() and version_file.exists():
-        print(f"DVD MediaInfo {MEDIAINFO_VERSION} already installed")
+        console.print(f"DVD MediaInfo {MEDIAINFO_VERSION} already installed", markup=False)
         return str(cli_file)
 
-    print(f"Downloading DVD-specific MediaInfo CLI and Library: {MEDIAINFO_VERSION}")
+    console.print(f"Downloading DVD-specific MediaInfo CLI and Library: {MEDIAINFO_VERSION}", markup=False)
 
     # Get download URLs
     cli_url = get_url(system, arch, "cli")
@@ -192,8 +197,8 @@ def download_dvd_mediainfo_docker():
     cli_filename = get_filename(system, arch, "cli")
     lib_filename = get_filename(system, arch, "lib")
 
-    print(f"CLI URL: {cli_url}")
-    print(f"Library URL: {lib_url}")
+    console.print(f"CLI URL: {cli_url}", markup=False)
+    console.print(f"Library URL: {lib_url}", markup=False)
 
     # Download and extract in temporary directory
     with TemporaryDirectory() as tmp_dir:
@@ -208,7 +213,7 @@ def download_dvd_mediainfo_docker():
         extract_linux_binaries(cli_archive, lib_archive, output_dir)
 
         # Create version marker
-        with open(version_file, 'w') as f:
+        with open(version_file, "w") as f:
             f.write(f"MediaInfo {MEDIAINFO_VERSION} - DVD Support")
 
         # Make CLI binary executable and verify permissions
@@ -219,7 +224,7 @@ def download_dvd_mediainfo_docker():
             file_stat = cli_file.stat()
             is_executable = bool(file_stat.st_mode & 0o100)  # Check if owner execute bit is set
             if is_executable:
-                print(f"✓ Set secure executable permissions on: {cli_file} (mode: {oct(file_stat.st_mode)})")
+                console.print(f"✓ Set secure executable permissions on: {cli_file} (mode: {oct(file_stat.st_mode)})", markup=False)
             else:
                 raise Exception(f"Failed to set executable permissions on: {cli_file}")
         else:
@@ -236,11 +241,11 @@ def download_dvd_mediainfo_docker():
     if not (cli_stat.st_mode & 0o111):
         raise Exception(f"CLI binary is not executable: {cli_file}")
     else:
-        print(f"✓ CLI binary is executable: {oct(cli_stat.st_mode)}")
+        console.print(f"✓ CLI binary is executable: {oct(cli_stat.st_mode)}", markup=False)
 
-    print(f"Successfully installed DVD MediaInfo {MEDIAINFO_VERSION}")
-    print(f"CLI: {cli_file}")
-    print(f"Library: {lib_file}")
+    console.print(f"Successfully installed DVD MediaInfo {MEDIAINFO_VERSION}", markup=False)
+    console.print(f"CLI: {cli_file}", markup=False)
+    console.print(f"Library: {lib_file}", markup=False)
 
     return str(cli_file)
 
@@ -248,7 +253,7 @@ def download_dvd_mediainfo_docker():
 if __name__ == "__main__":
     try:
         download_dvd_mediainfo_docker()
-        print("DVD MediaInfo installation completed successfully!")
+        console.print("DVD MediaInfo installation completed successfully!", markup=False)
     except Exception as e:
-        print(f"ERROR: Failed to install DVD MediaInfo: {e}")
+        console.print(f"ERROR: Failed to install DVD MediaInfo: {e}", markup=False)
         exit(1)

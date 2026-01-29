@@ -240,10 +240,10 @@ class TrackerDataManager:
                         return cast(dict[str, Any], updated_meta)
                     except aiohttp.ClientSSLError:
                         await self.save_tracker_timestamp(tracker_name, base_dir=base_dir)
-                        print(f"{tracker_name} tracker request failed due to SSL error.")
+                        console.print(f"{tracker_name} tracker request failed due to SSL error.", markup=False)
                     except requests.exceptions.ConnectionError as conn_err:
                         await self.save_tracker_timestamp(tracker_name, base_dir=base_dir)
-                        print(f"{tracker_name} tracker request failed due to connection error: {conn_err}")
+                        console.print(f"{tracker_name} tracker request failed due to connection error: {conn_err}", markup=False)
                     return meta
 
                 while not found_match and specific_tracker:
@@ -404,9 +404,9 @@ class TrackerDataManager:
                             meta['matched_tracker'] = tracker_name
                         return cast(dict[str, Any], updated_meta)
                     except aiohttp.ClientSSLError:
-                        print(f"{tracker_name} tracker request failed due to SSL error.")
+                        console.print(f"{tracker_name} tracker request failed due to SSL error.", markup=False)
                     except requests.exceptions.ConnectionError as conn_err:
-                        print(f"{tracker_name} tracker request failed due to connection error: {conn_err}")
+                        console.print(f"{tracker_name} tracker request failed due to connection error: {conn_err}", markup=False)
                     return meta
 
                 for tracker_name in tracker_order:

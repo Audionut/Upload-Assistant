@@ -86,10 +86,12 @@ class ULCX(UNIT3D):
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
         adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
         if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            pattern = r'(\[center\](?:\s*\[url=[^\]]+\]\[img(?:=[0-9]+)?\][^\]]+\[/img\]\[/url\]\s*)+\[/center\])'
+            pattern = r'(\[center\](?:(?!\[/center\]).)*\[/center\])'
 
             def wrap_in_spoiler(match: re.Match[str]) -> str:
                 center_block = match.group(1)
+                if '[img' not in center_block.lower():
+                    return center_block
                 return f'[center][spoiler=Screenshots]{center_block}[/spoiler][/center]'
 
             desc = re.sub(pattern, wrap_in_spoiler, desc, flags=re.DOTALL)

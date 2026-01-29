@@ -498,7 +498,7 @@ class DupeChecker:
                                 # Store the matched episode ID/s for later use
                                 # is_season=True means seasons match, which is sufficient for trump targeting
                                 # (season pack can trump individual episodes from same season)
-                                matched_episode_ids = cast(list[dict[str, Any]], meta.setdefault('matched_episode_ids', []))
+                                matched_episode_ids = cast(list[dict[str, Any]], meta.setdefault(f'{tracker_name}_matched_episode_ids', []))
 
                                 entry_id = entry.get('id')
                                 entry_link = entry.get('link')
@@ -524,6 +524,8 @@ class DupeChecker:
                                     })
                                     if meta.get('debug'):
                                         console.log(f"[debug] Added episode ID {entry_id} to matched list")
+                                    # Ensure this matched dupe is recorded for later use
+                                    remember_match('season_pack_contains_episode')
                                     # Don't exclude this entry - it's a valid trump target
                                     return False
                                 if already_exists and meta.get('debug'):
