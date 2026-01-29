@@ -189,8 +189,8 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
         """
         Applies an optional delay before injecting a torrent into the client.
 
-        The delay can be configured either per tracker or per client. When both are
-        defined, the tracker-specific value takes precedence over the client setting.
+        The delay can be configured either per tracker or globally in the default settings.
+        When both are defined, the tracker-specific value takes precedence over the client setting.
 
         This mechanism exists to handle cases where a tracker requires a short amount
         of time to register the uploaded torrent hash. Injecting the torrent too early
