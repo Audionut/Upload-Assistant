@@ -1337,8 +1337,10 @@ async def do_the_thing(base_dir: str) -> None:
                 server_thread = threading.Thread(target=_webui_server.run, daemon=True)
                 server_thread.start()
 
-                # Wait for shutdown signal
+                # Wait for shutdown signal or unexpected thread death
                 while not _shutdown_event.is_set():
+                    if not server_thread.is_alive():
+                        raise RuntimeError("Web UI server thread exited unexpectedly")
                     _shutdown_event.wait(timeout=1.0)
 
                 # Close server gracefully
