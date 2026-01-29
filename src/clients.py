@@ -200,24 +200,25 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
         By waiting before injection, this function helps ensure proper tracker
         synchronization and more reliable peer discovery.
         """
-        inject_delay = 0
-        tracker_inject_delay = self.config["TRACKERS"].get(tracker, {}).get("inject_delay", 0)
-        inject_delay = tracker_inject_delay if tracker_inject_delay else self.config["DEFAULT"].get("inject_delay", 0)
-        if inject_delay:
+        tracker_cfg = self.config.get("TRACKERS", {}).get(tracker, {})
+        has_tracker_delay = isinstance(tracker_cfg, dict) and "inject_delay" in tracker_cfg
+        inject_delay = tracker_cfg.get("inject_delay") if has_tracker_delay else self.config["DEFAULT"].get("inject_delay", 0)
+        if inject_delay is not None:
             try:
                 inject_delay = int(inject_delay)
             except (ValueError, TypeError):
-                if tracker_inject_delay:
+                if has_tracker_delay:
                     console.print(f"{tracker}: [bold red]CONFIG ERROR: 'inject_delay' must be an integer")
                 else:
                     console.print("[bold red]CONFIG ERROR: 'inject_delay' must be an integer")
+                inject_delay = 0
 
             if inject_delay < 0:
                 console.print("[bold red]CONFIG ERROR: 'inject_delay' must be >= 0")
                 inject_delay = 0
             if inject_delay > 0:
                 if meta["debug"] or inject_delay > 5:
-                    if tracker_inject_delay:
+                    if has_tracker_delay:
                         console.print(f"{tracker}: [cyan]Waiting {inject_delay} seconds before adding to client '{client_name}'[/cyan]")
                     else:
                         console.print(f"[cyan]Waiting {inject_delay} seconds before adding to client '{client_name}'[/cyan]")
