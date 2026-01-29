@@ -72,7 +72,7 @@ def _reset_shutdown_state() -> None:
     _shutdown_event.clear()
 
 
-def _handle_shutdown_signal(signum: int, frame: Any) -> None:
+def _handle_shutdown_signal(signum: int, _frame: Any) -> None:
     """Handle SIGTERM/SIGINT for graceful shutdown."""
     global _shutdown_requested, _webui_server
     signal_name = 'SIGTERM' if signum == signal.SIGTERM else 'SIGINT'
@@ -86,10 +86,8 @@ def _handle_shutdown_signal(signum: int, frame: Any) -> None:
 
         # If running webui, close the server (main thread handles exit via event)
         if _webui_server is not None:
-            try:
+            with contextlib.suppress(Exception):
                 _webui_server.close()
-            except Exception:
-                pass
         else:
             # Non-webui mode: raise to let asyncio handle task cancellation
             raise KeyboardInterrupt
@@ -1304,7 +1302,7 @@ async def do_the_thing(base_dir: str) -> None:
                 console.print("[red]Invalid port number in web UI address[/red]")
                 sys.exit(1)
 
-            from waitress import create_server
+            from waitress import create_server  # type: ignore[attr-defined]
 
             from web_ui.server import app, set_runtime_browse_roots
 
@@ -1326,7 +1324,7 @@ async def do_the_thing(base_dir: str) -> None:
                 _webui_server = create_server(app, host=host, port=port)
 
                 # Build clickable URL (use localhost for 0.0.0.0 display)
-                display_host = "localhost" if host == "0.0.0.0" else host
+                display_host = "localhost" if host == "0.0.0.0" else host  # nosec B104
                 url = f"http://{display_host}:{port}"
 
                 console.print()
