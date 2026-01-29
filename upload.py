@@ -84,12 +84,15 @@ def _handle_shutdown_signal(signum: int, frame: Any) -> None:
         # Signal shutdown event (for webui thread coordination)
         _shutdown_event.set()
 
-        # If running webui, close the server
+        # If running webui, close the server (main thread handles exit via event)
         if _webui_server is not None:
             try:
                 _webui_server.close()
             except Exception:
                 pass
+        else:
+            # Non-webui mode: raise to let asyncio handle task cancellation
+            raise KeyboardInterrupt
     else:
         # Second signal = force exit
         console.print("[red]Forced exit[/red]")
