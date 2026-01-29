@@ -8,7 +8,9 @@ import os
 import platform
 import re
 import shutil
+import signal
 import sys
+import threading
 import time
 import traceback
 from collections.abc import Iterable, Mapping
@@ -53,6 +55,46 @@ from src.uploadscreens import UploadScreensManager
 
 cli_ui.setup(color='always', title="Upload Assistant")
 base_dir = os.path.abspath(os.path.dirname(__file__))
+
+# Global state for shutdown handling (reset via _reset_shutdown_state() for in-process runs)
+_shutdown_requested = False
+_is_webui_mode = False
+_webui_server = None  # Reference to waitress server for graceful shutdown
+_shutdown_event = threading.Event()  # Event for coordinating graceful shutdown
+
+
+def _reset_shutdown_state() -> None:
+    """Reset global shutdown state for clean in-process runs from web UI."""
+    global _shutdown_requested, _is_webui_mode, _webui_server
+    _shutdown_requested = False
+    _is_webui_mode = False
+    _webui_server = None
+    _shutdown_event.clear()
+
+
+def _handle_shutdown_signal(signum: int, frame: Any) -> None:
+    """Handle SIGTERM/SIGINT for graceful shutdown."""
+    global _shutdown_requested, _webui_server
+    signal_name = 'SIGTERM' if signum == signal.SIGTERM else 'SIGINT'
+
+    if not _shutdown_requested:
+        _shutdown_requested = True
+        console.print(f"\n[yellow]Received {signal_name}, shutting down gracefully...[/yellow]")
+
+        # Signal shutdown event (for webui thread coordination)
+        _shutdown_event.set()
+
+        # If running webui, close the server
+        if _webui_server is not None:
+            try:
+                _webui_server.close()
+            except Exception:
+                pass
+    else:
+        # Second signal = force exit
+        console.print("[red]Forced exit[/red]")
+        sys.exit(1)
+
 
 # Early check for -webui to create config if needed
 _config_path = os.path.join(base_dir, "data", "config.py")
@@ -1244,6 +1286,9 @@ async def do_the_thing(base_dir: str) -> None:
 
         # Start web UI if requested (exclusive mode - doesn't continue with uploads)
         if meta.get('webui'):
+            global _is_webui_mode, _webui_server
+            _is_webui_mode = True
+
             webui_addr = meta['webui']
             if ':' not in webui_addr:
                 console.print("[red]Invalid web UI address format. Use HOST:PORT[/red]")
@@ -1256,9 +1301,7 @@ async def do_the_thing(base_dir: str) -> None:
                 console.print("[red]Invalid port number in web UI address[/red]")
                 sys.exit(1)
 
-            console.print(f"[green]Starting Web UI server on {host}:{port}...[/green]")
-
-            from waitress import serve
+            from waitress import create_server
 
             from web_ui.server import app, set_runtime_browse_roots
 
@@ -1277,10 +1320,37 @@ async def do_the_thing(base_dir: str) -> None:
             set_runtime_browse_roots(browse_roots)
 
             try:
-                serve(app, host=host, port=port)
+                _webui_server = create_server(app, host=host, port=port)
+
+                # Build clickable URL (use localhost for 0.0.0.0 display)
+                display_host = "localhost" if host == "0.0.0.0" else host
+                url = f"http://{display_host}:{port}"
+
+                console.print()
+                console.print("[green]Web UI server started[/green]")
+                console.print(f"[bold]Access at: [link={url}]{url}[/link][/bold]")
+                console.print("[dim]Press Ctrl+C to stop the server[/dim]")
+                console.print()
+
+                # Run server in daemon thread so main thread can handle signals
+                server_thread = threading.Thread(target=_webui_server.run, daemon=True)
+                server_thread.start()
+
+                # Wait for shutdown signal
+                while not _shutdown_event.is_set():
+                    _shutdown_event.wait(timeout=1.0)
+
+                # Close server gracefully
+                _webui_server.close()
+                server_thread.join(timeout=5.0)
+
             except Exception as e:
-                console.print(f"[red]Web UI server error: {e}[/red]")
-                sys.exit(1)
+                if not _shutdown_requested:
+                    console.print(f"[red]Web UI server error: {e}[/red]")
+                    sys.exit(1)
+            finally:
+                console.print("[yellow]Web UI server stopped[/yellow]")
+
             return  # Exit early when running web UI only
 
         # Validate config structure and types (after args parsed so we have trackers list)
@@ -1918,18 +1988,30 @@ def check_python_version() -> None:
 
 
 async def main() -> None:
+    # Reset global state for clean in-process runs (when called from web UI)
+    _reset_shutdown_state()
+
     try:
         await do_the_thing(base_dir)
     except asyncio.CancelledError:
-        console.print("[red]Tasks were cancelled. Exiting safely.[/red]")
+        if not _shutdown_requested:
+            console.print("[red]Tasks were cancelled. Exiting safely.[/red]")
+    except EOFError:
+        pass  # Web UI cancellation - handled silently
     except KeyboardInterrupt:
-        console.print("[bold red]Program interrupted. Exiting safely.[/bold red]")
+        pass  # Handled by signal handler
     except Exception as e:
-        console.print(f"[bold red]Unexpected error: {e}[/bold red]")
+        if not _shutdown_requested:
+            console.print(f"[bold red]Unexpected error: {e}[/bold red]")
 
 
 if __name__ == "__main__":
     check_python_version()
+
+    # Register signal handlers only when run as main script (not when imported)
+    signal.signal(signal.SIGINT, _handle_shutdown_signal)
+    if hasattr(signal, 'SIGTERM'):
+        signal.signal(signal.SIGTERM, _handle_shutdown_signal)
 
     try:
         # Use ProactorEventLoop for Windows subprocess handling
@@ -1938,11 +2020,30 @@ if __name__ == "__main__":
 
         asyncio.run(main())  # Ensures proper loop handling and cleanup
     except (KeyboardInterrupt, SystemExit):
-        pass
+        if not _shutdown_requested:
+            console.print("\n[yellow]Shutting down...[/yellow]")
     except BaseException as e:
-        console.print(f"[bold red]Critical error: {e}[/bold red]")
+        if not _shutdown_requested:
+            console.print(f"[bold red]Critical error: {e}[/bold red]")
     finally:
-        asyncio.run(cleanup_manager.cleanup())
+        # Only run async cleanup for non-webui mode (webui doesn't use asyncio)
+        if not _is_webui_mode:
+            try:
+                # Run cleanup with timeout to prevent hanging on shutdown
+                async def _cleanup_with_timeout() -> None:
+                    try:
+                        await asyncio.wait_for(cleanup_manager.cleanup(), timeout=10.0)
+                    except asyncio.TimeoutError:
+                        console.print("[yellow]Cleanup timed out, forcing exit...[/yellow]")
+
+                asyncio.run(_cleanup_with_timeout())
+            except Exception:
+                pass  # Cleanup errors during shutdown are expected
+
         gc.collect()
         cleanup_manager.reset_terminal()
+
+        if _shutdown_requested or _is_webui_mode:
+            console.print("[green]Shutdown complete[/green]")
+
         sys.exit(0)
