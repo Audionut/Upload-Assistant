@@ -314,6 +314,10 @@ config = {
 
         # POST UPLOAD
 
+        # Delay (in seconds) before injecting the torrent to allow the tracker to register the hash and avoid 'unregistered torrent' errors.
+        # Can be overridden in a per-tracker setting by adding this same config
+        "inject_delay": 0,
+
         # Whether or not to print how long the upload process took for each tracker
         # Useful for knowing which trackers are slowing down the overall upload process
         "show_upload_duration": True,
