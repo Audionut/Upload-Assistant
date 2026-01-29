@@ -185,7 +185,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                 console.print(f"[bold red]Failed to add torrent to {client_name}: {e}")
         return
 
-    async def inject_delay(self, meta, tracker, client_name):
+    async def inject_delay(self, meta: dict[str, Any], tracker: str, client_name: str) -> None:
         """
         Applies an optional delay before injecting a torrent into the client.
 
@@ -216,8 +216,11 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                 console.print("[bold red]CONFIG ERROR: 'inject_delay' must be >= 0")
                 inject_delay = 0
             if inject_delay > 0:
-                if meta["debug"] or inject_delay > 10:
-                    console.print(f"[cyan]Waiting {inject_delay} seconds before adding to {client_name}[/cyan]")
+                if meta["debug"] or inject_delay > 5:
+                    if tracker_inject_delay:
+                        console.print(f"{tracker}: [cyan]Waiting {inject_delay} seconds before adding to client '{client_name}'[/cyan]")
+                    else:
+                        console.print(f"[cyan]Waiting {inject_delay} seconds before adding to client '{client_name}'[/cyan]")
                 await asyncio.sleep(inject_delay)
 
     async def find_existing_torrent(self, meta: dict[str, Any]) -> Optional[str]:
