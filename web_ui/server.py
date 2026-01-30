@@ -488,6 +488,9 @@ def _cleanup_duplicate_sessions(username: str) -> None:
 # Supported video file extensions for WebUI file browser
 SUPPORTED_VIDEO_EXTS = {'.mkv', '.mp4', '.ts'}
 
+# Supported description file extensions for WebUI description file browser
+SUPPORTED_DESC_EXTS = {'.txt', '.nfo', '.md'}
+
 # Lock to prevent concurrent in-process uploads (avoids cross-session interference)
 inproc_lock = threading.Lock()
 
@@ -862,13 +865,14 @@ def _debug_process_snapshot(session_id: Optional[str] = None) -> dict[str, Any]:
         return {"error": "failed to build snapshot"}
 
 
-class BrowseItem(TypedDict):
+class BrowseItem(TypedDict, total=False):
     """Serialized representation of an entry returned by the browse API."""
 
     name: str
     path: str
     type: Literal["folder", "file"]
     children: Union[list["BrowseItem"], None]
+    subtitle: str  # Optional hint  (eg, when parent path when names collide)
 
 
 class ConfigItem(TypedDict, total=False):
@@ -2387,10 +2391,32 @@ def browse_roots():
     if not roots:
         return jsonify({"error": "Browsing is not configured", "success": False}), 400
 
+    # First pass: collect all display names to detect duplicates
+    name_to_roots: dict[str, list[str]] = {}
+    for root in roots:
+        display_name = os.path.basename(root.rstrip(os.sep)) or root
+        if display_name not in name_to_roots:
+            name_to_roots[display_name] = []
+        name_to_roots[display_name].append(root)
+
+    # Second pass: build items with subtitles when needed
     items: list[BrowseItem] = []
     for root in roots:
         display_name = os.path.basename(root.rstrip(os.sep)) or root
-        items.append({"name": display_name, "path": root, "type": "folder", "children": []})
+        item: BrowseItem = {"name": display_name, "path": root, "type": "folder", "children": []}
+
+        # Add subtitle if multiple roots share the same folder name
+        if len(name_to_roots.get(display_name, [])) > 1:
+            # Show parent path or drive letter
+            parent = os.path.dirname(root.rstrip(os.sep))
+            if parent:
+                # On Windows, show drive letter + parent; on Unix, show parent path
+                item["subtitle"] = parent
+            else:
+                # Fallback to full path if no parent (e.g., drive root)
+                item["subtitle"] = root
+
+        items.append(item)
 
     # If caller used a bearer token, require it to be valid.
     bearer = _get_bearer_from_header()
@@ -2685,6 +2711,7 @@ def api_tokens():
 def browse_path():
     """Browse filesystem paths"""
     requested = request.args.get("path", "")
+    file_filter = request.args.get("filter", "video")  # 'video' or 'desc'
     try:
         path = _resolve_browse_path(requested)
     except ValueError as e:
@@ -2746,11 +2773,16 @@ def browse_path():
                 try:
                     is_dir = os.path.isdir(full_path)
 
-                    # Skip files that are not supported video formats
+                    # Skip files based on filter type
                     if not is_dir:
                         _, ext = os.path.splitext(item.lower())
-                        if ext not in SUPPORTED_VIDEO_EXTS:
-                            continue
+                        if file_filter == "desc":
+                            if ext not in SUPPORTED_DESC_EXTS:
+                                continue
+                        else:
+                            # Default to video filter
+                            if ext not in SUPPORTED_VIDEO_EXTS:
+                                continue
 
                     items.append({"name": item, "path": full_path, "type": "folder" if is_dir else "file", "children": [] if is_dir else None})
                 except (PermissionError, OSError):
