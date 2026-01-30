@@ -7,8 +7,8 @@ import cli_ui
 
 from src.console import console
 from src.get_desc import DescriptionBuilder
-from src.tmdb import TmdbManager
 from src.languages import languages_manager
+from src.tmdb import TmdbManager
 from src.trackers.UNIT3D import UNIT3D
 
 
@@ -128,7 +128,7 @@ class DP(UNIT3D):
             for invalid_tag in invalid_tags:
                 dp_name = re.sub(f"-{invalid_tag}", "", dp_name, flags=re.IGNORECASE)
             dp_name = f"{dp_name}-NOGROUP"
-            
+
         audio = await self.get_audio(meta)
         if audio and audio != "SKIPPED" and "Dual-Audio" in dp_name:
             dp_name = dp_name.replace("Dual-Audio", audio)
