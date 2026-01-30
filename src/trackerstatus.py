@@ -126,6 +126,11 @@ class TrackerStatusManager:
                     if ('skipping' not in local_meta or local_meta['skipping'] is None) and not local_tracker_status['skipped']:
                         dupes = cast(list[Any], await dupe_checker.filter_dupes(dupes, local_meta, tracker_name))
 
+                        # Run dupe check first so it can modify local_meta (e.g., set cross-seed values)
+                        is_dupe, local_meta = await helper.dupe_check(dupes, local_meta, tracker_name)
+                        if is_dupe:
+                            local_tracker_status['dupe'] = True
+
                         matched_episode_ids = local_meta.get(f'{tracker_name}_matched_episode_ids', [])
                         trumpable_id = local_meta.get('trumpable_id')
                         cross_seed_key = f'{tracker_name}_cross_seed'
@@ -137,12 +142,8 @@ class TrackerStatusManager:
                                 meta[f'{tracker_name}_matched_episode_ids'] = matched_episode_ids
                             if trumpable_id:
                                 meta['trumpable_id'] = trumpable_id
-                            if cross_seed_key in local_meta:
+                            if cross_seed_key in local_meta and cross_seed_value:
                                 meta[cross_seed_key] = cross_seed_value
-
-                        is_dupe, local_meta = await helper.dupe_check(dupes, local_meta, tracker_name)
-                        if is_dupe:
-                            local_tracker_status['dupe'] = True
 
                         if tracker_name in ["AITHER", "LST"]:
                             were_trumping = local_meta.get('were_trumping', False)
@@ -206,8 +207,10 @@ class TrackerStatusManager:
                             if display_name is not None and display_name != "" and display_name != meta['name']:
                                 console.print(f"[bold yellow]{tracker_name} applies a naming change for this release: [green]{display_name}[/green][/bold yellow]")
                             try:
-                                edit_choice = "y" if local_meta['unattended'] else input("Enter 'y' to upload, or press enter to skip uploading:")
-                                if edit_choice.lower() == 'y':
+                                edit_choice = cli_ui.ask_string(
+                                    "Enter 'y' to upload, or press enter to skip uploading:"
+                                )
+                                if (edit_choice or "").lower() == 'y':
                                     local_tracker_status['upload'] = True
                                     successful_trackers += 1
                                 else:

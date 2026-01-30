@@ -1,7 +1,7 @@
 [tool.ruff]
 line-length = 176
 target-version = "py39"
-exclude = ["tests"]
+exclude = ["tests", "data"]
 
 [tool.ruff.lint]
 select = [
@@ -40,3 +40,4 @@ reportMissingImports = true
 reportMissingTypeStubs = false
 reportUnknownMemberType = true
 reportUnknownVariableType = true
+exclude = ["data"]

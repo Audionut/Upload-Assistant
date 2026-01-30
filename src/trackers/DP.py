@@ -8,6 +8,7 @@ import cli_ui
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.tmdb import TmdbManager
+from src.languages import languages_manager
 from src.trackers.UNIT3D import UNIT3D
 
 
@@ -104,7 +105,7 @@ class DP(UNIT3D):
 
         if not meta.get('language_checked', False):
             await languages_manager.process_desc_language(meta, tracker=self.tracker)
-            
+
         audio_languages = meta.get('audio_languages')
         if isinstance(audio_languages, list):
             audio_languages_list = cast(list[Any], audio_languages)
@@ -116,7 +117,7 @@ class DP(UNIT3D):
                 languages_result = "Dual-Audio"
             else:
                 languages_result = str(next(iter(normalized_languages), "SKIPPED"))
-            
+
         return f'{languages_result}'
 
     async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
@@ -129,8 +130,7 @@ class DP(UNIT3D):
             dp_name = f"{dp_name}-NOGROUP"
             
         audio = await self.get_audio(meta)
-        if audio and audio != "SKIPPED":
-            if "Dual-Audio" in dp_name:
-                dp_name = dp_name.replace("Dual-Audio", audio)
-            
+        if audio and audio != "SKIPPED" and "Dual-Audio" in dp_name:
+            dp_name = dp_name.replace("Dual-Audio", audio)
+
         return {'name': dp_name}

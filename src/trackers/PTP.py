@@ -230,16 +230,16 @@ class PTP:
             if not meta.get('skipit') and not meta['unattended']:
                 # Allow user to edit or discard the description
                 console.print("[cyan]Do you want to edit, discard or keep the description?[/cyan]")
-                edit_choice = input("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is: ")
+                edit_choice = cli_ui.ask_string("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is: ")
 
-                if edit_choice.lower() == 'e':
+                if (edit_choice or "").lower() == 'e':
                     edited_description = click.edit(desc)
                     if edited_description:
                         desc = edited_description.strip()
                         meta['description'] = desc
                         meta['saved_description'] = True
                     console.print(f"[green]Final description after editing:[/green] {desc}")
-                elif edit_choice.lower() == 'd':
+                elif (edit_choice or "").lower() == 'd':
                     desc = None
                     console.print("[yellow]Description discarded.[/yellow]")
                 else:

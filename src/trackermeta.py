@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Optional, cast
 
 import aiohttp
+import cli_ui
 import click
 from PIL import Image
 from typing_extensions import TypeAlias
@@ -476,16 +477,16 @@ async def update_metadata_from_tracker(
 
                         if not meta.get('skipit'):
                             console.print("[cyan]Do you want to edit, discard or keep the description?[/cyan]")
-                            edit_choice = input("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is: ")
+                            edit_choice = cli_ui.ask_string("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is: ")
 
-                            if edit_choice.lower() == 'e':
+                            if (edit_choice or "").lower() == 'e':
                                 edited_description = click.edit(description)
                                 if edited_description:
                                     desc = edited_description.strip()
                                     meta['description'] = desc
                                     meta['saved_description'] = True
                                 console.print(f"[green]Final description after editing:[/green] {meta['description']}", markup=False)
-                            elif edit_choice.lower() == 'd':
+                            elif (edit_choice or "").lower() == 'd':
                                 meta['description'] = ""
                                 meta['image_list'] = []
                                 console.print("[yellow]Description discarded.[/yellow]")
@@ -504,9 +505,9 @@ async def update_metadata_from_tracker(
                                 console.print("[bold green]Successfully grabbed FraMeSToR description")
                                 console.print(f"Description content:\n{nfo_content[:1000]}...", markup=False)
                                 console.print("[cyan]Do you want to discard or keep the description?[/cyan]")
-                                edit_choice = input("Enter 'd' to discard, or press Enter to keep it as is: ")
+                                edit_choice = cli_ui.ask_string("Enter 'd' to discard, or press Enter to keep it as is: ")
 
-                                if edit_choice.lower() == 'd':
+                                if (edit_choice or "").lower() == 'd':
                                     meta['description'] = ""
                                     meta['image_list'] = []
                                     nfo_file_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], "bhd.nfo")
