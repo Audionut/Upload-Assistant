@@ -409,7 +409,7 @@ class DescriptionBuilder:
         """Returns the screenshot header if applicable."""
         try:
             screenheader = self.tracker_config.get(
-                "custom_screenshot_header", self.config["DEFAULT"].get("screenshot_header", None)
+                "screenshot_header", self.config["DEFAULT"].get("screenshot_header", None)
             )
             if screenheader:
                 return str(screenheader)
