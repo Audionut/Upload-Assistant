@@ -1,5 +1,6 @@
 {
   "exclude": [
-    "tests"
+    "tests",
+    "data"
   ]
 }

@@ -547,7 +547,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                 return valid, torrent_path
 
             # Reuse if disc and basename matches or --keep-folder was specified
-            if meta.get('is_disc', '') != '' or (meta.get('keep_folder') and meta.get('isdir')):
+            if (meta.get('is_disc') and meta.get('is_disc') != '') or (meta.get('keep_folder', False) and meta.get('isdir', False)):
                 torrent_name = torrent.metainfo['info']['name']
                 if meta_uuid != torrent_name and meta['debug']:
                     console.print("Modified file structure, skipping hash")
