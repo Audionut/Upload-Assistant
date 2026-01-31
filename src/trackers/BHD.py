@@ -14,6 +14,9 @@ from src.console import console
 from src.rehostimages import RehostImagesManager
 from src.trackers.COMMON import COMMON
 
+# Prompt used in multiple locations asking whether to force upload
+UPLOAD_ANYWAY_PROMPT = "Do you want to upload anyway?"
+
 
 class BHD:
     """
@@ -37,7 +40,6 @@ class BHD:
         self.requests_url = f"https://beyond-hd.me/api/requests/{api_key}"
         self.banned_groups = ['Sicario', 'TOMMY', 'x0r', 'nikt0', 'FGT', 'd3g', 'MeGusta', 'YIFY', 'tigole', 'TEKNO3D', 'C4K', 'RARBG', '4K4U', 'EASports', 'ReaLHD', 'Telly', 'AOC', 'WKS', 'SasukeducK', 'CRUCiBLE', 'iFT']
         self.approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'pixhost', 'bhd', 'bam']
-        pass
 
     async def check_image_hosts(self, meta: dict[str, Any]) -> None:
         url_host_mapping = {
@@ -61,14 +63,14 @@ class BHD:
     async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
-        cat_id = await self.get_cat_id(str(meta['category']))
-        source_id = await self.get_source(str(meta['source']))
-        type_id = await self.get_type(meta)
-        draft = await self.get_live(meta)
+        cat_id = self.get_cat_id(str(meta['category']))
+        source_id = self.get_source(str(meta['source']))
+        type_id = self.get_type(meta)
+        draft = self.get_live(meta)
         await self.edit_desc(meta)
-        tags = await self.get_tags(meta)
-        custom, edition = await self.get_edition(meta, tags)
-        bhd_name = await self.edit_name(meta)
+        tags = self.get_tags(meta)
+        custom, edition = self.get_edition(meta, tags)
+        bhd_name = self.edit_name(meta)
         anon = 0 if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False) else 1
 
         mi_dump = None
@@ -183,14 +185,14 @@ class BHD:
         else:
             return False
 
-    async def get_cat_id(self, category_name: str) -> str:
+    def get_cat_id(self, category_name: str) -> str:
         category_id = {
             'MOVIE': '1',
             'TV': '2',
         }.get(category_name, '1')
         return category_id
 
-    async def get_source(self, source: str) -> Optional[str]:
+    def get_source(self, source: str) -> Optional[str]:
         sources = {
             "Blu-ray": "Blu-ray",
             "BluRay": "Blu-ray",
@@ -207,7 +209,7 @@ class BHD:
         source_id = sources.get(source)
         return source_id
 
-    async def get_type(self, meta: dict[str, Any]) -> str:
+    def get_type(self, meta: dict[str, Any]) -> str:
         if meta['is_disc'] == "BDMV":
             bdinfo = meta['bdinfo']
             bd_sizes = [25, 50, 66, 100]
@@ -324,7 +326,7 @@ class BHD:
             return None
 
     async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[dict[str, Any]]:
-        bhd_name = await self.edit_name(meta)
+        bhd_name = self.edit_name(meta)
         if any(phrase in bhd_name.lower() for phrase in (
             "-framestor", "-bhdstudio", "-bmf", "-decibel", "-d-zone", "-hifi",
             "-ncmt", "-tdd", "-flux", "-crfw", "-sonny", "-zr-", "-mkvultra",
@@ -332,9 +334,7 @@ class BHD:
         )):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print("[bold red]This is an internal BHD release, skipping upload[/bold red]")
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
+                if not cli_ui.ask_yes_no(UPLOAD_ANYWAY_PROMPT, default=False):
                     meta['skipping'] = "BHD"
                     return []
             else:
@@ -349,9 +349,7 @@ class BHD:
         if meta['type'] not in ['WEBDL'] and meta.get('tag', "") and any(x in meta['tag'] for x in ['EVO']):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at BHD[/bold red]')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
+                if not cli_ui.ask_yes_no(UPLOAD_ANYWAY_PROMPT, default=False):
                     meta['skipping'] = "BHD"
                     return []
             else:
@@ -363,9 +361,7 @@ class BHD:
         if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
                 console.print('[bold red]Porn/xxx is not allowed at BHD.')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
+                if not cli_ui.ask_yes_no(UPLOAD_ANYWAY_PROMPT, default=False):
                     meta['skipping'] = "BHD"
                     return []
             else:
@@ -374,7 +370,7 @@ class BHD:
 
         dupes: list[dict[str, Any]] = []
         category = meta['category']
-        tmdbID = "movie" if category == 'MOVIE' else "tv"
+        tmdb_id = "movie" if category == 'MOVIE' else "tv"
         if category == 'MOVIE':
             category = "Movies"
         elif category == "TV":
@@ -382,10 +378,10 @@ class BHD:
         if meta['is_disc'] == "DVD":
             type_id: Optional[str] = None
         else:
-            type_id = await self.get_type(meta)
+            type_id = self.get_type(meta)
         data: dict[str, Any] = {
             'action': 'search',
-            'tmdb_id': f"{tmdbID}/{meta['tmdb']}",
+            'tmdb_id': f"{tmdb_id}/{meta['tmdb']}",
             'types': type_id,
             'categories': category
         }
@@ -443,7 +439,7 @@ class BHD:
         """
         return str(value).strip().lower() in {"true", "1", "yes"}
 
-    async def get_live(self, meta: dict[str, Any]) -> int:
+    def get_live(self, meta: dict[str, Any]) -> int:
         draft_value = self.config['TRACKERS'][self.tracker].get('draft_default', False)
         draft_bool = draft_value if isinstance(draft_value, bool) else self._is_true(str(draft_value).strip())
 
@@ -451,7 +447,7 @@ class BHD:
 
         return draft_int
 
-    async def get_edition(self, meta: dict[str, Any], tags: list[str]) -> tuple[bool, str]:
+    def get_edition(self, meta: dict[str, Any], tags: list[str]) -> tuple[bool, str]:
         custom = False
         edition = str(meta.get('edition', ""))
         if "Hybrid" in tags:
@@ -466,7 +462,7 @@ class BHD:
                 custom = True
         return custom, edition
 
-    async def get_tags(self, meta: dict[str, Any]) -> list[str]:
+    def get_tags(self, meta: dict[str, Any]) -> list[str]:
         tags: list[str] = []
         if meta['type'] == "WEBRIP":
             tags.append("WEBRip")
@@ -499,7 +495,7 @@ class BHD:
             tags.append('HLG')
         return tags
 
-    async def edit_name(self, meta: dict[str, Any]) -> str:
+    def edit_name(self, meta: dict[str, Any]) -> str:
         name = str(meta.get('name') or '')
         if meta.get('source', '') in ('PAL DVD', 'NTSC DVD', 'DVD', 'NTSC', 'PAL'):
             audio = str(meta.get('audio', ''))

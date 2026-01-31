@@ -101,7 +101,7 @@ async def run_ffmpeg(command: Any) -> tuple[Optional[int], bytes, bytes]:
     return process.returncode, stdout, stderr
 
 
-async def sanitize_filename(filename: str) -> str:
+def sanitize_filename(filename: str) -> str:
     # Replace invalid characters like colons with an underscore
     return re.sub(r'[<>:"/\\|?*]', '_', filename)
 
@@ -118,7 +118,7 @@ async def disc_screenshots(
         num_screens: int = 0,
         force_screenshots: bool = False
 ) -> None:
-    img_host = await get_image_host(meta)
+    img_host = get_image_host(meta)
     screens = meta['screens']
     start_time = time.time() if meta.get('debug') else 0.0
     if 'image_list' not in meta:
@@ -139,7 +139,7 @@ async def disc_screenshots(
     if num_screens == 0 or (image_list and len(image_list) >= num_screens):
         return
 
-    sanitized_filename = await sanitize_filename(filename)
+    sanitized_filename = sanitize_filename(filename)
     length: float = 0.0
     file_path: str = ""
     frame_rate: Optional[float] = None
@@ -189,7 +189,7 @@ async def disc_screenshots(
     else:
         hdr_tonemap = False
 
-    ss_times = await valid_ss_time([], num_screens, length, frame_rate or 24.0, meta, retake=force_screenshots)
+    ss_times = valid_ss_time([], num_screens, length, frame_rate or 24.0, meta, retake=force_screenshots)
 
     if meta.get('frame_overlay', False):
         console.print("[yellow]Getting frame information for overlays...")
@@ -498,7 +498,7 @@ async def dvd_screenshots(
     if num_screens == 0 or (len(meta.get('image_list', [])) >= screens and disc_num == 0):
         return
 
-    sanitized_disc_name = await sanitize_filename(meta['discs'][disc_num]['name'])
+    sanitized_disc_name = sanitize_filename(meta['discs'][disc_num]['name'])
     if len(glob.glob(f"{meta['base_dir']}/tmp/{meta['uuid']}/{sanitized_disc_name}-*.png")) >= num_screens:
         i = num_screens
         console.print('[bold green]Reusing screenshots')
@@ -538,7 +538,7 @@ async def dvd_screenshots(
         w_sar = sar
         h_sar = 1.0
 
-    async def _is_vob_good(n: int, loops: int, _num_screens: int) -> tuple[float, float]:
+    def _is_vob_good(n: int, loops: int, _num_screens: int) -> tuple[float, float]:
         max_loops = 6
         fallback_duration = 300
         valid_tracks: list[dict[str, Any]] = []
@@ -577,8 +577,8 @@ async def dvd_screenshots(
 
     main_set = meta['discs'][disc_num]['main_set'][1:] if len(meta['discs'][disc_num]['main_set']) > 1 else meta['discs'][disc_num]['main_set']
     os.chdir(f"{meta['base_dir']}/tmp/{meta['uuid']}")
-    voblength, _vob_index = await _is_vob_good(0, 0, num_screens)
-    ss_times = await valid_ss_time([], num_screens, voblength, frame_rate, meta, retake=retry_cap)
+    voblength, _vob_index = _is_vob_good(0, 0, num_screens)
+    ss_times = valid_ss_time([], num_screens, voblength, frame_rate, meta, retake=retry_cap)
     capture_tasks: list[Awaitable[tuple[int, Optional[str]]]] = []
     existing_images_count = 0
     existing_image_paths: list[str] = []
@@ -859,7 +859,7 @@ async def screenshots(
         force_screenshots: bool = False,
         manual_frames: Union[str, list[str]] = "",
 ) -> Union[list[str], None]:
-    img_host = await get_image_host(meta)
+    img_host = get_image_host(meta)
     screens = meta['screens']
     start_time = time.time() if meta.get('debug') else 0.0
     if meta['debug']:
@@ -957,7 +957,7 @@ async def screenshots(
     if num_screens <= 0:
         return None
 
-    sanitized_filename = await sanitize_filename(filename)
+    sanitized_filename = sanitize_filename(filename)
     test_image_path = os.path.abspath(f"{base_dir}/tmp/{folder_id}/{sanitized_filename}-libplacebo-test.png")
 
     existing_images_count = 0
@@ -975,7 +975,7 @@ async def screenshots(
     num_capture = num_screens - existing_images_count
 
     if not ss_times:
-        ss_times = await valid_ss_time([], num_capture, length, frame_rate, meta, retake=force_screenshots)
+        ss_times = valid_ss_time([], num_capture, length, frame_rate, meta, retake=force_screenshots)
 
     if meta.get('frame_overlay', False):
         if meta['debug']:
@@ -1073,26 +1073,26 @@ async def screenshots(
     except KeyboardInterrupt:
         console.print("\n[red]CTRL+C detected. Cancelling capture tasks...[/red]")
         await asyncio.sleep(0.1)
-        await kill_all_child_processes()
+        kill_all_child_processes()
         console.print("[red]All tasks cancelled. Exiting.[/red]")
         gc.collect()
         cleanup_manager.reset_terminal()
         sys.exit(1)
     except asyncio.CancelledError:
         await asyncio.sleep(0.1)
-        await kill_all_child_processes()
+        kill_all_child_processes()
         gc.collect()
         cleanup_manager.reset_terminal()
         sys.exit(1)
     except Exception:
         await asyncio.sleep(0.1)
-        await kill_all_child_processes()
+        kill_all_child_processes()
         gc.collect()
         cleanup_manager.reset_terminal()
         sys.exit(1)
     finally:
         await asyncio.sleep(0.1)
-        await kill_all_child_processes()
+        kill_all_child_processes()
         if meta['debug']:
             console.print("[yellow]All capture tasks finished. Cleaning up...[/yellow]")
 
@@ -1537,7 +1537,7 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
         return None
 
 
-async def valid_ss_time(ss_times: list[str], num_screens: int, length: float, frame_rate: float, meta: dict[str, Any], retake: bool = False) -> list[str]:
+def valid_ss_time(ss_times: list[str], num_screens: int, length: float, frame_rate: float, meta: dict[str, Any], retake: bool = False) -> list[str]:
     total_screens = num_screens + 1 if meta['is_disc'] else num_screens
     total_frames = int(length * frame_rate)
 
@@ -1556,9 +1556,6 @@ async def valid_ss_time(ss_times: list[str], num_screens: int, length: float, fr
     # Calculate usable portion (from 1% to 90% of video)
     if meta['category'] == "TV" and retake:
         start_frame = int(total_frames * (0.1 + retake_offset))
-        end_frame = int(total_frames * 0.9)
-    elif meta['category'] == "Movie" and retake:
-        start_frame = int(total_frames * (0.05 + retake_offset))
         end_frame = int(total_frames * 0.9)
     else:
         start_frame = int(total_frames * (0.05 + retake_offset))
@@ -1590,7 +1587,7 @@ async def valid_ss_time(ss_times: list[str], num_screens: int, length: float, fr
     return result_times
 
 
-async def kill_all_child_processes() -> None:
+def kill_all_child_processes() -> None:
     """Ensures all child processes are terminated."""
     try:
         current_process = psutil.Process()
@@ -1776,7 +1773,7 @@ async def libplacebo_warmup(path: str, meta: dict[str, Any], loglevel: str) -> N
             console.print(f"[yellow]libplacebo warm-up failed: {e} (continuing)[/yellow]")
 
 
-async def get_image_host(meta: dict[str, Any]) -> Optional[str]:
+def get_image_host(meta: dict[str, Any]) -> Optional[str]:
     if meta.get('imghost') is not None:
         host = meta['imghost']
 
@@ -1807,8 +1804,8 @@ class TakeScreensManager:
     async def run_ffmpeg(self, command: Any) -> tuple[Optional[int], bytes, bytes]:
         return await run_ffmpeg(command)
 
-    async def sanitize_filename(self, filename: str) -> str:
-        return await sanitize_filename(filename)
+    def sanitize_filename(self, filename: str) -> str:
+        return sanitize_filename(filename)
 
     async def disc_screenshots(
             self,
@@ -1883,7 +1880,7 @@ class TakeScreensManager:
     ) -> Optional[tuple[int, Optional[str]]]:
         return await capture_screenshot(args)
 
-    async def valid_ss_time(
+    def valid_ss_time(
             self,
             ss_times: list[str],
             num_screens: int,
@@ -1892,10 +1889,10 @@ class TakeScreensManager:
             meta: dict[str, Any],
             retake: bool = False
     ) -> list[str]:
-        return await valid_ss_time(ss_times, num_screens, length, frame_rate, meta, retake)
+        return valid_ss_time(ss_times, num_screens, length, frame_rate, meta, retake)
 
-    async def kill_all_child_processes(self) -> None:
-        await kill_all_child_processes()
+    def kill_all_child_processes(self) -> None:
+        kill_all_child_processes()
 
     async def get_frame_info(self, path: str, ss_time: str, meta: dict[str, Any]) -> dict[str, Any]:
         return await get_frame_info(path, ss_time, meta)
@@ -1927,5 +1924,5 @@ class TakeScreensManager:
     async def libplacebo_warmup(self, path: str, meta: dict[str, Any], loglevel: str) -> None:
         await libplacebo_warmup(path, meta, loglevel)
 
-    async def get_image_host(self, meta: dict[str, Any]) -> Optional[str]:
-        return await get_image_host(meta)
+    def get_image_host(self, meta: dict[str, Any]) -> Optional[str]:
+        return get_image_host(meta)

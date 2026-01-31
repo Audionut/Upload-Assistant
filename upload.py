@@ -35,6 +35,7 @@ from src.clients import Clients
 from src.console import console
 from src.disc_menus import process_disc_menus
 from src.dupe_checking import DupeChecker
+from src.exceptions import UploadException
 from src.get_desc import gen_desc
 from src.get_name import NameManager
 from src.get_tracker_data import TrackerDataManager
@@ -252,7 +253,7 @@ else:
     sys.exit(1)
 
 
-async def merge_meta(meta: Meta, saved_meta: Meta) -> dict[str, Any]:
+def merge_meta(meta: Meta, saved_meta: Meta) -> dict[str, Any]:
     """Merges saved metadata with the current meta, respecting overwrite rules."""
     overwrite_list = [
         'trackers', 'dupe', 'debug', 'anon', 'category', 'type', 'screens', 'nohash', 'manual_edition', 'imdb', 'tmdb_manual', 'mal', 'manual',
@@ -278,12 +279,9 @@ async def merge_meta(meta: Meta, saved_meta: Meta) -> dict[str, Any]:
 
 async def print_progress(message: str, interval: int = 10) -> None:
     """Prints a progress message every `interval` seconds until cancelled."""
-    try:
-        while True:
-            await asyncio.sleep(interval)
-            console.print(message)
-    except asyncio.CancelledError:
-        pass
+    while True:
+        await asyncio.sleep(interval)
+        console.print(message)
 
 
 def update_oeimg_to_onlyimage() -> None:
@@ -599,11 +597,12 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             tracker_status = cast(dict[str, dict[str, Any]], meta.get('tracker_status', {}))
             for tracker in meta['trackers']:
                 upload_status = tracker_status.get(tracker, {}).get('upload', False)
-                if not upload_status:
-                    if tracker == "AITHER" and meta.get('aither_trumpable') and len(meta.get('aither_trumpable', [])) > 0:
-                        pass
-                    else:
-                        continue
+                if not upload_status and not (
+                    tracker == "AITHER"
+                    and meta.get('aither_trumpable')
+                    and len(meta.get('aither_trumpable', [])) > 0
+                ):
+                    continue
                 if tracker not in tracker_status:
                     continue
 
@@ -726,20 +725,20 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                                 meta, bdmv_filename, bdinfo, meta['uuid'], base_dir, use_vs,
                                 meta.get('image_list', []), meta.get('ffdebug', False), 0
                             )
-                        except asyncio.CancelledError as e:
-                            await cleanup_screenshot_temp_files(meta)
+                        except asyncio.CancelledError:
+                            cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
                             await cleanup_manager.cleanup()
                             gc.collect()
                             cleanup_manager.reset_terminal()
-                            raise Exception("Error during screenshot capture") from e
+                            raise
                         except Exception as e:
-                            await cleanup_screenshot_temp_files(meta)
+                            cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
                             await cleanup_manager.cleanup()
                             gc.collect()
                             cleanup_manager.reset_terminal()
-                            raise Exception(f"Error during screenshot capture: {e}") from e
+                            raise UploadException(f"Error during screenshot capture: {e}") from e
 
                     elif meta['is_disc'] == "DVD":
                         try:
@@ -749,20 +748,20 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                                 num_screens=0,
                                 retry_cap=False
                             )
-                        except asyncio.CancelledError as e:
-                            await cleanup_screenshot_temp_files(meta)
+                        except asyncio.CancelledError:
+                            cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
                             await cleanup_manager.cleanup()
                             gc.collect()
                             cleanup_manager.reset_terminal()
-                            raise Exception("Error during screenshot capture") from e
+                            raise
                         except Exception as e:
-                            await cleanup_screenshot_temp_files(meta)
+                            cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
                             await cleanup_manager.cleanup()
                             gc.collect()
                             cleanup_manager.reset_terminal()
-                            raise Exception(f"Error during screenshot capture: {e}") from e
+                            raise UploadException(f"Error during screenshot capture: {e}") from e
 
                     else:
                         try:
@@ -773,38 +772,38 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                                 videopath, filename, meta['uuid'], base_dir, meta,
                                 manual_frames=manual_frames  # Pass additional kwargs directly
                             )
-                        except asyncio.CancelledError as e:
-                            await cleanup_screenshot_temp_files(meta)
+                        except asyncio.CancelledError:
+                            cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
                             await cleanup_manager.cleanup()
                             gc.collect()
                             cleanup_manager.reset_terminal()
-                            raise Exception("Error during screenshot capture") from e
+                            raise
                         except Exception as e:
                             console.print(traceback.format_exc())
-                            await cleanup_screenshot_temp_files(meta)
+                            cleanup_screenshot_temp_files(meta)
                             await asyncio.sleep(0.1)
                             await cleanup_manager.cleanup()
                             gc.collect()
                             cleanup_manager.reset_terminal()
                             if "workers" in str(e):
                                 console.print("[red]max workers issue, see https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues[/red]")
-                            raise Exception(f"Error during screenshot capture: {e}") from e
+                            raise UploadException(f"Error during screenshot capture: {e}") from e
 
-                except asyncio.CancelledError as e:
-                    await cleanup_screenshot_temp_files(meta)
+                except asyncio.CancelledError:
+                    cleanup_screenshot_temp_files(meta)
                     await asyncio.sleep(0.1)
                     await cleanup_manager.cleanup()
                     gc.collect()
                     cleanup_manager.reset_terminal()
-                    raise Exception("Error during screenshot capture") from e
+                    raise
                 except Exception as e:
-                    await cleanup_screenshot_temp_files(meta)
+                    cleanup_screenshot_temp_files(meta)
                     await asyncio.sleep(0.1)
                     await cleanup_manager.cleanup()
                     gc.collect()
                     cleanup_manager.reset_terminal()
-                    raise Exception("Error during screenshot capture") from e
+                    raise UploadException("Error during screenshot capture") from e
                 finally:
                     await asyncio.sleep(0.1)
                     await cleanup_manager.cleanup()
@@ -985,7 +984,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                                 )
 
                         if image_list_count < min_successful_uploads:
-                            raise Exception(
+                            raise UploadException(
                                 f"Minimum of {min_successful_uploads} successful image uploads required, but only "
                                 f"{image_list_count} were uploaded."
                             )
@@ -1006,9 +1005,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                                 )
                     except asyncio.CancelledError:
                         console.print("\n[red]Upload process interrupted! Cancelling tasks...[/red]")
-                        return
-                    except Exception as e:
-                        raise e
+                        raise
                     finally:
                         cleanup_manager.reset_terminal()
                         if meta['debug']:
@@ -1104,7 +1101,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             await f.write(json.dumps(meta, indent=4))
 
 
-async def cleanup_screenshot_temp_files(meta: Meta) -> None:
+def cleanup_screenshot_temp_files(meta: Meta) -> None:
     """Cleanup temporary screenshot files to prevent orphaned files in case of failures."""
     tmp_dir = f"{meta['base_dir']}/tmp/{meta['uuid']}"
     if os.path.exists(tmp_dir):
@@ -1196,7 +1193,7 @@ def extract_changelog(content: str, to_version: str) -> Optional[str]:
     return None
 
 
-async def update_notification(base_dir: str) -> Optional[str]:
+def update_notification(base_dir: str) -> Optional[str]:
     version_file = os.path.join(base_dir, 'data', 'version.py')
     remote_version_url = 'https://raw.githubusercontent.com/Audionut/Upload-Assistant/master/data/version.py'
 
@@ -1217,11 +1214,11 @@ async def update_notification(base_dir: str) -> Optional[str]:
     if version.parse(remote_version) > version.parse(local_version):
         console.print(f"[red][NOTICE] [green]Update available: v[/green][yellow]{remote_version}")
         console.print(f"[red][NOTICE] [green]Current version: v[/green][yellow]{local_version}")
-        asyncio.create_task(asyncio.sleep(1))
+        time.sleep(1)
         if verbose and remote_content:
             changelog = extract_changelog(remote_content, remote_version)
             if changelog:
-                asyncio.create_task(asyncio.sleep(1))
+                time.sleep(1)
                 console.print(f"{changelog}")
             else:
                 console.print("[yellow]Changelog not found between versions.[/yellow]")
@@ -1265,7 +1262,7 @@ async def do_the_thing(base_dir: str) -> None:
             break
 
     meta['ua_name'] = 'Upload Assistant'
-    meta['current_version'] = await update_notification(base_dir)
+    meta['current_version'] = update_notification(base_dir)
 
     signature = 'Created by Upload Assistant'
     if meta.get('current_version', ''):
@@ -1494,7 +1491,7 @@ async def do_the_thing(base_dir: str) -> None:
                         content = await f.read()
                         saved_meta = cast(dict[str, Any], json.loads(content)) if content.strip() else {}
                         console.print("[yellow]Existing metadata file found, it holds cached values")
-                        await merge_meta(meta, saved_meta)
+                        merge_meta(meta, saved_meta)
 
             except Exception as e:
                 console.print(f"[red]Exception: '{path}': {e}")
@@ -1605,7 +1602,7 @@ async def do_the_thing(base_dir: str) -> None:
                         trackers_list = []
                         meta['trackers'] = trackers_list
 
-                    for tracker in list(trackers_list):
+                    for tracker in trackers_list:
                         tracker_status = cast(dict[str, Any], meta.get('tracker_status', {})).get(tracker, {})
                         if tracker_status.get('upload') is not True:
                             if meta.get('debug'):
@@ -1999,6 +1996,10 @@ async def main() -> None:
     except asyncio.CancelledError:
         if not _shutdown_requested:
             console.print("[red]Tasks were cancelled. Exiting safely.[/red]")
+        with contextlib.suppress(Exception):
+            await cleanup_manager.cleanup()
+        cleanup_manager.reset_terminal()
+        raise
     except EOFError:
         pass  # Web UI cancellation - handled silently
     except KeyboardInterrupt:
@@ -2025,6 +2026,7 @@ if __name__ == "__main__":
     except (KeyboardInterrupt, SystemExit):
         if not _shutdown_requested:
             console.print("\n[yellow]Shutting down...[/yellow]")
+        raise
     except BaseException as e:
         if not _shutdown_requested:
             console.print(f"[bold red]Critical error: {e}[/bold red]")
