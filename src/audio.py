@@ -14,6 +14,11 @@ import langcodes
 from src.console import console
 from src.trackers.COMMON import COMMON
 
+
+# Specific exception for lossy DTS core duplicate detection
+class LossyDtsDuplicateError(ValueError):
+    pass
+
 Meta = dict[str, Any]
 TrackDict = dict[str, Any]
 
@@ -251,7 +256,7 @@ async def _get_audio_v2(
         tracks = cast(list[TrackDict], cast(Mapping[str, Any], mi_map.get('media', {})).get('track', []))
         audio_tracks = [t for t in tracks if t.get('@type') == "Audio"]
         meta["non_disc_has_pcm_audio_tracks"] = meta.get("type") != "DISC" and any(
-            track for track in audio_tracks if track.get("Format") == "PCM")
+            track.get("Format") == "PCM" for track in audio_tracks)
         first_audio_track = None
         if audio_tracks:
             tracks_with_order = [t for t in audio_tracks if t.get('StreamOrder') and not isinstance(t.get('StreamOrder'), dict)]
@@ -302,7 +307,11 @@ async def _get_audio_v2(
         # Enhanced channel count determination based on MediaArea AudioChannelLayout
         chan = determine_channel_count(channels, channel_layout, additional, format)
 
-        dts_core_additional_check(meta)
+        try:
+            dts_core_additional_check(meta)
+        except LossyDtsDuplicateError:
+            # Propagate specific error so callers can handle it explicitly
+            raise
 
         if meta.get('dual_audio', False):
             dual = "Dual-Audio"
@@ -643,6 +652,6 @@ def dts_core_additional_check(meta: Meta) -> None:
                         if allow:
                             return
                         else:
-                            raise Exception("Upload cancelled due to lossy DTS core duplicate detected.")
+                            raise LossyDtsDuplicateError("Upload cancelled due to lossy DTS core duplicate detected.")
                     else:
-                        raise Exception("Upload cancelled due to lossy DTS core duplicate detected.")
+                        raise LossyDtsDuplicateError("Upload cancelled due to lossy DTS core duplicate detected.")
