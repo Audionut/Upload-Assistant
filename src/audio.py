@@ -592,6 +592,10 @@ def dts_core_additional_check(meta: Meta) -> None:
         for j in range(i + 1, n):
             track_two = audio_tracks[j]
             track_one_is_dts_hd_ma = track_one.get("Format_Commercial_IfAny") == "DTS-HD Master Audio"
+            track_two_is_dts_hd_ma = track_two.get("Format_Commercial_IfAny") == "DTS-HD Master Audio"
+            track_one_is_lossy_dts = (
+                track_one.get("Format_Commercial_IfAny") != "DTS-HD Master Audio" and track_one.get("Format") == "DTS"
+            )
             track_two_is_lossy_dts = (
                 track_two.get("Format_Commercial_IfAny") != "DTS-HD Master Audio" and track_two.get("Format") == "DTS"
             )
@@ -609,20 +613,27 @@ def dts_core_additional_check(meta: Meta) -> None:
             )
             # Ensure at least one property across both tracks is non-None to avoid matching on empty metadata
             has_meaningful_properties = any(p is not None for p in (*track_one_properties, *track_two_properties))
-            if (
-                track_one_is_dts_hd_ma
-                and track_two_is_lossy_dts
-                and has_meaningful_properties
-                and track_one_properties == track_two_properties
-            ):
+            # Order-agnostic detection: one track is DTS-HD MA and the other is lossy DTS
+            is_pair_hd_lossy = (
+                (track_one_is_dts_hd_ma and track_two_is_lossy_dts) or (track_two_is_dts_hd_ma and track_one_is_lossy_dts)
+            )
+            if is_pair_hd_lossy and has_meaningful_properties and track_one_properties == track_two_properties:
+                # Determine which index is HD MA and which is the lossy core for messages
+                if track_one_is_dts_hd_ma and track_two_is_lossy_dts:
+                    hd_idx, lossy_idx = i + 1, j + 1
+                    hd_track = track_one
+                else:
+                    hd_idx, lossy_idx = j + 1, i + 1
+                    hd_track = track_two
+
                 if meta.get("debug"):
                     console.print(
-                        f"[yellow]DEBUG: Detected potential DTS core duplicate between tracks {i+1} and {j+1}, matched on properties: (Duration={track_one.get('Duration')}, FrameRate={track_one.get('FrameRate')}, FrameCount={track_one.get('FrameCount')}, Language={track_one.get('Language')})[/yellow]"
+                        f"[yellow]DEBUG: Detected potential DTS core duplicate between tracks {i+1} and {j+1}, matched on properties: (Duration={hd_track.get('Duration')}, FrameRate={hd_track.get('FrameRate')}, FrameCount={hd_track.get('FrameCount')}, Language={hd_track.get('Language')})[/yellow]"
                     )
                 if not warned_once:
                     warned_once = True
                     console.print(
-                        f"[bold red]DTS audio track #{j+1} appears to be a lossy duplicate of DTS-HD MA track #{i+1}.[/bold red]"
+                        f"[bold red]DTS audio track #{lossy_idx} appears to be a lossy duplicate of DTS-HD MA track #{hd_idx}.[/bold red]"
                     )
                     if not meta.get("unattended", False) or meta.get("unattended_confirm", False):
                         try:
