@@ -71,16 +71,6 @@ class ULCX(UNIT3D):
             console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
             return False
 
-        if meta.get('has_multiple_default_audio_tracks', False):
-            console.print(
-                f"[bold red]Multiple default audio tracks detected, skipping {self.tracker} upload.[/bold red]")
-            return False
-
-        if meta.get('has_multiple_default_subtitle_tracks', False):
-            console.print(
-                f"[bold red]Multiple default subtitle tracks detected, skipping {self.tracker} upload.[/bold red]")
-            return False
-
         if meta.get('non_disc_has_pcm_audio_tracks', False):
             console.print(
                 f"[bold red]Non-disc source with PCM audio tracks detected, skipping {self.tracker} upload.[/bold red]")
