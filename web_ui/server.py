@@ -28,10 +28,11 @@ from flask_limiter.util import get_remote_address
 from werkzeug.security import safe_join
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-import web_ui.auth as auth_mod
 from flask_session import Session
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import web_ui.auth as auth_mod
 
 # Helper to convert ANSI -> HTML using Rich (optional)
 try:
