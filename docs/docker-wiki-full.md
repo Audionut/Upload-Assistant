@@ -89,6 +89,3 @@ This prints out the parameters passed as well so you can see for sure what is ha
 
 ## Can I utilize the -vs/--vapoursynth parameter?
 No.  The base docker image of alpine does not include vapoursynth in its package manager and building it or downloading portable version into python directory and configuring was decided to not be worth the extra complexity for something that probably gets very little usage and would probably break regularly.  If this is important to you let us know.
-
-## Can you make the docker image smaller?  It takes forever to download
-No.  FFmpeg and mono are thiccc and are required for functionality (taking screenshots and utilizing bdinfo).  This cannot be avoided.

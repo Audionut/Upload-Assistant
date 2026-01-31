@@ -75,7 +75,6 @@ Many thanks to all who have contributed.
 
 ## **Setup:**
    - **REQUIRES AT LEAST PYTHON 3.9 AND PIP3**
-   - Needs [mono](https://www.mono-project.com/) on linux systems for BDInfo
    - Also needs MediaInfo and ffmpeg installed on your system
       - On Windows systems, ffmpeg must be added to PATH (https://windowsloop.com/install-ffmpeg-windows-10/)
       - On linux systems, get it from your favorite package manager
