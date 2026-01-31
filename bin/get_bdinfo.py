@@ -129,16 +129,33 @@ class BDInfoBinaryManager:
                                 if debug:
                                     console.print(f"[yellow]Warning: Skipping symlink: {member}[/yellow]")
                                 continue
+
+                            # Check for absolute paths and directory traversal
                             if os.path.isabs(member) or ".." in member or member.startswith("/"):
                                 if debug:
                                     console.print(f"[yellow]Warning: Skipping dangerous path: {member}[/yellow]")
                                 continue
+
+                            # Verify final path is inside target directory
                             full_path = os.path.realpath(os.path.join(path, member))
                             base_path = os.path.realpath(path)
                             if not full_path.startswith(base_path + os.sep) and full_path != base_path:
                                 if debug:
                                     console.print(f"[yellow]Warning: Skipping path outside target directory: {member}[/yellow]")
                                 continue
+
+                            # Check for reasonable file sizes (prevent zip bombs)
+                            try:
+                                file_size = info.file_size
+                            except Exception:
+                                file_size = 0
+
+                            if file_size > 100 * 1024 * 1024:
+                                if debug:
+                                    console.print(f"[yellow]Warning: Skipping oversized file: {member} ({file_size} bytes)[/yellow]")
+                                continue
+
+                            # Extract the safe member
                             zip_file.extract(member, path)
                             if debug:
                                 console.print(f"[cyan]Extracted: {member}[/cyan]")
