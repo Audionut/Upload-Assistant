@@ -118,103 +118,108 @@ class BDInfoBinaryManager:
             if debug:
                 console.print(f"[green]Downloaded {file_pattern}[/green]")
 
-            # Extract archive safely
-            if file_pattern.endswith(".zip"):
-                with zipfile.ZipFile(temp_archive, "r") as zip_ref:
-                    def safe_extract_zip(zip_file: zipfile.ZipFile, path: str = ".") -> None:
-                        for member in zip_file.namelist():
-                            info = zip_file.getinfo(member)
-                            perm = info.external_attr >> 16
-                            if stat.S_ISLNK(perm):
+            # Extract archive safely and ensure temporary archive is always removed.
+            try:
+                if file_pattern.endswith(".zip"):
+                    with zipfile.ZipFile(temp_archive, "r") as zip_ref:
+                        def safe_extract_zip(zip_file: zipfile.ZipFile, path: str = ".") -> None:
+                            for member in zip_file.namelist():
+                                info = zip_file.getinfo(member)
+                                perm = info.external_attr >> 16
+                                if stat.S_ISLNK(perm):
+                                    if debug:
+                                        console.print(f"[yellow]Warning: Skipping symlink: {member}[/yellow]")
+                                    continue
+
+                                # Check for absolute paths and directory traversal
+                                if os.path.isabs(member) or ".." in member or member.startswith("/"):
+                                    if debug:
+                                        console.print(f"[yellow]Warning: Skipping dangerous path: {member}[/yellow]")
+                                    continue
+
+                                # Verify final path is inside target directory
+                                full_path = os.path.realpath(os.path.join(path, member))
+                                base_path = os.path.realpath(path)
+                                if not full_path.startswith(base_path + os.sep) and full_path != base_path:
+                                    if debug:
+                                        console.print(f"[yellow]Warning: Skipping path outside target directory: {member}[/yellow]")
+                                    continue
+
+                                # Check for reasonable file sizes (prevent zip bombs)
+                                try:
+                                    file_size = info.file_size
+                                except Exception:
+                                    file_size = 0
+
+                                if file_size > 100 * 1024 * 1024:
+                                    if debug:
+                                        console.print(f"[yellow]Warning: Skipping oversized file: {member} ({file_size} bytes)[/yellow]")
+                                    continue
+
+                                # Extract the safe member
+                                zip_file.extract(member, path)
                                 if debug:
-                                    console.print(f"[yellow]Warning: Skipping symlink: {member}[/yellow]")
-                                continue
+                                    console.print(f"[cyan]Extracted: {member}[/cyan]")
 
-                            # Check for absolute paths and directory traversal
-                            if os.path.isabs(member) or ".." in member or member.startswith("/"):
+                        safe_extract_zip(zip_ref, str(bin_dir))
+
+                elif file_pattern.endswith(".tar.gz"):
+                    with tarfile.open(temp_archive, "r:gz") as tar_ref:
+                        def safe_extract_tar(tar_file: tarfile.TarFile, path: str = ".") -> None:
+                            for member in tar_file.getmembers():
+                                if member.islnk() or member.issym():
+                                    if debug:
+                                        console.print(f"[yellow]Warning: Skipping link entry: {member.name}[/yellow]")
+                                    continue
+                                if os.path.isabs(member.name) or ".." in member.name or member.name.startswith("/"):
+                                    if debug:
+                                        console.print(f"[yellow]Warning: Skipping dangerous path: {member.name}[/yellow]")
+                                    continue
+                                full_path = os.path.realpath(os.path.join(path, member.name))
+                                base_path = os.path.realpath(path)
+                                if not full_path.startswith(base_path + os.sep) and full_path != base_path:
+                                    if debug:
+                                        console.print(f"[yellow]Warning: Skipping path outside target directory: {member.name}[/yellow]")
+                                    continue
+                                if member.size > 100 * 1024 * 1024:
+                                    if debug:
+                                        console.print(f"[yellow]Warning: Skipping oversized file: {member.name} ({member.size} bytes)[/yellow]")
+                                    continue
+                                tar_file.extract(member, path)
                                 if debug:
-                                    console.print(f"[yellow]Warning: Skipping dangerous path: {member}[/yellow]")
-                                continue
+                                    console.print(f"[cyan]Extracted: {member.name}[/cyan]")
 
-                            # Verify final path is inside target directory
-                            full_path = os.path.realpath(os.path.join(path, member))
-                            base_path = os.path.realpath(path)
-                            if not full_path.startswith(base_path + os.sep) and full_path != base_path:
-                                if debug:
-                                    console.print(f"[yellow]Warning: Skipping path outside target directory: {member}[/yellow]")
-                                continue
+                        safe_extract_tar(tar_ref, str(bin_dir))
 
-                            # Check for reasonable file sizes (prevent zip bombs)
-                            try:
-                                file_size = info.file_size
-                            except Exception:
-                                file_size = 0
+                # If extraction created a nested directory (common for GitHub release zips),
+                # search for the bdinfo executable and move it to the expected binary path.
+                if not binary_path.exists():
+                    binary_basename = binary_name
+                    found = None
+                    for p in bin_dir.rglob(binary_basename):
+                        if p.is_file():
+                            found = p
+                            break
 
-                            if file_size > 100 * 1024 * 1024:
-                                if debug:
-                                    console.print(f"[yellow]Warning: Skipping oversized file: {member} ({file_size} bytes)[/yellow]")
-                                continue
+                    if found:
+                        # Move to target location
+                        shutil.move(str(found), str(binary_path))
 
-                            # Extract the safe member
-                            zip_file.extract(member, path)
-                            if debug:
-                                console.print(f"[cyan]Extracted: {member}[/cyan]")
+                if system != "windows" and binary_path.exists():
+                    binary_path.chmod(binary_path.stat().st_mode | stat.S_IEXEC)
 
-                    safe_extract_zip(zip_ref, str(bin_dir))
-
-            elif file_pattern.endswith(".tar.gz"):
-                with tarfile.open(temp_archive, "r:gz") as tar_ref:
-                    def safe_extract_tar(tar_file: tarfile.TarFile, path: str = ".") -> None:
-                        for member in tar_file.getmembers():
-                            if member.islnk() or member.issym():
-                                if debug:
-                                    console.print(f"[yellow]Warning: Skipping link entry: {member.name}[/yellow]")
-                                continue
-                            if os.path.isabs(member.name) or ".." in member.name or member.name.startswith("/"):
-                                if debug:
-                                    console.print(f"[yellow]Warning: Skipping dangerous path: {member.name}[/yellow]")
-                                continue
-                            full_path = os.path.realpath(os.path.join(path, member.name))
-                            base_path = os.path.realpath(path)
-                            if not full_path.startswith(base_path + os.sep) and full_path != base_path:
-                                if debug:
-                                    console.print(f"[yellow]Warning: Skipping path outside target directory: {member.name}[/yellow]")
-                                continue
-                            if member.size > 100 * 1024 * 1024:
-                                if debug:
-                                    console.print(f"[yellow]Warning: Skipping oversized file: {member.name} ({member.size} bytes)[/yellow]")
-                                continue
-                            tar_file.extract(member, path)
-                            if debug:
-                                console.print(f"[cyan]Extracted: {member.name}[/cyan]")
-
-                    safe_extract_tar(tar_ref, str(bin_dir))
-
-            temp_archive.unlink()
-
-            # If extraction created a nested directory (common for GitHub release zips),
-            # search for the bdinfo executable and move it to the expected binary path.
-            if not binary_path.exists():
-                binary_basename = binary_name
-                found = None
-                for p in bin_dir.rglob(binary_basename):
-                    if p.is_file():
-                        found = p
-                        break
-
-                if found:
-                    # Move to target location
-                    shutil.move(str(found), str(binary_path))
-                else:
-                    raise Exception(f"Failed to extract bdinfo binary to {binary_path}")
-
-            if system != "windows" and binary_path.exists():
-                binary_path.chmod(binary_path.stat().st_mode | stat.S_IEXEC)
-
-            async with aiofiles.open(version_path, "w", encoding="utf-8") as version_file:
-                await version_file.write(f"BDInfoCLI-ng version {version} installed successfully.")
-            return str(binary_path)
-
+                async with aiofiles.open(version_path, "w", encoding="utf-8") as version_file:
+                    await version_file.write(f"BDInfoCLI-ng version {version} installed successfully.")
+                return str(binary_path)
+            finally:
+                try:
+                    if temp_archive.exists():
+                        temp_archive.unlink()
+                        if debug:
+                            console.print(f"[blue]Removed temporary archive: {temp_archive}[/blue]")
+                except Exception as unlink_exc:
+                    if debug:
+                        console.print(f"[yellow]Warning: Failed to remove temporary archive {temp_archive}: {unlink_exc}[/yellow]")
         except httpx.RequestError as e:
             raise Exception(f"Failed to download bdinfo binary: {e}") from e
         except (zipfile.BadZipFile, tarfile.TarError) as e:
