@@ -3,7 +3,6 @@ import asyncio
 import json
 import os
 import re
-import sys
 import traceback
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -584,32 +583,55 @@ def bloated_check(meta: Meta, audio_languages: Union[Sequence[str], str], is_eng
 
 def dts_core_additional_check(meta: Meta) -> None:
     mediainfo_tracks = meta.get("mediainfo", {}).get("media", {}).get("track") or []
-    audio_tracks = [track for track in mediainfo_tracks if track["@type"] == "Audio"]
+    audio_tracks = [track for track in mediainfo_tracks if track.get("@type") == "Audio"]
     warned_once = False
-    for track_one_index, track_one in enumerate(audio_tracks, start=1):
-        # This is technically O(n^2) but the number of audio tracks is usually very small
-        for track_two_index, track_two in enumerate(audio_tracks, start=1):
-            if track_one_index == track_two_index:
-                continue
+    # Iterate pairs once (i < j) to avoid duplicate comparisons
+    n = len(audio_tracks)
+    for i in range(n):
+        track_one = audio_tracks[i]
+        for j in range(i + 1, n):
+            track_two = audio_tracks[j]
             track_one_is_dts_hd_ma = track_one.get("Format_Commercial_IfAny") == "DTS-HD Master Audio"
-            track_two_is_lossy_dts = track_two.get("Format_Commercial_IfAny") != "DTS-HD Master Audio" and track_two[
-                "Format"] == "DTS"
-            track_one_properties = (track_one.get("Duration"), track_one.get("FrameRate"), track_one.get("FrameCount"),
-                                    track_one.get("Language"))
-            track_two_properties = (track_two.get("Duration"), track_two.get("FrameRate"), track_two.get("FrameCount"),
-                                    track_two.get("Language"))
-            # Ensure at least one property is non-None to avoid matching on empty metadata
-            has_meaningful_properties = any(p is not None for p in track_one_properties)
-            if track_one_is_dts_hd_ma and track_two_is_lossy_dts and has_meaningful_properties and track_one_properties == track_two_properties:
-                if meta["debug"]:
-                    console.print(f"[yellow]DEBUG: Detected potential DTS core duplicate between tracks {track_one_index} and {track_two_index}, matched on properties: (Duration={track_one.get('Duration')}, FrameRate={track_one.get('FrameRate')}, FrameCount={track_one.get('FrameCount')}, Language={track_one.get('Language')})[/yellow]")
+            track_two_is_lossy_dts = (
+                track_two.get("Format_Commercial_IfAny") != "DTS-HD Master Audio" and track_two.get("Format") == "DTS"
+            )
+            track_one_properties = (
+                track_one.get("Duration"),
+                track_one.get("FrameRate"),
+                track_one.get("FrameCount"),
+                track_one.get("Language"),
+            )
+            track_two_properties = (
+                track_two.get("Duration"),
+                track_two.get("FrameRate"),
+                track_two.get("FrameCount"),
+                track_two.get("Language"),
+            )
+            # Ensure at least one property across both tracks is non-None to avoid matching on empty metadata
+            has_meaningful_properties = any(p is not None for p in (*track_one_properties, *track_two_properties))
+            if (
+                track_one_is_dts_hd_ma
+                and track_two_is_lossy_dts
+                and has_meaningful_properties
+                and track_one_properties == track_two_properties
+            ):
+                if meta.get("debug"):
+                    console.print(
+                        f"[yellow]DEBUG: Detected potential DTS core duplicate between tracks {i+1} and {j+1}, matched on properties: (Duration={track_one.get('Duration')}, FrameRate={track_one.get('FrameRate')}, FrameCount={track_one.get('FrameCount')}, Language={track_one.get('Language')})[/yellow]"
+                    )
                 if not warned_once:
                     warned_once = True
                     console.print(
-                        f"[bold red]DTS audio track #{track_two_index} appears to be a lossy duplicate of DTS-HD MA track #{track_one_index}.[/bold red]")
-                    if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                        if cli_ui.ask_yes_no("Do you want to upload anyway?", default=True):
-                            # Setting this to true to keep current behavior (don't exit on lossy DTS core found)
-                            pass
+                        f"[bold red]DTS audio track #{j+1} appears to be a lossy duplicate of DTS-HD MA track #{i+1}.[/bold red]"
+                    )
+                    if not meta.get("unattended", False) or meta.get("unattended_confirm", False):
+                        try:
+                            allow = cli_ui.ask_yes_no("Do you want to upload anyway?", default=False)
+                        except Exception:
+                            allow = False
+                        if allow:
+                            return
                         else:
-                            sys.exit(1)
+                            raise Exception("Upload cancelled due to lossy DTS core duplicate detected.")
+                    else:
+                        raise Exception("Upload cancelled due to lossy DTS core duplicate detected.")
