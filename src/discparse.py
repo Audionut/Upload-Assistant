@@ -2,9 +2,9 @@
 import asyncio
 import json
 import os
+import platform
 import re
 import shutil
-import sys
 import traceback
 from collections import OrderedDict, defaultdict
 from glob import glob
@@ -243,28 +243,39 @@ class DiscParse:
                     else:
                         try:
                             bdinfo_executable = None
-                            if sys.platform.startswith('linux') or sys.platform.startswith('darwin'):
-                                bdinfo_exe_path = f"{base_dir}/bin/BDInfo/BDInfo.exe"
-                                if shutil.which("mono") and os.path.exists(bdinfo_exe_path):
-                                    bdinfo_executable = ['mono', bdinfo_exe_path, path, '-m', playlist['file'], save_dir]
-                                elif shutil.which("bdinfo"):
+                            # Prefer the bundled bdinfo binary for the detected OS/arch
+                            system = platform.system().lower()
+                            machine = platform.machine().lower()
+                            if system == "linux":
+                                if machine in ("x86_64", "amd64"):
+                                    folder = "linux/amd64"
+                                elif machine in ("arm64", "aarch64"):
+                                    folder = "linux/arm64"
+                                else:
+                                    folder = "linux/arm"
+                                bdinfo_path = f"{base_dir}/bin/bdinfo/{folder}/bdinfo"
+                                if os.path.exists(bdinfo_path):
+                                    bdinfo_executable = [bdinfo_path, path, '-m', playlist['file'], save_dir]
+                            elif system == "darwin":
+                                folder = "macos/arm64" if machine in ("arm64",) else "macos/x86_64"
+                                bdinfo_path = f"{base_dir}/bin/bdinfo/{folder}/bdinfo"
+                                if os.path.exists(bdinfo_path):
+                                    bdinfo_executable = [bdinfo_path, path, '-m', playlist['file'], save_dir]
+                            elif system == "windows":
+                                # Windows builds are provided as x64
+                                bdinfo_path = f"{base_dir}/bin/bdinfo/windows/x86_64/bdinfo.exe"
+                                if os.path.exists(bdinfo_path):
+                                    bdinfo_executable = [bdinfo_path, '-m', playlist['file'], path, save_dir]
+
+                            # Fallback to system-installed commands if bundled binary not present
+                            if bdinfo_executable is None:
+                                if shutil.which("bdinfo"):
                                     bdinfo_executable = ["bdinfo", path, '-m', playlist['file'], save_dir]
                                 elif shutil.which("BDInfo"):
                                     bdinfo_executable = ["BDInfo", path, '-m', playlist['file'], save_dir]
                                 else:
-                                    console.print(f"[bold red]BDInfo not found. Please install mono and place BDInfo.exe in {base_dir}/bin/BDInfo/ or install native bdinfo[/bold red]")
+                                    console.print(f"[bold red]BDInfo not found. Please download bdinfo and place it under {base_dir}/bin/bdinfo/ or install a system bdinfo/BDInfo binary[/bold red]")
                                     continue
-                            elif sys.platform.startswith('win32'):
-                                bdinfo_exe_path = f"{base_dir}/bin/BDInfo/BDInfo.exe"
-                                if os.path.exists(bdinfo_exe_path):
-                                    bdinfo_executable = [bdinfo_exe_path, '-m', playlist['file'], path, save_dir]
-                                else:
-                                    console.print(f"[bold red]BDInfo.exe not found at {bdinfo_exe_path}[/bold red]")
-                                    console.print(f"[yellow]Please download BDInfo and place BDInfo.exe in {base_dir}/bin/BDInfo/[/yellow]")
-                                    continue
-                            else:
-                                console.print("[red]Unsupported platform for BDInfo.")
-                                continue
 
                             if bdinfo_executable:
                                 proc = await asyncio.create_subprocess_exec(

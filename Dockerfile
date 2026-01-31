@@ -9,7 +9,6 @@ RUN apt-get update && \
     ffmpeg \
     mediainfo \
     rustc \
-    mono-complete \
     nano \
     ca-certificates \
     curl && \
@@ -45,9 +44,16 @@ RUN python3 -c "from bin.get_mkbrr import MkbrrBinaryManager; MkbrrBinaryManager
 # Ensure binaries are executable
 RUN find bin/mkbrr -name "mkbrr" -print0 | xargs -0 chmod +x
 
+# Download bdinfo binary for the container architecture using the docker helper
+RUN python3 bin/get_bdinfo_docker.py
+
+# Ensure bdinfo binaries are executable
+RUN find bin/bdinfo -name "bdinfo" -print0 | xargs -0 chmod +x
+
 # Enable non-root access while still letting Upload-Assistant tighten permissions at runtime
 RUN chown -R 1000:1000 /Upload-Assistant/bin/mkbrr
 RUN chown -R 1000:1000 /Upload-Assistant/bin/MI
+RUN chown -R 1000:1000 /Upload-Assistant/bin/bdinfo
 
 # Create tmp directory with appropriate permissions
 RUN mkdir -p /Upload-Assistant/tmp && chmod 777 /Upload-Assistant/tmp

@@ -13,6 +13,7 @@ requirements.txt
 docker-compose.yml
 Dockerfile
 bin/mkbrr/*
+bin/BDinfo/*
 *.mkv
 .vscode/
 __pycache__/
