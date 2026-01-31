@@ -14,6 +14,7 @@ from babel import Locale
 from babel.core import UnknownLocaleError
 
 from src.audio import AudioManager
+from src.console import console
 from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -28,11 +29,6 @@ class SHRI(UNIT3D):
     INVALID_TAG_PATTERN = re.compile(r"-(nogrp|nogroup|unknown|unk)", re.IGNORECASE)
     WHITESPACE_PATTERN = re.compile(r"\s{2,}")
     MARKER_PATTERN = re.compile(r"\b(UNTOUCHED|VU1080|VU720|VU)\b", re.IGNORECASE)
-    CINEMA_NEWS_PATTERN = re.compile(
-        r"\b(HDTS|TS|MD|LD|CAM|HDCAM|TC|HDTC)\b", re.IGNORECASE
-    )
-    CINEMA_VIDEO_PATTERN = re.compile(r"\b(HDTS|TS|CAM|HDCAM|TC|HDTC)\b", re.IGNORECASE)
-    CINEMA_AUDIO_PATTERN = re.compile(r"\b(MD|LD)\b", re.IGNORECASE)
 
     def __init__(self, config: dict[str, Any]) -> None:
         super().__init__(config, tracker_name="SHRI")
@@ -88,7 +84,7 @@ class SHRI(UNIT3D):
         Handles:
         - REMUX detection from filename markers (VU/UNTOUCHED)
         - Italian title substitution from IMDb AKAs
-        - Multi-language audio tags (ITALIAN - ENGLISH format)
+        - Multi-language audio tags (ITA - ENG format using ISO 639-3 codes)
         - Italian subtitle [SUBS] tag when no Italian audio present
         - Release group tag cleaning and validation
         - DISC region injection
@@ -131,10 +127,10 @@ class SHRI(UNIT3D):
         # Clean audio: remove Dual-Audio and trailing language codes
         audio = await self._get_best_italian_audio_format(meta)
 
-        # Build audio language tag: original -> ITALIAN -> ENGLISH -> others/Multi (4+)
+        # Build audio language tag: original -> ITA -> ENG -> others/Multi (4+)
         audio_lang_str = ""
         if meta.get("audio_languages"):
-            # Normalize all to full names
+            # Normalize all to abbreviated ISO 639-3 codes
             audio_langs_value = meta.get("audio_languages", [])
             audio_langs_raw = cast(list[Any], audio_langs_value) if isinstance(audio_langs_value, list) else []
             audio_langs = [self._get_language_name(str(lang).upper()) for lang in audio_langs_raw]
@@ -142,25 +138,25 @@ class SHRI(UNIT3D):
             audio_langs = list(dict.fromkeys(audio_langs))  # Dedupe preserving order
 
             orig_lang_iso = meta.get("original_language", "").upper()
-            orig_lang_full = self._get_language_name(orig_lang_iso)
+            orig_lang_abbrev = self._get_language_name(orig_lang_iso)
 
             result: list[str] = []
             remaining: list[str] = audio_langs.copy()
 
             # Priority 1: Original language
-            if orig_lang_full and orig_lang_full in remaining:
-                result.append(orig_lang_full)
-                remaining.remove(orig_lang_full)
+            if orig_lang_abbrev and orig_lang_abbrev in remaining:
+                result.append(orig_lang_abbrev)
+                remaining.remove(orig_lang_abbrev)
 
             # Priority 2: Italian (if not already added)
-            if "ITALIAN" in remaining:
-                result.append("ITALIAN")
-                remaining.remove("ITALIAN")
+            if "ITA" in remaining:
+                result.append("ITA")
+                remaining.remove("ITA")
 
             # Priority 3: English (if not already added)
-            if "ENGLISH" in remaining:
-                result.append("ENGLISH")
-                remaining.remove("ENGLISH")
+            if "ENG" in remaining:
+                result.append("ENG")
+                remaining.remove("ENG")
 
             # Handle remaining: show individually if <=3 total, else add Multi
             if len(result) + len(remaining) > 3:
@@ -222,23 +218,6 @@ class SHRI(UNIT3D):
             type_str = "WEB-DL" if effective_type == "WEBDL" else "WEBRip"
             # WEB: Title Year LANG Edition Hybrid REPACK Resolution UHD Service Type Audio HDR VideoCodec
             name = f"{title} {year} {season}{episode} {episode_title} {part} {audio_lang_str} {edition} {hybrid} {repack} {resolution} {uhd} {service} {type_str} {audio} {hdr} {video_encode}"
-
-        elif effective_type == "CINEMA_NEWS":
-            basename_upper = self.get_basename(meta).upper()
-            markers: list[str] = []
-
-            video_match = self.CINEMA_VIDEO_PATTERN.search(basename_upper)
-            if video_match:
-                markers.append(video_match.group(0))
-
-            audio_match = self.CINEMA_AUDIO_PATTERN.search(basename_upper)
-            if audio_match:
-                markers.append(audio_match.group(0))
-
-            source_marker = " ".join(markers)
-
-            # Cinema News: Title Year LANG Edition REPACK Resolution Source Audio VideoCodec
-            name = f"{title} {year} {audio_lang_str} {edition} {repack} {resolution} {source_marker} {audio} {video_encode}"
 
         else:
             # Fallback: use original name with cleaned audio
@@ -313,7 +292,6 @@ class SHRI(UNIT3D):
     ) -> dict[str, str]:
         """Map release type to ShareIsland type IDs"""
         type_mapping = {
-            "CINEMA_NEWS": "42",
             "DISC": "26",
             "REMUX": "7",
             "WEBDL": "27",
@@ -355,7 +333,7 @@ class SHRI(UNIT3D):
                     )
                     if region_name:
                         break
-                    print("Region code is required.")
+                    console.print("Region code is required.", markup=False)
 
             # Validate region name was provided
             if not region_name:
@@ -591,14 +569,9 @@ class SHRI(UNIT3D):
     def get_effective_type(self, meta: dict[str, Any]) -> str:
         """
         Determine effective type with priority hierarchy:
-        1. Cinema News (CAM/HDCAM/TC/HDTC/TS/HDTS/MD/LD keywords)
-        2. Technical analysis (REMUX/ENCODE/WEB-DL/WEBRip detection)
-        3. Base type from meta
+        1. Technical analysis (REMUX/ENCODE/WEB-DL/WEBRip detection)
+        2. Base type from meta
         """
-        basename = self.get_basename(meta)
-        if self.CINEMA_NEWS_PATTERN.search(basename):
-            return "CINEMA_NEWS"
-
         detected_type = self._detect_type_from_technical_analysis(meta)
         return detected_type
 
@@ -647,21 +620,28 @@ class SHRI(UNIT3D):
         )
 
     def _get_language_name(self, iso_code: str) -> str:
-        """Convert ISO language code to full language name"""
+        """Convert ISO language code to abbreviated 3-letter code (ITA, ENG, etc)"""
         if not iso_code:
             return ""
 
-        # Try alpha_2 (IT, EN, etc)
-        lang = pycountry.languages.get(alpha_2=iso_code.lower())
-        if lang:
-            return str(lang.name).upper()
+        iso_lower = iso_code.lower()
+
+        # Try alpha_2 (IT, EN, etc) and convert to alpha_3
+        lang = pycountry.languages.get(alpha_2=iso_lower)
+        if lang and hasattr(lang, 'alpha_3'):
+            return str(lang.alpha_3).upper()
 
         # Try alpha_3 (ITA, ENG, etc)
-        lang = pycountry.languages.get(alpha_3=iso_code.lower())
-        if lang:
-            return str(lang.name).upper()
+        lang = pycountry.languages.get(alpha_3=iso_lower)
+        if lang and hasattr(lang, 'alpha_3'):
+            return str(lang.alpha_3).upper()
 
-        return iso_code
+        # Try full language name (Italian, English, etc)
+        lang = pycountry.languages.get(name=iso_code.title())
+        if lang and hasattr(lang, 'alpha_3'):
+            return str(lang.alpha_3).upper()
+
+        return iso_code.upper()
 
     def _get_italian_language_name(self, iso_code: str) -> str:
         """Convert ISO language code to Italian language name using Babel"""
@@ -877,7 +857,7 @@ class SHRI(UNIT3D):
                         if not logo_url and fallback_logo:
                             logo_url = f"https://image.tmdb.org/t/p/w300{fallback_logo}"
         except Exception as e:
-            print(f"[DEBUG] TMDb fetch error: {e}")
+            console.print(f"[DEBUG] TMDb fetch error: {e}", markup=False)
 
         return summary, logo_url
 
@@ -1077,7 +1057,7 @@ class SHRI(UNIT3D):
                 "subs": subs,
             }
         except Exception as e:
-            print(f"[DEBUG] Mediainfo extraction error: {e}")
+            console.print(f"[DEBUG] Mediainfo extraction error: {e}", markup=False)
             import traceback
 
             traceback.print_exc()

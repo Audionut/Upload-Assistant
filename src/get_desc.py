@@ -152,13 +152,16 @@ async def gen_desc(
                 response = await client.get(raw_url)
             description_link_content = response.text
             cleaned_content = clean_text(description_link_content)
-            if cleaned_content:
+            if cleaned_content and "Not Found" not in cleaned_content:
                 if not content_written:
                     description_lines.append(cleaned_content)
                 meta["description_link_content"] = cleaned_content
                 content_written = True
+            elif cleaned_content and "Not Found" in cleaned_content:
+                raise ValueError("Description link returned 'Not Found'")
         except Exception as e:
             console.print(f"[ERROR] Failed to fetch description from link: {e}")
+            raise e
 
     if description_file and os.path.isfile(description_file):
         async with aiofiles.open(description_file, encoding="utf-8") as f:
@@ -406,7 +409,7 @@ class DescriptionBuilder:
         """Returns the screenshot header if applicable."""
         try:
             screenheader = self.tracker_config.get(
-                "custom_screenshot_header", self.config["DEFAULT"].get("screenshot_header", None)
+                "screenshot_header", self.config["DEFAULT"].get("screenshot_header", None)
             )
             if screenheader:
                 return str(screenheader)
@@ -854,7 +857,7 @@ class DescriptionBuilder:
                                         True,
                                     )
                                 except Exception as e:
-                                    print(f"Error during BDMV screenshot capture: {e}")
+                                    console.print(f"Error during BDMV screenshot capture: {e}", markup=False)
                                 new_screens = [os.path.basename(f) for f in glob.glob(
                                     os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png")
                                 )]
@@ -939,10 +942,10 @@ class DescriptionBuilder:
                     if multi_screens != 0:
                         processed_count += 1
                         disc_name = each.get("name", f"Disc {i}")
-                        print(
+                        console.print(
                             f"\rProcessing disc {processed_count}/{total_discs_to_process}: {disc_name[:40]}{'...' if len(disc_name) > 40 else ''}",
+                            markup=False,
                             end="",
-                            flush=True,
                         )
                         # Check if screenshots exist for the current disc key
                         # Check for saved images first
@@ -1042,7 +1045,7 @@ class DescriptionBuilder:
                                             True,
                                         )
                                     except Exception as e:
-                                        print(f"Error during BDMV screenshot capture: {e}")
+                                        console.print(f"Error during BDMV screenshot capture: {e}", markup=False)
                                     new_screens = [os.path.basename(f) for f in glob.glob(
                                         os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
                                     )]
@@ -1050,7 +1053,7 @@ class DescriptionBuilder:
                                     try:
                                         await self.takescreens_manager.dvd_screenshots(meta, i, multi_screens, True)
                                     except Exception as e:
-                                        print(f"Error during DVD screenshot capture: {e}")
+                                        console.print(f"Error during DVD screenshot capture: {e}", markup=False)
                                     new_screens = [os.path.basename(f) for f in glob.glob(
                                         os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png")
                                     )]
@@ -1158,10 +1161,10 @@ class DescriptionBuilder:
                 if total_files_to_process > 1:
                     processed_count += 1
                     filename = os.path.basename(file)
-                    print(
+                    console.print(
                         f"\rProcessing file {processed_count}/{total_files_to_process}: {filename[:40]}{'...' if len(filename) > 40 else ''}",
+                        markup=False,
                         end="",
-                        flush=True,
                     )
                 if i > 0:
                     new_images_key = f"new_images_file_{i}"
@@ -1209,7 +1212,7 @@ class DescriptionBuilder:
                             )
                             await asyncio.sleep(0.1)
                         except Exception as e:
-                            print(f"Error during generic screenshot capture: {e}")
+                            console.print(f"Error during generic screenshot capture: {e}", markup=False)
 
                         new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
 
@@ -1268,7 +1271,7 @@ class DescriptionBuilder:
                         mi_dump = MediaInfo.parse(
                             file, output="STRING", full=False, mediainfo_options={"inform_version": "1"}
                         )
-                        parsed_mediainfo = self.parser.parse_mediainfo(mi_dump)
+                        parsed_mediainfo = self.parser.parse_mediainfo(str(mi_dump))
                         formatted_bbcode = self.parser.format_bbcode(parsed_mediainfo)
                         desc_parts.append(
                             f"[center][spoiler={filename}]{formatted_bbcode}[/spoiler][/center]\n"

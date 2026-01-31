@@ -22,7 +22,7 @@ class BtnIdManager:
         imdb_id = 0
         tvdb_id = 0
         if meta.get('debug'):
-            print("Fetching BTN data...")
+            console.print("Fetching BTN data...", markup=False)
         post_query_url = "https://api.broadcasthe.net/"
         post_data = {
             "jsonrpc": "2.0",
@@ -43,15 +43,15 @@ class BtnIdManager:
                 try:
                     data = cast(dict[str, Any], response.json())
                 except ValueError as e:
-                    print(f"[ERROR] Failed to parse BTN response as JSON: {e}")
-                    print(f"Response content: {response.text[:200]}...")
+                    console.print(f"[ERROR] Failed to parse BTN response as JSON: {e}", markup=False)
+                    console.print(f"Response content: {response.text[:200]}...", markup=False)
                     return 0, 0
         except Exception as e:
-            print(f"[ERROR] Failed to fetch BTN data: {e}")
+            console.print(f"[ERROR] Failed to fetch BTN data: {e}", markup=False)
             return 0, 0
 
         if not data:
-            print("[ERROR] BTN API response is empty or invalid.")
+            console.print("[ERROR] BTN API response is empty or invalid.", markup=False)
             return 0, 0
 
         error = data.get('error')
@@ -99,7 +99,7 @@ class BtnIdManager:
         imdb = 0
         tmdb = 0
         if meta.get('debug'):
-            print("Fetching BHD data...")
+            console.print("Fetching BHD data...", markup=False)
         post_query_url = f"https://beyond-hd.me/api/torrents/{bhd_api}"
 
         post_data = {"action": "details", "torrent_id": torrent_id} if torrent_id is not None else {"action": "search", "rsskey": bhd_rss_key}
@@ -122,16 +122,16 @@ class BtnIdManager:
                 try:
                     data = response.json()
                 except ValueError as e:
-                    print(f"[ERROR] Failed to parse BHD response as JSON: {e}")
-                    print(f"Response content: {response.text[:200]}...")
+                    console.print(f"[ERROR] Failed to parse BHD response as JSON: {e}", markup=False)
+                    console.print(f"Response content: {response.text[:200]}...", markup=False)
                     return 0, 0
         except (httpx.RequestError, httpx.HTTPStatusError) as e:
-            print(f"[ERROR] Failed to fetch BHD data: {e}")
+            console.print(f"[ERROR] Failed to fetch BHD data: {e}", markup=False)
             return 0, 0
 
         if data.get("status_code") == 0 or data.get("success") is False:
             error_message = data.get("status_message", "Unknown BHD API error")
-            print(f"[ERROR] BHD API error: {error_message}")
+            console.print(f"[ERROR] BHD API error: {error_message}", markup=False)
             return 0, 0
 
         # Handle different response formats from BHD API
@@ -146,7 +146,7 @@ class BtnIdManager:
             first_result = data["result"]
 
         if not first_result:
-            print("No valid results found in BHD API response.")
+            console.print("No valid results found in BHD API response.", markup=False)
             return 0, 0
 
         name = str(first_result.get("name", "")).lower()
@@ -169,13 +169,13 @@ class BtnIdManager:
 
                     if desc_data.get("status_code") == 1 and desc_data.get("success") is True:
                         description = str(desc_data.get("result", ""))
-                        print("Successfully retrieved full description")
+                        console.print("Successfully retrieved full description", markup=False)
                     else:
                         description = ""
                         error_message = desc_data.get("status_message", "Unknown BHD API error")
-                        print(f"[ERROR] Failed to fetch description: {error_message}")
+                        console.print(f"[ERROR] Failed to fetch description: {error_message}", markup=False)
             except (httpx.RequestError, httpx.HTTPStatusError) as e:
-                print(f"[ERROR] Failed to fetch description: {e}")
+                console.print(f"[ERROR] Failed to fetch description: {e}", markup=False)
                 description = ""
         else:
             # Use the description from the initial response

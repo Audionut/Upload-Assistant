@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Assistant Web UI - Recovery Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body style="background-color: oklch(0.145 0 0);">
+    <div class="flex h-screen items-center justify-center bg-background px-4 sm:px-6">
+        <div class="w-full max-w-md">
+            <div class="bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 relative overflow-hidden w-full shadow-xl" style="background-color: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.1);">
+                <div class="px-6 pt-6">
+                    <h2 class="text-xl font-semibold text-white">Recovery login</h2>
+                    <p class="text-sm text-gray-300">Use a one-time recovery code to sign in.</p>
+                    {% if error %}
+                    <div class="text-red-400 text-sm mt-3">{{ error }}</div>
+                    {% endif %}
+                    <form method="post" action="/login/recovery" class="space-y-4 mt-4">
+                        <div>
+                            <label class="text-sm text-white" for="username">Username</label>
+                            <input id="username" name="username" type="text" required class="w-full rounded px-3 py-2 bg-transparent border border-gray-600 text-white">
+                        </div>
+                        <div>
+                            <label class="text-sm text-white" for="password">Password</label>
+                            <input id="password" name="password" type="password" required class="w-full rounded px-3 py-2 bg-transparent border border-gray-600 text-white">
+                        </div>
+                        <div>
+                            <label class="text-sm text-white" for="recovery_code">Recovery Code</label>
+                            <input id="recovery_code" name="recovery_code" type="text" required class="w-full rounded px-3 py-2 bg-transparent border border-gray-600 text-white">
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="remember" name="remember" value="1" />
+                            <label for="remember" class="text-sm text-white">Remember me</label>
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 text-white rounded py-2">Use recovery code</button>
+                    </form>
+                    <div class="mt-4">
+                        <a href="/login" class="text-sm text-blue-400 hover:underline">Back to sign in</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

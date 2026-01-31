@@ -414,7 +414,7 @@ class DiscParse:
                 bdinfo_files.append(m2ts)
 
             except Exception as e:
-                print(f"Failed to process bdinfo line: {line} -> {e}")
+                console.print(f"Failed to process bdinfo line: {line} -> {e}", markup=False)
 
         return bdinfo_files
 
@@ -1089,7 +1089,7 @@ class DiscParse:
                 titles.append(title_data)
 
         except ET.ParseError as e:
-            print(f"Error parsing XPL file: {e}")
+            console.print(f"Error parsing XPL file: {e}", markup=False)
         return titles
 
     def timecode_to_seconds(self, timecode: str) -> int:

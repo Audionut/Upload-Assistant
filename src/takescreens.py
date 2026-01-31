@@ -1,6 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
-import contextlib
 import gc
 import glob
 import json
@@ -24,7 +23,6 @@ from src.console import console
 
 default_config: dict[str, Any] = {}
 task_limit = 1
-threads = "1"
 cutoff = 1
 ffmpeg_limit = False
 ffmpeg_is_good = False
@@ -36,7 +34,7 @@ desat = 10.0
 
 
 def _apply_config(config: Mapping[str, Any]) -> None:
-    global default_config, task_limit, threads, cutoff
+    global default_config, task_limit, cutoff
     global ffmpeg_limit, ffmpeg_is_good, use_libplacebo
     global tone_map, ffmpeg_compression, algorithm, desat
 
@@ -47,8 +45,6 @@ def _apply_config(config: Mapping[str, Any]) -> None:
         task_limit = int(default_config.get('process_limit', 1) or 1)
     except (TypeError, ValueError):
         task_limit = 1
-
-    threads = str(default_config.get('threads', '1'))
 
     try:
         cutoff = int(default_config.get('cutoff_screens', 1) or 1)
@@ -68,20 +64,34 @@ def _apply_config(config: Mapping[str, Any]) -> None:
 
 
 async def run_ffmpeg(command: Any) -> tuple[Optional[int], bytes, bytes]:
+    # On Linux prefer bundled amd/arm binary when present; otherwise fall back to system ffmpeg.
     if platform.system() == 'Linux':
-        ffmpeg_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'bin', 'ffmpeg', 'ffmpeg')
-        if os.path.exists(ffmpeg_path):
-            cmd_list = command.compile()
-            cmd_list[0] = ffmpeg_path
+        base_dir = os.path.dirname(os.path.dirname(__file__))
+        ff_bin_dir = os.path.join(base_dir, 'bin', 'ffmpeg')
 
-            process = await asyncio.create_subprocess_exec(
-                *cmd_list,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await process.communicate()
-            return (process.returncode or -1), stdout, stderr
+        machine = platform.machine().lower()
+        if machine in ('x86_64', 'amd64'):
+            arch = 'amd'
+        elif machine in ('aarch64', 'arm64'):
+            arch = 'arm'
+        else:
+            arch = None
 
+        if arch:
+            candidate = os.path.join(ff_bin_dir, arch, 'ffmpeg')
+            if os.path.exists(candidate):
+                cmd_list = list(command.compile())
+                cmd_list[0] = candidate
+
+                process = await asyncio.create_subprocess_exec(
+                    *cmd_list,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await process.communicate()
+                return (process.returncode if process.returncode is not None else -1), stdout, stderr
+
+    # Fallback: use system/default ffmpeg (command.compile())
     process = await asyncio.create_subprocess_exec(
         *command.compile(),
         stdout=asyncio.subprocess.PIPE,
@@ -160,7 +170,7 @@ async def disc_screenshots(
 
     keyframe = 'nokey' if "VC-1" in bdinfo['video'][0]['codec'] or bdinfo['video'][0]['hdr_dv'] != "" else 'none'
     if meta['debug']:
-        print(f"File: {file_path}, Length: {length}, Frame Rate: {frame_rate}")
+        console.print(f"File: {file_path}, Length: {length}, Frame Rate: {frame_rate}", markup=False)
     os.chdir(f"{base_dir}/tmp/{folder_id}")
     existing_screens = glob.glob(f"{sanitized_filename}-*.png")
     total_existing = len(existing_screens) + len(existing_images)
@@ -386,7 +396,7 @@ async def capture_disc_task(index: int, file: str, ss_time: str, image_path: str
             frame_info = meta.get('frame_info_map', {}).get(ss_time, {})
 
             frame_rate = meta.get('frame_rate', 24.0)
-            frame_number = int(ss_time * frame_rate)
+            frame_number = int(float(ss_time) * frame_rate)
 
             # If we have PTS time from frame info, use it to calculate a more accurate frame number
             if 'pts_time' in frame_info:
@@ -432,33 +442,19 @@ async def capture_disc_task(index: int, file: str, ss_time: str, image_path: str
             vf_filters.append("format=rgb24")
         vf_chain = ",".join(vf_filters)
 
-        cmd = [
-            "ffmpeg",
-            "-y",
-            "-loglevel", loglevel,
-            "-hide_banner",
-            "-ss", str(ss_time),
-            "-skip_frame", keyframe,
-            "-i", file,
-            "-vframes", "1",
-            "-vf", vf_chain,
-            "-compression_level", ffmpeg_compression,
-            "-pred", "mixed",
-            image_path
-        ]
+        # Build ffmpeg-python command and run via run_ffmpeg
+        info_command: Any = cast(Any, ffmpeg).input(file, ss=str(ss_time), skip_frame=keyframe).output(
+            image_path,
+            vframes=1,
+            vf=vf_chain,
+            compression_level=ffmpeg_compression,
+            pred='mixed'
+        ).global_args('-y', '-loglevel', loglevel, '-hide_banner')
 
-        # Print the command for debugging
         if loglevel == 'verbose' or (meta and meta.get('debug', False)):
-            console.print(f"[cyan]FFmpeg command: {' '.join(cmd)}[/cyan]")
+            console.print(f"[cyan]FFmpeg command: {' '.join(info_command.compile())}[/cyan]")
 
-        # Run command
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await process.communicate()
-        returncode = process.returncode
+        returncode, stdout, stderr = await run_ffmpeg(info_command)
 
         # Print stdout and stderr if in verbose mode
         if loglevel == 'verbose':
@@ -553,7 +549,7 @@ async def dvd_screenshots(
                     f"{meta['discs'][disc_num]['path']}/VTS_{main_set[n]}",
                     output='JSON'
                 )
-                vob_mi = json.loads(vob_mi)  # type: ignore
+                vob_mi = json.loads(str(vob_mi))
 
                 for track in vob_mi.get('media', {}).get('track', []):
                     duration = float(track.get('Duration', 0))
@@ -824,33 +820,19 @@ async def capture_dvd_screenshot(task: tuple[int, str, str, str, dict[str, Any],
             vf_filters.append("format=rgb24")
         vf_chain = ",".join(vf_filters)
 
-        cmd = [
-            "ffmpeg",
-            "-y",
-            "-loglevel", loglevel,
-            "-hide_banner",
-            "-ss", str(seek_time),
-            "-accurate_seek",
-            "-i", input_file,
-            "-vframes", "1",
-            "-vf", vf_chain,
-            "-compression_level", ffmpeg_compression,
-            "-pred", "mixed",
-            image
-        ]
+        # Build ffmpeg-python command and run via run_ffmpeg
+        info_command: Any = cast(Any, ffmpeg).input(input_file, ss=str(seek_time), accurate_seek=None).output(
+            image,
+            vframes=1,
+            vf=vf_chain,
+            compression_level=ffmpeg_compression,
+            pred='mixed'
+        ).global_args('-y', '-loglevel', loglevel, '-hide_banner')
 
-        # Print the command for debugging
         if loglevel == 'verbose' or (meta and meta.get('debug', False)):
-            console.print(f"[cyan]FFmpeg command: {' '.join(cmd)}[/cyan]", emoji=False)
+            console.print(f"[cyan]FFmpeg command: {' '.join(info_command.compile())}[/cyan]", emoji=False)
 
-        # Run command
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        _stdout, stderr = await process.communicate()
-        returncode = process.returncode
+        returncode, _stdout, stderr = await run_ffmpeg(info_command)
 
         if returncode != 0:
             console.print(f"[red]Error capturing screenshot for {input_file} at {seek_time}s:[/red]\n{stderr.decode()}")
@@ -1346,11 +1328,11 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
                     if loglevel == 'verbose' or (meta and meta.get('debug', False)):
                         console.print("[cyan]Using libplacebo tonemapping[/cyan]")
                 else:
-                    vf_filters.append("format=rgb48le")
                     vf_filters.extend([
                         "zscale=transfer=linear",
                         f"tonemap=tonemap={algorithm}:desat={desat}",
-                        "zscale=transfer=bt709"
+                        "zscale=transfer=bt709",
+                        "format=rgb24",
                     ])
                     if loglevel == 'verbose' or (meta and meta.get('debug', False)):
                         console.print(f"[cyan]Using zscale tonemap chain (algo={algorithm}, desat={desat})[/cyan]")
@@ -1364,59 +1346,54 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
             threads_value = ['-threads', '1']
             threads_val = threads_value[1]
 
-            def build_cmd(use_libplacebo: bool = True) -> list[str]:
-                cmd_local = [
-                    "ffmpeg",
-                    "-y",
-                    "-ss", str(ss_time),
-                    "-i", path,
-                    "-map", "0:v:0",
-                    "-an",
-                    "-sn",
-                ]
+            def build_cmd(use_libplacebo: bool = True) -> Any:
+                inp = cast(Any, ffmpeg).input(path, ss=str(ss_time))
+                # Build output and global args
+                out_kwargs = {
+                    'vframes': 1,
+                    'vf': vf_chain,
+                    'compression_level': ffmpeg_compression,
+                    'pred': 'mixed'
+                }
+                info_cmd = inp.output(image_path, **out_kwargs)
+
+                global_args = ['-y', '-loglevel', loglevel, '-hide_banner', '-map', '0:v:0', '-an', '-sn']
                 if use_libplacebo and meta.get('libplacebo', False):
-                    cmd_local += ["-init_hw_device", "vulkan"]
-                cmd_local += [
-                    "-vframes", "1",
-                    "-vf", vf_chain,
-                    "-compression_level", ffmpeg_compression,
-                    "-pred", "mixed",
-                    "-loglevel", loglevel,
-                ]
+                    global_args += ['-init_hw_device', 'vulkan']
                 if ffmpeg_limit:
-                    cmd_local += ["-threads", threads_val]
-                cmd_local.append(image_path)
-                return cmd_local
+                    global_args += ['-threads', threads_val]
+
+                info_cmd = info_cmd.global_args(*global_args)
+                return info_cmd
 
             cmd = build_cmd(use_libplacebo=True)
 
             if loglevel == 'verbose' or (meta and meta.get('debug', False)):
                 # Disable emoji translation so 0:v:0 stays literal
-                console.print(f"[cyan]FFmpeg command: {' '.join(cmd)}[/cyan]", emoji=False)
+                try:
+                    compiled = cast(list[str], cmd.compile())
+                    console.print(f"[cyan]FFmpeg command: {' '.join(compiled)}[/cyan]", emoji=False)
+                except Exception:
+                    console.print("[cyan]FFmpeg command: (unable to render command)[/cyan]", emoji=False)
 
             # --- Execute with retry/fallback if libplacebo fails ---
-            async def run_cmd(run_cmd_list: list[str], timeout_sec: float) -> tuple[Optional[int], bytes, bytes]:
-                proc = await asyncio.create_subprocess_exec(
-                    *run_cmd_list,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
+            async def run_cmd(info_command: Any, timeout_sec: float) -> tuple[Optional[int], bytes, bytes]:
                 try:
-                    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_sec)
+                    return await asyncio.wait_for(run_ffmpeg(info_command), timeout=timeout_sec)
                 except asyncio.TimeoutError:
-                    proc.kill()
-                    with contextlib.suppress(Exception):
-                        await proc.wait()
                     return -1, b"", b"Timeout"
-                return proc.returncode, stdout, stderr
 
-            returncode, stdout, stderr = await run_cmd(cmd, 140)  # a bit longer for first pass
+            info_cmd = build_cmd(use_libplacebo=True)
+            if loglevel == 'verbose' or (meta and meta.get('debug', False)):
+                console.print(f"[cyan]FFmpeg command: {' '.join(info_cmd.compile())}[/cyan]", emoji=False)
+
+            returncode, stdout, stderr = await run_cmd(info_cmd, 140)  # a bit longer for first pass
             if returncode != 0 and hdr_tonemap and meta.get('libplacebo'):
                 # Retry once (shader compile might have delayed first invocation)
                 if loglevel == 'verbose' or meta.get('debug', False):
                     console.print("[yellow]First libplacebo attempt failed; retrying once...[/yellow]")
                 await asyncio.sleep(1.0)
-                returncode, stdout, stderr = await run_cmd(cmd, 160)
+                returncode, stdout, stderr = await run_cmd(info_cmd, 160)
 
             if returncode != 0 and hdr_tonemap and meta.get('libplacebo'):
                 # Fallback: switch to zscale tonemap chain
@@ -1428,23 +1405,17 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
                 if w_sar != 1 or h_sar != 1:
                     z_vf_filters.append(f"scale={scaled_w}:{scaled_h}")
                 z_vf_filters.extend([
-                    "format=rgb48le",
+                    "format=rgb24",
                     "zscale=transfer=linear",
                     f"tonemap=tonemap={algorithm}:desat={desat}",
-                    "zscale=transfer=bt709",
-                    "format=rgb24"
+                    "zscale=transfer=bt709"
                 ])
                 vf_chain = ",".join(z_vf_filters)
-                fallback_cmd = build_cmd(use_libplacebo=False)
-                # Replace the -vf argument with new chain
-                for i, tok in enumerate(fallback_cmd):
-                    if tok == "-vf":
-                        fallback_cmd[i+1] = vf_chain
-                        break
+                info_cmd = build_cmd(use_libplacebo=False)
                 if loglevel == 'verbose' or meta.get('debug', False):
-                    console.print(f"[cyan]Fallback FFmpeg command: {' '.join(fallback_cmd)}[/cyan]", emoji=False)
-                returncode, stdout, stderr = await run_cmd(fallback_cmd, 140)
-                cmd = fallback_cmd  # for logging below
+                    console.print(f"[cyan]Fallback FFmpeg command: {' '.join(info_cmd.compile())}[/cyan]", emoji=False)
+                returncode, stdout, stderr = await run_cmd(info_cmd, 140)
+                cmd = info_cmd  # for logging below
 
             if returncode == 0 and os.path.exists(image_path):
                 if loglevel == 'verbose' or (meta and meta.get('debug', False)):
@@ -1473,7 +1444,7 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
                 "zscale=transfer=linear",
                 f"tonemap=tonemap={algorithm}:desat={desat}",
                 "zscale=transfer=bt709",
-                "format=rgb24"
+                "format=rgb24",
             ])
 
         if meta.get('frame_overlay', False):
@@ -1526,39 +1497,21 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
         vf_filters.append("format=rgb24")
         vf_chain = ",".join(vf_filters)
 
-        cmd = [
-            "ffmpeg",
-            "-y",
-            "-loglevel", loglevel,
-            "-hide_banner",
-            "-ss", str(ss_time),
-            "-i", path,
-            "-vframes", "1",
-            "-vf", vf_chain,
-            "-compression_level", ffmpeg_compression,
-            "-pred", "mixed",
-            image_path
-        ]
-
-        if ffmpeg_limit:
-            # Insert threads before compression options
-            cmd.insert(-3, "-threads")
-            cmd.insert(-3, threads_val)
-
-        # Print the command for debugging
-        if loglevel == 'verbose' or (meta and meta.get('debug', False)):
-            console.print(f"[cyan]FFmpeg command: {' '.join(cmd)}[/cyan]")
-
         try:
-            # Run command
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await process.communicate()
-            returncode = process.returncode or -1
+            info_cmd: Any = cast(Any, ffmpeg).input(path, ss=str(ss_time)).output(
+                image_path,
+                vframes=1,
+                vf=vf_chain,
+                compression_level=ffmpeg_compression,
+                pred='mixed'
+            ).global_args('-y', '-loglevel', loglevel, '-hide_banner', '-map', '0:v:0', '-an', '-sn')
+            if ffmpeg_limit:
+                info_cmd = info_cmd.global_args('-threads', threads_val)
 
+            if loglevel == 'verbose':
+                console.print(f"[cyan]FFmpeg command: {' '.join(info_cmd.compile())}[/cyan]")
+
+            returncode, stdout, stderr = await run_ffmpeg(info_cmd)
             # Print stdout and stderr if in verbose mode
             if loglevel == 'verbose':
                 if stdout:
@@ -1573,7 +1526,7 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
         if returncode == 0:
             return (index, image_path)
         else:
-            stderr_text = stderr.decode('utf-8', errors='replace')
+            stderr_text = (stderr or b"").decode('utf-8', errors='replace')
             if "Error initializing complex filters" in stderr_text:
                 console.print("[red]FFmpeg complex filters error: see https://github.com/Audionut/Upload-Assistant/wiki/ffmpeg---max-workers-issues[/red]")
             else:
@@ -1742,55 +1695,33 @@ async def check_libplacebo_compatibility(w_sar: float, h_sar: float, width: floa
         if try_libplacebo:
             filter_parts.append(f"{input_label}libplacebo=tonemapping=auto:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv[out]")
             output_map = "[out]"
-            cmd = [
-                "ffmpeg",
-                "-init_hw_device", "vulkan",
-                "-ss", str(ss_time),
-                "-i", path,
-                "-filter_complex", ",".join(filter_parts),
-                "-map", output_map,
-                "-vframes", "1",
-                "-pix_fmt", "rgb24",
-                "-y",
-                "-loglevel", "quiet",
-                test_image_path
-            ]
         else:
             # Use -vf for zscale/tonemap chain, no output label or -map needed
             vf_chain = f"zscale=transfer=linear,tonemap=tonemap={algorithm}:desat={desat},zscale=transfer=bt709,format=rgb24"
-            cmd = [
-                "ffmpeg",
-                "-ss", str(ss_time),
-                "-i", path,
-                "-vf", vf_chain,
-                "-vframes", "1",
-                "-pix_fmt", "rgb24",
-                "-y",
-                "-loglevel", "quiet",
-                test_image_path
-            ]
+
+        # Build ffmpeg-python command and run
+        if try_libplacebo:
+            info_cmd: Any = cast(Any, ffmpeg).input(path, ss=str(ss_time)).output(
+                test_image_path,
+                vframes=1,
+                pix_fmt='rgb24'
+            ).global_args('-y', '-loglevel', 'quiet', '-init_hw_device', 'vulkan', '-filter_complex', ','.join(filter_parts), '-map', output_map)
+        else:
+            vf_chain = f"zscale=transfer=linear,tonemap=tonemap={algorithm}:desat={desat},zscale=transfer=bt709,format=rgb24"
+            info_cmd: Any = cast(Any, ffmpeg).input(path, ss=str(ss_time)).output(
+                test_image_path,
+                vframes=1,
+                vf=vf_chain,
+                pix_fmt='rgb24'
+            ).global_args('-y', '-loglevel', 'quiet')
 
         if loglevel == 'verbose' or (meta and meta.get('debug', False)):
-            console.print(f"[cyan]libplacebo compatibility test command: {' '.join(cmd)}[/cyan]")
-
-        # Add timeout to prevent hanging
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
+            console.print(f"[cyan]libplacebo compatibility test command: {' '.join(info_cmd.compile())}[/cyan]")
 
         try:
-            _stdout, _stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=30.0  # 30 second timeout for compatibility test
-            )
-            return process.returncode == 0
-        except asyncio.TimeoutError:
-            console.print("[red]libplacebo compatibility test timed out after 30 seconds[/red]")
-            process.kill()
-            with contextlib.suppress(Exception):
-                await process.wait()
+            retcode, _stdout, _stderr = await run_ffmpeg(info_cmd)
+            return retcode == 0
+        except Exception:
             return False
 
     if not meta['is_disc']:
@@ -1825,35 +1756,20 @@ async def libplacebo_warmup(path: str, meta: dict[str, Any], loglevel: str) -> N
     if not os.path.exists(path):
         return
     # Use a very small seek (0.1s) to avoid issues at pts 0
-    cmd = [
-        "ffmpeg",
-        "-ss", "0.1",
-        "-i", path,
-        "-map", "0:v:0",
-        "-an", "-sn",
-        "-init_hw_device", "vulkan",
-        "-vf", "libplacebo=tonemapping=hable:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv,format=rgb24",
-        "-vframes", "1",
-        "-f", "null",
-        "-",
-        "-loglevel", "error"
-    ]
+    info_cmd: Any = cast(Any, ffmpeg).input(path, ss='0.1').output(
+        '-',
+        format='null',
+        vframes=1
+    ).global_args('-map', '0:v:0', '-an', '-sn', '-init_hw_device', 'vulkan', '-vf', "libplacebo=tonemapping=hable:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv,format=rgb24", '-loglevel', 'error')
     if loglevel == 'verbose' or meta.get('debug', False):
         console.print("[cyan]Running libplacebo warm-up...[/cyan]", emoji=False)
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
         try:
-            await asyncio.wait_for(proc.communicate(), timeout=40)
-        except asyncio.TimeoutError:
-            proc.kill()
-            with contextlib.suppress(Exception):
-                await proc.wait()
+            await run_ffmpeg(info_cmd)
+        except Exception:
+            # Warmup failures are non-fatal; continue
             if loglevel == 'verbose' or meta.get('debug', False):
-                console.print("[yellow]libplacebo warm-up timed out (continuing anyway)[/yellow]")
+                console.print("[yellow]libplacebo warm-up failed or errored (continuing anyway)[/yellow]")
         meta['_libplacebo_warmed'] = True
     except Exception as e:
         if loglevel == 'verbose' or meta.get('debug', False):

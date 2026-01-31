@@ -1,5 +1,4 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# import discord
 import re
 from typing import Any, Optional
 
@@ -135,17 +134,15 @@ class LCD(UNIT3D):
     ) -> dict[str, str]:
         _ = (resolution, reverse, mapping_only)
         resolution_id = {
-            # '8640p':'10',
-            '4320p': '1',
-            '2160p': '2',
-            # '1440p' : '2',
-            '1080p': '3',
-            '1080i': '34',
-            '720p': '5',
-            '576p': '6',
-            '576i': '7',
-            '480p': '8',
-            '480i': '9',
-            'Other': '10',
-        }.get(meta['resolution'], '10')
+            "4320p": "1",
+            "2160p": "2",
+            "1080p": "3",
+            "1080i": "4",
+            "720p": "5",
+            "576p": "6",
+            "576i": "7",
+            "480p": "8",
+            "480i": "9",
+            "Other": "10",
+        }.get(meta["resolution"], "10")
         return {'resolution_id': resolution_id}

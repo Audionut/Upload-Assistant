@@ -8,7 +8,9 @@ import os
 import platform
 import re
 import shutil
+import signal
 import sys
+import threading
 import time
 import traceback
 from collections.abc import Iterable, Mapping
@@ -54,12 +56,66 @@ from src.uploadscreens import UploadScreensManager
 cli_ui.setup(color='always', title="Upload Assistant")
 base_dir = os.path.abspath(os.path.dirname(__file__))
 
+# Global state for shutdown handling (reset via _reset_shutdown_state() for in-process runs)
+_shutdown_requested = False
+_is_webui_mode = False
+_webui_server = None  # Reference to waitress server for graceful shutdown
+_shutdown_event = threading.Event()  # Event for coordinating graceful shutdown
+
+
+def _reset_shutdown_state() -> None:
+    """Reset global shutdown state for clean in-process runs from web UI."""
+    global _shutdown_requested, _is_webui_mode, _webui_server
+    _shutdown_requested = False
+    _is_webui_mode = False
+    _webui_server = None
+    _shutdown_event.clear()
+
+
+def _handle_shutdown_signal(signum: int, _frame: Any) -> None:
+    """Handle SIGTERM/SIGINT for graceful shutdown."""
+    global _shutdown_requested, _webui_server
+    signal_name = 'SIGTERM' if signum == signal.SIGTERM else 'SIGINT'
+
+    if not _shutdown_requested:
+        _shutdown_requested = True
+        console.print(f"\n[yellow]Received {signal_name}, shutting down gracefully...[/yellow]")
+
+        # Signal shutdown event (for webui thread coordination)
+        _shutdown_event.set()
+
+        # If running webui, close the server (main thread handles exit via event)
+        if _webui_server is not None:
+            with contextlib.suppress(Exception):
+                _webui_server.close()
+        else:
+            # Non-webui mode: raise to let asyncio handle task cancellation
+            raise KeyboardInterrupt
+    else:
+        # Second signal = force exit
+        console.print("[red]Forced exit[/red]")
+        sys.exit(1)
+
+
+# Early check for -webui to create config if needed
+_config_path = os.path.join(base_dir, "data", "config.py")
+_example_config_path = os.path.join(base_dir, "data", "example-config.py")
+# Detect -webui or --webui forms, including --webui=host:port
+if any(
+    (arg == "-webui" or arg == "--webui" or arg.startswith("-webui=") or arg.startswith("--webui="))
+    for arg in sys.argv
+) and not os.path.exists(_config_path) and os.path.exists(_example_config_path):
+    console.print("No config.py found. Creating default config from example-config.py...", markup=False)
+    try:
+        shutil.copy2(_example_config_path, _config_path)
+        console.print("Default config created successfully!", markup=False)
+    except Exception as e:
+        console.print(f"Failed to create default config: {e}", markup=False)
+        console.print("Continuing without config file...", markup=False)
+
 Meta: TypeAlias = dict[str, Any]
 
 from src.prep import Prep  # noqa: E402
-
-_base_dir = os.path.abspath(os.path.dirname(__file__))
-_config_path = os.path.join(_base_dir, "data", "config.py")
 
 # Enable ANSI colors on Windows
 _use_colors = True
@@ -83,18 +139,18 @@ def _print_config_error(error_type: str, message: str, lineno: Optional[int] = N
                         text: Optional[str] = None, offset: Optional[int] = None,
                         suggestion: Optional[str] = None) -> None:
     """Print a formatted config error message."""
-    print(f"{_RED}{error_type} in config.py:{_RESET}")
+    console.print(f"{_RED}{error_type} in config.py:{_RESET}", markup=False)
     if lineno:
-        print(f"{_RED}  Line {lineno}: {message}{_RESET}")
+        console.print(f"{_RED}  Line {lineno}: {message}{_RESET}", markup=False)
         if text:
-            print(f"{_YELLOW}    {text.rstrip()}{_RESET}")
+            console.print(f"{_YELLOW}    {text.rstrip()}{_RESET}", markup=False)
             if offset:
-                print(f"{_YELLOW}    {' ' * (offset - 1)}^{_RESET}")
+                console.print(f"{_YELLOW}    {' ' * (offset - 1)}^{_RESET}", markup=False)
     else:
-        print(f"{_RED}  {message}{_RESET}")
+        console.print(f"{_RED}  {message}{_RESET}", markup=False)
     if suggestion:
-        print(f"{_GREEN}  Suggestion: {suggestion}{_RESET}")
-    print(f"\n{_RED}Reference: https://github.com/Audionut/Upload-Assistant/blob/master/data/example-config.py{_RESET}")
+        console.print(f"{_GREEN}  Suggestion: {suggestion}{_RESET}", markup=False)
+    console.print(f"\n{_RED}Reference: https://github.com/Audionut/Upload-Assistant/blob/master/data/example-config.py{_RESET}", markup=False)
 
 
 config: dict[str, Any]
@@ -103,6 +159,18 @@ if os.path.exists(_config_path):
     try:
         from data.config import config as _imported_config  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
         config = cast(dict[str, Any], _imported_config)
+        parser = Args(config)
+        client = Clients(config)
+        name_manager = NameManager(config)
+        tracker_data_manager = TrackerDataManager(config)
+        nfo_link_manager = NfoLinkManager(config)
+        takescreens_manager = TakeScreensManager(config)
+        uploadscreens_manager = UploadScreensManager(config)
+        use_discord = False
+        discord_cfg_obj = config.get('DISCORD')
+        discord_config: Optional[dict[str, Any]] = cast(dict[str, Any], discord_cfg_obj) if isinstance(discord_cfg_obj, dict) else None
+        if discord_config is not None:
+            use_discord = bool(discord_config.get('use_discord', False))
     except SyntaxError as e:
         _print_config_error(
             "Syntax error",
@@ -111,10 +179,10 @@ if os.path.exists(_config_path):
             text=e.text,
             offset=e.offset
         )
-        print(f"\n{_RED}Common syntax issues:{_RESET}")
-        print(f"{_YELLOW}  - Missing comma between dictionary items{_RESET}")
-        print(f"{_YELLOW}  - Missing closing bracket, brace, quote or comma{_RESET}")
-        print(f"{_YELLOW}  - Unclosed string (missing quote at end){_RESET}")
+        console.print(f"\n{_RED}Common syntax issues:{_RESET}", markup=False)
+        console.print(f"{_YELLOW}  - Missing comma between dictionary items{_RESET}", markup=False)
+        console.print(f"{_YELLOW}  - Missing closing bracket, brace, quote or comma{_RESET}", markup=False)
+        console.print(f"{_YELLOW}  - Unclosed string (missing quote at end){_RESET}", markup=False)
         sys.exit(1)
     except NameError as e:
         # Extract line number from traceback
@@ -160,9 +228,9 @@ if os.path.exists(_config_path):
             lineno=lineno,
             text=text
         )
-        print(f"\n{_RED}Common type issues:{_RESET}")
-        print(f"{_YELLOW}  - Using unhashable type as dictionary key{_RESET}")
-        print(f"{_YELLOW}  - Incorrect data structure nesting{_RESET}")
+        console.print(f"\n{_RED}Common type issues:{_RESET}", markup=False)
+        console.print(f"{_YELLOW}  - Using unhashable type as dictionary key{_RESET}", markup=False)
+        console.print(f"{_YELLOW}  - Incorrect data structure nesting{_RESET}", markup=False)
         sys.exit(1)
     except Exception as e:
         import traceback
@@ -178,23 +246,10 @@ if os.path.exists(_config_path):
         )
         sys.exit(1)
 else:
-    print(f"{_RED}Configuration file 'config.py' not found.{_RESET}")
-    print(f"{_RED}Please ensure the file is located at: {_YELLOW}{_config_path}{_RESET}")
-    print(f"{_RED}Follow the setup instructions: https://github.com/Audionut/Upload-Assistant{_RESET}")
+    console.print(f"{_RED}Configuration file 'config.py' not found.{_RESET}", markup=False)
+    console.print(f"{_RED}Please ensure the file is located at: {_YELLOW}{_config_path}{_RESET}", markup=False)
+    console.print(f"{_RED}Follow the setup instructions: https://github.com/Audionut/Upload-Assistant{_RESET}", markup=False)
     sys.exit(1)
-
-client = Clients(config=config)
-parser = Args(config)
-name_manager = NameManager(config)
-tracker_data_manager = TrackerDataManager(config)
-nfo_link_manager = NfoLinkManager(config)
-takescreens_manager = TakeScreensManager(config)
-uploadscreens_manager = UploadScreensManager(config)
-use_discord = False
-discord_cfg_obj = config.get('DISCORD')
-discord_config: Optional[dict[str, Any]] = cast(dict[str, Any], discord_cfg_obj) if isinstance(discord_cfg_obj, dict) else None
-if discord_config is not None:
-    use_discord = bool(discord_config.get('use_discord', False))
 
 
 async def merge_meta(meta: Meta, saved_meta: Meta) -> dict[str, Any]:
@@ -1230,6 +1285,77 @@ async def do_the_thing(base_dir: str) -> None:
         else:
             meta, _help, _before_args = cast(tuple[Meta, Any, Any], parser.parse(list(' '.join(sys.argv[1:]).split(' ')), meta))
 
+        # Start web UI if requested (exclusive mode - doesn't continue with uploads)
+        if meta.get('webui'):
+            global _is_webui_mode, _webui_server
+            _is_webui_mode = True
+
+            webui_addr = meta['webui']
+            if ':' not in webui_addr:
+                console.print("[red]Invalid web UI address format. Use HOST:PORT[/red]")
+                sys.exit(1)
+
+            try:
+                host, port_str = webui_addr.split(':', 1)
+                port = int(port_str)
+            except ValueError:
+                console.print("[red]Invalid port number in web UI address[/red]")
+                sys.exit(1)
+
+            from waitress import create_server  # type: ignore[attr-defined]
+
+            from web_ui.server import app, set_runtime_browse_roots
+
+            # Set browse roots for web UI
+            browse_roots = os.environ.get('UA_BROWSE_ROOTS', '').strip()
+            if not browse_roots and paths:
+                # Use the paths from command line as browse roots
+                browse_roots = ','.join(paths)
+            elif not browse_roots and meta.get('path'):
+                # Use the path from command line as browse roots
+                path_value = meta['path']
+                browse_roots = ','.join(str(p) for p in cast(list[Any], path_value)) if isinstance(path_value, list) else str(path_value)
+            if not browse_roots:
+                raise SystemExit("No browse roots specified. Please set UA_BROWSE_ROOTS environment variable or provide explicit paths.")
+
+            set_runtime_browse_roots(browse_roots)
+
+            try:
+                _webui_server = create_server(app, host=host, port=port)
+
+                # Build clickable URL (use localhost for 0.0.0.0 display)
+                display_host = "localhost" if host == "0.0.0.0" else host  # nosec B104
+                url = f"http://{display_host}:{port}"
+
+                console.print()
+                console.print("[green]Web UI server started[/green]")
+                console.print(f"[bold]Access at: [link={url}]{url}[/link][/bold]")
+                console.print("[dim]Press Ctrl+C to stop the server[/dim]")
+                console.print()
+
+                # Run server in daemon thread so main thread can handle signals
+                server_thread = threading.Thread(target=_webui_server.run, daemon=True)
+                server_thread.start()
+
+                # Wait for shutdown signal or unexpected thread death
+                while not _shutdown_event.is_set():
+                    if not server_thread.is_alive():
+                        raise RuntimeError("Web UI server thread exited unexpectedly")
+                    _shutdown_event.wait(timeout=1.0)
+
+                # Close server gracefully
+                _webui_server.close()
+                server_thread.join(timeout=5.0)
+
+            except Exception as e:
+                if not _shutdown_requested:
+                    console.print(f"[red]Web UI server error: {e}[/red]")
+                    sys.exit(1)
+            finally:
+                console.print("[yellow]Web UI server stopped[/yellow]")
+
+            return  # Exit early when running web UI only
+
         # Validate config structure and types (after args parsed so we have trackers list)
         from src.configvalidator import group_warnings, validate_config
 
@@ -1266,7 +1392,7 @@ async def do_the_thing(base_dir: str) -> None:
                 console.print(f"[yellow]Config validation passed with {len(grouped)} warning(s):[/yellow]")
                 for warning_str in grouped:
                     console.print(f"[yellow]  ⚠ {warning_str}[/yellow]")
-                print()  # Blank line after warnings
+                console.print()  # Blank line after warnings
 
         if meta.get('cleanup'):
             if os.path.exists(f"{base_dir}/tmp"):
@@ -1865,18 +1991,30 @@ def check_python_version() -> None:
 
 
 async def main() -> None:
+    # Reset global state for clean in-process runs (when called from web UI)
+    _reset_shutdown_state()
+
     try:
         await do_the_thing(base_dir)
     except asyncio.CancelledError:
-        console.print("[red]Tasks were cancelled. Exiting safely.[/red]")
+        if not _shutdown_requested:
+            console.print("[red]Tasks were cancelled. Exiting safely.[/red]")
+    except EOFError:
+        pass  # Web UI cancellation - handled silently
     except KeyboardInterrupt:
-        console.print("[bold red]Program interrupted. Exiting safely.[/bold red]")
+        pass  # Handled by signal handler
     except Exception as e:
-        console.print(f"[bold red]Unexpected error: {e}[/bold red]")
+        if not _shutdown_requested:
+            console.print(f"[bold red]Unexpected error: {e}[/bold red]")
 
 
 if __name__ == "__main__":
     check_python_version()
+
+    # Register signal handlers only when run as main script (not when imported)
+    signal.signal(signal.SIGINT, _handle_shutdown_signal)
+    if hasattr(signal, 'SIGTERM'):
+        signal.signal(signal.SIGTERM, _handle_shutdown_signal)
 
     try:
         # Use ProactorEventLoop for Windows subprocess handling
@@ -1885,11 +2023,30 @@ if __name__ == "__main__":
 
         asyncio.run(main())  # Ensures proper loop handling and cleanup
     except (KeyboardInterrupt, SystemExit):
-        pass
+        if not _shutdown_requested:
+            console.print("\n[yellow]Shutting down...[/yellow]")
     except BaseException as e:
-        console.print(f"[bold red]Critical error: {e}[/bold red]")
+        if not _shutdown_requested:
+            console.print(f"[bold red]Critical error: {e}[/bold red]")
     finally:
-        asyncio.run(cleanup_manager.cleanup())
+        # Only run async cleanup for non-webui mode (webui doesn't use asyncio)
+        if not _is_webui_mode:
+            try:
+                # Run cleanup with timeout to prevent hanging on shutdown
+                async def _cleanup_with_timeout() -> None:
+                    try:
+                        await asyncio.wait_for(cleanup_manager.cleanup(), timeout=10.0)
+                    except asyncio.TimeoutError:
+                        console.print("[yellow]Cleanup timed out, forcing exit...[/yellow]")
+
+                asyncio.run(_cleanup_with_timeout())
+            except Exception:
+                pass  # Cleanup errors during shutdown are expected
+
         gc.collect()
         cleanup_manager.reset_terminal()
+
+        if _shutdown_requested or _is_webui_mode:
+            console.print("[green]Shutdown complete[/green]")
+
         sys.exit(0)

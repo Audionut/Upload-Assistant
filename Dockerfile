@@ -3,11 +3,10 @@ FROM python:3.12
 # Update the package list and install system dependencies including mono
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    ffmpeg \
     git \
     g++ \
     cargo \
-    mktorrent \
+    ffmpeg \
     mediainfo \
     rustc \
     mono-complete \
@@ -29,6 +28,7 @@ RUN pip install --upgrade pip==25.3 wheel==0.45.1 requests==2.32.5
 WORKDIR /Upload-Assistant
 
 # Copy DVD MediaInfo download script and run it
+# This downloads specialized MediaInfo binaries for DVD processing with language support
 COPY bin/get_dvd_mediainfo_docker.py bin/
 RUN python3 bin/get_dvd_mediainfo_docker.py
 
@@ -42,12 +42,11 @@ COPY . .
 # Download only the required mkbrr binary (requires full repo for src imports)
 RUN python3 -c "from bin.get_mkbrr import MkbrrBinaryManager; MkbrrBinaryManager.download_mkbrr_for_docker()"
 
-# Ensure mkbrr is executable
-RUN find bin/mkbrr -type f -name "mkbrr" -exec chmod +x {} \;
-# Enable non-root access while still letting Upload-Assistant tighten mkbrr permissions at runtime
-RUN chown -R 1000:1000 /Upload-Assistant/bin/mkbrr
+# Ensure binaries are executable
+RUN find bin/mkbrr -name "mkbrr" -print0 | xargs -0 chmod +x
 
-# Enable non-root access for DVD MediaInfo binary
+# Enable non-root access while still letting Upload-Assistant tighten permissions at runtime
+RUN chown -R 1000:1000 /Upload-Assistant/bin/mkbrr
 RUN chown -R 1000:1000 /Upload-Assistant/bin/MI
 
 # Create tmp directory with appropriate permissions

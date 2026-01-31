@@ -39,7 +39,13 @@ class OTW(UNIT3D):
     async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
         combined_genres_value = meta.get('combined_genres', [])
-        combined_genres = cast(list[str], combined_genres_value) if isinstance(combined_genres_value, list) else [str(combined_genres_value)]
+        # Normalize combined_genres to a list of individual genre strings.
+        if isinstance(combined_genres_value, list):
+            combined_genres = cast(list[str], combined_genres_value)
+        else:
+            # Split comma-separated strings and strip whitespace
+            combined_genres = [g.strip() for g in str(combined_genres_value).split(',') if g.strip()]
+
         if not any(genre in combined_genres for genre in ['Animation', 'Family']):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]Genre does not match Animation or Family for OTW.')

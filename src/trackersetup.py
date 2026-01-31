@@ -116,7 +116,7 @@ class TRACKER_SETUP:
         removed_trackers = set(trackers) - set(valid_trackers)
 
         for tracker in removed_trackers:
-            print(f"Warning: Tracker '{tracker}' is not recognized and will be ignored.")
+            console.print(f"Warning: Tracker '{tracker}' is not recognized and will be ignored.", markup=False)
 
         return valid_trackers
 
@@ -1303,7 +1303,7 @@ class TRACKER_SETUP:
                     console.print("[yellow]Prompt cancelled; no additional message provided.[/yellow]")
                     user_message = None
                 message = message + ": " + user_message if user_message else message + ": No additional message provided by user"
-                message = message + ": https://lst.gg/torrents/" + str(trumping_torrent_id)
+            message = message + ": https://lst.gg/torrents/" + str(trumping_torrent_id)
             payload: JsonDict = {
                 'message': str(message)
             }

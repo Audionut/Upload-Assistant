@@ -162,6 +162,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
 
             client = self.config['TORRENT_CLIENTS'][client_name]
             torrent_client = client['torrent_client']
+            await self.inject_delay(meta, tracker, client_name)
 
             # Must pass client_name to remote_path_map
             local_path, remote_path = await self.remote_path_map(meta, client_name)
@@ -183,6 +184,45 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
             except Exception as e:
                 console.print(f"[bold red]Failed to add torrent to {client_name}: {e}")
         return
+
+    async def inject_delay(self, meta: dict[str, Any], tracker: str, client_name: str) -> None:
+        """
+        Applies an optional delay before injecting a torrent into the client.
+
+        The delay can be configured either per tracker or globally in the default settings.
+        When both are defined, the tracker-specific value takes precedence over the client setting.
+
+        This mechanism exists to handle cases where a tracker requires a short amount
+        of time to register the uploaded torrent hash. Injecting the torrent too early
+        may cause connectivity issues, such as failing to discover peers even though
+        they are already available.
+
+        By waiting before injection, this function helps ensure proper tracker
+        synchronization and more reliable peer discovery.
+        """
+        tracker_cfg = self.config.get("TRACKERS", {}).get(tracker, {})
+        has_tracker_delay = isinstance(tracker_cfg, dict) and "inject_delay" in tracker_cfg
+        inject_delay = tracker_cfg.get("inject_delay") if has_tracker_delay else self.config["DEFAULT"].get("inject_delay", 0)
+        if inject_delay is not None:
+            try:
+                inject_delay = int(inject_delay)
+            except (ValueError, TypeError):
+                if has_tracker_delay:
+                    console.print(f"{tracker}: [bold red]CONFIG ERROR: 'inject_delay' must be an integer")
+                else:
+                    console.print("[bold red]CONFIG ERROR: 'inject_delay' must be an integer")
+                inject_delay = 0
+
+            if inject_delay < 0:
+                console.print("[bold red]CONFIG ERROR: 'inject_delay' must be >= 0")
+                inject_delay = 0
+            if inject_delay > 0:
+                if meta["debug"] or inject_delay > 5:
+                    if has_tracker_delay:
+                        console.print(f"{tracker}: [cyan]Waiting {inject_delay} seconds before adding to client '{client_name}'[/cyan]")
+                    else:
+                        console.print(f"[cyan]Waiting {inject_delay} seconds before adding to client '{client_name}'[/cyan]")
+                await asyncio.sleep(inject_delay)
 
     async def find_existing_torrent(self, meta: dict[str, Any]) -> Optional[str]:
         # Determine piece size preferences
@@ -507,7 +547,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                 return valid, torrent_path
 
             # Reuse if disc and basename matches or --keep-folder was specified
-            if meta.get('is_disc', '') != '' or (meta.get('keep_folder') and meta.get('isdir')):
+            if (meta.get('is_disc') and meta.get('is_disc') != '') or (meta.get('keep_folder', False) and meta.get('isdir', False)):
                 torrent_name = torrent.metainfo['info']['name']
                 if meta_uuid != torrent_name and meta['debug']:
                     console.print("Modified file structure, skipping hash")

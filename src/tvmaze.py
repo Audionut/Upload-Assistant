@@ -168,9 +168,9 @@ class TvmazeManager:
                     return None
                 return None
         except httpx.HTTPStatusError as e:
-            print(f"[ERROR] TVmaze API error: {e.response.status_code}")
+            console.print(f"[ERROR] TVmaze API error: {e.response.status_code}", markup=False)
         except httpx.RequestError as e:
-            print(f"[ERROR] Network error while accessing TVmaze: {e}")
+            console.print(f"[ERROR] Network error while accessing TVmaze: {e}", markup=False)
         return cast(dict[str, Any], {})
 
     async def get_tvmaze_episode_data(
