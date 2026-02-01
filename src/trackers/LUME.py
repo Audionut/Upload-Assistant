@@ -1,5 +1,4 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import re
 from typing import Any
 
 import cli_ui
@@ -25,17 +24,17 @@ class LUME(UNIT3D):
         self.torrent_url = f"{self.base_url}/torrents/"
         self.banned_groups: list[str] = []
 
-    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+    def get_additional_data(self, meta: Meta) -> dict[str, Any]:
         data = {
-            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
+            'mod_queue_opt_in': self.get_flag(meta, 'modq'),
         }
 
         return data
 
-    async def get_additional_checks(self, meta: Meta) -> bool:
+    def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
 
-        if meta['is_disc'] not in ["BDMV", "DVD"] and not await self.common.check_language_requirements(
+        if meta['is_disc'] not in ["BDMV", "DVD"] and not self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True, original_language=True
         ):
             return False
@@ -43,9 +42,7 @@ class LUME(UNIT3D):
         if meta['is_disc'] not in ["BDMV", "DVD"] and meta['resolution'] not in ['8640p', '4320p', '2160p', '1440p', '1080p', '1080i', '720p']:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print(f"[bold red]{self.tracker} only allows SD releases when the content does not have a higher resolution release.[/bold red]")
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
+                if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     return False
             else:
                 return False
@@ -54,16 +51,13 @@ class LUME(UNIT3D):
             console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
             return False
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                console.print(f"[bold red]Pornography is not allowed at {self.tracker}.[/bold red]")
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
-                    return False
-            else:
-                return False
+        if not self.common.prompt_adult_content(
+            meta,
+            tracker_name=self.tracker,
+            block_message=f"[bold red]Pornography is not allowed at {self.tracker}.[/bold red]",
+            prompt_text="Do you want to upload anyway?",
+            default=False,
+        ):
+            return False
 
         return should_continue

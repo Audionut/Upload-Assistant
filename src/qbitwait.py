@@ -84,7 +84,7 @@ class Wait:
 
     async def wait_for_completion(self, infohash: str, check_interval: int = 3) -> None:
         if not self.proxy_url and not self.qbt_client:
-            raise Exception("[ERROR] qBittorrent is not configured.")
+            raise RuntimeError("[ERROR] qBittorrent is not configured.")
 
         console.print(f"Waiting for torrent {infohash} to complete...", markup=False)
 
@@ -243,7 +243,7 @@ class Wait:
                                 except (TypeError, ValueError):
                                     progress_float = 0.0
                             else:
-                                raise Exception("No torrents found in response")
+                                raise LookupError("No torrents found in response")
                         else:
                             console.print(f"[bold red]Failed to get torrent info via proxy: {response.status}")
                             return False
@@ -253,7 +253,7 @@ class Wait:
                         return False
                     torrent_list_raw = cast(Any, self.qbt_client.torrents_info(hashes=torrent_hash))
                     if torrent_list_raw is None:
-                        raise Exception("qBittorrent returned no torrent info")
+                        raise RuntimeError("qBittorrent returned no torrent info")
                     if isinstance(torrent_list_raw, list):
                         torrent_candidates = cast(list[Any], torrent_list_raw)
                     elif isinstance(torrent_list_raw, tuple):
@@ -261,7 +261,7 @@ class Wait:
                     else:
                         torrent_candidates = [torrent_list_raw]
                     if not torrent_candidates:
-                        raise Exception("No torrents found in TorrentInfoList")
+                        raise LookupError("No torrents found in TorrentInfoList")
                     torrent = torrent_candidates[0]
                     state = getattr(torrent, 'state', None)
                     progress = getattr(torrent, 'progress', 0)
@@ -295,7 +295,7 @@ class Wait:
                             final_state = torrent.get('state')
                             final_progress = torrent.get('progress', 0)
                         else:
-                            raise Exception("No torrents found in response")
+                            raise LookupError("No torrents found in response")
                     else:
                         console.print(f"[bold red]Failed to get final torrent info via proxy: {response.status}")
                         return False
@@ -305,7 +305,7 @@ class Wait:
                     return False
                 torrent_list_raw = cast(Any, self.qbt_client.torrents_info(hashes=torrent_hash))
                 if torrent_list_raw is None:
-                    raise Exception("qBittorrent returned no torrent info")
+                    raise RuntimeError("qBittorrent returned no torrent info")
                 if isinstance(torrent_list_raw, list):
                     torrent_candidates = cast(list[Any], torrent_list_raw)
                 elif isinstance(torrent_list_raw, tuple):
@@ -313,7 +313,7 @@ class Wait:
                 else:
                     torrent_candidates = [torrent_list_raw]
                 if not torrent_candidates:
-                    raise Exception("No torrents found in TorrentInfoList")
+                    raise LookupError("No torrents found in TorrentInfoList")
                 torrent = torrent_candidates[0]
                 final_state = getattr(torrent, 'state', 'unknown')
                 final_progress = float(getattr(torrent, 'progress', 0) or 0)

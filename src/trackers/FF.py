@@ -181,7 +181,7 @@ class FF:
         desc_parts: list[str] = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header())
+        desc_parts.append(builder.get_custom_header())
 
         # Logo
         logo_resize_url = meta.get('tmdb_logo', '')
@@ -189,7 +189,7 @@ class FF:
             desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/center]")
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta)
+        title, episode_image, episode_overview = builder.get_tv_info(meta)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
 
@@ -199,19 +199,19 @@ class FF:
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # File information
-        mediainfo = await builder.get_mediainfo_section(meta)
+        mediainfo = builder.get_mediainfo_section(meta)
         if mediainfo:
             desc_parts.append(f'[pre]{mediainfo}[/pre]')
 
-        bdinfo = await builder.get_bdinfo_section(meta)
+        bdinfo = builder.get_bdinfo_section(meta)
         if bdinfo:
             desc_parts.append(f'[pre]{bdinfo}[/pre]')
 
         # User description
-        desc_parts.append(await builder.get_user_description(meta))
+        desc_parts.append(builder.get_user_description(meta))
 
         # Disc menus screenshots header
-        desc_parts.append(await builder.menu_screenshot_header(meta))
+        desc_parts.append(builder.menu_screenshot_header(meta))
 
         # Disc menus screenshots
         menu_images = meta.get("menu_images", [])
@@ -230,12 +230,12 @@ class FF:
                 desc_parts.append(f"[center]{menu_screenshots_block}[/center]")
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        desc_parts.append(builder.get_tonemapped_header(meta))
 
         # Screenshot Header
         images = meta.get("image_list", [])
         if isinstance(images, list) and images:
-            desc_parts.append(await builder.screenshot_header())
+            desc_parts.append(builder.screenshot_header())
 
             # Screenshots
             screenshots_block = ""
@@ -473,7 +473,7 @@ class FF:
         else:
             return 'x264'
 
-    async def edit_name(self, meta: dict[str, Any]) -> str:
+    def edit_name(self, meta: dict[str, Any]) -> str:
         if meta.get("scene", False):
             if meta.get("scene_name", ""):
                 ff_name = str(meta.get("scene_name"))
@@ -642,7 +642,7 @@ class FF:
             return False
         self.session.cookies = cookie_jar
         data = await self.get_data(meta)
-        torrent_name = await self.edit_name(meta)
+        torrent_name = self.edit_name(meta)
         files: dict[str, Any] = {}
         poster = await self.get_poster(meta)
         if poster:

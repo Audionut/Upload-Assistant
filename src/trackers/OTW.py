@@ -34,10 +34,11 @@ class OTW(UNIT3D):
             'SicFoI', 'SPASM', 'STUTTERSHIT', 'Telly', 'TM', 'UPiNSMOKE', 'WAF', 'xRed',
             'XS', 'YELLO', 'YIFY', 'YTS', 'ZKBL', 'ZmN', '4f8c4100292', 'Azkars', 'Sync0rdi'
         ]
-        pass
 
-    async def get_additional_checks(self, meta: Meta) -> bool:
+    def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
+        keywords_value = meta.get('keywords', '')
+        keywords = ', '.join(cast(list[str], keywords_value)) if isinstance(keywords_value, list) else str(keywords_value)
         combined_genres_value = meta.get('combined_genres', [])
         # Normalize combined_genres to a list of individual genre strings.
         if isinstance(combined_genres_value, list):
@@ -49,35 +50,26 @@ class OTW(UNIT3D):
         if not any(genre in combined_genres for genre in ['Animation', 'Family']):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]Genre does not match Animation or Family for OTW.')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
+                if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     return False
             else:
                 return False
 
-        keywords_value = meta.get('keywords', '')
-        keywords = ', '.join(cast(list[str], keywords_value)) if isinstance(keywords_value, list) else str(keywords_value)
-        combined_genres_text = ', '.join(combined_genres)
-        genres = f"{keywords} {combined_genres_text}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy', 'hentai', 'adult animation', 'softcore']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                console.print('[bold red]Adult animation not allowed at OTW.')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
-                    return False
-            else:
-                return False
+        genres = f"{keywords} {combined_genres}"
+        if not self.common.prompt_adult_content(
+            meta,
+            tracker_name=self.tracker,
+            block_message='[bold red]Adult animation not allowed at OTW.',
+            prompt_text="Do you want to upload anyway?",
+            default=False,
+        ):
+            return False
 
         game_show_keywords = ['reality', 'game show', 'game-show', 'reality tv', 'reality television']
         if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in game_show_keywords):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]Reality / Game Show content not allowed at OTW.')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
+                if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     return False
             else:
                 return False
@@ -85,16 +77,14 @@ class OTW(UNIT3D):
         if meta['type'] not in ['WEBDL'] and not meta['is_disc'] and meta.get('tag', "") in ['CMRG', 'EVO', 'TERMiNAL', 'ViSION']:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at OTW[/bold red]')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
+                if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     return False
             else:
                 return False
 
         return should_continue
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,
@@ -123,18 +113,18 @@ class OTW(UNIT3D):
         type_value = str(type) if type is not None else meta_type
         return {'type_id': type_id.get(type_value, '0')}
 
-    async def get_name(self, meta: Meta) -> dict[str, str]:
+    def get_name(self, meta: Meta) -> dict[str, str]:
         otw_name = str(meta.get('name', ''))
         source = str(meta.get('source', ''))
         resolution = str(meta.get('resolution', ''))
         aka = str(meta.get('aka', ''))
-        type = str(meta.get('type', ''))
+        release_type = str(meta.get('type', ''))
         video_codec = str(meta.get('video_codec', ''))
         if aka:
             otw_name = otw_name.replace(f"{aka} ", '')
         is_disc = str(meta.get('is_disc', ''))
         audio = str(meta.get('audio', ''))
-        if is_disc == "DVD" or (type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
+        if is_disc == "DVD" or (release_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
             otw_name = otw_name.replace(source, f"{resolution} {source}", 1)
             otw_name = otw_name.replace(audio, f"{video_codec} {audio}", 1)
         if str(meta.get('category', '')) == "TV":
@@ -164,9 +154,9 @@ class OTW(UNIT3D):
 
         return {'name': otw_name}
 
-    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+    def get_additional_data(self, meta: Meta) -> dict[str, Any]:
         data: dict[str, Any] = {
-            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
+            'mod_queue_opt_in': self.get_flag(meta, 'modq'),
         }
 
         return data

@@ -77,7 +77,7 @@ class DiscInfoManager:
             download_dvd_mediainfo(meta['base_dir'], debug=meta['debug'])
             discs = cast(list[Disc], await cast(Any, self._parser).get_dvdinfo(discs, base_dir=meta['base_dir'], debug=meta['debug']))
         elif is_disc == "HDDVD":
-            discs = await self._parser.get_hddvd_info(discs, meta)
+            discs = self._parser.get_hddvd_info(discs, meta)
             async with aiofiles.open(
                 f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt",
                 "w",
@@ -89,7 +89,7 @@ class DiscInfoManager:
         discs = sorted(discs, key=lambda d: d['name'])
         return is_disc, videoloc, bdinfo, discs
 
-    async def get_dvd_size(self, discs: Iterable[Disc], manual_dvds: Any) -> str:
+    def get_dvd_size(self, discs: Iterable[Disc], manual_dvds: Any) -> str:
         sizes = [str(each['size']) for each in discs]
         dvd_sizes: list[str] = []
 

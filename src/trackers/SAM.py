@@ -22,9 +22,8 @@ class SAM(UNIT3D):
         self.torrent_url = f"{self.base_url}/torrents/"
         self.requests_url = f"{self.base_url}/api/requests/filter"
         self.banned_groups = []
-        pass
 
-    async def get_name(self, meta: Meta) -> dict[str, str]:
+    def get_name(self, meta: Meta) -> dict[str, str]:
         name = (
             str(meta.get("name", ""))
             .replace("DD+ ", "DDP")
@@ -98,14 +97,14 @@ class SAM(UNIT3D):
 
         return {"name": re.sub(r"\s{2,}", " ", sam_name)}
 
-    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+    def get_additional_data(self, meta: Meta) -> dict[str, Any]:
         data: dict[str, Any] = {
-            "mod_queue_opt_in": await self.get_flag(meta, "modq"),
+            "mod_queue_opt_in": self.get_flag(meta, "modq"),
         }
 
         return data
 
-    async def get_additional_checks(self, meta: Meta) -> bool:
-        return await self.common.check_language_requirements(
+    def get_additional_checks(self, meta: Meta) -> bool:
+        return self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=["portuguese", "português"], check_audio=True, check_subtitle=True
         )

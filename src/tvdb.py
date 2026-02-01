@@ -85,7 +85,6 @@ def _get_tvdb_or_warn() -> Optional[TVDB]:
 class tvdb_data:
     def __init__(self, config: Any) -> None:
         self.config = config
-        pass
 
     async def search_tvdb_series(
         self,
@@ -507,7 +506,7 @@ class tvdb_data:
         console.print(f"[yellow]No TVDB {result_type_str} found for any available external ID[/yellow]")
         return None
 
-    async def get_imdb_id_from_tvdb_episode_id(
+    def get_imdb_id_from_tvdb_episode_id(
         self,
         episode_id: Union[int, str],
         debug: bool = False,
@@ -545,7 +544,7 @@ class tvdb_data:
             console.print(f"[red]Error getting IMDB ID from TVDB episode ID: {e}[/red]")
             return None
 
-    async def get_specific_episode_data(
+    def get_specific_episode_data(
         self,
         data: Any,
         season: Optional[Union[int, str]],

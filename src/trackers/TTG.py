@@ -37,7 +37,7 @@ class TTG:
 
         self.cookie_validator = CookieValidator(config)
 
-    async def edit_name(self, meta: Meta) -> str:
+    def edit_name(self, meta: Meta) -> str:
         ttg_name = str(meta.get('name', ''))
 
         remove_list = ['Dubbed', 'Dual-Audio']
@@ -47,7 +47,7 @@ class TTG:
         ttg_name = ttg_name.replace('.', '{@}')
         return ttg_name
 
-    async def get_type_id(self, meta: Meta) -> int:
+    def get_type_id(self, meta: Meta) -> int:
         type_id = 0
         lang = str(meta.get('original_language', 'UNKNOWN')).upper()
         category = str(meta.get('category', ''))
@@ -117,7 +117,7 @@ class TTG:
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         await self.edit_desc(meta)
-        ttg_name = await self.edit_name(meta)
+        ttg_name = self.edit_name(meta)
 
         # FORM
         # type = category dropdown
@@ -165,7 +165,7 @@ class TTG:
             'team': '',
             'hr': 'no',
             'name': ttg_name,
-            'type': await self.get_type_id(meta),
+            'type': self.get_type_id(meta),
             'descr': ttg_desc.rstrip(),
 
             'anonymity': anon,
@@ -320,7 +320,6 @@ class TTG:
                 await asyncio.sleep(1)
                 console.print(response.text)
                 console.print(response.url)
-        return
 
     async def edit_desc(self, meta: Meta) -> None:
         async with aiofiles.open(

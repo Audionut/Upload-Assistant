@@ -430,7 +430,7 @@ class LanguagesManager:
             return None
 
 
-    async def has_english_language(self, languages: Union[list[str], str]) -> bool:
+    def has_english_language(self, languages: Union[list[str], str]) -> bool:
         """Check if any language in the list contains 'english'"""
         if isinstance(languages, str):
             languages = [languages]

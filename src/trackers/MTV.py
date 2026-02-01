@@ -33,6 +33,7 @@ class MTV:
 
     def __init__(self, config: Config) -> None:
         self.config: Config = config
+        self.common = COMMON(config)
         self.rehost_images_manager = RehostImagesManager(config)
         self.tracker = 'MTV'
         self.source_flag = 'MTV'
@@ -50,7 +51,6 @@ class MTV:
             'TM', 'ViSiON',  # ViSiON: Xvid releases -- re-encoded
             'WAF', 'x0r', 'XS', 'YIFY', 'ZKBL', 'ZmN'
         ]
-        pass
 
     # For loading
     async def async_json_loads(self, data_str: str) -> Any:
@@ -76,10 +76,8 @@ class MTV:
             img_host_index=1,
             approved_image_hosts=self.approved_image_hosts,
         )
-        return
 
     async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
-        common = COMMON(config=self.config)
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.json")
         base_piece_mb = int(meta.get('base_torrent_piece_mb', 0) or 0)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -99,22 +97,22 @@ class MTV:
                     await asyncio.sleep(cooldown)  # Small cooldown before rehashing
 
                 await TorrentCreator.create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
-                await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
+                await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
 
             else:
                 console.print("[red]Piece size is OVER 8M and skip_if_rehash enabled. Skipping upload.")
                 return
         else:
-            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+            await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
-        cat_id = await self.get_cat_id(meta)
-        resolution_id = await self.get_res_id(meta['resolution'])
-        source_id = await self.get_source_id(meta)
-        origin_id = await self.get_origin_id(meta)
-        des_tags = await self.get_tags(meta)
+        cat_id = self.get_cat_id(meta)
+        resolution_id = self.get_res_id(meta['resolution'])
+        source_id = self.get_source_id(meta)
+        origin_id = self.get_origin_id(meta)
+        des_tags = self.get_tags(meta)
         await self.edit_desc(meta)
-        group_desc = await self.edit_group_desc(meta)
-        mtv_name = await self.edit_name(meta)
+        group_desc = self.edit_group_desc(meta)
+        mtv_name = self.edit_name(meta)
 
         anon = 0 if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False) else 1
 
@@ -176,7 +174,7 @@ class MTV:
                     try:
                         if "torrents.php" in str(response.url):
                             meta['tracker_status'][self.tracker]['status_message'] = response.url
-                            await common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), str(response.url))
+                            await self.common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.config['TRACKERS'][self.tracker].get('announce_url'), str(response.url))
                             return True
                         elif 'https://www.morethantv.me/upload.php' in str(response.url):
                             meta['tracker_status'][self.tracker]['status_message'] = "data error - Still on upload page - upload may have failed"
@@ -213,7 +211,7 @@ class MTV:
                 debug_data['auth'] = f"{auth_value[:3]}..." if len(auth_value) > 3 else '***'
             console.print(debug_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return True  # Debug mode - simulated success
 
     async def edit_desc(self, meta: Meta) -> None:
@@ -262,9 +260,8 @@ class MTV:
             if base != "":
                 await desc.write(f"\n\n[spoiler=Notes]{base}[/spoiler]")
 
-        return
 
-    async def edit_group_desc(self, meta: Meta) -> str:
+    def edit_group_desc(self, meta: Meta) -> str:
         description = ""
         if meta['imdb_id'] != 0:
             description += str(meta.get('imdb_info', {}).get('imdb_url', ''))
@@ -279,7 +276,7 @@ class MTV:
 
         return description
 
-    async def edit_name(self, meta: Meta) -> str:
+    def edit_name(self, meta: Meta) -> str:
         KNOWN_EXTENSIONS = {".mkv", ".mp4", ".avi", ".ts"}
         prefix_index = -1
         if meta['scene'] is True:
@@ -343,7 +340,7 @@ class MTV:
         mtv_name = mtv_name.replace(' ', '.').replace('..', '.')
         return mtv_name
 
-    async def get_res_id(self, resolution: str) -> str:
+    def get_res_id(self, resolution: str) -> str:
         resolution_id = {
             '8640p': '0',
             '4320p': '4000',
@@ -359,7 +356,7 @@ class MTV:
         }.get(resolution, '10')
         return resolution_id
 
-    async def get_cat_id(self, meta: Meta) -> Optional[int]:
+    def get_cat_id(self, meta: Meta) -> Optional[int]:
         if meta['category'] == "MOVIE":
             if meta['sd'] == 1:
                 return 2
@@ -377,7 +374,7 @@ class MTV:
                 else:
                     return 3
 
-    async def get_source_id(self, meta: Meta) -> str:
+    def get_source_id(self, meta: Meta) -> str:
         if meta['is_disc'] == 'DVD':
             return '1'
         elif meta['is_disc'] == 'BDMV' or meta['type'] == "REMUX":
@@ -400,7 +397,7 @@ class MTV:
             }.get(meta['type'], '0')
         return type_id
 
-    async def get_origin_id(self, meta: Meta) -> str:
+    def get_origin_id(self, meta: Meta) -> str:
         if meta['personalrelease']:
             return '4'
         elif meta['scene']:
@@ -409,7 +406,7 @@ class MTV:
         else:
             return '3'
 
-    async def get_tags(self, meta: Meta) -> str:
+    def get_tags(self, meta: Meta) -> str:
         tags: list[str] = []
         # Genres
         # MTV takes issue with some of the pulled TMDB tags, and I'm not hand checking and attempting
@@ -664,9 +661,7 @@ class MTV:
         if meta['type'] not in ['WEBDL'] and meta.get('tag', "") and any(x in meta['tag'] for x in ['EVO']):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at {self.tracker}[/bold red]')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
+                if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     meta['skipping'] = "MTV"
                     return []
             else:
@@ -681,50 +676,28 @@ class MTV:
             if meta['anime'] and meta.get('tag', "") and not any(x in meta['tag'] for x in allowed_anime):
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     console.print(f'[bold red]Only 4K HEVC anime releases from {meta["tag"]} are allowed at {self.tracker}[/bold red]')
-                    if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                        pass
-                    else:
+                    if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                         meta['skipping'] = "MTV"
                         return []
             else:
                 console.print(f'[bold red]Only 4K HEVC releases are allowed at {self.tracker}[/bold red]')
                 if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
-                    if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                        pass
-                    else:
+                    if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                         meta['skipping'] = "MTV"
                         return []
                 else:
                     meta['skipping'] = "MTV"
                     return []
 
-        disallowed_keywords = {'xxx', 'erotic', 'porn'}
-        disallowed_genres = {'adult', 'erotica'}
-        keywords_value = meta.get('keywords', [])
-        keywords_list: list[str] = []
-        if isinstance(keywords_value, list):
-            keywords_list.extend([str(item) for item in cast(list[Any], keywords_value)])
-        else:
-            keywords_list.append(str(keywords_value))
-        genres_value = meta.get('combined_genres', [])
-        genres_list: list[str] = []
-        if isinstance(genres_value, list):
-            genres_list.extend([str(item) for item in cast(list[Any], genres_value)])
-        else:
-            genres_list.append(str(genres_value))
-        keywords_lower = {k.lower() for k in keywords_list if k}
-        genres_lower = {g.lower() for g in genres_list if g}
-        if any(keyword in keywords_lower for keyword in disallowed_keywords) or any(genre in genres_lower for genre in disallowed_genres):
-            if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
-                console.print(f'[bold red]Porn/xxx is not allowed at {self.tracker}.[/bold red]')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
-                    meta['skipping'] = "MTV"
-                    return []
-            else:
-                meta['skipping'] = "MTV"
-                return []
+        if not self.common.prompt_adult_content(
+            meta,
+            tracker_name=self.tracker,
+            block_message=f'[bold red]Porn/xxx is not allowed at {self.tracker}.',
+            prompt_text="Do you want to upload anyway?",
+            default=False,
+        ):
+            meta['skipping'] = "MTV"
+            return []
 
         dupes: list[dict[str, Any]] = []
 

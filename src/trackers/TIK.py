@@ -31,9 +31,8 @@ class TIK(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
-        pass
 
-    async def get_additional_checks(self, meta: Meta) -> bool:
+    def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
 
         if not meta.get('is_disc'):
@@ -42,14 +41,14 @@ class TIK(UNIT3D):
 
         return should_continue
 
-    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+    def get_additional_data(self, meta: Meta) -> dict[str, Any]:
         data: dict[str, Any] = {
-            'modq': await self.get_flag(meta, 'modq'),
+            'modq': self.get_flag(meta, 'modq'),
         }
 
         return data
 
-    async def get_name(self, meta: Meta) -> dict[str, str]:
+    def get_name(self, meta: Meta) -> dict[str, str]:
         disctype = meta.get('disctype', None)
         filelist = cast(list[Any], meta.get('filelist', []))
         basename = os.path.basename(next(iter(filelist), str(meta.get('path', ''))))
@@ -64,13 +63,7 @@ class TIK(UNIT3D):
             repack = f"[{repack}]"
         three_d = str(meta.get('3D', ""))
         three_d_tag = f"[{three_d}]" if three_d else ""
-        tag = str(meta.get('tag', "")).replace("-", "- ")
-        if tag == "":
-            tag = "- NOGRP"
         source = str(meta.get('source', ""))
-        hdr = str(meta.get('hdr', ""))
-        if not hdr.strip():
-            hdr = "SDR"
         video_codec = str(meta.get('video_codec', ""))
         video_encode = str(meta.get('video_encode', "")).replace(".", "")
         if 'x265' in basename:
@@ -79,7 +72,7 @@ class TIK(UNIT3D):
         search_year = str(meta.get('search_year', ""))
         if not str(search_year).strip():
             search_year = year
-        meta['category_id'] = (await self.get_category_id(meta))['category_id']
+        meta['category_id'] = self.get_category_id(meta)['category_id']
 
         name = ""
         alt_title_part = f" {alt_title}" if alt_title else ""
@@ -96,7 +89,7 @@ class TIK(UNIT3D):
 
         return {'name': name}
 
-    async def get_category_id(
+    def get_category_id(
         self,
         meta: Meta,
         category: Optional[str] = None,
@@ -136,7 +129,7 @@ class TIK(UNIT3D):
 
         return {'category_id': category_id}
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,
@@ -172,7 +165,7 @@ class TIK(UNIT3D):
 
         return {'type_id': type_id}
 
-    async def get_resolution_id(
+    def get_resolution_id(
         self,
         meta: Meta,
         resolution: Optional[str] = None,

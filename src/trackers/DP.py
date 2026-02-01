@@ -7,7 +7,6 @@ import cli_ui
 
 from src.console import console
 from src.get_desc import DescriptionBuilder
-from src.languages import languages_manager
 from src.tmdb import TmdbManager
 from src.trackers.UNIT3D import UNIT3D
 
@@ -33,22 +32,19 @@ class DP(UNIT3D):
             'TGALAXY', 'TGx', 'TORRENTGALAXY', 'ToVaR', 'TSP', 'TSPxL', 'ViSION', 'VXT',
             'WAF', 'WKS', 'X0r', 'YIFY', 'YTS',
         ]
-        pass
 
-    async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
+    def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         should_continue = True
         if meta.get('keep_folder'):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print(f'[bold red]{self.tracker} does not allow single files in a folder.')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
+                if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     return False
             else:
                 return False
 
         nordic_languages = ['danish', 'swedish', 'norwegian', 'icelandic', 'finnish', 'english']
-        if not await self.common.check_language_requirements(
+        if not self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=nordic_languages, check_audio=True, check_subtitle=True
         ):
             return False
@@ -93,18 +89,15 @@ class DP(UNIT3D):
 
         return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta)}
 
-    async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
+    def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         data = {
-            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
+            'mod_queue_opt_in': self.get_flag(meta, 'modq'),
         }
 
         return data
 
-    async def get_audio(self, meta: dict[str, Any]) -> str:
+    def get_audio(self, meta: dict[str, Any]) -> str:
         languages_result = "SKIPPED"
-
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
         audio_languages = meta.get('audio_languages')
         if isinstance(audio_languages, list):
@@ -120,7 +113,7 @@ class DP(UNIT3D):
 
         return f'{languages_result}'
 
-    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         dp_name = str(meta.get('name', ''))
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
         tag_lower = meta['tag'].lower()
@@ -129,7 +122,7 @@ class DP(UNIT3D):
                 dp_name = re.sub(f"-{invalid_tag}", "", dp_name, flags=re.IGNORECASE)
             dp_name = f"{dp_name}-NOGROUP"
 
-        audio = await self.get_audio(meta)
+        audio = self.get_audio(meta)
         if audio and audio != "SKIPPED" and "Dual-Audio" in dp_name:
             dp_name = dp_name.replace("Dual-Audio", audio)
 

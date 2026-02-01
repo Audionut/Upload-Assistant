@@ -76,7 +76,7 @@ class PTER:
         cookies = await common.parseCookieFile(cookiefile)
         imdb_id = int(meta.get('imdb_id', 0) or 0)
         imdb = f"tt{meta.get('imdb', '')}" if imdb_id != 0 else ""
-        source = await self.get_type_medium_id(meta)
+        source = self.get_type_medium_id(meta)
         search_url = f"https://pterclub.com/torrents.php?search={imdb}&incldead=0&search_mode=0&source{source}=1"
 
         try:
@@ -106,7 +106,7 @@ class PTER:
 
         return dupes
 
-    async def get_type_category_id(self, meta: Meta) -> str:
+    def get_type_category_id(self, meta: Meta) -> str:
         cat_id = "EXIT"
         category = str(meta.get('category', ''))
 
@@ -127,7 +127,7 @@ class PTER:
 
         return cat_id
 
-    async def get_area_id(self, meta: Meta) -> int:
+    def get_area_id(self, meta: Meta) -> int:
 
         area_id = 8
         area_map = {  # To do
@@ -144,7 +144,7 @@ class PTER:
                 return area_map[area]
         return area_id
 
-    async def get_type_medium_id(self, meta: Meta) -> str:
+    def get_type_medium_id(self, meta: Meta) -> str:
         medium_id = "EXIT"
         # 1 = UHD Discs
         if meta.get('is_disc', '') in ("BDMV", "HD DVD"):
@@ -249,7 +249,7 @@ class PTER:
             cookies = {name: str(data.get('value', '')) for name, data in raw_cookies.items()}
             async with httpx.AsyncClient(cookies=cookies, timeout=30.0, follow_redirects=True) as client:
                 response = await client.get("https://s3.pterclub.com")
-                logged_in = await self.validate_login(response)
+                logged_in = self.validate_login(response)
                 if logged_in is True:
                     auth_token = self._extract_auth_token(response.text, r'auth_token.*?"(\w+)"')
                     return auth_token
@@ -272,7 +272,7 @@ class PTER:
 
         return auth_token
 
-    async def validate_login(self, response: httpx.Response) -> bool:
+    def validate_login(self, response: httpx.Response) -> bool:
         loggedIn = response.text.find('''<a href="https://s3.pterclub.com/logout/?''') != -1
         return loggedIn
 
@@ -317,7 +317,7 @@ class PTER:
                     if not req.is_success:
                         if message in ('重复上传', 'Duplicated upload'):
                             continue
-                        raise Exception(f'HTTP {req.status_code}, reason: {message}')
+                        raise RuntimeError(f'HTTP {req.status_code}, reason: {message}')
 
                     if not isinstance(res, dict):
                         raise ValueError('Unexpected response payload while uploading to Pterimg.')
@@ -336,7 +336,7 @@ class PTER:
                     image_list.append(image_dict)
         return image_list
 
-    async def edit_name(self, meta: Meta) -> str:
+    def edit_name(self, meta: Meta) -> str:
         pter_name = str(meta.get('name', ''))
 
         remove_list = ['Dubbed', 'Dual-Audio']
@@ -351,7 +351,7 @@ class PTER:
 
         return pter_name
 
-    async def is_zhongzi(self, meta: Meta) -> Optional[str]:
+    def is_zhongzi(self, meta: Meta) -> Optional[str]:
         if meta.get('is_disc', '') != 'BDMV':
             mi = cast(dict[str, Any], meta.get('mediainfo', {}))
             media = cast(dict[str, Any], mi.get('media', {}))
@@ -380,7 +380,7 @@ class PTER:
 
         anon = 'no' if meta.get('anon') == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False) else 'yes'
 
-        pter_name = await self.edit_name(meta)
+        pter_name = self.edit_name(meta)
 
         mi_path = (
             f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
@@ -421,11 +421,11 @@ class PTER:
             "name": pter_name,
             "small_descr": small_descr,
             "descr": pter_desc,
-            "type": await self.get_type_category_id(meta),
-            "source_sel": await self.get_type_medium_id(meta),
-            "team_sel": await self.get_area_id(meta),
+            "type": self.get_type_category_id(meta),
+            "source_sel": self.get_type_medium_id(meta),
+            "team_sel": self.get_area_id(meta),
             "uplver": anon,
-            "zhongzi": await self.is_zhongzi(meta)
+            "zhongzi": self.is_zhongzi(meta)
         }
         if meta.get('personalrelease', False) is True:
             data["pr"] = "yes"

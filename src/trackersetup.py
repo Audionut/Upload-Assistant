@@ -266,7 +266,7 @@ class TRACKER_SETUP:
                     name = m.group(1)
                 else:
                     # Fallback: strip common regex anchors and escapes
-                    name = re.sub(r"[\\\^\$\\b]", "", val)
+                    name = re.sub(r"[\\\^\$b]", "", val)
                     name = re.sub(r"[\(\)\[\]\|]", "", name).strip()
 
                 if not name:

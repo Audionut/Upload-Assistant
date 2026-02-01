@@ -374,7 +374,7 @@ class UploadHelper:
             return True
         else:
             if not meta.get('emby', False):
-                await self.get_missing(meta)
+                self.get_missing(meta)
                 ring_the_bell = "\a" if bool(self.default_config.get("sfx_on_prompt", True)) else ""
                 if ring_the_bell:
                     console.print(ring_the_bell)
@@ -488,7 +488,7 @@ class UploadHelper:
 
         return confirm
 
-    async def get_missing(self, meta: Meta) -> None:
+    def get_missing(self, meta: Meta) -> None:
         info_notes = {
             'edition': 'Special Edition/Release',
             'description': "Please include Remux/Encode Notes if possible",

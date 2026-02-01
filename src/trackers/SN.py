@@ -22,9 +22,8 @@ class SN:
         self.forum_link = 'https://swarmazon.club/php/forum.php?forum_page=2-swarmazon-rules'
         self.search_url = 'https://swarmazon.club/api/search.php'
         self.banned_groups = [""]
-        pass
 
-    async def get_type_id(self, type: str) -> str:
+    def get_type_id(self, type: str) -> str:
         type_id = {
             'BluRay': '3',
             'Web': '1',
@@ -64,7 +63,7 @@ class SN:
         if category == 'MOVIE':
             cat_id = '1'
             # sub cat is source so using source to get
-            sub_cat_id = await self.get_type_id(str(meta.get('source', '')))
+            sub_cat_id = self.get_type_id(str(meta.get('source', '')))
         elif category == 'TV':
             cat_id = '2'
             sub_cat_id = '6' if bool(meta.get('tv_pack')) else '5'
@@ -189,7 +188,6 @@ class SN:
             encoding='utf-8',
         ) as desc:
             await desc.write("".join(parts))
-        return
 
     async def search_existing(self, meta: Meta, _disctype: str) -> list[str]:
         dupes: list[str] = []

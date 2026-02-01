@@ -217,7 +217,7 @@ class DescriptionBuilder:
         self.tracker_config: dict[str, Any] = cast(dict[str, Any], tracker_cfg) if isinstance(tracker_cfg, dict) else {}
         self.parser = self.common.parser
 
-    async def get_custom_header(self) -> str:
+    def get_custom_header(self) -> str:
         """Returns a custom header if configured."""
         try:
             custom_description_header = str(self.tracker_config.get(
@@ -230,7 +230,7 @@ class DescriptionBuilder:
 
         return ""
 
-    async def get_tonemapped_header(self, meta: dict[str, Any]) -> str:
+    def get_tonemapped_header(self, meta: dict[str, Any]) -> str:
         try:
             tonemapped_description_header = str(self.tracker_config.get(
                 "tonemapped_header", self.config["DEFAULT"].get("tonemapped_header", "")
@@ -241,7 +241,7 @@ class DescriptionBuilder:
             console.print(f"[yellow]Warning: Error setting tonemapped header: {str(e)}[/yellow]")
         return ""
 
-    async def get_logo_section(self, meta: dict[str, Any]) -> tuple[str, str]:
+    def get_logo_section(self, meta: dict[str, Any]) -> tuple[str, str]:
         """Returns the logo URL and size if applicable."""
         logo, logo_size = "", ""
         try:
@@ -260,7 +260,7 @@ class DescriptionBuilder:
 
         return logo, logo_size
 
-    async def get_tv_info(self, meta: dict[str, Any], resize: bool = False) -> tuple[str, str, str]:
+    def get_tv_info(self, meta: dict[str, Any], resize: bool = False) -> tuple[str, str, str]:
         title: str = ""
         image: str = ""
         overview: str = ""
@@ -389,7 +389,7 @@ class DescriptionBuilder:
 
         return ""
 
-    async def get_bdinfo_section(self, meta: dict[str, Any]) -> str:
+    def get_bdinfo_section(self, meta: dict[str, Any]) -> str:
         """Returns the bdinfo section if applicable."""
         try:
             if meta.get("is_disc") == "BDMV":
@@ -405,7 +405,7 @@ class DescriptionBuilder:
 
         return ""
 
-    async def screenshot_header(self) -> str:
+    def screenshot_header(self) -> str:
         """Returns the screenshot header if applicable."""
         try:
             screenheader = self.tracker_config.get(
@@ -418,7 +418,7 @@ class DescriptionBuilder:
 
         return ""
 
-    async def menu_screenshot_header(self, meta: dict[str, Any]) -> str:
+    def menu_screenshot_header(self, meta: dict[str, Any]) -> str:
         """Returns the screenshot header for menus if applicable."""
         try:
             if meta.get("is_disc", "") and meta.get('menu_images', []):
@@ -432,7 +432,7 @@ class DescriptionBuilder:
 
         return ""
 
-    async def get_user_description(self, meta: dict[str, Any]) -> str:
+    def get_user_description(self, meta: dict[str, Any]) -> str:
         """Returns the user-provided description (file or link)"""
         try:
             description_file_content = str(meta.get("description_file_content", "")).strip()
@@ -448,7 +448,7 @@ class DescriptionBuilder:
 
         return ""
 
-    async def get_custom_signature(self) -> str:
+    def get_custom_signature(self) -> str:
         custom_signature: str = ""
         try:
             raw_signature = self.tracker_config.get(
@@ -473,7 +473,7 @@ class DescriptionBuilder:
                 release_url = meta["release_url"]
 
             covers = False
-            if await self.common.path_exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/covers.json"):
+            if self.common.path_exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/covers.json"):
                 covers = True
 
             if (
@@ -537,7 +537,7 @@ class DescriptionBuilder:
 
         # Custom Header
         if not desc_header:
-            desc_header = await self.get_custom_header()
+            desc_header = self.get_custom_header()
         if desc_header:
             desc_parts.append(desc_header + "\n")
 
@@ -560,7 +560,7 @@ class DescriptionBuilder:
             console.print(f"[yellow]Warning: Error processing language: {str(e)}[/yellow]")
 
         # Logo
-        logo, logo_size = await self.get_logo_section(meta)
+        logo, logo_size = self.get_logo_section(meta)
         if logo and logo_size:
             desc_parts.append(f"[center][img={logo_size}]{logo}[/img][/center]\n")
 
@@ -572,7 +572,7 @@ class DescriptionBuilder:
             desc_parts.append(f"[center]{cover_images}[/center]\n")
 
         # TV
-        title, _, episode_overview = await self.get_tv_info(meta)
+        title, _, episode_overview = self.get_tv_info(meta)
         if episode_overview:
             if self.tracker == "HUNO":
                 if title:
@@ -610,13 +610,13 @@ class DescriptionBuilder:
             desc_parts.append(meta_description)
 
         # Description from file/pastebin link
-        desc_parts.append(await self.get_user_description(meta))
+        desc_parts.append(self.get_user_description(meta))
 
         # Menu Screenshots
-        desc_parts.append(await self.menu_section(meta))
+        desc_parts.append(self.menu_section(meta))
 
         # Tonemapped Header
-        desc_parts.append(await self.get_tonemapped_header(meta))
+        desc_parts.append(self.get_tonemapped_header(meta))
 
         # Discs and Screenshots
         discs_and_screenshots = await self._handle_discs_and_screenshots(
@@ -625,7 +625,7 @@ class DescriptionBuilder:
         desc_parts.append(discs_and_screenshots)
 
         # Custom Signature
-        desc_parts.append(await self.get_custom_signature())
+        desc_parts.append(self.get_custom_signature())
 
         # UA Signature
         if not signature:
@@ -739,7 +739,7 @@ class DescriptionBuilder:
 
     async def _handle_discs_and_screenshots(self, meta: dict[str, Any], approved_image_hosts: list[str], images: list[dict[str, str]], multi_screens: int) -> str:
         try:
-            screenheader = await self.screenshot_header()
+            screenheader = self.screenshot_header()
         except Exception:
             screenheader = None
 
@@ -751,7 +751,7 @@ class DescriptionBuilder:
         thumb_size = int(self.config["DEFAULT"].get("pack_thumb_size", "300"))
         process_limit = int(self.config["DEFAULT"].get("processLimit", 10))
 
-        screensPerRow = await self.get_screens_per_row()
+        screensPerRow = self.get_screens_per_row()
 
         desc_parts: list[str] = []
 
@@ -1330,7 +1330,7 @@ class DescriptionBuilder:
 
         return description
 
-    async def get_screens_per_row(self) -> int:
+    def get_screens_per_row(self) -> int:
         try:
             # If screensPerRow is set, use that to determine how many screenshots should be on each row. Otherwise, use 2 as default
             screensPerRow = int(self.config["DEFAULT"].get("screens_per_row", 2))
@@ -1343,11 +1343,11 @@ class DescriptionBuilder:
             screensPerRow = 2
         return screensPerRow
 
-    async def menu_section(self, meta: dict[str, Any]) -> str:
+    def menu_section(self, meta: dict[str, Any]) -> str:
         menu_image_section = ""
         try:
-            disc_menu_header = await self.menu_screenshot_header(meta)
-            screensPerRow = await self.get_screens_per_row()
+            disc_menu_header = self.menu_screenshot_header(meta)
+            screensPerRow = self.get_screens_per_row()
             if meta.get("is_disc"):
                 menu_parts: list[str] = []
                 menu_images = meta.get("menu_images", [])

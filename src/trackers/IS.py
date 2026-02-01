@@ -49,25 +49,25 @@ class IS:
         desc_parts: list[str] = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header())
+        desc_parts.append(builder.get_custom_header())
 
         # TV
-        title, _, episode_overview = await builder.get_tv_info(meta, resize=True)
+        title, _, episode_overview = builder.get_tv_info(meta, resize=True)
         if episode_overview:
             desc_parts.append(f'Title: {title}')
             desc_parts.append(f'Overview: {episode_overview}')
 
         # File information
-        mediainfo = await builder.get_mediainfo_section(meta)
+        mediainfo = builder.get_mediainfo_section(meta)
         if mediainfo:
             desc_parts.append(f'{mediainfo}')
 
-        bdinfo = await builder.get_bdinfo_section(meta)
+        bdinfo = builder.get_bdinfo_section(meta)
         if bdinfo:
             desc_parts.append(f'{bdinfo}')
 
         # User description
-        desc_parts.append(await builder.get_user_description(meta))
+        desc_parts.append(builder.get_user_description(meta))
 
         # Screenshots
         images_value = meta.get('image_list', [])
@@ -90,7 +90,7 @@ class IS:
             desc_parts.append('Screenshots:\n' + screenshots_block)
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        desc_parts.append(builder.get_tonemapped_header(meta))
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 
@@ -161,7 +161,7 @@ class IS:
 
         return dupes
 
-    async def get_category_id(self, meta: Meta) -> int:
+    def get_category_id(self, meta: Meta) -> int:
         resolution = str(meta.get('resolution', ''))
         category = str(meta.get('category', ''))
         genres = str(meta.get('genres', '')).lower()
@@ -286,11 +286,11 @@ class IS:
             is_name = is_name.replace(' ', '.')
         return is_name
 
-    async def get_data(self, meta: Meta) -> dict[str, Any]:
+    def get_data(self, meta: Meta) -> dict[str, Any]:
         data: dict[str, Any] = {
             'UseNFOasDescr': 'no',
             'message': f"{meta.get('overview', '')}\n\n[youtube]{meta.get('youtube', '')}[/youtube]",
-            'category': await self.get_category_id(meta),
+            'category': self.get_category_id(meta),
             'subject': self.get_name(meta),
             'nothingtopost': "1",
             't_image_url': meta.get('poster'),
@@ -318,7 +318,7 @@ class IS:
         self.session.cookies.clear()
         if cookies is not None:
             self.session.cookies.update(cookies)
-        data = await self.get_data(meta)
+        data = self.get_data(meta)
         files = await self.get_nfo(meta)
 
         is_uploaded = await self.cookie_auth_uploader.handle_upload(

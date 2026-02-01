@@ -38,9 +38,8 @@ class UNIT3D:
         # Default URLs - should be overridden by subclasses
         self.search_url = ""
         self.upload_url = ""
-        pass
 
-    async def get_additional_checks(self, _meta: dict[str, Any]) -> bool:
+    def get_additional_checks(self, _meta: dict[str, Any]) -> bool:
         should_continue = True
         return should_continue
 
@@ -59,7 +58,7 @@ class UNIT3D:
             meta["skipping"] = f"{self.tracker}"
             return dupes
 
-        should_continue = await self.get_additional_checks(meta)
+        should_continue = self.get_additional_checks(meta)
         if not should_continue:
             meta["skipping"] = f"{self.tracker}"
             return dupes
@@ -69,7 +68,7 @@ class UNIT3D:
             "accept": "application/json",
         }
 
-        category_id = str((await self.get_category_id(meta))['category_id'])
+        category_id = str((self.get_category_id(meta))['category_id'])
         params_dict: dict[str, str] = {
             "tmdbId": str(meta['tmdb']),
             "categories[]": category_id,
@@ -77,7 +76,7 @@ class UNIT3D:
             "perPage": "100",
         }
         params_list: Optional[ParamsList] = None
-        resolutions = await self.get_resolution_id(meta)
+        resolutions = self.get_resolution_id(meta)
         resolution_id = str(resolutions["resolution_id"])
         if resolution_id in ["3", "4"]:
             # Convert params to list of tuples to support duplicate keys
@@ -88,7 +87,7 @@ class UNIT3D:
             params_dict["resolutions[]"] = resolution_id
 
         if self.tracker not in ["SP", "STC"]:
-            type_id = str((await self.get_type_id(meta))["type_id"])
+            type_id = str((self.get_type_id(meta))["type_id"])
             if params_list is not None:
                 params_list.append(("types[]", type_id))
             else:
@@ -184,7 +183,7 @@ class UNIT3D:
 
         return dupes
 
-    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         return {"name": meta["name"]}
 
     async def get_description(self, meta: dict[str, Any]) -> dict[str, str]:
@@ -214,7 +213,7 @@ class UNIT3D:
             bdinfo = ""
         return {"bdinfo": bdinfo}
 
-    async def get_category_id(
+    def get_category_id(
         self, meta: dict[str, Any], category: str = "", reverse: bool = False, mapping_only: bool = False
     ) -> dict[str, str]:
         category_id = {
@@ -232,7 +231,7 @@ class UNIT3D:
             resolved_id = category_id.get(meta_category, "0")
             return {"category_id": resolved_id}
 
-    async def get_type_id(
+    def get_type_id(
         self, meta: dict[str, Any], type: str = "", reverse: bool = False, mapping_only: bool = False
     ) -> dict[str, str]:
         type_id = {
@@ -255,7 +254,7 @@ class UNIT3D:
             resolved_id = type_id.get(meta_type, "0")
             return {"type_id": resolved_id}
 
-    async def get_resolution_id(
+    def get_resolution_id(
         self, meta: dict[str, Any], resolution: str = "", reverse: bool = False, mapping_only: bool = False
     ) -> dict[str, str]:
         resolution_id = {
@@ -282,23 +281,23 @@ class UNIT3D:
             resolved_id = resolution_id.get(meta_resolution, "10")
             return {"resolution_id": resolved_id}
 
-    async def get_anonymous(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_anonymous(self, meta: dict[str, Any]) -> dict[str, str]:
         anonymous = "0" if meta["anon"] == 0 and not self.tracker_config.get("anon", False) else "1"
         return {"anonymous": anonymous}
 
-    async def get_additional_data(self, _meta: dict[str, Any]) -> dict[str, str]:
+    def get_additional_data(self, _meta: dict[str, Any]) -> dict[str, str]:
         # Used to add additional data if needed
         """
         data = {
-            'modq': await self.get_flag(meta, 'modq'),
-            'draft': await self.get_flag(meta, 'draft'),
+            'modq': self.get_flag(meta, 'modq'),
+            'draft': self.get_flag(meta, 'draft'),
         }
         """
         data: dict[str, str] = {}
 
         return data
 
-    async def get_flag(self, meta: dict[str, Any], flag_name: str) -> str:
+    def get_flag(self, meta: dict[str, Any], flag_name: str) -> str:
         config_flag = self.tracker_config.get(flag_name)
         if meta.get(flag_name, False):
             return "1"
@@ -308,50 +307,50 @@ class UNIT3D:
             else:
                 return "0"
 
-    async def get_distributor_id(self, meta: dict[str, Any]) -> dict[str, str]:
-        distributor_id = await self.common.unit3d_distributor_ids(meta.get("distributor", ""))
+    def get_distributor_id(self, meta: dict[str, Any]) -> dict[str, str]:
+        distributor_id = self.common.unit3d_distributor_ids(meta.get("distributor", ""))
         if distributor_id:
             return {"distributor_id": distributor_id}
 
         return {}
 
-    async def get_region_id(self, meta: dict[str, Any]) -> dict[str, str]:
-        region_id = await self.common.unit3d_region_ids(meta.get("region", ""))
+    def get_region_id(self, meta: dict[str, Any]) -> dict[str, str]:
+        region_id = self.common.unit3d_region_ids(meta.get("region", ""))
         if region_id:
             return {"region_id": region_id}
 
         return {}
 
-    async def get_tmdb(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_tmdb(self, meta: dict[str, Any]) -> dict[str, str]:
         return {"tmdb": f"{meta['tmdb']}"}
 
-    async def get_imdb(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_imdb(self, meta: dict[str, Any]) -> dict[str, str]:
         return {"imdb": f"{meta['imdb']}"}
 
-    async def get_tvdb(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_tvdb(self, meta: dict[str, Any]) -> dict[str, str]:
         tvdb = meta.get("tvdb_id", 0) if meta["category"] == "TV" else 0
         return {"tvdb": f"{tvdb}"}
 
-    async def get_mal(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_mal(self, meta: dict[str, Any]) -> dict[str, str]:
         return {"mal": f"{meta['mal_id']}"}
 
-    async def get_igdb(self, _meta: dict[str, Any]) -> dict[str, str]:
+    def get_igdb(self, _meta: dict[str, Any]) -> dict[str, str]:
         return {"igdb": "0"}
 
-    async def get_stream(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_stream(self, meta: dict[str, Any]) -> dict[str, str]:
         return {"stream": f"{meta['stream']}"}
 
-    async def get_sd(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_sd(self, meta: dict[str, Any]) -> dict[str, str]:
         return {"sd": f"{meta['sd']}"}
 
-    async def get_keywords(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_keywords(self, meta: dict[str, Any]) -> dict[str, str]:
         return {"keywords": meta.get("keywords", "")}
 
-    async def get_personal_release(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_personal_release(self, meta: dict[str, Any]) -> dict[str, str]:
         personal_release = "1" if meta.get("personalrelease", False) else "0"
         return {"personal_release": personal_release}
 
-    async def get_internal(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_internal(self, meta: dict[str, Any]) -> dict[str, str]:
         internal = "0"
         if self.tracker_config.get("internal", False) is True and meta["tag"] != "" and (
             meta["tag"][1:] in self.tracker_config.get("internal_groups", [])
@@ -360,70 +359,71 @@ class UNIT3D:
 
         return {"internal": internal}
 
-    async def get_season_number(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_season_number(self, meta: dict[str, Any]) -> dict[str, str]:
         data = {}
         if meta.get("category") == "TV":
             data = {"season_number": f"{meta.get('season_int', '0')}"}
 
         return data
 
-    async def get_episode_number(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_episode_number(self, meta: dict[str, Any]) -> dict[str, str]:
         data = {}
         if meta.get("category") == "TV":
             data = {"episode_number": f"{meta.get('episode_int', '0')}"}
 
         return data
 
-    async def get_featured(self, _meta: dict[str, Any]) -> dict[str, str]:
+    def get_featured(self, _meta: dict[str, Any]) -> dict[str, str]:
         return {"featured": "0"}
 
-    async def get_free(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_free(self, meta: dict[str, Any]) -> dict[str, str]:
         free = "0"
         if meta.get("freeleech", 0) != 0:
             free = f"{meta.get('freeleech', '0')}"
 
         return {"free": free}
 
-    async def get_doubleup(self, _meta: dict[str, Any]) -> dict[str, str]:
+    def get_doubleup(self, _meta: dict[str, Any]) -> dict[str, str]:
         return {"doubleup": "0"}
 
-    async def get_sticky(self, _meta: dict[str, Any]) -> dict[str, str]:
+    def get_sticky(self, _meta: dict[str, Any]) -> dict[str, str]:
         return {"sticky": "0"}
 
     async def get_data(self, meta: dict[str, Any]) -> dict[str, str]:
-        results = await asyncio.gather(
-            self.get_name(meta),
+        description, mediainfo, bdinfo = await asyncio.gather(
             self.get_description(meta),
             self.get_mediainfo(meta),
             self.get_bdinfo(meta),
-            self.get_category_id(meta),
-            self.get_type_id(meta),
-            self.get_resolution_id(meta),
-            self.get_tmdb(meta),
-            self.get_imdb(meta),
-            self.get_tvdb(meta),
-            self.get_mal(meta),
-            self.get_igdb(meta),
-            self.get_anonymous(meta),
-            self.get_stream(meta),
-            self.get_sd(meta),
-            self.get_keywords(meta),
-            self.get_personal_release(meta),
-            self.get_internal(meta),
-            self.get_season_number(meta),
-            self.get_episode_number(meta),
-            self.get_featured(meta),
-            self.get_free(meta),
-            self.get_doubleup(meta),
-            self.get_sticky(meta),
-            self.get_additional_data(meta),
-            self.get_region_id(meta),
-            self.get_distributor_id(meta),
         )
 
         merged: dict[str, str] = {}
-        for r in results:
-            merged.update(r)
+        merged.update(self.get_name(meta))
+        merged.update(description)
+        merged.update(mediainfo)
+        merged.update(bdinfo)
+        merged.update(self.get_category_id(meta))
+        merged.update(self.get_type_id(meta))
+        merged.update(self.get_resolution_id(meta))
+        merged.update(self.get_tmdb(meta))
+        merged.update(self.get_imdb(meta))
+        merged.update(self.get_tvdb(meta))
+        merged.update(self.get_mal(meta))
+        merged.update(self.get_igdb(meta))
+        merged.update(self.get_anonymous(meta))
+        merged.update(self.get_stream(meta))
+        merged.update(self.get_sd(meta))
+        merged.update(self.get_keywords(meta))
+        merged.update(self.get_personal_release(meta))
+        merged.update(self.get_internal(meta))
+        merged.update(self.get_season_number(meta))
+        merged.update(self.get_episode_number(meta))
+        merged.update(self.get_featured(meta))
+        merged.update(self.get_free(meta))
+        merged.update(self.get_doubleup(meta))
+        merged.update(self.get_sticky(meta))
+        merged.update(self.get_additional_data(meta))
+        merged.update(self.get_region_id(meta))
+        merged.update(self.get_distributor_id(meta))
 
         # Handle exclusive flag centrally for all UNIT3D trackers
         # Priority: meta['exclusive'] > tracker config > default (not set)
@@ -489,9 +489,9 @@ class UNIT3D:
                             return False
 
                         meta["tracker_status"][self.tracker]["status_message"] = (
-                            await self.process_response_data(response_data)
+                            self.process_response_data(response_data)
                         )
-                        torrent_id = await self.get_torrent_id(response_data)
+                        torrent_id = self.get_torrent_id(response_data)
 
                         meta["tracker_status"][self.tracker]["torrent_id"] = torrent_id
                         await self.common.download_tracker_torrent(
@@ -580,7 +580,7 @@ class UNIT3D:
 
         return False
 
-    async def get_torrent_id(self, response_data: dict[str, Any]) -> str:
+    def get_torrent_id(self, response_data: dict[str, Any]) -> str:
         """Matches /12345.abcde and returns 12345"""
         torrent_id = ""
         try:
@@ -591,7 +591,7 @@ class UNIT3D:
             console.print("Could not parse torrent_id from response data.")
         return torrent_id
 
-    async def process_response_data(self, response_data: dict[str, Any]) -> str:
+    def process_response_data(self, response_data: dict[str, Any]) -> str:
         """Returns the success message from the response data as a string."""
         if response_data.get("success") is True:
             return str(response_data.get("message", "Upload successful"))

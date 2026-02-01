@@ -5,6 +5,7 @@ import re
 from typing import Any, Optional, cast
 
 import aiofiles
+import cli_ui
 import httpx
 from bs4 import BeautifulSoup
 from pymediainfo import MediaInfo
@@ -44,7 +45,7 @@ class PTS:
             success_text='forums.php',
         )
 
-    async def get_type(self, meta: Meta) -> Optional[str]:
+    def get_type(self, meta: Meta) -> Optional[str]:
         if meta.get('anime'):
             return '407'
 
@@ -145,13 +146,13 @@ class PTS:
         return desc
 
     async def search_existing(self, meta: Meta, _disctype: str) -> Optional[list[str]]:
-        mandarin = await self.common.check_language_requirements(
+        mandarin = self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=['mandarin', 'chinese'], check_audio=True, check_subtitle=True
         )
 
         if not mandarin:
-            user_input = input("Warning: Mandarin subtitle or audio not found. Do you want to continue with the upload anyway? (y/n): ")
-            if user_input.lower() not in ['y', 'yes']:
+            user_input_raw = cli_ui.ask_string("Warning: Mandarin subtitle or audio not found. Do you want to continue with the upload anyway?", default="n")
+            if (user_input_raw or "").lower() not in ['y', 'yes']:
                 console.print("Upload cancelled by user.", markup=False)
                 meta['skipping'] = f"{self.tracker}"
                 return
@@ -191,7 +192,7 @@ class PTS:
             'name': meta['name'],
             'url': str(meta.get('imdb_info', {}).get('imdb_url', '')),
             'descr': await self.generate_description(meta),
-            'type': await self.get_type(meta),
+            'type': self.get_type(meta),
         }
 
         return data

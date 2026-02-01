@@ -83,7 +83,7 @@ class SonarrManager:
                             console.print(f"[blue]Sonarr Response Data:[/blue] {data}")
 
                         # Check if we got valid data by trying to extract show info
-                        show_data: ShowInfo = await self.extract_show_data(data)
+                        show_data: ShowInfo = self.extract_show_data(data)
 
                         if show_data and (show_data.get("tvdb_id") or show_data.get("imdb_id") or show_data.get("tmdb_id")):
                             console.print(f"[green]Found valid show data from Sonarr instance {instance_index if instance_index > 0 else 'default'}[/green]")
@@ -105,7 +105,7 @@ class SonarrManager:
         console.print("[yellow]No Sonarr instance returned valid show data.[/yellow]")
         return None
 
-    async def extract_show_data(self, sonarr_data: Any) -> ShowInfo:
+    def extract_show_data(self, sonarr_data: Any) -> ShowInfo:
         if not sonarr_data:
             return {
                 "tvdb_id": None,

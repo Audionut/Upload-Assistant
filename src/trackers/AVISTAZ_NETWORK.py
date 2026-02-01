@@ -685,16 +685,16 @@ class AZTrackerBase:
         desc_parts: list[str] = []
 
         # TV stuff
-        title, _, episode_overview = await builder.get_tv_info(meta)
+        title, _, episode_overview = builder.get_tv_info(meta)
         if episode_overview:
             desc_parts.append(f'[b]Episode:[/b] {title}')
             desc_parts.append(f'[b]Overview:[/b] {episode_overview}')
 
         # User description
-        desc_parts.append(await builder.get_user_description(meta))
+        desc_parts.append(builder.get_user_description(meta))
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        desc_parts.append(builder.get_tonemapped_header(meta))
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 
@@ -710,7 +710,7 @@ class AZTrackerBase:
         if amount > 0:
             console.print(f'{self.tracker}: Deleted from description: {amount} NFO section.')
 
-        processed_desc, amount = re.subn(r'http[s]?://\S+|www\.\S+', '', processed_desc)
+        processed_desc, amount = re.subn(r'https?://\S+|www\.\S+', '', processed_desc)
         if amount > 0:
             console.print(f'{self.tracker}: Deleted from description: {amount} link(s).')
 

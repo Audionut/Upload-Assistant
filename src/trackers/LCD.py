@@ -23,9 +23,8 @@ class LCD(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
-        pass
 
-    async def get_name(self, meta: Meta) -> dict[str, str]:
+    def get_name(self, meta: Meta) -> dict[str, str]:
         name_value = meta.get('name', '') if meta.get('is_disc', '') == 'BDMV' else meta.get('uuid', '')
         name = str(name_value)
 
@@ -70,12 +69,12 @@ class LCD(UNIT3D):
 
         return {'name': name}
 
-    async def get_region_id(self, meta: Meta) -> dict[str, str]:
+    def get_region_id(self, meta: Meta) -> dict[str, str]:
         if meta.get('region') == 'EUR':
             return {}
 
         region_value = str(meta.get('region', ''))
-        region_id = await self.common.unit3d_region_ids(region_value)
+        region_id = self.common.unit3d_region_ids(region_value)
         if region_id:
             return {'region_id': region_id}
 
@@ -90,7 +89,7 @@ class LCD(UNIT3D):
 
         return {'mediainfo': mediainfo}
 
-    async def get_category_id(
+    def get_category_id(
         self,
         meta: Meta,
         category: Optional[str] = None,
@@ -107,7 +106,7 @@ class LCD(UNIT3D):
             category_id = '6'
         return {'category_id': category_id}
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,
@@ -125,7 +124,7 @@ class LCD(UNIT3D):
         }.get(meta['type'], '0')
         return {'type_id': type_id}
 
-    async def get_resolution_id(
+    def get_resolution_id(
         self,
         meta: Meta,
         resolution: Optional[str] = None,

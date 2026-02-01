@@ -314,7 +314,6 @@ class RtorrentClientMixin:
             os.remove(f"{path_dir}/fr.torrent")
         if meta.get('debug', False):
             console.print(f"[cyan]Path: {path}")
-        return
 
     def add_fast_resume(self, metainfo: dict[str, Any], datapath: str, _torrent: Torrent) -> dict[str, Any]:
         """ Add fast resume data to a metafile dict.

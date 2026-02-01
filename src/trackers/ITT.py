@@ -24,9 +24,8 @@ class ITT(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
-        pass
 
-    async def get_type_name(self, meta: Meta) -> Optional[str]:
+    def get_type_name(self, meta: Meta) -> Optional[str]:
         type_name: Optional[str] = None
 
         uuid_string = meta.get('uuid', '')
@@ -50,7 +49,7 @@ class ITT(UNIT3D):
 
         return type_name
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,
@@ -79,13 +78,13 @@ class ITT(UNIT3D):
         if type is not None:
             return {'type_id': type_id_map.get(type, '0')}
 
-        resolved_type = await self.get_type_name(meta)
+        resolved_type = self.get_type_name(meta)
         type_id = type_id_map.get(resolved_type or '', '0')
 
         return {'type_id': type_id}
 
-    async def get_name(self, meta: Meta) -> dict[str, str]:
-        type_name = await self.get_type_name(meta) or ''
+    def get_name(self, meta: Meta) -> dict[str, str]:
+        type_name = self.get_type_name(meta) or ''
         title = str(meta.get('title', ""))
         year = str(meta.get('year', ""))
         if int(meta.get('manual_year') or 0) > 0:
@@ -122,7 +121,7 @@ class ITT(UNIT3D):
         if meta.get('no_year', False) is True:
             year = ''
 
-        dubs = await self.get_dubs(meta)
+        dubs = self.get_dubs(meta)
 
         """
         From https://itatorrents.xyz/wikis/20
@@ -176,12 +175,12 @@ class ITT(UNIT3D):
             dubs = " ".join(lang[:3].upper() for lang in audio_languages)
         return dubs
 
-    async def get_additional_checks(self, meta: Meta) -> bool:
+    def get_additional_checks(self, meta: Meta) -> bool:
         # From rules:
         # "Non sono ammessi film e serie tv che non comprendono il doppiaggio in italiano."
         # Translates to "Films and TV series that do not include Italian dubbing are not permitted."
         italian_languages = ["italian", "italiano"]
-        if not await self.common.check_language_requirements(
+        if not self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=italian_languages, check_audio=True
         ):
             console.print(

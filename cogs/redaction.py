@@ -139,7 +139,7 @@ class Redaction:
         tracker_status = meta.get('tracker_status')
         if isinstance(tracker_status, dict):
             typed_status = cast(dict[str, dict[str, Any]], tracker_status)
-            for tracker in list(typed_status):  # list() to avoid RuntimeError if deleting keys
+            for tracker in typed_status:  # list() to avoid RuntimeError if deleting keys
                 if 'status_message' in typed_status[tracker]:
                     del typed_status[tracker]['status_message']
 

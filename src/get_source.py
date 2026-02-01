@@ -18,7 +18,7 @@ def guessit_fn(value: str, options: Optional[dict[str, Any]] = None) -> dict[str
     return cast(dict[str, Any], guessit_module.guessit(value, options))
 
 
-async def get_source(type: str, video: str, path: str, is_disc: str, meta: dict[str, Any], folder_id: str, base_dir: str) -> tuple[str, str]:
+async def get_source(type_value: str, video: str, path: str, is_disc: str, meta: dict[str, Any], folder_id: str, base_dir: str) -> tuple[str, str]:
     source = "BluRay"
     system = ""
     mi: dict[str, Any] = {}
@@ -41,9 +41,9 @@ async def get_source(type: str, video: str, path: str, is_disc: str, meta: dict[
                 except Exception:
                     source = "BluRay"
         if source in ("Blu-ray", "Ultra HD Blu-ray", "BluRay", "BR") or is_disc == "BDMV":
-            if type == "DISC":
+            if type_value == "DISC":
                 source = "Blu-ray"
-            elif type in ('ENCODE', 'REMUX'):
+            elif type_value in ('ENCODE', 'REMUX'):
                 source = "BluRay"
         if is_disc == "DVD" or source in ("DVD", "dvd"):
             try:
@@ -52,7 +52,7 @@ async def get_source(type: str, video: str, path: str, is_disc: str, meta: dict[
                     if track['@type'] == "Video":
                         system = str(track.get('Standard', ''))
                 if system not in ("PAL", "NTSC"):
-                    raise WeirdSystem  # noqa: F405
+                    raise WeirdSystem
             except Exception:
                 try:
                     other = cast(list[str], guessit_fn(video).get('other', []))
@@ -74,17 +74,17 @@ async def get_source(type: str, video: str, path: str, is_disc: str, meta: dict[
                     except Exception:
                         system = ""
             finally:
-                if type == "REMUX":
+                if type_value == "REMUX":
                     system = f"{system} DVD".strip()
                 source = system
-        if source in ("Web", "WEB") and type == "ENCODE":
-            type = "WEBRIP"
+        if source in ("Web", "WEB") and type_value == "ENCODE":
+            type_value = "WEBRIP"
         if source in ("HD-DVD", "HD DVD", "HDDVD"):
             if is_disc == "HDDVD":
                 source = "HD DVD"
-            if type in ("ENCODE", "REMUX"):
+            if type_value in ("ENCODE", "REMUX"):
                 source = "HDDVD"
-        if type in ("WEBDL", 'WEBRIP'):
+        if type_value in ("WEBDL", 'WEBRIP'):
             source = "Web"
         if source == "Ultra HDTV":
             source = "UHDTV"
@@ -92,4 +92,4 @@ async def get_source(type: str, video: str, path: str, is_disc: str, meta: dict[
         console.print(traceback.format_exc())
         source = "BluRay"
 
-    return source, type
+    return source, type_value

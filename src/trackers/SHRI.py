@@ -3,7 +3,7 @@ import asyncio
 import os
 import random
 import re
-from typing import Any, Literal, Optional, Union, cast
+from typing import Any, Optional, Union, cast
 
 import aiofiles
 import certifi
@@ -15,7 +15,6 @@ from babel.core import UnknownLocaleError
 
 from src.audio import AudioManager
 from src.console import console
-from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -70,14 +69,14 @@ class SHRI(UNIT3D):
                 or pycountry.languages.get(alpha_3=lang_str)
             )
             return lang_obj.alpha_2.lower() if lang_obj else lang_str
-        except (AttributeError, KeyError, LookupError):
+        except (AttributeError, LookupError):
             return lang_str
 
-    async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
+    def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         """Get additional tracker-specific upload data"""
-        return {"mod_queue_opt_in": await self.get_flag(meta, "modq")}
+        return {"mod_queue_opt_in": self.get_flag(meta, "modq")}
 
-    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         """
         Rebuild release name from meta components following ShareIsland naming rules.
 
@@ -89,9 +88,6 @@ class SHRI(UNIT3D):
         - Release group tag cleaning and validation
         - DISC region injection
         """
-        if not meta.get("language_checked", False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
-
         # Title and basic info
         title = meta.get("title", "")
         italian_title = self._get_italian_title(meta.get("imdb_info", {}))
@@ -125,7 +121,7 @@ class SHRI(UNIT3D):
         three_d = str(meta.get("3D") or "")
 
         # Clean audio: remove Dual-Audio and trailing language codes
-        audio = await self._get_best_italian_audio_format(meta)
+        audio = self._get_best_italian_audio_format(meta)
 
         # Build audio language tag: original -> ITA -> ENG -> others/Multi (4+)
         audio_lang_str = ""
@@ -283,7 +279,7 @@ class SHRI(UNIT3D):
 
         return potential_tag
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: dict[str, Any],
         type: Optional[str] = None,
@@ -314,7 +310,7 @@ class SHRI(UNIT3D):
             type_id = type_mapping.get(effective_type, "0")
             return {"type_id": type_id}
 
-    async def get_additional_checks(self, meta: dict[str, Any]) -> Literal[True]:
+    def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         """
         Validate and prompt for DVD/HDDVD region/distributor before upload.
         Stores validated IDs in module-level dict keyed by UUID for use during upload.
@@ -341,7 +337,7 @@ class SHRI(UNIT3D):
                 raise ValueError("Region required for disc upload")
 
             # Validate region code with API
-            region_id = await self.common.unit3d_region_ids(region_name)
+            region_id = self.common.unit3d_region_ids(region_name)
             if not region_id:
                 cli_ui.error(f"Invalid region code '{region_name}'; skipping SHRI.")
                 raise ValueError(f"Invalid region code: {region_name}")
@@ -358,7 +354,7 @@ class SHRI(UNIT3D):
                 )
 
             if distributor_name:
-                distributor_id = await self.common.unit3d_distributor_ids(
+                distributor_id = self.common.unit3d_distributor_ids(
                     distributor_name
                 )
 
@@ -369,23 +365,23 @@ class SHRI(UNIT3D):
                 "_shri_distributor_id": distributor_id if distributor_name else None,
             }
 
-        return await super().get_additional_checks(meta)  # type: ignore
+        return super().get_additional_checks(meta)
 
-    async def get_region_id(self, meta: dict[str, Any]) -> dict[str, Any]:
+    def get_region_id(self, meta: dict[str, Any]) -> dict[str, Any]:
         """Override to use validated region ID stored in meta"""
         data = _shri_session_data.get(meta["uuid"], {})
         region_id = data.get("_shri_region_id")
         if region_id:
             return {"region_id": region_id}
-        return cast(dict[str, Any], await super().get_region_id(meta))
+        return cast(dict[str, Any], super().get_region_id(meta))
 
-    async def get_distributor_id(self, meta: dict[str, Any]) -> dict[str, Any]:
+    def get_distributor_id(self, meta: dict[str, Any]) -> dict[str, Any]:
         """Override to use validated distributor ID stored in meta"""
         data = _shri_session_data.get(meta["uuid"], {})
         distributor_id = data.get("_shri_distributor_id")
         if distributor_id:
             return {"distributor_id": distributor_id}
-        return cast(dict[str, Any], await super().get_distributor_id(meta))
+        return cast(dict[str, Any], super().get_distributor_id(meta))
 
     def get_basename(self, meta: dict[str, Any]) -> str:
         """Extract basename from first file in filelist or path"""
@@ -770,8 +766,8 @@ class SHRI(UNIT3D):
 
         # Fetch TMDb data and format components
         summary, logo_url = await self._fetch_tmdb_italian(meta)
-        screens = await self._format_screens_italian(meta)
-        synthetic_mi = await self._get_synthetic_mediainfo(meta)
+        screens = self._format_screens_italian(meta)
+        synthetic_mi = self._get_synthetic_mediainfo(meta)
 
         bbcode = self._build_bbcode(
             title, info_line, logo_url, summary, screens, synthetic_mi, category, meta
@@ -861,7 +857,7 @@ class SHRI(UNIT3D):
 
         return summary, logo_url
 
-    async def _format_screens_italian(self, meta: dict[str, Any]) -> str:
+    def _format_screens_italian(self, meta: dict[str, Any]) -> str:
         """Format up to 6 screenshots in 2-column grid with [img=350]"""
         images_value = meta.get("image_list", [])
         images = cast(list[dict[str, Any]], images_value) if isinstance(images_value, list) else []
@@ -888,7 +884,7 @@ class SHRI(UNIT3D):
         row3 = " ".join(screens[4:6]) + " \n" if len(screens) > 4 else ""
         return f"[center]{row1}{row2}{row3}[/center]"
 
-    async def _get_synthetic_mediainfo(self, meta: dict[str, Any]) -> Optional[dict[str, Any]]:
+    def _get_synthetic_mediainfo(self, meta: dict[str, Any]) -> Optional[dict[str, Any]]:
         """Extract formatted mediainfo from meta.json structure"""
 
         def safe_int(val: Any, default: int = 0) -> int:
@@ -984,7 +980,7 @@ class SHRI(UNIT3D):
             elif 2.35 <= asp_float <= 2.45:
                 asp = "2.39:1"
             else:
-                asp = f"{asp_float:.2f}:1" if asp_float != 0.0 else "N/A"
+                asp = f"{asp_float:.2f}:1" if abs(asp_float) > 1e-6 else "N/A"
 
             # Audio info
             afmt = ita_audio.get("Format", "N/A") if ita_audio else "N/A"

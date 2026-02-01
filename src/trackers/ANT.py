@@ -4,9 +4,8 @@ import asyncio
 import json
 import os
 import platform
-import re
 from pathlib import Path
-from typing import Any, Union
+from typing import Any
 
 import aiofiles
 import cli_ui
@@ -40,9 +39,8 @@ class ANT:
             'SicFoI', 'SPASM', 'SPDVD', 'STUTTERSHIT', 'TBS', 'Telly', 'TM', 'UPiNSMOKE', 'URANiME', 'WAF', 'xRed',
             'XS', 'YIFY', 'YTS', 'Zeus', 'ZKBL', 'ZmN', 'ZMNT'
         ]
-        pass
 
-    async def get_flags(self, meta: Meta) -> list[str]:
+    def get_flags(self, meta: Meta) -> list[str]:
         flags: list[str] = []
         flags.extend(
             [
@@ -72,7 +70,7 @@ class ANT:
             flags.append('Remux')
         return flags
 
-    async def get_release_group(self, meta: Meta) -> str:
+    def get_release_group(self, meta: Meta) -> str:
         if meta.get('tag', ''):
             tag = str(meta['tag'])
 
@@ -80,51 +78,7 @@ class ANT:
 
         return ""
 
-    async def get_tags(self, meta: Meta) -> Union[list[str], str]:
-        no_tags = False
-        tags: list[str] = []
-        if meta.get('genres', []):
-            genres = meta['genres']
-            # Handle both string and list formats
-            if isinstance(genres, str):
-                tags.append(genres.replace(' ', '.').lower())
-            else:
-                tags.extend(genre.replace(' ', '.').lower() for genre in genres)
-        else:
-            no_tags = True
-        if no_tags and meta.get('imdb_info', {}):
-            imdb_genres = meta['imdb_info'].get('genres', [])
-            # Handle both string and list formats
-            if isinstance(imdb_genres, str):
-                tags.append(imdb_genres.replace(' ', '.').lower())
-            else:
-                tags.extend(genre.replace(' ', '.').lower() for genre in imdb_genres)
-            allowed_tags = {
-                'action', 'adventure', 'animation', 'comedy', 'crime', 'documentary', 'drama',
-                'family', 'fantasy', 'history', 'horror', 'music', 'mystery', 'romance', 'sci.fi',
-                'thriller', 'war', 'western'
-            }
-            tags = [tag for tag in tags if tag.lower() in allowed_tags]
-
-            if tags:
-                console.print(f"[green]{self.tracker}: Using IMDb genres for tagging: {', '.join(tags)}")
-                console.print("[yellow]ANT api will accept this upload, but no tag will be added.\n"
-                              "You must manually add at least one tag from the approved list when uploaded.")
-                await asyncio.sleep(3)
-
-        if not tags:
-            console.print(f"[yellow]{self.tracker}: No genres found for tagging. Tag required.")
-            console.print("[yellow]Only use a tag in the approved list found in the site search box.")
-            console.print("[yellow]ANT api will accept this upload, but no tag will be added.\n"
-                            "You must manually add at least one tag from the approved list when uploaded.")
-            await asyncio.sleep(3)
-            user_tag = cli_ui.ask_string("Please enter at least one tag (genre) to use for the upload", default="")
-            if user_tag:
-                tags.append(user_tag.replace(' ', '.').lower())
-
-        return tags if not no_tags else ""
-
-    async def get_type(self, meta: Meta) -> int:
+    def get_type(self, meta: Meta) -> int:
         antType = None
         imdb_info = meta.get('imdb_info', {})
         if imdb_info.get('type') is not None:
@@ -184,8 +138,8 @@ class ANT:
             torrent_filename = "ANT"
 
         await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
-        flags = await self.get_flags(meta)
-        audioformat = await self.get_audio(meta)
+        flags = self.get_flags(meta)
+        audioformat = self.get_audio(meta)
         if not audioformat:
             console.print(f"[bold red]{self.tracker} upload aborted due to unsupported audio format.")
             meta['tracker_status'][self.tracker]['status_message'] = "data error: upload aborted: unsupported audio format"
@@ -196,7 +150,7 @@ class ANT:
             torrent_bytes = await f.read()
         files = {'file_input': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')}
         data: dict[str, Any] = {
-            'type': await self.get_type(meta),
+            'type': self.get_type(meta),
             'audioformat': audioformat,
             'api_key': str(self.tracker_config.get('api_key', '')).strip(),
             'action': 'upload',
@@ -211,24 +165,28 @@ class ANT:
             # ID of "Scene?" checkbox on upload form is actually "censored"
             data['censored'] = 1
 
-        tags = await self.get_tags(meta)
-        if tags != "":
+        tags_value = meta.get("ant_tagging", [])
+        if isinstance(tags_value, list):
+            tags = [str(tag).strip() for tag in tags_value if str(tag).strip()]
+        elif tags_value:
+            tags = [str(tags_value).strip()]
+        else:
+            tags = []
+        if tags:
             data.update({'tags': ','.join(tags)})
 
-        release_group = await self.get_release_group(meta)
+        release_group = self.get_release_group(meta)
         if release_group and release_group not in self.banned_groups:
             data.update({'releasegroup': release_group})
         else:
             data.update({'noreleasegroup': 1})
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
+        if self.common.is_adult_content(meta):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]Adult content detected[/bold red]')
                 if cli_ui.ask_yes_no("Are the screenshots safe?", default=False):
                     data.update({'screenshots': '\n'.join([x['raw_url'] for x in meta['image_list']][:4])})
-                    if tags == "":
+                    if not tags:
                         data.update({'flagchangereason': "Adult with screens uploaded with Upload Assistant"})
                     else:
                         data.update({'flagchangereason': "Adult with screens uploaded with Upload Assistant. User to add tags manually."})
@@ -238,7 +196,7 @@ class ANT:
                 data.update({'screenshots': ''})
         else:
             data.update({'screenshots': '\n'.join([x['raw_url'] for x in meta['image_list']][:4])})
-            if tags != "":
+            if tags:
                 data.update({'flagchangereason': "User prompted to add tags manually"})
 
         headers = {
@@ -356,7 +314,7 @@ class ANT:
             meta['tracker_status'][self.tracker]['status_message'] = "data error: double check if it uploaded"
             return False
 
-    async def get_audio(self, meta: Meta) -> str:
+    def get_audio(self, meta: Meta) -> str:
         """
         Possible values:
         DD+, DD, DTS-HD MA, DTS, TrueHD, FLAC, PCM, OPUS, AAC, MP3, MP2
@@ -402,10 +360,10 @@ class ANT:
         desc_parts: list[str] = []
 
         # Avoid unnecessary descriptions, adding only the logo if there is a user description
-        user_desc: str = await builder.get_user_description(meta)
+        user_desc: str = builder.get_user_description(meta)
         if user_desc:
             # Custom Header
-            desc_parts.append(await builder.get_custom_header())
+            desc_parts.append(builder.get_custom_header())
 
             # Logo
             logo_resize_url = str(meta.get("tmdb_logo", ""))
@@ -415,7 +373,7 @@ class ANT:
                 desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/align]")
 
         # BDinfo
-        bdinfo = await builder.get_bdinfo_section(meta)
+        bdinfo = builder.get_bdinfo_section(meta)
         if bdinfo:
             desc_parts.append(f"[spoiler=BDInfo][pre]{bdinfo}[/pre][/spoiler]")
 
@@ -426,7 +384,7 @@ class ANT:
         # Disc menus screenshots
         menu_images = meta.get("menu_images", [])
         if menu_images:
-            desc_parts.append(await builder.menu_screenshot_header(meta))
+            desc_parts.append(builder.menu_screenshot_header(meta))
 
             # Disc menus screenshots
             menu_screenshots_block = ""
@@ -438,7 +396,7 @@ class ANT:
                 desc_parts.append(f"[align=center]{menu_screenshots_block}[/align]")
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        desc_parts.append(builder.get_tonemapped_header(meta))
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 
@@ -458,6 +416,61 @@ class ANT:
         return description
 
     async def search_existing(self, meta: Meta, _) -> list[dict[str, Any]]:
+        if "ant_tagging" not in meta:
+            meta["ant_tagging"] = []
+        no_tags = False
+        tags: list[str] = []
+        if meta.get('genres', []):
+            genres = meta['genres']
+            # Handle both string and list formats
+            if isinstance(genres, str):
+                tags.append(genres.replace(' ', '.').lower())
+            else:
+                tags.extend(genre.replace(' ', '.').lower() for genre in genres)
+        else:
+            no_tags = True
+        if no_tags and meta.get('imdb_info', {}):
+            imdb_genres = meta['imdb_info'].get('genres', [])
+            # Handle both string and list formats
+            if isinstance(imdb_genres, str):
+                tags.append(imdb_genres.replace(' ', '.').lower())
+            else:
+                tags.extend(genre.replace(' ', '.').lower() for genre in imdb_genres)
+            allowed_tags = {
+                'action', 'adventure', 'animation', 'comedy', 'crime', 'documentary', 'drama',
+                'family', 'fantasy', 'history', 'horror', 'music', 'mystery', 'romance', 'sci.fi',
+                'thriller', 'war', 'western'
+            }
+            tags = [tag for tag in tags if tag.lower() in allowed_tags]
+            meta["ant_tagging"] = tags
+
+            if tags and (not meta.get('unattended', False) or (meta.get('unattended', False) and meta.get('unattended_confirm', False))):
+                console.print(f"[green]{self.tracker}: Using IMDb genres for tagging: {', '.join(tags)}")
+                console.print("[yellow]ANT api will accept this upload, but no tag will be added.\n"
+                              "You must manually add at least one tag from the approved list when uploaded.")
+                await asyncio.sleep(3)
+            else:
+                tags = []
+                meta["ant_tagging"] = tags
+
+        if not tags and (not meta.get('unattended', False) or (meta.get('unattended', False) and meta.get('unattended_confirm', False))):
+            console.print(f"[yellow]{self.tracker}: No genres found for tagging. Tag required.")
+            console.print("[yellow]Only use a tag in the approved list found in the site search box.")
+            console.print("[yellow]ANT api will accept this upload, but no tag will be added.\n"
+                            "You must manually add at least one tag from the approved list when uploaded.")
+            user_tag = cli_ui.ask_string("Please enter at least one tag (genre) to use for the upload", default="")
+            if user_tag:
+                tags.append(user_tag.replace(' ', '.').lower())
+                meta["ant_tagging"] = tags
+            else:
+                meta["ant_tagging"] = []
+
+        elif not tags:
+            if not meta['unattended']:
+                console.print(f"[bold red]{self.tracker}: No genres found for tagging in unattended mode.")
+            meta['skipping'] = "ANT"
+            return []
+
         dupes: list[dict[str, Any]] = []
         if meta.get('category') == "TV":
             if not meta['unattended']:

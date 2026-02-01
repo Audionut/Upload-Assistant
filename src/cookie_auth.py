@@ -33,7 +33,6 @@ class CookieValidator:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.common = COMMON(config)
-        pass
 
     async def load_session_cookies(self, meta: dict[str, Any], tracker: str) -> Optional[http.cookiejar.MozillaCookieJar]:
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{tracker}.txt")
@@ -70,7 +69,7 @@ class CookieValidator:
 
         return cookie_jar
 
-    async def save_session_cookies(self, tracker: str, cookie_jar: Optional[http.cookiejar.MozillaCookieJar]) -> None:
+    def save_session_cookies(self, tracker: str, cookie_jar: Optional[http.cookiejar.MozillaCookieJar]) -> None:
         """Save updated cookies after a successful validation."""
         if not cookie_jar:
             console.print(f"{tracker}: Cookie jar not initialized, cannot save cookies.")
@@ -275,7 +274,7 @@ class CookieValidator:
                     cls.secret_token = str(match.group(1))
 
                 # Save cookies only after a confirmed valid login
-                await self.save_session_cookies(tracker, cookie_jar)
+                self.save_session_cookies(tracker, cookie_jar)
                 return True
 
         except httpx.ConnectTimeout:
@@ -316,9 +315,7 @@ class CookieValidator:
             "You can open this file in a web browser to see what went wrong.\n"
         )
 
-        return
-
-    async def find_html_token(self, tracker: str, token_pattern: str, response: str) -> Optional[str]:
+    def find_html_token(self, tracker: str, token_pattern: str, response: str) -> Optional[str]:
         """Find the auth token in a web page using a regular expression pattern."""
         auth_match = re.search(token_pattern, response)
         if not auth_match:
@@ -464,7 +461,6 @@ class CookieAuthUploader:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.common = COMMON(config)
-        pass
 
     async def handle_upload(
         self,

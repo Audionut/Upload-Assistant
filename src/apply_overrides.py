@@ -46,7 +46,7 @@ class ApplyOverrides:
                         continue
 
                     # Parse the entry's TMDB ID from the user-args.json file
-                    entry_category, entry_normalized_id = await self.parse_tmdb_id(entry_tmdb_id)
+                    entry_category, entry_normalized_id = self.parse_tmdb_id(entry_tmdb_id)
                     if entry_category and entry_category != meta['category']:
                         if meta['debug']:
                             console.print(f"Skipping user entry because override category {entry_category} does not match UA category {meta['category']}:")
@@ -57,7 +57,7 @@ class ApplyOverrides:
                         console.print(f"[green]Found matching override for TMDb ID: {entry_normalized_id}")
                         console.print(f"[yellow]Applying arguments: {' '.join(args)}")
 
-                        meta = await self.apply_args_to_meta(meta, args)
+                        meta = self.apply_args_to_meta(meta, args)
                         break
 
             else:
@@ -67,7 +67,7 @@ class ApplyOverrides:
                         args = cast(list[str], entry.get('args', []))
                         console.print(f"[green]Found matching override for TVDb ID: {current_tvdb_id}")
                         console.print(f"[yellow]Applying arguments: {' '.join(args)}")
-                        meta = await self.apply_args_to_meta(meta, args)
+                        meta = self.apply_args_to_meta(meta, args)
                         break
 
                     # Check for IMDB ID match (without tt prefix)
@@ -80,7 +80,7 @@ class ApplyOverrides:
                             args = cast(list[str], entry.get('args', []))
                             console.print(f"[green]Found matching override for IMDb ID: {current_imdb_id}")
                             console.print(f"[yellow]Applying arguments: {' '.join(args)}")
-                            meta = await self.apply_args_to_meta(meta, args)
+                            meta = self.apply_args_to_meta(meta, args)
                             break
 
         except (FileNotFoundError, json.JSONDecodeError) as e:
@@ -88,7 +88,7 @@ class ApplyOverrides:
 
         return meta
 
-    async def parse_tmdb_id(self, tmdb_id: Optional[Any], category: Optional[str] = None) -> tuple[Optional[str], int]:
+    def parse_tmdb_id(self, tmdb_id: Optional[Any], category: Optional[str] = None) -> tuple[Optional[str], int]:
         if tmdb_id is None:
             return category, 0
 
@@ -119,7 +119,7 @@ class ApplyOverrides:
         except ValueError:
             return category, 0
 
-    async def apply_args_to_meta(self, meta: Meta, args: list[str]) -> Meta:
+    def apply_args_to_meta(self, meta: Meta, args: list[str]) -> Meta:
         try:
             arg_keys_to_track: set[str] = set()
             arg_values: dict[str, str] = {}

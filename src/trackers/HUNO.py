@@ -33,12 +33,11 @@ class HUNO(UNIT3D):
             'ShieldBearer', 'SiQ', 'TBD', 'Telly', 'TSP', 'VXT', 'WKS', 'YAWNiX', 'YIFY', 'YTS'
         ]
         self.approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'pixhost', 'bam']
-        pass
 
-    async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
+    def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         should_continue = True
 
-        if await self.get_audio(meta) == "SKIPPED":
+        if self.get_audio(meta) == "SKIPPED":
             console.print(f'{self.tracker}: No audio languages were found, the upload cannot continue.')
             return False
 
@@ -87,8 +86,8 @@ class HUNO(UNIT3D):
 
         return should_continue
 
-    async def get_stream(self, meta: dict[str, Any]) -> dict[str, str]:
-        return {'stream': str(await self.is_plex_friendly(meta))}
+    def get_stream(self, meta: dict[str, Any]) -> dict[str, str]:
+        return {'stream': str(self.is_plex_friendly(meta))}
 
     async def check_image_hosts(self, meta: dict[str, Any]) -> None:
         url_host_mapping = {
@@ -120,35 +119,35 @@ class HUNO(UNIT3D):
 
         return {'mediainfo': mediainfo}
 
-    async def get_featured(self, _meta: dict[str, Any]) -> dict[str, Any]:
+    def get_featured(self, _meta: dict[str, Any]) -> dict[str, Any]:
         return {}
 
-    async def get_free(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_free(self, meta: dict[str, Any]) -> dict[str, str]:
         if meta.get('freeleech', 0) != 0:
             free = meta.get('freeleech', 0)
             return {'free': str(free)}
         return {}
 
-    async def get_doubleup(self, _meta: dict[str, Any]) -> dict[str, Any]:
+    def get_doubleup(self, _meta: dict[str, Any]) -> dict[str, Any]:
         return {}
 
-    async def get_sticky(self, _meta: dict[str, Any]) -> dict[str, Any]:
+    def get_sticky(self, _meta: dict[str, Any]) -> dict[str, Any]:
         return {}
 
-    async def get_season_number(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_season_number(self, meta: dict[str, Any]) -> dict[str, str]:
         if meta.get('category') == 'TV' and meta.get('tv_pack') == 1:
             return {'season_pack': '1'}
         return {}
 
-    async def get_episode_number(self, meta: dict[str, Any]) -> dict[str, Any]:
+    def get_episode_number(self, meta: dict[str, Any]) -> dict[str, Any]:
         _ = meta
         return {}
 
-    async def get_personal_release(self, meta: dict[str, Any]) -> dict[str, Any]:
+    def get_personal_release(self, meta: dict[str, Any]) -> dict[str, Any]:
         _ = meta
         return {}
 
-    async def get_internal(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_internal(self, meta: dict[str, Any]) -> dict[str, str]:
         internal = 0
         if (
             self.config['TRACKERS'][self.tracker].get('internal', False) is True
@@ -195,18 +194,18 @@ class HUNO(UNIT3D):
         path = next(iter(meta['filelist']), meta['path'])
         return os.path.basename(str(path))
 
-    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         distributor_name = str(meta.get('distributor') or "")
         region = meta.get('region', '')
 
         name = ""
         basename = self.get_basename(meta)
         hc = "Hardsubbed" if meta.get('hardcoded_subs') else ""
-        type = meta.get('type', "").upper()
+        format_type = meta.get('type', "").upper()
         title = meta.get('title', "")
         year = meta.get('year', "")
         resolution = meta.get('resolution', "")
-        audio = await self.get_audio(meta)
+        audio = self.get_audio(meta)
         service = meta.get('service', "")
         season = meta.get('season', "")
         if meta.get('tvdb_season_number', ""):
@@ -230,7 +229,7 @@ class HUNO(UNIT3D):
         source = meta.get('source', "").replace("Blu-ray", "BluRay")
         if source == "BluRay" and "2160" in resolution:
             source = "UHD BluRay"
-        if any(x in source.lower() for x in ["pal", "ntsc"]) and type == "ENCODE":
+        if any(x in source.lower() for x in ["pal", "ntsc"]) and format_type == "ENCODE":
             source = "DVD"
         hdr = meta.get('hdr', "")
         if not hdr.strip():
@@ -248,49 +247,49 @@ class HUNO(UNIT3D):
 
         # YAY NAMING FUN
         if meta['category'] == "MOVIE":  # MOVIE SPECIFIC
-            if type == "DISC":  # Disk
+            if format_type == "DISC":  # Disk
                 if meta['is_disc'] == 'BDMV':
                     name = f"{title} ({year}) {distributor} {edition} {hc} ({resolution} {region} {three_d} {source} {hybrid} {video_codec} {hdr} {hfr} {audio} {tag}) {repack}"
                 elif meta['is_disc'] == 'DVD':
                     name = f"{title} ({year}) {distributor} {edition} {hc} ({resolution} {source} {dvd_size} {hybrid} {video_codec} {hdr} {audio} {tag}) {repack}"
                 elif meta['is_disc'] == 'HDDVD':
                     name = f"{title} ({year}) {distributor} {edition} {hc} ({resolution} {source} {hybrid} {video_codec} {hdr} {audio} {tag}) {repack}"
-            elif type == "REMUX" and source.endswith("BluRay"):  # BluRay Remux
+            elif format_type == "REMUX" and source.endswith("BluRay"):  # BluRay Remux
                 name = f"{title} ({year}) {edition} ({resolution} {three_d} {source} {hybrid} REMUX {video_codec} {hdr} {hfr} {audio} {tag}) {repack}"
-            elif type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):  # DVD Remux
+            elif format_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):  # DVD Remux
                 name = f"{title} ({year}) {edition} {hc} ({resolution} {source} {hybrid} REMUX {video_codec} {hdr} {audio} {tag}) {repack}"
-            elif type == "ENCODE":  # Encode
+            elif format_type == "ENCODE":  # Encode
                 name = f"{title} ({year}) {edition} {hc} ({resolution} {scale} {source} {hybrid} {video_encode} {hdr} {hfr} {audio} {tag}) {repack}"
-            elif type in ("WEBDL", "WEBRIP"):  # WEB
+            elif format_type in ("WEBDL", "WEBRIP"):  # WEB
                 name = f"{title} ({year}) {edition} {hc} ({resolution} {scale} {service} WEB-DL {hybrid} {video_encode} {hdr} {hfr} {audio} {tag}) {repack}"
-            elif type == "HDTV":  # HDTV
+            elif format_type == "HDTV":  # HDTV
                 name = f"{title} ({year}) {edition} {hc} ({resolution} HDTV {hybrid} {video_encode} {audio} {tag}) {repack}"
-            elif type == "DVDRIP":
+            elif format_type == "DVDRIP":
                 name = f"{title} ({year}) {edition} {hc} ({resolution} {source} {video_encode} {hdr} {audio} {tag}) {repack}"
         elif meta['category'] == "TV":  # TV SPECIFIC
-            if type == "DISC":  # Disk
+            if format_type == "DISC":  # Disk
                 if meta['is_disc'] == 'BDMV':
                     name = f"{title} ({year}) {season}{episode} {distributor} {edition} {hc} ({resolution} {region} {three_d} {source} {hybrid} {video_codec} {hdr} {hfr} {audio} {tag}) {repack}"
                 if meta['is_disc'] == 'DVD':
                     name = f"{title} ({year}) {season}{episode} {distributor} {edition} {hc} ({resolution} {source} {dvd_size} {hybrid} {video_codec} {hdr} {audio} {tag}) {repack}"
                 elif meta['is_disc'] == 'HDDVD':
                     name = f"{title} ({year}) {season}{episode} {edition} ({resolution} {source} {hybrid} {video_codec} {hdr} {audio} {tag}) {repack}"
-            elif type == "REMUX" and source == "BluRay":  # BluRay Remux
+            elif format_type == "REMUX" and source == "BluRay":  # BluRay Remux
                 name = f"{title} ({year}) {season}{episode} {edition} ({resolution} {three_d} {source} {hybrid} REMUX {video_codec} {hdr} {hfr} {audio} {tag}) {repack}"  # SOURCE
-            elif type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):  # DVD Remux
+            elif format_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):  # DVD Remux
                 name = f"{title} ({year}) {season}{episode} {edition} ({resolution} {source} {hybrid} REMUX {video_codec} {hdr} {audio} {tag}) {repack}"  # SOURCE
-            elif type == "ENCODE":  # Encode
+            elif format_type == "ENCODE":  # Encode
                 name = f"{title} ({year}) {season}{episode} {edition} ({resolution} {scale} {source} {hybrid} {video_encode} {hdr} {hfr} {audio} {tag}) {repack}"  # SOURCE
-            elif type in ("WEBDL", "WEBRIP"):  # WEB
+            elif format_type in ("WEBDL", "WEBRIP"):  # WEB
                 name = f"{title} ({year}) {season}{episode} {edition} ({resolution} {scale} {service} WEB-DL {hybrid} {video_encode} {hdr} {hfr} {audio} {tag}) {repack}"
-            elif type == "HDTV":  # HDTV
+            elif format_type == "HDTV":  # HDTV
                 name = f"{title} ({year}) {season}{episode} {edition} ({resolution} HDTV {hybrid} {video_encode} {audio} {tag}) {repack}"
 
         name = ' '.join(name.split()).replace(": ", " - ")
         name = re.sub(r'\s{2,}', ' ', name)
         return {'name': name}
 
-    async def get_type_id(self, meta: dict[str, Any], type: Any = None, reverse: bool = False, mapping_only: bool = False) -> dict[str, str]:
+    def get_type_id(self, meta: dict[str, Any], type: Any = None, reverse: bool = False, mapping_only: bool = False) -> dict[str, str]:
         _ = (type, reverse, mapping_only)
         type_value = (meta.get('type') or '').lower()
         video_encode = (meta.get('video_encode') or '').lower()
@@ -308,7 +307,7 @@ class HUNO(UNIT3D):
 
         return {'type_id': type_id}
 
-    async def get_resolution_id(self, meta: dict[str, Any], resolution: Any = None, reverse: bool = False, mapping_only: bool = False) -> dict[str, str]:
+    def get_resolution_id(self, meta: dict[str, Any], resolution: Any = None, reverse: bool = False, mapping_only: bool = False) -> dict[str, str]:
         _ = (resolution, reverse, mapping_only)
         resolution_id = {
             'Other': '10',
@@ -327,7 +326,7 @@ class HUNO(UNIT3D):
         }.get(meta['resolution'], '10')
         return {'resolution_id': resolution_id}
 
-    async def is_plex_friendly(self, meta: dict[str, Any]) -> int:
+    def is_plex_friendly(self, meta: dict[str, Any]) -> int:
         lossy_audio_codecs = ["AAC", "DD", "DD+", "OPUS"]
 
         if any(codec in meta["audio"] for codec in lossy_audio_codecs):

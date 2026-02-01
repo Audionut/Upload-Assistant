@@ -203,7 +203,7 @@ class TrackerDataManager:
 
                 # for just searching, remove any specific trackers already in meta['trackers']
                 # since that tracker was found in client, and remove it from meta['trackers']
-                for tracker in list(specific_tracker):
+                for tracker in specific_tracker:
                     if tracker in meta_trackers and meta.get('site_check', False):
                         specific_tracker.remove(tracker)
                         meta_trackers.remove(tracker)

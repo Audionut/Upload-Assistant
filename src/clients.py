@@ -183,7 +183,6 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                     shutil.copy(torrent_path, client['watch_folder'])
             except Exception as e:
                 console.print(f"[bold red]Failed to add torrent to {client_name}: {e}")
-        return
 
     async def inject_delay(self, meta: dict[str, Any], tracker: str, client_name: str) -> None:
         """

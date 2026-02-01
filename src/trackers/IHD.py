@@ -1,8 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import re
 from typing import Any, Optional, cast
 
-import cli_ui
 import pycountry
 
 from src.console import console
@@ -27,9 +25,8 @@ class IHD(UNIT3D):
         self.requests_url = f'{self.base_url}/api/requests/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
-        pass
 
-    async def get_category_id(
+    def get_category_id(
         self,
         meta: Meta,
         category: Optional[str] = None,
@@ -70,7 +67,7 @@ class IHD(UNIT3D):
             resolved_id = category_id.get(meta_category, '0')
             return {'category_id': resolved_id}
 
-    async def get_resolution_id(
+    def get_resolution_id(
         self,
         meta: Meta,
         resolution: Optional[str] = None,
@@ -124,7 +121,7 @@ class IHD(UNIT3D):
                 or pycountry.languages.get(alpha_3=lang_str)
             )
             return lang_obj.alpha_2.lower() if lang_obj else lang_str
-        except (AttributeError, KeyError, LookupError):
+        except (AttributeError, LookupError):
             return lang_str
 
     def original_language_check(self, meta: Meta) -> bool:
@@ -154,24 +151,22 @@ class IHD(UNIT3D):
                 return True
         return False
 
-    async def get_name(self, meta: Meta) -> dict[str, str]:
+    def get_name(self, meta: Meta) -> dict[str, str]:
         ihd_name = str(meta.get('name', ''))
         resolution = str(meta.get('resolution', ''))
 
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
         audio_languages_value = meta.get('audio_languages', [])
         audio_languages: list[str] = []
         if isinstance(audio_languages_value, list):
             audio_languages_list = cast(list[Any], audio_languages_value)
             audio_languages = [str(item) for item in audio_languages_list]
-        if audio_languages and not await languages_manager.has_english_language(audio_languages):
+        if audio_languages and not languages_manager.has_english_language(audio_languages):
             foreign_lang = str(audio_languages[0]).upper()
             ihd_name = ihd_name.replace(resolution, f"{foreign_lang} {resolution}", 1)
 
         return {'name': ihd_name}
 
-    async def get_additional_checks(self, meta: Meta) -> bool:
+    def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
 
         if meta['resolution'] not in ['4320p', '2160p', '1440p', '1080p', '1080i']:
@@ -185,8 +180,6 @@ class IHD(UNIT3D):
             should_continue = False
 
         if meta['is_disc'] != "BDMV":
-            if not meta.get('language_checked', False):
-                await languages_manager.process_desc_language(meta, tracker=self.tracker)
             original_language = self.original_language_check(meta)
             audio_languages_value = meta.get('audio_languages', [])
             subtitle_languages_value = meta.get('subtitle_languages', [])
@@ -202,24 +195,26 @@ class IHD(UNIT3D):
                 subtitle_languages = [str(item) for item in subtitle_languages_list]
             else:
                 subtitle_languages = []
-            has_eng_audio = await languages_manager.has_english_language(audio_languages if audio_languages else '')
-            has_eng_subs = await languages_manager.has_english_language(subtitle_languages if subtitle_languages else '')
+            has_eng_audio = languages_manager.has_english_language(audio_languages if audio_languages else '')
+            has_eng_subs = languages_manager.has_english_language(subtitle_languages if subtitle_languages else '')
             # Require at least one English audio/subtitle track or an original language audio track
             if not (original_language or has_eng_audio or has_eng_subs):
                 if not meta['unattended'] or meta['debug']:
                     console.print(f'[bold red]{self.tracker} requires at least one English audio or subtitle track or an original language audio track.')
                 should_continue = False
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
-                console.print(f'[bold red]Pornographic content is not allowed at {self.tracker}, unless it follows strict rules.')
-                yes = cli_ui.ask_yes_no(f'Do you have permission to upload this torrent to {self.tracker}?', default=False)
-                should_continue = bool(yes)
-            else:
-                if not meta['unattended'] or meta['debug']:
-                    console.print('[bold red]Pornographic content is not allowed at IHD, unless it follows strict rules.')
-                should_continue = False
+        unattended_message = (
+            '[bold red]Pornographic content is not allowed at IHD, unless it follows strict rules.'
+            if meta.get('debug')
+            else None
+        )
+        should_continue = self.common.prompt_adult_content(
+            meta,
+            tracker_name=self.tracker,
+            block_message=f'[bold red]Pornographic content is not allowed at {self.tracker}, unless it follows strict rules.',
+            prompt_text=f'Do you have permission to upload this torrent to {self.tracker}?',
+            unattended_message=unattended_message,
+            default=False,
+        )
 
         return should_continue

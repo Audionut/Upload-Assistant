@@ -18,7 +18,7 @@ def guessit_fn(value: str, options: Optional[dict[str, Any]] = None) -> dict[str
     return cast(dict[str, Any], guessit_module.guessit(value, options))
 
 
-async def get_tag(video: str, meta: dict[str, Any], season_pack_check: bool = False) -> str:
+def get_tag(video: str, meta: dict[str, Any], season_pack_check: bool = False) -> str:
     # Using regex from cross-seed (https://github.com/cross-seed/cross-seed/tree/master?tab=Apache-2.0-1-ov-file)
     release_group = None
     basename = os.path.basename(video)
@@ -47,9 +47,25 @@ async def get_tag(video: str, meta: dict[str, Any], season_pack_check: bool = Fa
             name, ext = os.path.splitext(basename_no_path)
             # If the extension contains a hyphen, it's not a real extension
             basename_stripped = basename_no_path if ext and '-' in ext else name
-        non_anime_match = re.search(r'(?<=-)((?!\s*(?:WEB-DL|Blu-ray|H-264|H-265))(?:\W|\b)(?!(?:\d{3,4}[ip]))(?!\d+\b)(?:\W|\b)([\w .]+?))(?:\[.+\])?(?:\))?(?:\s\[.+\])?$', basename_stripped)
-        if non_anime_match:
-            release_group = non_anime_match.group(1).strip()
+        parts = [part.strip() for part in basename_stripped.split("-") if part.strip()]
+        candidates: list[str] = []
+        if len(parts) > 1:
+            for part in parts[1:]:
+                cleaned = re.sub(r"\s*\[.*\]\s*$", "", part).strip()
+                cleaned = re.sub(r"\)+$", "", cleaned).strip()
+                cleaned = re.sub(r"\s*\[.*\]\s*$", "", cleaned).strip()
+                if not cleaned:
+                    continue
+                upper_candidate = cleaned.upper()
+                invalid_candidate = any(token in upper_candidate for token in ("WEB-DL", "BLU-RAY", "H-264", "H-265"))
+                invalid_candidate = invalid_candidate or re.search(r"\b\d{3,4}[ip]\b", cleaned) is not None
+                invalid_candidate = invalid_candidate or cleaned.isdigit()
+                if invalid_candidate:
+                    continue
+                candidates.append(cleaned)
+
+        if candidates:
+            release_group = candidates[-1]
             if "Z0N3" in release_group:
                 release_group = release_group.replace("Z0N3", "D-Z0N3")
             if not meta.get('scene', False) and release_group and len(release_group) > 12:
@@ -101,8 +117,6 @@ async def tag_override(meta: dict[str, Any]) -> dict[str, Any]:
                     if key == 'type':
                         if meta[key] == "ENCODE":
                             meta[key] = value.get(key)
-                        else:
-                            pass
                     elif key == 'personalrelease':
                         meta[key] = _is_true(value.get(key, "False"))
                     elif key == 'template':

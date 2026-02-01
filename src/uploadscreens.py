@@ -21,6 +21,9 @@ from src.console import console
 Meta: TypeAlias = dict[str, Any]
 ImageDict: TypeAlias = dict[str, Any]
 
+REQUEST_TIMED_OUT = "Request timed out"
+INVALID_JSON_RESPONSE = "Invalid JSON response"
+
 
 class UploadScreensManager:
     def __init__(self, config: dict[str, Any]) -> None:
@@ -118,7 +121,7 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
 
                     except httpx.TimeoutException:
                         console.print("[red][ptpimg] Request timed out.")
-                        return {'status': 'failed', 'reason': 'Request timed out'}
+                        return {'status': 'failed', 'reason': REQUEST_TIMED_OUT}
                     except json.JSONDecodeError as e:
                         console.print(f"[red][ptpimg] JSONDecodeError: {str(e)}")
                         return {'status': 'failed', 'reason': 'Invalid JSON response from ptpimg'}
@@ -158,11 +161,11 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
 
             except httpx.TimeoutException:
                 console.print("[red]Request timed out. The server took too long to respond.")
-                return {'status': 'failed', 'reason': 'Request timed out'}
+                return {'status': 'failed', 'reason': REQUEST_TIMED_OUT}
 
             except ValueError as e:  # JSON decoding error
                 console.print(f"[red]Invalid JSON response: {e}")
-                return {'status': 'failed', 'reason': 'Invalid JSON response'}
+                return {'status': 'failed', 'reason': INVALID_JSON_RESPONSE}
 
             except httpx.RequestError as e:
                 console.print(f"[red]Request failed with error: {e}")
@@ -196,11 +199,11 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
 
             except httpx.TimeoutException:
                 console.print("[red]Request timed out. The server took too long to respond.")
-                return {'status': 'failed', 'reason': 'Request timed out'}
+                return {'status': 'failed', 'reason': REQUEST_TIMED_OUT}
 
             except ValueError as e:  # JSON decoding error
                 console.print(f"[red]Invalid JSON response: {e}")
-                return {'status': 'failed', 'reason': 'Invalid JSON response'}
+                return {'status': 'failed', 'reason': INVALID_JSON_RESPONSE}
 
             except httpx.RequestError as e:
                 console.print(f"[red]Request failed with error: {e}")
@@ -234,13 +237,13 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
 
             except httpx.TimeoutException:
                 console.print("[red]Request timed out. The server took too long to respond.")
-                return {'status': 'failed', 'reason': 'Request timed out'}
+                return {'status': 'failed', 'reason': REQUEST_TIMED_OUT}
             except httpx.RequestError as e:
                 console.print(f"[red]Request failed with error: {e}")
                 return {'status': 'failed', 'reason': str(e)}
             except ValueError as e:
                 console.print(f"[red]Invalid JSON response from ptscreens: {e}")
-                return {'status': 'failed', 'reason': 'Invalid JSON response'}
+                return {'status': 'failed', 'reason': INVALID_JSON_RESPONSE}
 
         elif img_host == "utppm":
             url = "https://utp.pm/api/1/upload"
@@ -272,13 +275,13 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
 
             except httpx.TimeoutException:
                 console.print("[red]Request timed out. The server took too long to respond.")
-                return {'status': 'failed', 'reason': 'Request timed out'}
+                return {'status': 'failed', 'reason': REQUEST_TIMED_OUT}
             except httpx.RequestError as e:
                 console.print(f"[red]Request failed with error: {e}")
                 return {'status': 'failed', 'reason': str(e)}
             except ValueError as e:
                 console.print(f"[red]Invalid JSON response from utppm: {e}")
-                return {'status': 'failed', 'reason': 'Invalid JSON response'}
+                return {'status': 'failed', 'reason': INVALID_JSON_RESPONSE}
 
         elif img_host == "onlyimage":
             url = "https://onlyimage.org/api/1/upload"
@@ -310,13 +313,13 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
 
             except httpx.TimeoutException:
                 console.print("[red]Request timed out. The server took too long to respond.")
-                return {'status': 'failed', 'reason': 'Request timed out'}
+                return {'status': 'failed', 'reason': REQUEST_TIMED_OUT}
             except httpx.RequestError as e:
                 console.print(f"[red]Request failed with error: {e}")
                 return {'status': 'failed', 'reason': str(e)}
             except ValueError as e:
                 console.print(f"[red]Invalid JSON response from OnlyImage: {e}")
-                return {'status': 'failed', 'reason': 'Invalid JSON response'}
+                return {'status': 'failed', 'reason': INVALID_JSON_RESPONSE}
 
         elif img_host == "pixhost":
             url = "https://api.pixhost.to/images"
@@ -352,11 +355,11 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
 
                     except ValueError as e:
                         console.print(f"[red]Invalid JSON response from pixhost: {e}")
-                        return {'status': 'failed', 'reason': 'Invalid JSON response'}
+                        return {'status': 'failed', 'reason': INVALID_JSON_RESPONSE}
 
             except httpx.TimeoutException:
                 console.print("[red]Request to pixhost timed out. The server took too long to respond.")
-                return {'status': 'failed', 'reason': 'Request timed out'}
+                return {'status': 'failed', 'reason': REQUEST_TIMED_OUT}
 
             except httpx.RequestError as e:
                 console.print(f"[red]pixhost request failed with error: {e}")
@@ -381,10 +384,10 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
                         web_url = response_data['data']['url_viewer']
             except httpx.TimeoutException:
                 console.print("[red]Request timed out. The server took too long to respond.")
-                return {'status': 'failed', 'reason': 'Request timed out'}
+                return {'status': 'failed', 'reason': REQUEST_TIMED_OUT}
             except ValueError as e:
                 console.print(f"[red]Invalid JSON response: {e}")
-                return {'status': 'failed', 'reason': 'Invalid JSON response'}
+                return {'status': 'failed', 'reason': INVALID_JSON_RESPONSE}
             except httpx.RequestError as e:
                 console.print(f"[red]Request failed with error: {e}")
                 return {'status': 'failed', 'reason': str(e)}
@@ -426,11 +429,11 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
                         return {'status': 'failed', 'reason': f"Zipline upload failed: {response.text}"}
             except httpx.TimeoutException:
                 console.print("[red]Request timed out. The server took too long to respond.")
-                return {'status': 'failed', 'reason': 'Request timed out'}
+                return {'status': 'failed', 'reason': REQUEST_TIMED_OUT}
 
             except ValueError as e:  # JSON decoding error
                 console.print(f"[red]Invalid JSON response: {e}")
-                return {'status': 'failed', 'reason': 'Invalid JSON response'}
+                return {'status': 'failed', 'reason': INVALID_JSON_RESPONSE}
 
             except httpx.RequestError as e:
                 console.print(f"[red]Request failed with error: {e}")
@@ -477,13 +480,13 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
 
             except httpx.TimeoutException:
                 console.print("[red]Request to passtheimage timed out after 60 seconds")
-                return {'status': 'failed', 'reason': 'Request timed out'}
+                return {'status': 'failed', 'reason': REQUEST_TIMED_OUT}
             except httpx.RequestError as e:
                 console.print(f"[red]Request to passtheimage failed with error: {e}")
                 return {'status': 'failed', 'reason': str(e)}
             except ValueError as e:
                 console.print(f"[red]Invalid JSON response from passtheimage: {e}")
-                return {'status': 'failed', 'reason': 'Invalid JSON response'}
+                return {'status': 'failed', 'reason': INVALID_JSON_RESPONSE}
             except Exception as e:
                 console.print(f"[red]Unexpected error with passtheimage: {str(e)}")
                 return {'status': 'failed', 'reason': f'Unexpected error: {str(e)}'}
@@ -535,13 +538,13 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
 
             except httpx.TimeoutException:
                 console.print("[red]Request to Seedpool CDN timed out.")
-                return {'status': 'failed', 'reason': 'Request timed out'}
+                return {'status': 'failed', 'reason': REQUEST_TIMED_OUT}
             except httpx.RequestError as e:
                 console.print(f"[red]Seedpool CDN request failed: {e}")
                 return {'status': 'failed', 'reason': str(e)}
             except ValueError as e:
                 console.print(f"[red]Invalid JSON response from Seedpool CDN: {e}")
-                return {'status': 'failed', 'reason': 'Invalid JSON response'}
+                return {'status': 'failed', 'reason': INVALID_JSON_RESPONSE}
             except Exception as e:
                 console.print(f"[red]Unexpected error with Seedpool CDN: {e}")
                 return {'status': 'failed', 'reason': f'Unexpected error: {str(e)}'}
@@ -591,13 +594,13 @@ async def upload_image_task(args: Sequence[Any]) -> dict[str, Any]:
 
             except httpx.TimeoutException:
                 console.print("[red]Request to ShareX image host timed out.[/red]")
-                return {'status': 'failed', 'reason': 'Request timed out'}
+                return {'status': 'failed', 'reason': REQUEST_TIMED_OUT}
             except httpx.RequestError as e:
                 console.print(f"[red]Request to ShareX image host failed with error: {e}[/red]")
                 return {'status': 'failed', 'reason': str(e)}
             except ValueError as e:
                 console.print(f"[red]Invalid JSON response from ShareX image host: {e}[/red]")
-                return {'status': 'failed', 'reason': 'Invalid JSON response'}
+                return {'status': 'failed', 'reason': INVALID_JSON_RESPONSE}
             except Exception as e:
                 console.print(f"[red]Unexpected error with ShareX image host: {str(e)}[/red]")
                 return {'status': 'failed', 'reason': f'Unexpected error: {str(e)}'}
@@ -802,7 +805,7 @@ async def _upload_screens(
                     if future and future in running_tasks:
                         future.cancel()
                         running_tasks.discard(future)
-                    return None
+                    raise
 
                 except Exception as e:
                     console.print(f"[red]Error during upload for image {index}: {str(e)}[/red]")
@@ -818,7 +821,6 @@ async def _upload_screens(
         return None
 
     try:
-        max_retries = 3
         results: list[tuple[int, dict[str, Any]]] = []
         try:
             upload_results = await asyncio.gather(*[async_upload(task, max_retries) for task in upload_tasks])
@@ -872,7 +874,7 @@ async def _upload_screens(
             if not using_custom_img_list:
                 console.print(f"[green]Successfully obtained and uploaded {len(new_images)} images.")
         else:
-            raise Exception("No images uploaded. Configure additional image hosts or use a different -ih")
+            raise RuntimeError("No images uploaded. Configure additional image hosts or use a different -ih")
 
         if meta.get('debug') and upload_start_time is not None:
             console.print(f"Screenshot uploads processed in {time.time() - upload_start_time:.4f} seconds")
@@ -887,8 +889,7 @@ async def _upload_screens(
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
-
-        return image_list, len(image_list)
+        raise
 
     finally:
         # Cleanup

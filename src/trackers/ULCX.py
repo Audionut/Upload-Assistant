@@ -30,25 +30,20 @@ class ULCX(UNIT3D):
             ['Ralphy', 'Encodes'], 'RARBG', 'Sicario', 'SM737', 'SPDVD', 'SWTYBLZ', 'TAoE', 'TGx', 'Tigole', 'TSP',
             'TSPxL', 'VXT', 'Vyndros', 'Will1869', 'x0r', 'YIFY', 'Alcaide_Kira', 'PHOCiS', 'HDT', 'SPx', 'seedpool'
         ]
-        pass
 
-    async def get_additional_checks(self, meta: Meta) -> bool:
+    def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
         if 'concert' in meta['keywords']:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print(f'[bold red]Concerts not allowed at {self.tracker}.[/bold red]')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
+                if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     return False
             else:
                 return False
         if meta['video_codec'] == "HEVC" and meta['resolution'] != "2160p" and 'animation' not in meta['keywords'] and meta.get('anime', False) is not True:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print(f'[bold red]This content might not fit HEVC rules for {self.tracker}.[/bold red]')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
+                if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     return False
             else:
                 return False
@@ -62,7 +57,7 @@ class ULCX(UNIT3D):
                 console.print(f'[bold red]DVDRIPs are not allowed for {self.tracker}.[/bold red]')
             return False
 
-        if meta['is_disc'] != "BDMV" and not await self.common.check_language_requirements(
+        if meta['is_disc'] != "BDMV" and not self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True
         ):
             return False
@@ -73,9 +68,9 @@ class ULCX(UNIT3D):
 
         return should_continue
 
-    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+    def get_additional_data(self, meta: Meta) -> dict[str, Any]:
         data = {
-            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
+            'mod_queue_opt_in': self.get_flag(meta, 'modq'),
         }
 
         return data
@@ -83,9 +78,7 @@ class ULCX(UNIT3D):
     async def get_description(self, meta: Meta) -> dict[str, str]:
         desc = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, comparison=True)
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
+        if self.common.is_adult_content(meta):
             pattern = r'(\[center\](?:(?!\[/center\]).)*\[/center\])'
 
             def wrap_in_spoiler(match: re.Match[str]) -> str:
@@ -100,7 +93,7 @@ class ULCX(UNIT3D):
 
         return {'description': desc}
 
-    async def get_name(self, meta: Meta) -> dict[str, str]:
+    def get_name(self, meta: Meta) -> dict[str, str]:
         ulcx_name = meta['name']
         imdb_name = meta.get('imdb_info', {}).get('title', "")
         imdb_year = str(meta.get('imdb_info', {}).get('year', ""))

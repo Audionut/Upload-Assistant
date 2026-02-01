@@ -121,8 +121,6 @@ class BJS:
         self.main_tmdb_data = main_ptbr_data or {}
         self.episode_tmdb_data = episode_ptbr_data or {}
 
-        return
-
     def get_container(self, meta: dict[str, Any]) -> str:
         container: str = meta.get('container', '')
         if container in ['mkv', 'mp4', 'avi', 'vob', 'm2ts', 'ts']:
@@ -322,7 +320,7 @@ class BJS:
         desc_parts: list[str] = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header())
+        desc_parts.append(builder.get_custom_header())
 
         # Logo
         logo_resize_url = str(meta.get("tmdb_logo", ""))
@@ -346,17 +344,17 @@ class BJS:
 
         # File information
         if meta.get('is_disc', '') == 'DVD':
-            desc_parts.append(f'[hide=DVD MediaInfo][pre]{await builder.get_mediainfo_section(meta)}[/pre][/hide]')
+            desc_parts.append(f'[hide=DVD MediaInfo][pre]{builder.get_mediainfo_section(meta)}[/pre][/hide]')
 
-        bd_info = await builder.get_bdinfo_section(meta)
+        bd_info = builder.get_bdinfo_section(meta)
         if bd_info:
             desc_parts.append(f'[hide=BDInfo][pre]{bd_info}[/pre][/hide]')
 
         # User description
-        desc_parts.append(await builder.get_user_description(meta))
+        desc_parts.append(builder.get_user_description(meta))
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        desc_parts.append(builder.get_tonemapped_header(meta))
 
         # Signature
         desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta['ua_name']} {meta['current_version']}[/url][/align]")
@@ -1340,19 +1338,20 @@ class BJS:
         - Movies: Classified as adult only if pornographic.
         - Anime TV Shows: Classified as adult only if hentai.
         """
+        combined_genres_value = meta.get('combined_genres', [])
+        # Normalize combined_genres to a list of individual genre strings.
+        if isinstance(combined_genres_value, list):
+            combined_genres = cast(list[str], combined_genres_value)
+        else:
+            # Split comma-separated strings and strip whitespace
+            combined_genres = [g.strip() for g in str(combined_genres_value).split(',') if g.strip()]
         adult_yes = "1"
         adult_no = "2"
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ["xxx", "erotic", "porn", "adult", "orgy"]
-
-        if meta.get("anime", False) and "hentai" in genres.lower():
+        if meta.get("anime", False) and "hentai" in combined_genres:
             return adult_yes
 
-        if any(
-            re.search(rf"(^|,\s*){re.escape(keyword)}(\s*,|$)", genres, re.IGNORECASE)
-            for keyword in adult_keywords
-        ):
+        if self.common.is_adult_content(meta):
             return adult_yes
 
         return adult_no

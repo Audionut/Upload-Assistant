@@ -543,24 +543,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
     else:
         console.print(f"[green]Processing {meta['name']} for upload...[/green]")
 
-        # reset trackers after any removals
-        trackers = meta['trackers']
-
-        audio_prompted = False
-        for tracker in ["AITHER", "ASC", "BJS", "BT", "CBR", "DP", "FF", "GPW", "HUNO", "IHD", "LDU", "LT", "OE", "PTS", "SAM", "SHRI", "SPD", "TTR", "TVC", "ULCX"]:
-            if tracker in trackers:
-                if not audio_prompted:
-                    await languages_manager.process_desc_language(meta, tracker=tracker)
-                    audio_prompted = True
-                else:
-                    if 'tracker_status' not in meta:
-                        meta['tracker_status'] = {}
-                    if tracker not in meta['tracker_status']:
-                        meta['tracker_status'][tracker] = {}
-                    if meta.get('unattended_audio_skip', False) or meta.get('unattended_subtitle_skip', False):
-                        meta['tracker_status'][tracker]['skip_upload'] = True
-                    else:
-                        meta['tracker_status'][tracker]['skip_upload'] = False
+        await languages_manager.process_desc_language(meta)
 
         await asyncio.sleep(0.2)
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w', encoding='utf-8') as f:

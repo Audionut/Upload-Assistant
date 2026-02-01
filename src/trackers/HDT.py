@@ -57,7 +57,7 @@ class HDT:
             token_pattern=r'name="csrfToken" value="([^"]+)"'  # nosec B106
         )
 
-    async def get_category_id(self, meta: Meta) -> int:
+    def get_category_id(self, meta: Meta) -> int:
         cat_id = 0
         category = str(meta.get('category', ''))
         resolution = str(meta.get('resolution', ''))
@@ -115,7 +115,7 @@ class HDT:
 
         return cat_id
 
-    async def edit_name(self, meta: Meta) -> str:
+    def edit_name(self, meta: Meta) -> str:
         hdt_name = str(meta.get('name', ''))
         audio = str(meta.get('audio', ''))
         hdr = str(meta.get('hdr', ''))
@@ -136,7 +136,7 @@ class HDT:
         desc_parts: list[str] = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header())
+        desc_parts.append(builder.get_custom_header())
 
         # Logo
         logo_resize_url = str(meta.get('tmdb_logo', ''))
@@ -144,7 +144,7 @@ class HDT:
             desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/center]")
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, resize=True)
+        title, episode_image, episode_overview = builder.get_tv_info(meta, resize=True)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
 
@@ -154,22 +154,22 @@ class HDT:
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # File information
-        mediainfo = await builder.get_mediainfo_section(meta)
+        mediainfo = builder.get_mediainfo_section(meta)
         if mediainfo:
             desc_parts.append(f'[left][font=consolas]{mediainfo}[/font][/left]')
 
-        bdinfo = await builder.get_bdinfo_section(meta)
+        bdinfo = builder.get_bdinfo_section(meta)
         if bdinfo:
             desc_parts.append(f'[left][font=consolas]{bdinfo}[/font][/left]')
 
         # User description
-        desc_parts.append(await builder.get_user_description(meta))
+        desc_parts.append(builder.get_user_description(meta))
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        desc_parts.append(builder.get_tonemapped_header(meta))
 
         # Screenshot Header
-        desc_parts.append(await builder.screenshot_header())
+        desc_parts.append(builder.screenshot_header())
 
         # Screenshots
         images_value = meta.get('image_list', [])
@@ -246,13 +246,13 @@ class HDT:
                 'search': imdbID,
                 'active': '0',
                 'options': '2',
-                'category[]': await self.get_category_id(meta)
+                'category[]': self.get_category_id(meta)
             }
         else:
             params = {
                 'csrfToken': self.secret_token,
                 'search': str(meta.get('title', '')),
-                'category[]': await self.get_category_id(meta),
+                'category[]': self.get_category_id(meta),
                 'options': '3'
             }
 
@@ -304,8 +304,8 @@ class HDT:
 
     async def get_data(self, meta: Meta) -> dict[str, Any]:
         data: dict[str, Any] = {
-            'filename': await self.edit_name(meta),
-            'category': await self.get_category_id(meta),
+            'filename': self.edit_name(meta),
+            'category': self.get_category_id(meta),
             'info': await self.edit_desc(meta),
             'csrfToken': self.secret_token,
         }

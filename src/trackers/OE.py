@@ -44,17 +44,18 @@ class OE(UNIT3D):
             'VipapkSudios', 'ViSION', 'WAF', 'Wardevil', 'x0r', 'xRed', 'XS', 'YakuboEncodes', 'YAWNTiC', 'YAWNiX', 'YIFY', 'YTS',
             'YuiSubs', 'ZKBL', 'ZmN', 'ZMNT'
         ]
-        pass
 
-    async def get_additional_checks(self, meta: Meta) -> bool:
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            if not meta['unattended']:
-                console.print('[bold red]Erotic not allowed at OE.')
+    def get_additional_checks(self, meta: Meta) -> bool:
+        if not self.common.prompt_adult_content(
+            meta,
+            tracker_name=self.tracker,
+            block_message='[bold red]Erotic not allowed at OE.',
+            prompt_text=None,
+            unattended_message="",
+        ):
             return False
 
-        return not (meta['is_disc'] != "BDMV" and not await self.common.check_language_requirements(meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True))
+        return not (meta['is_disc'] != "BDMV" and not self.common.check_language_requirements(meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True))
 
     async def check_image_hosts(self, meta: Meta) -> None:
         url_host_mapping = {
@@ -74,7 +75,6 @@ class OE(UNIT3D):
             img_host_index=1,
             approved_image_hosts=self.approved_image_hosts,
         )
-        return
 
     async def get_description(self, meta: Meta) -> dict[str, str]:
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf8') as f:
@@ -129,7 +129,7 @@ class OE(UNIT3D):
 
         return {'description': desc}
 
-    async def get_name(self, meta: Meta) -> dict[str, str]:
+    def get_name(self, meta: Meta) -> dict[str, str]:
         oe_name = str(meta.get('name', ''))
         resolution = str(meta.get('resolution', ''))
         video_encode = str(meta.get('video_encode', ''))
@@ -163,12 +163,10 @@ class OE(UNIT3D):
                 oe_name = oe_name.replace(f"{source}", f"{resolution}", 1)
                 oe_name = oe_name.replace(f"{video_codec}", f"{audio} {video_codec}", 1)
 
-        if not meta.get('audio_languages'):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
-        elif meta.get('audio_languages'):
+        if meta.get('audio_languages'):
             audio_languages_value = meta.get('audio_languages', [])
             audio_languages = cast(list[str], audio_languages_value) if isinstance(audio_languages_value, list) else []
-            if audio_languages and not await languages_manager.has_english_language(audio_languages) and meta.get('is_disc') != "BDMV":
+            if audio_languages and not languages_manager.has_english_language(audio_languages) and meta.get('is_disc') != "BDMV":
                 foreign_lang = str(audio_languages[0]).upper()
                 oe_name = oe_name.replace(f"{resolution}", f"{foreign_lang} {resolution}", 1)
 
@@ -187,7 +185,7 @@ class OE(UNIT3D):
 
         return {'name': oe_name}
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,
@@ -196,17 +194,18 @@ class OE(UNIT3D):
     ) -> dict[str, str]:
         _ = (reverse, mapping_only)
         video_codec = str(meta.get('video_codec', 'N/A'))
-        type = str(meta.get('type', '')).upper()
+        release_type = str(type) if type is not None else str(meta.get('type', ''))
+        release_type = release_type.upper()
 
-        if type == "DVDRIP":
-            type = "ENCODE"
+        if release_type == "DVDRIP":
+            release_type = "ENCODE"
 
         type_id = {
             'DISC': '19',
             'REMUX': '20',
             'WEBDL': '21',
-        }.get(type, '0')
-        if type == "WEBRIP":
+        }.get(release_type, '0')
+        if release_type == "WEBRIP":
             if video_codec == "HEVC":
                 # x265 Encode
                 type_id = '10'
@@ -216,7 +215,7 @@ class OE(UNIT3D):
             if video_codec == 'AVC':
                 # x264 Encode
                 type_id = '15'
-        if type == "ENCODE":
+        if release_type == "ENCODE":
             if video_codec == "HEVC":
                 # x265 Encode
                 type_id = '10'

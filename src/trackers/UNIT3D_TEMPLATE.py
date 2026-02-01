@@ -22,14 +22,13 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [""]
-        pass
 
     # The section below can be deleted if no changes are needed, as everything else is handled in UNIT3D.py
     # If advanced changes are required, copy the necessary functions from UNIT3D.py here
     # For example, if you need to modify the description, copy and paste the 'get_description' function and adjust it accordingly
 
     # If default UNIT3D categories, remove this function
-    async def get_category_id(
+    def get_category_id(
         self,
         meta: Meta,
         category: Optional[str] = None,
@@ -44,7 +43,7 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
         return {'category_id': category_id}
 
     # If default UNIT3D types, remove this function
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,
@@ -63,7 +62,7 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
         return {'type_id': type_id}
 
     # If default UNIT3D resolutions, remove this function
-    async def get_resolution_id(
+    def get_resolution_id(
         self,
         meta: Meta,
         resolution: Optional[str] = None,
@@ -89,20 +88,20 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
     # If there are tracker specific checks to be done before upload, add them here
     # Is it a movie only tracker? Are concerts banned? Etc.
     # If no checks are necessary, remove this function
-    async def get_additional_checks(self, _meta: Meta) -> bool:
+    def get_additional_checks(self, _meta: Meta) -> bool:
         should_continue = True
         return should_continue
 
     # If the tracker has modq in the api, otherwise remove this function
     # If no additional data is required, remove this function
-    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+    def get_additional_data(self, meta: Meta) -> dict[str, Any]:
         data = {
-            'modq': await self.get_flag(meta, 'modq'),
+            'modq': self.get_flag(meta, 'modq'),
         }
 
         return data
 
     # If the tracker has specific naming conventions, add them here; otherwise, remove this function
-    async def get_name(self, meta: Meta) -> dict[str, str]:
+    def get_name(self, meta: Meta) -> dict[str, str]:
         UNIT3D_TEMPLATE_name = meta['name']
         return {'name': UNIT3D_TEMPLATE_name}

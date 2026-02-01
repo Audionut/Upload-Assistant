@@ -27,7 +27,7 @@ class ACM:
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups: list[str] = []
 
-    async def get_type_id(self, meta: dict[str, Any]) -> str:
+    def get_type_id(self, meta: dict[str, Any]) -> str:
         if meta['is_disc'] == "BDMV":
             bdinfo = meta['bdinfo']
             bd_sizes = [25, 50, 66, 100]
@@ -73,14 +73,14 @@ class ACM:
 
         return type_id
 
-    async def get_cat_id(self, category_name: str) -> str:
+    def get_cat_id(self, category_name: str) -> str:
         category_id = {
             'MOVIE': '1',
             'TV': '2',
         }.get(category_name, '0')
         return category_id
 
-    async def get_resolution_id(self, meta: dict[str, Any]) -> str:
+    def get_resolution_id(self, meta: dict[str, Any]) -> str:
         resolution_id = {
             '2160p': '1',
             '1080p': '2',
@@ -94,7 +94,7 @@ class ACM:
         return resolution_id
 
     # ACM rejects uploads with more that 10 keywords
-    async def get_keywords(self, meta: dict[str, Any]) -> str:
+    def get_keywords(self, meta: dict[str, Any]) -> str:
         keywords: str = str(meta.get('keywords', ''))
         if keywords != '':
             keywords_list = keywords.split(',')
@@ -183,13 +183,13 @@ class ACM:
 
     async def upload(self, meta: dict[str, Any], _) -> bool:
         await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
-        cat_id = await self.get_cat_id(meta['category'])
-        type_id = await self.get_type_id(meta)
-        resolution_id = await self.get_resolution_id(meta)
+        cat_id = self.get_cat_id(meta['category'])
+        type_id = self.get_type_id(meta)
+        resolution_id = self.get_resolution_id(meta)
         desc = await self.get_description(meta)
-        region_id = await self.common.unit3d_region_ids(meta.get('region', ''))
-        distributor_id = await self.common.unit3d_distributor_ids(meta.get('distributor', ''))
-        acm_name = await self.get_name(meta)
+        region_id = self.common.unit3d_region_ids(meta.get('region', ''))
+        distributor_id = self.common.unit3d_distributor_ids(meta.get('distributor', ''))
+        acm_name = self.get_name(meta)
         anon = 0 if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False) else 1
 
         if meta['bdinfo'] is not None:
@@ -222,7 +222,7 @@ class ACM:
             'anonymous': anon,
             'stream': meta['stream'],
             'sd': meta['sd'],
-            'keywords': await self.get_keywords(meta),
+            'keywords': self.get_keywords(meta),
             'personal_release': int(meta.get('personalrelease', False)),
             'internal': 0,
             'featured': 0,
@@ -286,8 +286,8 @@ class ACM:
         params: dict[str, Any] = {
             'api_token': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'tmdb': meta['tmdb'],
-            'categories[]': (await self.get_cat_id(meta['category'])),
-            'types[]': (await self.get_type_id(meta)),
+            'categories[]': (self.get_cat_id(meta['category'])),
+            'types[]': (self.get_type_id(meta)),
             # A majority of the ACM library doesn't contain resolution information
             # 'resolutions[]' : await self.get_res_id(meta['resolution']),
             # 'name' : ""
@@ -313,7 +313,7 @@ class ACM:
 
         return dupes
 
-    async def get_name(self, meta: dict[str, Any]) -> str:
+    def get_name(self, meta: dict[str, Any]) -> str:
         name: str = meta.get('name', '')
         aka: str = meta.get('aka', '')
         original_title: str = meta.get('original_title', '')
@@ -326,10 +326,9 @@ class ACM:
             # ugly fix to remove the extra space in the title
             aka = aka + ' '
             name = name.replace(aka, f' / {original_title} {chr(int("202A", 16))}')
-        elif aka == '':
-            if meta.get('title') != original_title:
-                # name = f'{name[:name.find(year)]}/ {original_title} {chr(int("202A", 16))}{name[name.find(year):]}'
-                name = name.replace(meta['title'], f"{meta['title']} / {original_title} {chr(int('202A', 16))}")
+        elif aka == '' and meta.get('title') != original_title:
+            # name = f'{name[:name.find(year)]}/ {original_title} {chr(int("202A", 16))}{name[name.find(year):]}'
+            name = name.replace(meta['title'], f"{meta['title']} / {original_title} {chr(int('202A', 16))}")
         if 'AAC' in audio:
             name = name.replace(audio.strip().replace("  ", " "), audio.replace("AAC ", "AAC"))
         name = name.replace("DD+ ", "DD+")

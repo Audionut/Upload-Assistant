@@ -11,6 +11,7 @@ from glob import glob
 from pathlib import Path
 from typing import Any, Optional, cast
 
+import cli_ui
 import defusedxml.ElementTree as ET
 from langcodes import Language
 from pymediainfo import MediaInfo
@@ -21,6 +22,18 @@ from src.exportmi import setup_mediainfo_library
 
 PlaylistItem = dict[str, Any]
 PlaylistInfo = dict[str, Any]
+
+
+def _coerce_mediainfo_text(value: str | MediaInfo) -> str:
+    if isinstance(value, MediaInfo):
+        return str(value)
+    return value
+
+
+def _coerce_mediainfo_json(value: str | MediaInfo) -> str:
+    if isinstance(value, MediaInfo):
+        return str(value)
+    return value
 
 
 class DiscParse:
@@ -211,7 +224,8 @@ class DiscParse:
                                     console.print(f"[{idx}] {playlist['file']} - {duration_str} - {items_str}")
 
                                 console.print("[bold yellow]Enter playlist numbers separated by commas, 'ALL' to select all, or press Enter to select the biggest playlist:")
-                                user_input = input("Select playlists: ").strip()
+                                user_input_raw = cli_ui.ask_string("Select playlists: ")
+                                user_input = (user_input_raw or "").strip()
 
                                 if user_input.lower() == "all":
                                     selected_playlists = valid_playlists
@@ -341,7 +355,8 @@ class DiscParse:
 
                                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                     console.print("[bold green]You can create a custom Edition for this playlist.")
-                                    user_input = input(f"Enter a new Edition title for playlist {playlist['file']} (or press Enter to keep the current label): ").strip()
+                                    user_input_raw = cli_ui.ask_string(f"Enter a new Edition title for playlist {playlist['file']} (or press Enter to keep the current label): ")
+                                    user_input = (user_input_raw or "").strip()
                                     if user_input:
                                         bdinfo['edition'] = user_input
                                         selected_playlists[idx]['edition'] = user_input
@@ -563,14 +578,14 @@ class DiscParse:
                                 console.print(f"[yellow]Specialized MediaInfo failed for {ifo_file}, falling back to standard[/yellow]")
                                 if stderr:
                                     console.print(f"[red]MediaInfo stderr: {stderr.decode()}[/red]")
-                                vob_set_mi = MediaInfo.parse(ifo_file, output='JSON')
+                                vob_set_mi = _coerce_mediainfo_json(MediaInfo.parse(ifo_file, output='JSON'))
                         else:
-                            vob_set_mi = MediaInfo.parse(ifo_file, output='JSON')
+                            vob_set_mi = _coerce_mediainfo_json(MediaInfo.parse(ifo_file, output='JSON'))
 
                     except Exception as e:
                         console.print(f"[yellow]Error with DVD MediaInfo binary for JSON: {str(e)}")
                         # Fall back to standard MediaInfo
-                        vob_set_mi = MediaInfo.parse(ifo_file, output='JSON')
+                        vob_set_mi = _coerce_mediainfo_json(MediaInfo.parse(ifo_file, output='JSON'))
 
                     vob_set_mi = json.loads(vob_set_mi)
                     tracks = vob_set_mi.get('media', {}).get('track', [])
@@ -597,9 +612,9 @@ class DiscParse:
                     main_set_duration = vob_set_duration_float
 
             each['main_set'] = main_set
-            set = main_set[0][:2]
-            each['vob'] = vob = f"{path}/VTS_{set}_1.VOB"
-            each['ifo'] = ifo = f"{path}/VTS_{set}_0.IFO"
+            set_id = main_set[0][:2]
+            each['vob'] = vob = f"{path}/VTS_{set_id}_1.VOB"
+            each['ifo'] = ifo = f"{path}/VTS_{set_id}_0.IFO"
 
             # Use basenames for mediainfo processing to avoid full paths in output
             vob_basename = os.path.basename(vob)
@@ -622,12 +637,12 @@ class DiscParse:
                             console.print("[yellow]Specialized MediaInfo failed for VOB, falling back[/yellow]")
                             if stderr:
                                 console.print(f"[red]MediaInfo stderr: {stderr.decode()}[/red]")
-                            vob_mi_output = MediaInfo.parse(vob_basename, output='STRING', full=False).replace('\r\n', '\n')
+                            vob_mi_output = _coerce_mediainfo_text(MediaInfo.parse(vob_basename, output='STRING', full=False)).replace('\r\n', '\n')
                     else:
-                        vob_mi_output = MediaInfo.parse(vob_basename, output='STRING', full=False).replace('\r\n', '\n')
+                        vob_mi_output = _coerce_mediainfo_text(MediaInfo.parse(vob_basename, output='STRING', full=False)).replace('\r\n', '\n')
                 except Exception as e:
                     console.print(f"[yellow]Error with DVD MediaInfo binary for VOB: {str(e)}")
-                    vob_mi_output = MediaInfo.parse(vob_basename, output='STRING', full=False).replace('\r\n', '\n')
+                    vob_mi_output = _coerce_mediainfo_text(MediaInfo.parse(vob_basename, output='STRING', full=False)).replace('\r\n', '\n')
 
                 # Store VOB mediainfo (same output for both keys)
                 each['vob_mi'] = vob_mi_output
@@ -649,12 +664,12 @@ class DiscParse:
                             console.print("[yellow]Specialized MediaInfo failed for IFO, falling back[/yellow]")
                             if stderr:
                                 console.print(f"[red]MediaInfo stderr: {stderr.decode()}[/red]")
-                            ifo_mi_output = MediaInfo.parse(ifo_basename, output='STRING', full=False).replace('\r\n', '\n')
+                            ifo_mi_output = _coerce_mediainfo_text(MediaInfo.parse(ifo_basename, output='STRING', full=False)).replace('\r\n', '\n')
                     else:
-                        ifo_mi_output = MediaInfo.parse(ifo_basename, output='STRING', full=False).replace('\r\n', '\n')
+                        ifo_mi_output = _coerce_mediainfo_text(MediaInfo.parse(ifo_basename, output='STRING', full=False)).replace('\r\n', '\n')
                 except Exception as e:
                     console.print(f"[yellow]Error with DVD MediaInfo binary for IFO: {str(e)}")
-                    ifo_mi_output = MediaInfo.parse(ifo_basename, output='STRING', full=False).replace('\r\n', '\n')
+                    ifo_mi_output = _coerce_mediainfo_text(MediaInfo.parse(ifo_basename, output='STRING', full=False)).replace('\r\n', '\n')
 
                 each['ifo_mi'] = ifo_mi_output
                 each['ifo_mi_full'] = ifo_mi_output
@@ -662,8 +677,8 @@ class DiscParse:
             except Exception as e:
                 console.print(f"[yellow]Error using DVD MediaInfo binary, falling back to standard: {e}")
                 # Fallback to standard MediaInfo using basenames
-                vob_mi_output = MediaInfo.parse(vob_basename, output='STRING', full=False).replace('\r\n', '\n')
-                ifo_mi_output = MediaInfo.parse(ifo_basename, output='STRING', full=False).replace('\r\n', '\n')
+                vob_mi_output = _coerce_mediainfo_text(MediaInfo.parse(vob_basename, output='STRING', full=False)).replace('\r\n', '\n')
+                ifo_mi_output = _coerce_mediainfo_text(MediaInfo.parse(ifo_basename, output='STRING', full=False)).replace('\r\n', '\n')
                 each['vob_mi'] = vob_mi_output
                 each['ifo_mi'] = ifo_mi_output
                 each['vob_mi_full'] = vob_mi_output
@@ -677,7 +692,7 @@ class DiscParse:
             each['size'] = dvd_size
         return discs
 
-    async def get_hddvd_info(self, discs: list[dict[str, Any]], meta: dict[str, Any]):
+    def get_hddvd_info(self, discs: list[dict[str, Any]], meta: dict[str, Any]):
         use_largest = int(self.config['DEFAULT'].get('use_largest_playlist', False))
         for each in discs:
             path = each.get('path')
@@ -806,7 +821,7 @@ class DiscParse:
                         raise FileNotFoundError(f"Selected .EVO file {selected_evo_path} does not exist.")
 
                     # Parse MediaInfo for the largest .EVO file
-                    original_mediainfo = MediaInfo.parse(selected_evo_path, output='STRING', full=False)
+                    original_mediainfo = _coerce_mediainfo_text(MediaInfo.parse(selected_evo_path, output='STRING', full=False))
 
                     modified_mediainfo = re.sub(
                         r"File size\s+:\s+[^\r\n]+",

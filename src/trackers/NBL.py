@@ -36,9 +36,8 @@ class NBL:
                               'SpaceFish', 'SPASM', 'SSA', 'Telly', 'Tenrai-Sensei', 'TM', 'Trix', 'URANiME', 'VipapkStudios', 'ViSiON', 'Wardevil', 'xRed',
                               'XS', 'YakuboEncodes', 'YuiSubs', 'ZKBL', 'ZmN', 'ZMNT']
 
-        pass
 
-    async def get_cat_id(self, meta: Meta) -> int:
+    def get_cat_id(self, meta: Meta) -> int:
         cat_id = 3 if meta.get('tv_pack', 0) == 1 else 1
         return cat_id
 
@@ -66,7 +65,7 @@ class NBL:
             'api_key': self.api_key,
             'tvmazeid': int(meta.get('tvmaze_id', 0)),
             'mediainfo': mi_dump,
-            'category': await self.get_cat_id(meta),
+            'category': self.get_cat_id(meta),
             'ignoredupes': 'on'
         }
 
@@ -104,9 +103,7 @@ class NBL:
             if meta['tvmaze_id'] != 0:
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     console.print("[red]Only TV or TV Movies are allowed at NBL, this has a tvmaze ID[/red]")
-                    if cli_ui.ask_yes_no("Do you want to upload it?", default=False):
-                        pass
-                    else:
+                    if not cli_ui.ask_yes_no("Do you want to upload it?", default=False):
                         meta['skipping'] = "NBL"
                         return []
                 else:

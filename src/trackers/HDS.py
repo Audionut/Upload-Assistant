@@ -50,7 +50,7 @@ class HDS:
         desc_parts: list[str] = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header())
+        desc_parts.append(builder.get_custom_header())
 
         # Logo
         logo_resize_url = str(meta.get('tmdb_logo', ''))
@@ -58,7 +58,7 @@ class HDS:
             desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/center]")
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, resize=True)
+        title, episode_image, episode_overview = builder.get_tv_info(meta, resize=True)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
 
@@ -68,17 +68,16 @@ class HDS:
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # File information
-        mediainfo = await builder.get_mediainfo_section(meta)
+        mediainfo = builder.get_mediainfo_section(meta)
         if mediainfo:
             desc_parts.append(f'[pre]{mediainfo}[/pre]')
 
-        bdinfo = await builder.get_bdinfo_section(meta)
+        bdinfo = builder.get_bdinfo_section(meta)
         if bdinfo:
             desc_parts.append(f'[pre]{bdinfo}[/pre]')
 
         # User description
-        desc_parts.append(await builder.get_user_description(meta))
-
+        desc_parts.append(builder.get_user_description(meta))
         # Disc menus screenshots header
         menu_images_value = meta.get("menu_images", [])
         menu_images: list[dict[str, Any]] = []
@@ -92,7 +91,7 @@ class HDS:
                 ]
             )
         if menu_images:
-            desc_parts.append(await builder.menu_screenshot_header(meta))
+            desc_parts.append(builder.menu_screenshot_header(meta))
 
             # Disc menus screenshots
             menu_screenshots_block = ""
@@ -108,7 +107,7 @@ class HDS:
                 desc_parts.append(f"[center]\n{menu_screenshots_block}\n[/center]")
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        desc_parts.append(builder.get_tonemapped_header(meta))
 
         # Screenshot Header
         images_value = meta.get("image_list", [])
@@ -123,7 +122,7 @@ class HDS:
                 ]
             )
         if images:
-            desc_parts.append(await builder.screenshot_header())
+            desc_parts.append(builder.screenshot_header())
 
             # Screenshots
             if images:
@@ -231,7 +230,7 @@ class HDS:
 
         return dupes
 
-    async def get_category_id(self, meta: Meta) -> int:
+    def get_category_id(self, meta: Meta) -> int:
         resolution = str(meta.get('resolution', ''))
         category = str(meta.get('category', ''))
         type_ = str(meta.get('type', ''))
@@ -337,7 +336,7 @@ class HDS:
 
     async def get_data(self, meta: Meta) -> dict[str, Any]:
         data: dict[str, Any] = {
-            'category': await self.get_category_id(meta),
+            'category': self.get_category_id(meta),
             'filename': str(meta.get('name', '')),
             'genre': str(meta.get('genres', '')),
             'imdb': str(meta.get('imdb', '')),

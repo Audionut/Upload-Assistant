@@ -23,9 +23,8 @@ class PT(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
-        pass
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,
@@ -43,7 +42,7 @@ class PT(UNIT3D):
         }.get(str(meta.get('type', '')), '0')
         return {'type_id': type_id}
 
-    async def get_resolution_id(
+    def get_resolution_id(
         self,
         meta: Meta,
         resolution: Optional[str] = None,
@@ -66,7 +65,7 @@ class PT(UNIT3D):
         }.get(str(meta.get('resolution', '')), '10')
         return {'resolution_id': resolution_id}
 
-    async def get_name(self, meta: Meta) -> dict[str, str]:
+    def get_name(self, meta: Meta) -> dict[str, str]:
         name = str(meta.get('name', '')).replace(' ', '.')
 
         pt_name = name
@@ -107,7 +106,7 @@ class PT(UNIT3D):
                         media_info_text = f.read()
 
                     if not found_portuguese_audio:
-                        audio_sections = re.findall(r'Audio(?: #\d+)?\s*\n(.*?)(?=\n\n(?:Audio|Video|Text|Menu)|$)', media_info_text, re.DOTALL | re.IGNORECASE)
+                        audio_sections = re.findall(r'Audio(?: #\d+)?\s*\n(.+)(?=\n\n(?:Audio|Video|Text|Menu)|$)', media_info_text, re.DOTALL | re.IGNORECASE)
                         for section in audio_sections:
                             language_match = re.search(r'Language\s*:\s*(.+)', section, re.IGNORECASE)
                             title_match = re.search(r'Title\s*:\s*(.+)', section, re.IGNORECASE)
@@ -154,9 +153,9 @@ class PT(UNIT3D):
                         media_info_text = f.read()
 
                     if not found_portuguese_subtitle:
-                        text_sections = re.findall(r'Text(?: #\d+)?\s*\n(.*?)(?=\n\n(?:Audio|Video|Text|Menu)|$)', media_info_text, re.DOTALL | re.IGNORECASE)
+                        text_sections = re.findall(r'Text(?: #\d+)?\s*\n(.+)(?=\n\n(?:Audio|Video|Text|Menu)|$)', media_info_text, re.DOTALL | re.IGNORECASE)
                         if not text_sections:
-                            text_sections = re.findall(r'Subtitle(?: #\d+)?\s*\n(.*?)(?=\n\n(?:Audio|Video|Text|Menu)|$)', media_info_text, re.DOTALL | re.IGNORECASE)
+                            text_sections = re.findall(r'Subtitle(?: #\d+)?\s*\n(.+)(?=\n\n(?:Audio|Video|Text|Menu)|$)', media_info_text, re.DOTALL | re.IGNORECASE)
 
                         for section in text_sections:
                             language_match = re.search(r'Language\s*:\s*(.+)', section, re.IGNORECASE)
@@ -178,14 +177,14 @@ class PT(UNIT3D):
 
         return 1 if found_portuguese_subtitle else 0
 
-    async def get_distributor_ids(self, _meta: Meta) -> dict[str, str]:
+    def get_distributor_ids(self, _meta: Meta) -> dict[str, str]:
         return {}
 
-    async def get_region_id(self, meta: Meta) -> dict[str, str]:
+    def get_region_id(self, meta: Meta) -> dict[str, str]:
         _ = meta
         return {}
 
-    async def get_additional_data(self, meta: Meta) -> dict[str, str]:
+    def get_additional_data(self, meta: Meta) -> dict[str, str]:
         audio_flag = self.get_audio(meta)
         subtitle_flag = self.get_subtitles(meta)
 

@@ -107,7 +107,7 @@ class SPD:
                 media_info = await mi_file.read()
             return media_info, None
 
-    async def get_screenshots(self, meta: Meta) -> list[str]:
+    def get_screenshots(self, meta: Meta) -> list[str]:
         images = cast(list[dict[str, Any]], meta.get('menu_images', [])) + cast(
             list[dict[str, Any]], meta.get('image_list', [])
         )
@@ -163,12 +163,8 @@ class SPD:
             return spd_channel
 
         # if user enters id as a string number
-        if isinstance(spd_channel, str):
-            if spd_channel.isdigit():
-                return int(spd_channel)
-            # if user enter tag then it will use API to search
-            else:
-                pass
+        if isinstance(spd_channel, str) and spd_channel.isdigit():
+            return int(spd_channel)
 
         params: dict[str, str] = {
             'search': str(spd_channel)
@@ -191,9 +187,7 @@ class SPD:
                             return int(channel_id)
                     else:
                         console.print(f'[{self.tracker}]: Could not find the channel ID. Please check if you entered it correctly.')
-
-                else:
-                    console.print(f"[bold red]HTTP request failed. Status: {response.status_code}")
+                console.print(f"[{self.tracker}]: Unable to find a matching channel for '{spd_channel}'.")
 
         except Exception as e:
             console.print(f"[bold red]Unexpected error: {e}")
@@ -203,11 +197,11 @@ class SPD:
         builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts: list[str] = []
 
-        user_description = await builder.get_user_description(meta)
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, resize=True)
+        user_description = builder.get_user_description(meta)
+        title, episode_image, episode_overview = builder.get_tv_info(meta, resize=True)
         if user_description or episode_overview:  # Avoid unnecessary descriptions
             # Custom Header
-            desc_parts.append(await builder.get_custom_header())
+            desc_parts.append(builder.get_custom_header())
 
             # Logo
             logo_resize_url = str(meta.get('tmdb_logo', ''))
@@ -227,7 +221,7 @@ class SPD:
             desc_parts.append(user_description)
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        desc_parts.append(builder.get_tonemapped_header(meta))
 
         # Signature
         desc_parts.append(
@@ -246,7 +240,7 @@ class SPD:
 
         return description
 
-    async def edit_name(self, meta: Meta) -> str:
+    def edit_name(self, meta: Meta) -> str:
         torrent_name = str(meta.get('name', ''))
 
         name = torrent_name.replace(':', ' -')
@@ -280,12 +274,12 @@ class SPD:
             'coverPhotoUrl': str(meta.get('backdrop', '')),
             'description': str(meta.get('genres', '')),
             'media_info': media_info,
-            'name': await self.edit_name(meta),
+            'name': self.edit_name(meta),
             'nfo': await self.get_nfo(meta),
             'plot': str(meta.get('overview_meta', '') or meta.get('overview', '')),
             'poster': str(meta.get('poster', '')),
             'technicalDetails': await self.edit_desc(meta),
-            'screenshots': await self.get_screenshots(meta),
+            'screenshots': self.get_screenshots(meta),
             'type': await self.get_cat_id(meta),
             'url': str(cast(dict[str, Any], meta.get('imdb_info', {})).get('imdb_url', '')),
         }

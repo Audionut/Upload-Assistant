@@ -42,17 +42,17 @@ class DC:
         desc_parts: list[str] = []
 
         # Custom Header
-        custom_header = await builder.get_custom_header()
+        custom_header = builder.get_custom_header()
         desc_parts.append(custom_header)
 
         # TV
-        title, _episode_image, episode_overview = await builder.get_tv_info(meta)
+        title, _episode_image, episode_overview = builder.get_tv_info(meta)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # File information
-        bdinfo_section = await builder.get_bdinfo_section(meta)
+        bdinfo_section = builder.get_bdinfo_section(meta)
         desc_parts.append(bdinfo_section)
 
         # NFO
@@ -61,7 +61,7 @@ class DC:
             desc_parts.append(f"[nfo]{nfo_content}[/nfo]")
 
         # User description
-        user_description = await builder.get_user_description(meta)
+        user_description = builder.get_user_description(meta)
         desc_parts.append(user_description)
 
         # Screenshots
@@ -95,7 +95,7 @@ class DC:
                 desc_parts.append(f"[center]{screenshots_block}[/center]")
 
         # Tonemapped Header
-        tonemapped_header = await builder.get_tonemapped_header(meta)
+        tonemapped_header = builder.get_tonemapped_header(meta)
         desc_parts.append(tonemapped_header)
 
         # Signature
@@ -205,7 +205,7 @@ class DC:
 
         return []
 
-    async def edit_name(self, meta: Meta) -> str:
+    def edit_name(self, meta: Meta) -> str:
         """
         Edits the name according to DC's naming conventions.
         Scene uploads should use the scene name.
@@ -250,7 +250,6 @@ class DC:
             img_host_index=1,
             approved_image_hosts=self.approved_image_hosts,
         )
-        return
 
     async def fetch_data(self, meta: Meta) -> dict[str, Any]:
         anon = '1' if meta['anon'] or self.config['TRACKERS'][self.tracker].get('anon', False) else '0'
@@ -272,7 +271,7 @@ class DC:
 
     async def upload(self, meta: Meta, _) -> bool:
         data = await self.fetch_data(meta)
-        torrent_title = await self.edit_name(meta)
+        torrent_title = self.edit_name(meta)
         response = None
 
         if not meta.get('debug', False):

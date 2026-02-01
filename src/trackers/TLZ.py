@@ -21,9 +21,8 @@ class TLZ(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [""]
-        pass
 
-    async def get_category_id(
+    def get_category_id(
         self,
         meta: Meta,
         category: Optional[str] = None,
@@ -38,7 +37,7 @@ class TLZ(UNIT3D):
         }.get(category_value, '0')
         return {'category_id': category_id}
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,

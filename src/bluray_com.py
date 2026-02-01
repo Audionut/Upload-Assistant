@@ -320,7 +320,7 @@ async def extract_bluray_release_info(html_content: str, meta: Meta) -> list[Rel
         return []
 
 
-async def extract_product_id(url: str, meta: Meta) -> Optional[str]:
+def extract_product_id(url: str, meta: Meta) -> Optional[str]:
     pattern = r'blu-ray\.com/.*?/(\d+)/'
     match = re.search(pattern, url)
 
@@ -358,7 +358,7 @@ async def get_bluray_releases(meta: Meta) -> list[Release]:
         if meta.get('debug'):
             console.print(f"[blue]Processing movie {idx}/{len(movie_links)}: {movie['title']} ({movie['year']})[/blue]")
         releases_url = movie['releases_url']
-        product_id = await extract_product_id(releases_url, meta)
+        product_id = extract_product_id(releases_url, meta)
         if not product_id:
             console.print(f"[red]Could not extract product ID from {releases_url}[/red]")
             continue
@@ -489,7 +489,8 @@ async def get_bluray_releases(meta: Meta) -> list[Release]:
 
             while True:
                 try:  # noqa: PERF203
-                    selection = input(f"Selection (1-{len(matching_releases)}/a/n): ").strip().lower()
+                    selection_raw = cli_ui.ask_string(f"Selection (1-{len(matching_releases)}/a/n): ")
+                    selection = (selection_raw or "").strip().lower()
                     if selection == 'a':
                         cli_ui.info("All releases selected")
                         detailed_releases = await process_all_releases(matching_releases, meta)
@@ -554,7 +555,7 @@ async def get_bluray_releases(meta: Meta) -> list[Release]:
     return matching_releases
 
 
-async def parse_release_details(response_text: str, release: Release, meta: Meta) -> Release:
+def parse_release_details(response_text: str, release: Release, meta: Meta) -> Release:
     try:
         soup: Any = BeautifulSoup(response_text, 'lxml')
         specs_td: Any = soup.find('td', width="228px", style=_style_specs)
@@ -660,7 +661,7 @@ async def parse_release_details(response_text: str, release: Release, meta: Meta
             if subs_div:
                 subtitle_text = subs_div.get_text().strip()
                 subtitle_text = re.sub(r'\s*\(less\)\s*', '', subtitle_text)
-                subtitles = [s.strip() for s in re.split(r',|\n', subtitle_text) if s.strip()]
+                subtitles = [s.strip() for s in re.split(r"[,\n]", subtitle_text) if s.strip()]
                 specs['subtitles'] = subtitles
                 if meta['debug']:
                     console.print(f"[blue]Subtitles: {', '.join(subtitles)}[/blue]")
@@ -895,7 +896,7 @@ async def fetch_release_details(release: Release, meta: Meta) -> Release:
             response_text = await asyncio.to_thread(Path(debug_filename).read_text, encoding="utf-8")
 
             if response_text and "No index" not in response_text:
-                return await parse_release_details(response_text, release, meta)
+                return parse_release_details(response_text, release, meta)
             else:
                 console.print("[yellow]Cached file exists but appears to be invalid, will fetch fresh data[/yellow]")
     except Exception as e:
@@ -981,7 +982,7 @@ async def fetch_release_details(release: Release, meta: Meta) -> Release:
         console.print("[red]Failed to retrieve release details after all attempts[/red]")
         return release
     else:
-        release = await parse_release_details(response_text, release, meta)
+        release = parse_release_details(response_text, release, meta)
         return release
 
 
@@ -1413,7 +1414,6 @@ async def process_all_releases(releases: Sequence[Release], meta: Meta) -> list[
                 # Subtitle checks
                 if 'subtitles' in specs and meta_subtitles:
                     sub_matches = 0
-                    missing_subs = 0
                     available_release_subs = list(cast(list[str], specs.get('subtitles', [])))
 
                     for meta_sub in meta_subtitles:
@@ -1434,7 +1434,6 @@ async def process_all_releases(releases: Sequence[Release], meta: Meta) -> list[
                             log_and_print(f"[green]✓[/green] Subtitle match found: {meta_sub} -> {matched_sub}", release_logs)
                             available_release_subs.pop(matched_idx)
                         else:
-                            missing_subs += 1
                             log_and_print(f"[red]✗[/red] No match found for subtitle: {meta_sub}", release_logs)
 
                     total_subs = len(meta_subtitles)
@@ -1502,7 +1501,8 @@ async def process_all_releases(releases: Sequence[Release], meta: Meta) -> list[
                 if (not meta.get('unattended') or (meta.get('unattended') and meta.get('unattended_confirm', False))):
                     cli_ui.info(f"Single match found: {close_matches[0]['title']} ({close_matches[0]['country']}) with score {best_score:.1f}/100")
                     while True:
-                        user_input = input("Do you want to use this release? (y/n): ").strip().lower()
+                        user_input_raw = cli_ui.ask_string("Do you want to use this release? (y/n): ")
+                        user_input = (user_input_raw or "").strip().lower()
                         try:
                             if user_input == 'y':
                                 region_code = map_country_to_region_code(close_matches[0]['country'])
@@ -1555,14 +1555,16 @@ async def process_all_releases(releases: Sequence[Release], meta: Meta) -> list[
 
                     while True:
                         console.print("Enter the number of the release to use, 'p' to print logs for a release, or 'n' to skip:")
-                        user_input = input("Selection: ").strip().lower()
+                        user_input_raw = cli_ui.ask_string("Selection: ")
+                        user_input = (user_input_raw or "").strip().lower()
                         if user_input == 'n':
                             cli_ui.warning("No release selected.")
                             detailed_releases = []
                             break
                         elif user_input == 'p':
                             try:
-                                release_idx = int(input(f"Enter the release number (1-{len(close_matches)}) to print logs: ").strip())
+                                release_idx_raw = cli_ui.ask_string(f"Enter the release number (1-{len(close_matches)}) to print logs: ")
+                                release_idx = int((release_idx_raw or "").strip())
                                 if 1 <= release_idx <= len(close_matches):
                                     selected_release = close_matches[release_idx - 1]
                                     for logged_release, release_logs in logs:
@@ -1624,7 +1626,8 @@ async def process_all_releases(releases: Sequence[Release], meta: Meta) -> list[
                             for log in release_logs:
                                 console.print(log)
                     while True:
-                        user_input = input("Do you want to use this release? (y/n): ").strip().lower()
+                        user_input_raw = cli_ui.ask_string("Do you want to use this release? (y/n): ")
+                        user_input = (user_input_raw or "").strip().lower()
                         try:
                             if user_input == 'y':
                                 region_code = map_country_to_region_code(best_release['country'])

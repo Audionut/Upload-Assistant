@@ -6,7 +6,6 @@ from typing import Any, Optional, cast
 import cloudscraper
 
 from src.console import console
-from src.languages import languages_manager
 from src.tmdb import TmdbManager
 from src.trackers.UNIT3D import UNIT3D
 
@@ -27,7 +26,7 @@ class EMUW(UNIT3D):
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
 
-    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         """
         Generate EMUW-compliant torrent name format
         Format: [Spanish Title] [Season] [Year] [Resolution] [Format] [Codec] [Audio] [SUBS] - [Group]
@@ -37,7 +36,7 @@ class EMUW(UNIT3D):
         - Sound! Euphonium S03 2025 1080p WEB-DL AVC JAP AAC 2.0 SUBS-Fool
         """
         # Get Spanish title if available and configured
-        title = await self._get_title(meta)
+        title = self._get_title(meta)
 
         # Get season using season_int
         season = ""
@@ -49,12 +48,8 @@ class EMUW(UNIT3D):
         video_format = self._map_format(meta)
         video_codec = self._map_codec(meta)
 
-        # Process language information
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
-
         # Build audio string
-        audio_str = await self._build_audio_string(meta)
+        audio_str = self._build_audio_string(meta)
 
         # Check for Spanish subtitles
         subs_tag = " SUBS" if self._has_spanish_subs(meta) else ""
@@ -89,7 +84,7 @@ class EMUW(UNIT3D):
         spanish_title = None
 
         # Try to get from IMDb with priority: country match, then language match
-        imdb_info_raw = meta.get('imdb_info')
+        imdb_info_raw = meta.get('imdb_info`')
         imdb_info: dict[str, Any] = cast(dict[str, Any], imdb_info_raw) if isinstance(imdb_info_raw, dict) else {}
         akas_raw = imdb_info.get('akas', [])
         akas: list[Any] = cast(list[Any], akas_raw) if isinstance(akas_raw, list) else []
@@ -189,7 +184,7 @@ class EMUW(UNIT3D):
 
         return f"{hdr_prefix}{codec}".strip()
 
-    async def _get_original_language(self, meta: dict[str, Any]) -> Optional[str]:
+    def _get_original_language(self, meta: dict[str, Any]) -> Optional[str]:
         """Get the original language from existing metadata"""
         original_lang = None
 
@@ -220,7 +215,7 @@ class EMUW(UNIT3D):
 
         return None
 
-    async def _build_audio_string(self, meta: dict[str, Any]) -> str:
+    def _build_audio_string(self, meta: dict[str, Any]) -> str:
         """
         Build audio string in EMUW format with proper priority order
 
@@ -239,7 +234,7 @@ class EMUW(UNIT3D):
         if not audio_langs:
             return ''
 
-        original_lang = await self._get_original_language(meta)
+        original_lang = self._get_original_language(meta)
         has_spanish_audio = 'ESP' in audio_langs or 'LAT' in audio_langs
         has_spanish_subs = self._has_spanish_subs(meta)
         num_audio_tracks = len(audio_tracks)
@@ -424,7 +419,7 @@ class EMUW(UNIT3D):
 
         return False
 
-    async def get_cat_id(self, category_name: str) -> str:
+    def get_cat_id(self, category_name: str) -> str:
         """Categories: Movies(1), Series(2), Documentales(4), Musica(5), Juegos(6), Software(7)"""
         category_map = {
             'MOVIE': '1',
@@ -433,7 +428,7 @@ class EMUW(UNIT3D):
         }
         return category_map.get(category_name, '1')
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: dict[str, Any],
         type: Any = None,
@@ -450,7 +445,7 @@ class EMUW(UNIT3D):
         type_id = type_map.get(str(meta_type), '3')
         return {'type_id': type_id}
 
-    async def get_res_id(self, resolution: str) -> str:
+    def get_res_id(self, resolution: str) -> str:
         """Resolutions: 4320p(1), 2160p(2), 1080p(3), 1080i(4), 720p(5), 576p(6), 540p(7), 480p(8), Otras(10)"""
         resolution_map = {
             '4320p': '1', '2160p': '2', '1080p': '3', '1080i': '4',
@@ -476,7 +471,7 @@ class EMUW(UNIT3D):
 
         params: dict[str, Any] = {
             'tmdbId': meta.get('tmdb', ''),
-            'categories[]': await self.get_cat_id(str(meta['category'])),
+            'categories[]': self.get_cat_id(str(meta['category'])),
             'name': search_name
         }
 

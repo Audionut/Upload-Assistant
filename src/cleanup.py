@@ -67,7 +67,7 @@ class CleanupManager:
                             # console.print(f"[red]Subprocess {proc.pid} did not exit in time, force killing.[/red]")
                             with contextlib.suppress(PermissionError, OSError):
                                 proc.kill()  # Force kill if it doesn't exit
-                except (PermissionError, OSError):
+                except OSError:
                     # Android doesn't allow process termination in many cases
                     if not IS_ANDROID:
                         console.print(f"[yellow]Cannot terminate process {proc.pid}: Permission denied[/yellow]")
@@ -139,7 +139,7 @@ class CleanupManager:
             # On Android, we have limited process access - just clean up what we can
             try:
                 # Only try to clean up processes we directly spawned
-                for proc in list(running_subprocesses):
+                for proc in running_subprocesses:
                     if proc.returncode is None:
                         with contextlib.suppress(PermissionError, psutil.AccessDenied, OSError):
                             proc.terminate()
@@ -168,7 +168,7 @@ class CleanupManager:
                     except (psutil.AccessDenied, PermissionError):
                         # Handle systems where we can't wait for processes
                         pass
-            except (PermissionError, psutil.AccessDenied, OSError) as e:
+            except (psutil.AccessDenied, OSError) as e:
                 if not IS_ANDROID:
                     console.print(f"[yellow]Limited process access: {e}[/yellow]")
             except Exception as e:
@@ -191,7 +191,6 @@ class CleanupManager:
                             delete_fn()
         except Exception as e:
             console.print(f"[red]Error cleaning up threads: {e}[/red]")
-            pass
 
         # 🔹 Print remaining active threads
         # active_threads = [t for t in threading.enumerate()]

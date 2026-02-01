@@ -165,9 +165,7 @@ class BT:
         self.main_tmdb_data = main_ptbr_data or {}
         self.episode_tmdb_data = episode_ptbr_data or {}
 
-        return
-
-    async def get_container(self, meta: dict[str, Any]) -> str:
+    def get_container(self, meta: dict[str, Any]) -> str:
         container = meta.get('container', '')
         container_str = str(container) if container is not None else ''
         if container_str in ['avi', 'm2ts', 'm4v', 'mkv', 'mp4', 'ts', 'vob', 'wmv', 'mkv']:
@@ -175,7 +173,7 @@ class BT:
 
         return 'Outro'
 
-    async def get_type(self, meta: dict[str, Any]) -> Optional[str]:
+    def get_type(self, meta: dict[str, Any]) -> Optional[str]:
         if meta.get('anime'):
             return '5'
 
@@ -186,7 +184,7 @@ class BT:
 
         return category_map.get(meta['category'])
 
-    async def get_languages(self, _meta: dict[str, Any]) -> Optional[str]:
+    def get_languages(self, _meta: dict[str, Any]) -> Optional[str]:
         lang_code = self.main_tmdb_data.get('original_language')
 
         if not isinstance(lang_code, str) or not lang_code:
@@ -198,10 +196,7 @@ class BT:
         except LanguageTagError:
             return str(lang_code)
 
-    async def get_audio(self, meta: dict[str, Any]) -> str:
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
-
+    def get_audio(self, meta: dict[str, Any]) -> str:
         raw_audio_languages = meta.get('audio_languages')
         audio_languages_raw: list[Any] = []
         if isinstance(raw_audio_languages, list):
@@ -254,7 +249,7 @@ class BT:
 
         return has_pt_subtitles, subtitle_id_list
 
-    async def get_resolution(self, meta: dict[str, Any]) -> tuple[str, str]:
+    def get_resolution(self, meta: dict[str, Any]) -> tuple[str, str]:
         width = ''
         height = ''
         if meta.get('is_disc') == 'BDMV':
@@ -275,7 +270,7 @@ class BT:
 
         return width, height
 
-    async def get_video_codec(self, meta: dict[str, Any]) -> str:
+    def get_video_codec(self, meta: dict[str, Any]) -> str:
         video_encode = meta.get('video_encode', '').strip().lower()
         codec_final = meta.get('video_codec', '')
         is_hdr = bool(meta.get('hdr'))
@@ -310,7 +305,7 @@ class BT:
 
         return codec_final if codec_final else "Outro"
 
-    async def get_audio_codec(self, meta: dict[str, Any]) -> str:
+    def get_audio_codec(self, meta: dict[str, Any]) -> str:
         priority_order = [
             'DTS-X', 'E-AC-3 JOC', 'TrueHD', 'DTS-HD', 'PCM', 'FLAC', 'DTS-ES',
             'DTS', 'E-AC-3', 'AC3', 'AAC', 'Opus', 'Vorbis', 'MP3', 'MP2'
@@ -348,7 +343,7 @@ class BT:
 
         return 'Outro'
 
-    async def get_title(self, meta: dict[str, Any]) -> str:
+    def get_title(self, meta: dict[str, Any]) -> str:
         title_value = self.main_tmdb_data.get('name') or self.main_tmdb_data.get('title') or ''
         title = title_value if isinstance(title_value, str) else ''
 
@@ -359,7 +354,7 @@ class BT:
         desc_parts: list[str] = []
 
         # Custom Header
-        custom_header = await builder.get_custom_header()
+        custom_header = builder.get_custom_header()
         desc_parts.append(custom_header)
 
         # Logo
@@ -386,11 +381,11 @@ class BT:
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # User description
-        user_description = await builder.get_user_description(meta)
+        user_description = builder.get_user_description(meta)
         desc_parts.append(user_description)
 
         # Tonemapped Header
-        tonemapped_header = await builder.get_tonemapped_header(meta)
+        tonemapped_header = builder.get_tonemapped_header(meta)
         desc_parts.append(tonemapped_header)
 
         # Signature
@@ -408,7 +403,7 @@ class BT:
 
         return description
 
-    async def get_trailer(self, meta: dict[str, Any]) -> str:
+    def get_trailer(self, meta: dict[str, Any]) -> str:
         video_results: list[dict[str, Any]] = []
         videos = self.main_tmdb_data.get('videos')
         if isinstance(videos, dict):
@@ -570,7 +565,7 @@ class BT:
             console.print(f'[bold red]Arquivo de info não encontrado: {info_file_path}[/bold red]')
             return ''
 
-    async def get_edition(self, meta: dict[str, Any]) -> str:
+    def get_edition(self, meta: dict[str, Any]) -> str:
         edition_str = meta.get('edition', '').lower()
         if not edition_str:
             return ''
@@ -592,7 +587,7 @@ class BT:
 
         return ''
 
-    async def get_bitrate(self, meta: dict[str, Any]) -> str:
+    def get_bitrate(self, meta: dict[str, Any]) -> str:
         if meta.get('type') == 'DISC':
             is_disc_type = meta.get('is_disc')
 
@@ -643,7 +638,7 @@ class BT:
 
         return keyword_map.get(source_type.lower(), 'Outro')
 
-    async def get_screens(self, meta: dict[str, Any]) -> list[str]:
+    def get_screens(self, meta: dict[str, Any]) -> list[str]:
         menu_images = meta.get('menu_images')
         image_list = meta.get('image_list')
 
@@ -667,7 +662,7 @@ class BT:
 
         return urls
 
-    async def get_credits(self, meta: dict[str, Any]) -> str:
+    def get_credits(self, meta: dict[str, Any]) -> str:
         director_entries: list[str] = []
 
         imdb_directors = meta.get('imdb_info', {}).get('directors')
@@ -691,34 +686,34 @@ class BT:
     async def get_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         await self.load_localized_data(meta)
         has_pt_subtitles, subtitle_ids = await self.get_subtitle(meta)
-        resolution_width, resolution_height = await self.get_resolution(meta)
+        resolution_width, resolution_height = self.get_resolution(meta)
 
         data = {
-            'audio_c': await self.get_audio_codec(meta),
-            'audio': await self.get_audio(meta),
+            'audio_c': self.get_audio_codec(meta),
+            'audio': self.get_audio(meta),
             'auth': BT.secret_token,
-            'bitrate': await self.get_bitrate(meta),
+            'bitrate': self.get_bitrate(meta),
             'desc': '',
-            'diretor': await self.get_credits(meta),
+            'diretor': self.get_credits(meta),
             'duracao': f"{str(meta.get('runtime', ''))} min",
             'especificas': await self.get_description(meta),
-            'format': await self.get_container(meta),
-            'idioma_ori': await self.get_languages(meta) or meta.get('original_language', ''),
+            'format': self.get_container(meta),
+            'idioma_ori': self.get_languages(meta) or meta.get('original_language', ''),
             'image': f"https://image.tmdb.org/t/p/w500{self.main_tmdb_data.get('poster_path', '') or meta.get('tmdb_poster', '')}",
             'legenda': has_pt_subtitles,
             'mediainfo': await self.get_media_info(meta),
             'resolucao_1': resolution_width,
             'resolucao_2': resolution_height,
-            'screen[]': await self.get_screens(meta),
+            'screen[]': self.get_screens(meta),
             'sinopse': self.main_tmdb_data.get('overview', 'Nenhuma sinopse disponível.'),
             'submit': 'true',
             'subtitles[]': subtitle_ids,
             'tags': await self.get_tags(meta),
             'title': meta['title'],
-            'type': await self.get_type(meta),
-            'video_c': await self.get_video_codec(meta),
+            'type': self.get_type(meta),
+            'video_c':  self.get_video_codec(meta),
             'year': str(meta['year']),
-            'youtube': await self.get_trailer(meta),
+            'youtube': self.get_trailer(meta),
         }
 
         # Common data MOVIE/TV
@@ -729,7 +724,7 @@ class BT:
                     'adulto': '0',
                     'imdb_input': meta.get('imdb_info', {}).get('imdbID', ''),
                     'nota_imdb': str(meta.get('imdb_info', {}).get('rating', '')),
-                    'title_br': await self.get_title(meta),
+                    'title_br': self.get_title(meta),
                 })
             if meta.get('scene', False):
                 data['scene'] = 'on'
@@ -747,7 +742,7 @@ class BT:
 
         # Specific
         if meta['category'] == 'MOVIE':
-            data['versao'] = await self.get_edition(meta)
+            data['versao'] = self.get_edition(meta)
         elif meta.get('anime'):
             data.update({
                 'fundo_torrent': meta.get('backdrop'),

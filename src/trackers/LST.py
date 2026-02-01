@@ -23,9 +23,8 @@ class LST(UNIT3D):
         self.torrent_url = f'{self.base_url}/torrents/'
         self.trumping_url = f'{self.base_url}/api/reports/torrents/'
         self.banned_groups = []
-        pass
 
-    async def get_additional_checks(self, meta: Meta) -> bool:
+    def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
         if not meta['valid_mi_settings']:
             console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
@@ -33,7 +32,7 @@ class LST(UNIT3D):
 
         return should_continue
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,
@@ -41,7 +40,8 @@ class LST(UNIT3D):
         mapping_only: bool = False
     ) -> dict[str, str]:
         _ = (reverse, mapping_only)
-        type = str(meta.get('type', '')).upper()
+        release_type = str(type) if type is not None else str(meta.get('type', ''))
+        release_type = release_type.upper()
         type_id = {
             'DISC': '1',
             'REMUX': '2',
@@ -50,23 +50,23 @@ class LST(UNIT3D):
             'HDTV': '6',
             'ENCODE': '3',
             'DVDRIP': '3'
-        }.get(type, '0')
+        }.get(release_type, '0')
         return {'type_id': type_id}
 
-    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+    def get_additional_data(self, meta: Meta) -> dict[str, Any]:
         data: dict[str, Any] = {
-            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
-            'draft_queue_opt_in': await self.get_flag(meta, 'draft'),
+            'mod_queue_opt_in': self.get_flag(meta, 'modq'),
+            'draft_queue_opt_in': self.get_flag(meta, 'draft'),
         }
 
         # Only add edition_id if we have a valid edition
-        edition_id = await self.get_edition(meta)
+        edition_id = self.get_edition(meta)
         if edition_id is not None:
             data['edition_id'] = edition_id
 
         return data
 
-    async def get_edition(self, meta: Meta) -> Optional[int]:
+    def get_edition(self, meta: Meta) -> Optional[int]:
         edition_mapping = {
             'Alternative Cut': 12,
             'Collector\'s Edition': 1,
@@ -88,7 +88,7 @@ class LST(UNIT3D):
         else:
             return None
 
-    async def get_name(self, meta: Meta) -> dict[str, str]:
+    def get_name(self, meta: Meta) -> dict[str, str]:
         lst_name = str(meta.get('name', ''))
         resolution = str(meta.get('resolution', ''))
         video_encode = str(meta.get('video_encode', ''))

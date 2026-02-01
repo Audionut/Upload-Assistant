@@ -1,8 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import re
 from typing import Any, Optional, cast
-
-import cli_ui
 
 from src.console import console
 from src.get_desc import DescriptionBuilder
@@ -28,9 +25,8 @@ class STC(UNIT3D):
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [""]
         self.approved_image_hosts = ['imgbox', 'imgbb']
-        pass
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,
@@ -53,26 +49,21 @@ class STC(UNIT3D):
 
         return {'type_id': type_id}
 
-    async def get_additional_checks(self, meta: Meta) -> bool:
+    def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
         if str(meta.get('category', '')) != 'TV':
             if not bool(meta.get('unattended')):
                 console.print(f'[bold red]Only TV uploads allowed at {self.tracker}.[/bold red]')
             return False
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy', 'hentai', 'adult animation', 'softcore']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            if not bool(meta.get('unattended')) or (
-                bool(meta.get('unattended')) and meta.get('unattended_confirm', False)
-            ):
-                console.print(f'[bold red]Porn is not allowed at {self.tracker}.[/bold red]')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
-                    return False
-            else:
-                return False
+        if not self.common.prompt_adult_content(
+            meta,
+            tracker_name=self.tracker,
+            block_message=f'[bold red]Porn is not allowed at {self.tracker}.[/bold red]',
+            prompt_text="Do you want to upload anyway?",
+            default=False,
+        ):
+            return False
 
         return should_continue
 

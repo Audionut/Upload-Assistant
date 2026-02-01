@@ -14,7 +14,7 @@ from src.exportmi import mi_resolution
 
 
 class VideoManager:
-    async def get_uhd(self, type: str, guess: Any, resolution: str, path: str) -> str:
+    def get_uhd(self, type_value: str, guess: Any, resolution: str, path: str) -> str:
         try:
             guess_dict = cast(dict[str, Any], guess)
             source = guess_dict['Source']
@@ -25,15 +25,15 @@ class VideoManager:
         uhd = ""
         if source == 'Blu-ray' and other == "Ultra HD" or source == "Ultra HD Blu-ray" or "UHD" in path:
             uhd = "UHD"
-        elif type in ("DISC", "REMUX", "ENCODE", "WEBRIP"):
+        elif type_value in ("DISC", "REMUX", "ENCODE", "WEBRIP"):
             uhd = ""
 
-        if type in ("DISC", "REMUX", "ENCODE") and resolution == "2160p":
+        if type_value in ("DISC", "REMUX", "ENCODE") and resolution == "2160p":
             uhd = "UHD"
 
         return uhd
 
-    async def get_hdr(self, mi: Any, bdinfo: Optional[Any]) -> str:
+    def get_hdr(self, mi: Any, bdinfo: Optional[Any]) -> str:
         hdr = ""
         dv = ""
         if bdinfo is not None:  # Disks
@@ -86,7 +86,7 @@ class VideoManager:
         hdr = f"{dv} {hdr}".strip()
         return hdr
 
-    async def get_video_codec(self, bdinfo: Any) -> str:
+    def get_video_codec(self, bdinfo: Any) -> str:
         codecs = {
             "MPEG-2 Video": "MPEG-2",
             "MPEG-4 AVC Video": "AVC",
@@ -97,47 +97,47 @@ class VideoManager:
         codec = codecs.get(bdinfo_dict['video'][0]['codec'], "")
         return codec
 
-    async def get_video_encode(self, mi: Any, type: str, bdinfo: Any) -> tuple[str, str, bool, str]:
+    def get_video_encode(self, mi: Any, type_value: str, bdinfo: Any) -> tuple[str, str, bool, str]:
         video_encode = ""
         codec = ""
         bit_depth = '0'
         has_encode_settings = False
         try:
             mi_dict = cast(dict[str, Any], mi)
-            format = mi_dict['media']['track'][1]['Format']
-            format_profile = mi_dict['media']['track'][1].get('Format_Profile', format)
+            media_format = mi_dict['media']['track'][1]['Format']
+            format_profile = mi_dict['media']['track'][1].get('Format_Profile', media_format)
             if mi_dict['media']['track'][1].get('Encoded_Library_Settings', None):
                 has_encode_settings = True
             bit_depth = mi_dict['media']['track'][1].get('BitDepth', '0')
             encoded_library_name = mi_dict['media']['track'][1].get('Encoded_Library_Name', None)
         except Exception:
             bdinfo_dict = cast(dict[str, Any], bdinfo)
-            format = bdinfo_dict['video'][0]['codec']
+            media_format = bdinfo_dict['video'][0]['codec']
             format_profile = bdinfo_dict['video'][0]['profile']
             encoded_library_name = None
-        if format in ('AV1', 'VP9', 'VC-1'):
-            codec = format
-        elif type in ("ENCODE", "WEBRIP", "DVDRIP"):  # ENCODE or WEBRIP or DVDRIP
-            if format == 'AVC':
+        if media_format in ('AV1', 'VP9', 'VC-1'):
+            codec = media_format
+        elif type_value in ("ENCODE", "WEBRIP", "DVDRIP"):  # ENCODE or WEBRIP or DVDRIP
+            if media_format == 'AVC':
                 codec = 'x264'
-            elif format == 'HEVC':
+            elif media_format == 'HEVC':
                 codec = 'x265'
-            elif format == 'MPEG-4 Visual' and encoded_library_name:
+            elif media_format == 'MPEG-4 Visual' and encoded_library_name:
                 if 'xvid' in encoded_library_name.lower():
                     codec = 'XviD'
                 elif 'divx' in encoded_library_name.lower():
                     codec = 'DivX'
-        elif type in ('WEBDL', 'HDTV'):  # WEB-DL
-            if format == 'AVC':
+        elif type_value in ('WEBDL', 'HDTV'):  # WEB-DL
+            if media_format == 'AVC':
                 codec = 'H.264'
-            elif format == 'HEVC':
+            elif media_format == 'HEVC':
                 codec = 'H.265'
 
-            if type == 'HDTV' and has_encode_settings is True:
+            if type_value == 'HDTV' and has_encode_settings is True:
                 codec = codec.replace('H.', 'x')
         profile = "Hi10P" if format_profile == 'High 10' else ""
         video_encode = f"{profile} {codec}"
-        video_codec = format
+        video_codec = media_format
         if video_codec == "MPEG Video":
             mi_dict = cast(dict[str, Any], mi)
             video_codec = f"MPEG-{mi_dict['media']['track'][1].get('Format_Version')}"
@@ -174,7 +174,7 @@ class VideoManager:
             if debug and filelist:
                 console.print(f"[blue]Found {len(filelist)} video files in directory.[/blue]")
             if len(filelist) > 1:
-                for f in list(filelist):
+                for f in filelist:
                     if 'sample' in os.path.basename(f).lower() and '!sample' not in os.path.basename(f).lower():
                         console.print("[green]Filelist:[/green]")
                         for tf in filelist:
@@ -193,7 +193,7 @@ class VideoManager:
                     console.print(f"[bold red]This looks like some *arr renamed file which is not allowed: [yellow]{file}")
                     try:
                         if cli_ui.ask_yes_no("Do you want to upload with this file?", default=False):
-                            pass
+                                continue
                         else:
                             console.print("[red]Exiting on user request[/red]")
                             await cleanup_manager.cleanup()
@@ -218,7 +218,7 @@ class VideoManager:
                 console.print(f"[bold red]This looks like some *arr renamed file which is not allowed: [yellow]{videoloc}")
                 try:
                     if cli_ui.ask_yes_no("Do you want to upload with this file?", default=False):
-                        pass
+                        console.print("[yellow]Continuing with file despite *arr rename.[/yellow]")
                     else:
                         console.print("[red]Exiting on user request[/red]")
                         await cleanup_manager.cleanup()
@@ -273,50 +273,50 @@ class VideoManager:
                 scan = "p" if match else "i"  # Assume progressive based on common resolution markers
             width_list = [3840, 2560, 1920, 1280, 1024, 854, 720, 15360, 7680, 0]
             height_list = [2160, 1440, 1080, 720, 576, 540, 480, 8640, 4320, 0]
-            width = await self.closest(width_list, int(width))
-            height = await self.closest(height_list, int(height))
+            width = self.closest(width_list, int(width))
+            height = self.closest(height_list, int(height))
             res = f"{width}x{height}{scan}"
-            resolution = await mi_resolution(res, guess, width, scan)
+            resolution = mi_resolution(res, guess, width, scan)
         return resolution, hfr
 
-    async def closest(self, lst: list[int], K: int) -> int:
+    def closest(self, lst: list[int], K: int) -> int:
         # Get closest, but not over
         lst = sorted(lst)
         mi_input = K
         res = 0
         for each in lst:
             if mi_input > each:
-                pass
+                continue
             else:
                 res = each
                 break
         return res
 
-    async def get_type(self, video: str, _scene: bool, is_disc: Optional[str], meta: dict[str, Any]) -> str:
+    def get_type(self, video: str, _scene: bool, is_disc: Optional[str], meta: dict[str, Any]) -> str:
         if meta.get('manual_type'):
-            type = cast(str, meta.get('manual_type'))
+            type_value = cast(str, meta.get('manual_type'))
         else:
             filename = os.path.basename(video).lower()
             if "remux" in filename:
-                type = "REMUX"
+                type_value = "REMUX"
             elif any(word in filename for word in [" web ", ".web.", "web-dl", "webdl"]):
-                type = "WEBDL"
+                type_value = "WEBDL"
             elif "webrip" in filename:
-                type = "WEBRIP"
+                type_value = "WEBRIP"
             # elif scene == True:
-                # type = "ENCODE"
+                # type_value = "ENCODE"
             elif "hdtv" in filename:
-                type = "HDTV"
+                type_value = "HDTV"
             elif is_disc is not None:
-                type = "DISC"
+                type_value = "DISC"
             elif "dvdrip" in filename:
-                type = "DVDRIP"
+                type_value = "DVDRIP"
                 # exit()
             else:
-                type = "ENCODE"
-        return type
+                type_value = "ENCODE"
+        return type_value
 
-    async def is_3d(self, bdinfo: Optional[Any]) -> str:
+    def is_3d(self, bdinfo: Optional[Any]) -> str:
         if bdinfo is not None:
             if bdinfo['video'][0]['3d'] != "":
                 return "3D"
@@ -325,11 +325,11 @@ class VideoManager:
         else:
             return ""
 
-    async def is_sd(self, resolution: str) -> int:
+    def is_sd(self, resolution: str) -> int:
         sd = 1 if resolution in ("480i", "480p", "576i", "576p", "540p") else 0
         return sd
 
-    async def get_video_duration(self, meta: dict[str, Any]) -> Optional[int]:
+    def get_video_duration(self, meta: dict[str, Any]) -> Optional[int]:
         if meta.get('is_disc') != "BDMV" and meta.get('mediainfo', {}).get('media', {}).get('track'):
             general_track = next((track for track in meta['mediainfo']['media']['track']
                                   if track.get('@type') == 'General'), None)
@@ -350,7 +350,7 @@ class VideoManager:
         else:
             return None
 
-    async def get_container(self, meta: dict[str, Any]) -> str:
+    def get_container(self, meta: dict[str, Any]) -> str:
         if meta.get('is_disc', '') == 'BDMV':
             return 'm2ts'
         elif meta.get('is_disc', '') == 'HDDVD':

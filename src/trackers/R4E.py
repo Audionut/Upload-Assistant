@@ -26,7 +26,7 @@ class R4E(UNIT3D):
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
 
-    async def get_category_id(
+    def get_category_id(
         self,
         meta: Meta,
         category: Optional[str] = None,
@@ -53,7 +53,7 @@ class R4E(UNIT3D):
 
         return {'category_id': category_id}
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,
@@ -76,28 +76,28 @@ class R4E(UNIT3D):
         }.get(str(meta.get('type', '')), '10')
         return {'type_id': type_id}
 
-    async def get_personal_release(self, meta: Meta) -> dict[str, str]:
+    def get_personal_release(self, meta: Meta) -> dict[str, str]:
         _ = meta
         return {}
 
-    async def get_internal(self, meta: Meta) -> dict[str, str]:
+    def get_internal(self, meta: Meta) -> dict[str, str]:
         _ = meta
         return {}
 
-    async def get_featured(self, _meta: Meta) -> dict[str, str]:
+    def get_featured(self, _meta: Meta) -> dict[str, str]:
         return {}
 
-    async def get_free(self, meta: Meta) -> dict[str, str]:
+    def get_free(self, meta: Meta) -> dict[str, str]:
         _ = meta
         return {}
 
-    async def get_doubleup(self, _meta: Meta) -> dict[str, str]:
+    def get_doubleup(self, _meta: Meta) -> dict[str, str]:
         return {}
 
-    async def get_sticky(self, _meta: Meta) -> dict[str, str]:
+    def get_sticky(self, _meta: Meta) -> dict[str, str]:
         return {}
 
-    async def get_resolution_id(
+    def get_resolution_id(
         self,
         meta: Meta,
         resolution: Optional[str] = None,
@@ -113,8 +113,8 @@ class R4E(UNIT3D):
         params: dict[str, Any] = {
             'api_token': str(self.config['TRACKERS']['R4E']['api_key']).strip(),
             'tmdb': meta.get('tmdb'),
-            'categories[]': (await self.get_category_id(meta))['category_id'],
-            'types[]': (await self.get_type_id(meta))['type_id'],
+            'categories[]': (self.get_category_id(meta))['category_id'],
+            'types[]': (self.get_type_id(meta))['type_id'],
             'name': ""
         }
         if meta['category'] == 'TV':

@@ -328,8 +328,8 @@ class ImdbManager:
                 category_text = self.safe_get(pc, ['category', 'text'], '')
 
                 if category_keyword in category_text:
-                    credits = cast(list[Mapping[str, Any]], self.safe_get(pc, ['credits'], []))
-                    for c in credits:
+                    credit_entries = cast(list[Mapping[str, Any]], self.safe_get(pc, ['credits'], []))
+                    for c in credit_entries:
                         name_obj = self.safe_get(c, ['name'], {})
                         person_id = self.safe_get(name_obj, ['id'], '')
                         person_name = self.safe_get(name_obj, ['nameText', 'text'], '')

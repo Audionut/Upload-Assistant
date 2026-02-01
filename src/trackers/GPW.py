@@ -94,8 +94,6 @@ class GPW:
 
         self.tmdb_data = main_ch_data
 
-        return
-
     def get_container(self, meta: dict[str, Any]) -> str:
         container_value = meta.get('container', '')
         container = container_value if isinstance(container_value, str) else ''
@@ -206,18 +204,17 @@ class GPW:
             img_host_index=1,
             approved_image_hosts=self.approved_image_hosts,
         )
-        return
 
     async def get_release_desc(self, meta: dict[str, Any]) -> str:
         builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts: list[str] = []
 
         # Custom Header
-        custom_header = await builder.get_custom_header()
+        custom_header = builder.get_custom_header()
         desc_parts.append(custom_header)
 
         # Logo
-        logo, logo_size = await builder.get_logo_section(meta)
+        logo, logo_size = builder.get_logo_section(meta)
         if logo and logo_size:
             if logo.endswith(".svg"):
                 logo = logo.replace(".svg", ".png")
@@ -229,11 +226,11 @@ class GPW:
             desc_parts.append(f"[pre]{nfo_content}[/pre]")
 
         # User description
-        user_description = await builder.get_user_description(meta)
+        user_description = builder.get_user_description(meta)
         desc_parts.append(user_description)
 
         # Disc menus screenshots header
-        menu_header = await builder.menu_screenshot_header(meta)
+        menu_header = builder.menu_screenshot_header(meta)
         desc_parts.append(menu_header)
 
         # Disc menus screenshots
@@ -252,7 +249,7 @@ class GPW:
             desc_parts.append('[center]\n' + menu_screenshots_block + '[/center]')
 
         # Screenshot Header
-        screenshot_header = await builder.screenshot_header()
+        screenshot_header = builder.screenshot_header()
         desc_parts.append(screenshot_header)
 
         # Screenshots
@@ -271,7 +268,7 @@ class GPW:
             desc_parts.append('[center]\n' + screenshots_block + '[/center]')
 
         # Tonemapped Header
-        tonemapped_header = await builder.get_tonemapped_header(meta)
+        tonemapped_header = builder.get_tonemapped_header(meta)
         desc_parts.append(tonemapped_header)
 
         # Signature

@@ -179,7 +179,7 @@ class QueueManager:
                         await QueueManager._process_scandir_entry(entry, normalized_path, allowed_extensions_tuple, allowed_extensions)
                     )
 
-            except (OSError, PermissionError) as e:
+            except OSError as e:
                 console.print(f"[red]Error scanning directory {normalized_path}: {e}[/red]")
                 return []
 
@@ -210,7 +210,7 @@ class QueueManager:
             elif entry.is_file() and (allowed_extensions_tuple is None or entry.name.lower().endswith(allowed_extensions_tuple)):
                 entry_paths.append(entry_path)
 
-        except (OSError, UnicodeDecodeError, UnicodeError) as e:
+        except (OSError, UnicodeError) as e:
             console.print(f"[yellow]Warning: Skipping entry due to encoding issue: {e}[/yellow]")
             # Try to get the path in a different way
             try:
@@ -259,7 +259,7 @@ class QueueManager:
 
             return False
 
-        except (OSError, PermissionError, UnicodeError) as e:
+        except (OSError, UnicodeError) as e:
             console.print(f"[yellow]Warning: Could not scan directory {dir_path}: {e}[/yellow]")
             return False
 

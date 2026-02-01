@@ -5,7 +5,7 @@ import json
 import os
 import re
 from typing import Any, Optional, cast
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 
 import aiofiles
 import httpx
@@ -35,7 +35,7 @@ class HDB:
         self.signature: Optional[str] = None
         self.banned_groups: list[str] = [""]
 
-    async def get_type_category_id(self, meta: Meta) -> int:
+    def get_type_category_id(self, meta: Meta) -> int:
         cat_id = 0
         # 6 = Audio Track
         # 8 = Misc/Demo
@@ -61,7 +61,7 @@ class HDB:
                 cat_id = 4
         return cat_id
 
-    async def get_type_codec_id(self, meta: Meta) -> int:
+    def get_type_codec_id(self, meta: Meta) -> int:
         codecmap = {
             "AVC": 1, "H.264": 1,
             "HEVC": 5, "H.265": 5,
@@ -74,7 +74,7 @@ class HDB:
         codec_id = codecmap.get(searchcodec, 0)
         return codec_id
 
-    async def get_type_medium_id(self, meta: Meta) -> int:
+    def get_type_medium_id(self, meta: Meta) -> int:
         medium_id = 0
         # 1 = Blu-ray / HD DVD
         if meta.get('is_disc', '') in ("BDMV", "HD DVD"):
@@ -95,7 +95,7 @@ class HDB:
             medium_id = 6
         return medium_id
 
-    async def get_res_id(self, resolution: str) -> str:
+    def get_res_id(self, resolution: str) -> str:
         resolution_id = {
             '8640p': '10',
             '4320p': '1',
@@ -111,7 +111,7 @@ class HDB:
         }.get(resolution, '10')
         return resolution_id
 
-    async def get_tags(self, meta: Meta) -> list[int]:
+    def get_tags(self, meta: Meta) -> list[int]:
         tags: list[int] = []
 
         # Web Services:
@@ -190,7 +190,7 @@ class HDB:
 
         return tags
 
-    async def edit_name(self, meta: Meta) -> str:
+    def edit_name(self, meta: Meta) -> str:
         hdb_name = str(meta.get('name', ''))
         audio = str(meta.get('audio', ''))
         hdb_name = hdb_name.replace('H.265', 'HEVC')
@@ -225,11 +225,11 @@ class HDB:
     async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
         common = COMMON(config=self.config)
         await self.edit_desc(meta)
-        hdb_name = await self.edit_name(meta)
-        cat_id = await self.get_type_category_id(meta)
-        codec_id = await self.get_type_codec_id(meta)
-        medium_id = await self.get_type_medium_id(meta)
-        hdb_tags = await self.get_tags(meta)
+        hdb_name = self.edit_name(meta)
+        cat_id = self.get_type_category_id(meta)
+        codec_id = self.get_type_codec_id(meta)
+        medium_id = self.get_type_medium_id(meta)
+        hdb_tags = self.get_tags(meta)
 
         for each in (cat_id, codec_id, medium_id):
             if each == 0:
@@ -328,9 +328,13 @@ class HDB:
             match = re.match(r".*?hdbits\.org/details\.php\?id=(\d+)&uploaded=(\d+)", str(up.url))
             if match:
                 meta['tracker_status'][self.tracker]['status_message'] = match.group(0)
-                if id_match := re.search(r"(id=)(\d+)", urlparse(str(up.url)).query):
-                    id = id_match.group(2)
-                    await self.download_new_torrent(id, torrent_file_path)
+                torrent_id = None
+                try:
+                    torrent_id = up.url.params.get("id")
+                except Exception:
+                    torrent_id = None
+                if torrent_id:
+                    await self.download_new_torrent(str(torrent_id), torrent_file_path)
                 return True
             else:
                 console.print(data)
@@ -345,9 +349,9 @@ class HDB:
         data: dict[str, Any] = {
             'username': self.username,
             'passkey': self.passkey,
-            'category': await self.get_type_category_id(meta),
-            'codec': await self.get_type_codec_id(meta),
-            'medium': await self.get_type_medium_id(meta)
+            'category': self.get_type_category_id(meta),
+            'codec': self.get_type_codec_id(meta),
+            'medium': self.get_type_medium_id(meta)
         }
 
         if int(meta.get('imdb_id') or 0) != 0:
@@ -472,17 +476,17 @@ class HDB:
         try:
             r_json = r.json()
         except json.JSONDecodeError as e:
-            raise Exception(
+            raise ValueError(
                 f"Failed to parse JSON response from {api_url}. Response content: {r.text}. Data: {data}. Error: {e}"
             ) from e
 
         if 'data' not in r_json or not isinstance(r_json['data'], list) or len(r_json['data']) == 0:
-            raise Exception(f"Invalid JSON response from {api_url}: 'data' key missing, not a list, or empty. Response: {r_json}. Data: {data}")
+            raise ValueError(f"Invalid JSON response from {api_url}: 'data' key missing, not a list, or empty. Response: {r_json}. Data: {data}")
 
         try:
             filename = r_json['data'][0]['filename']
         except (KeyError, IndexError) as e:
-            raise Exception(
+            raise KeyError(
                 f"Failed to access filename in response from {api_url}. Response: {r_json}. Data: {data}. Error: {e}"
             ) from e
 
@@ -500,15 +504,14 @@ class HDB:
         # Validate content-type
         content_type = r.headers.get('content-type', '').lower()
         if 'bittorrent' not in content_type and 'octet-stream' not in content_type:
-            raise Exception(f"Unexpected content-type for torrent download: {content_type}. URL: {download_url}. Params: {params}")
+            raise ValueError(f"Unexpected content-type for torrent download: {content_type}. URL: {download_url}. Params: {params}")
 
         # Basic validation: check if content looks like bencoded data (starts with 'd')
         if not r.content.startswith(b'd'):
-            raise Exception(f"Downloaded content does not appear to be a valid torrent file (does not start with 'd'). URL: {download_url}. Params: {params}")
+            raise ValueError(f"Downloaded content does not appear to be a valid torrent file (does not start with 'd'). URL: {download_url}. Params: {params}")
 
         async with aiofiles.open(torrent_path, "wb") as tor:
             await tor.write(r.content)
-        return
 
     async def edit_desc(self, meta: Meta) -> None:
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf-8') as base_file:
@@ -617,8 +620,6 @@ class HDB:
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as descfile:
             await descfile.write("".join(desc_parts))
-
-        return
 
     async def hdbimg_upload(self, meta: Meta) -> Optional[str]:
         bbcode = ""

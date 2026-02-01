@@ -1,6 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # import discord
-import re
 from typing import Any, Optional, cast
 
 import langcodes
@@ -26,9 +25,8 @@ class LDU(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
-        pass
 
-    async def get_category_id(
+    def get_category_id(
         self,
         meta: Meta,
         category: Optional[str] = None,
@@ -37,7 +35,6 @@ class LDU(UNIT3D):
     ) -> dict[str, str]:
         _ = (category, reverse, mapping_only)
         genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
         sound_mixes_value = meta.get('imdb_info', {}).get('sound_mixes', [])
         sound_mixes = cast(list[Any], sound_mixes_value) if isinstance(sound_mixes_value, list) else []
 
@@ -51,8 +48,8 @@ class LDU(UNIT3D):
 
         if 'hentai' in genres.lower():
             category_id = '10'
-        elif any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            category_id = '45' if not await languages_manager.has_english_language(meta.get('subtitle_languages', [])) else '6'
+        elif self.common.is_adult_content(meta):
+            category_id = '45' if not languages_manager.has_english_language(meta.get('subtitle_languages', [])) else '6'
         if meta.get('category') == "MOVIE":
             if meta.get('3d') or "3D" in meta.get('edition', ''):
                 category_id = '21'
@@ -72,7 +69,7 @@ class LDU(UNIT3D):
                 category_id = '20'
             elif "short film" in genres.lower() or int(meta.get('imdb_info', {}).get('runtime', 0) or 0) < 5:
                 category_id = '19'
-            elif not await languages_manager.has_english_language(meta.get('audio_languages', [])) and not await languages_manager.has_english_language(meta.get('subtitle_languages', [])):
+            elif not languages_manager.has_english_language(meta.get('audio_languages', [])) and not languages_manager.has_english_language(meta.get('subtitle_languages', [])):
                 category_id = '22'
             elif "dubbed" in meta.get('audio', '').lower():
                 category_id = '27'
@@ -83,7 +80,7 @@ class LDU(UNIT3D):
                 category_id = '9'
             elif "documentary" in genres.lower():
                 category_id = '40'
-            elif not await languages_manager.has_english_language(meta.get('audio_languages', [])) and not await languages_manager.has_english_language(meta.get('subtitle_languages', [])):
+            elif not languages_manager.has_english_language(meta.get('audio_languages', [])) and not languages_manager.has_english_language(meta.get('subtitle_languages', [])):
                 category_id = '29'
             elif meta.get('tv_pack', False):
                 category_id = '2'
@@ -94,7 +91,7 @@ class LDU(UNIT3D):
 
         return {'category_id': category_id}
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,
@@ -115,9 +112,9 @@ class LDU(UNIT3D):
             type_id = '16'
         return {'type_id': type_id}
 
-    async def get_name(self, meta: Meta) -> dict[str, str]:
+    def get_name(self, meta: Meta) -> dict[str, str]:
         ldu_name = str(meta.get('name', ''))
-        cat_id = (await self.get_category_id(meta))['category_id']
+        cat_id = self.get_category_id(meta)['category_id']
         non_eng = False
         non_eng_audio = False
         iso_audio: Optional[str] = None
@@ -132,7 +129,7 @@ class LDU(UNIT3D):
                 try:
                     lang = langcodes.find(audio_language).to_alpha3()
                     iso_audio = lang.upper()
-                    if not await languages_manager.has_english_language(audio_language):
+                    if not languages_manager.has_english_language(audio_language):
                         non_eng_audio = True
                 except Exception as e:
                     console.print(f"[bold red]Error extracting audio language: {e}[/bold red]")

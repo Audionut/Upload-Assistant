@@ -27,9 +27,8 @@ class A4K(UNIT3D):
         self.rehost_images_manager = RehostImagesManager(config)
         self.approved_image_hosts = ['imgbox', 'ptscreens', 'imgbb', 'imgur', 'postimg']
         self.banned_groups = ["BiTOR", "DepraveD", "Flights", "SasukeducK", "SPDVD", "TEKNO3D"]
-        pass
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,
@@ -45,7 +44,7 @@ class A4K(UNIT3D):
         }.get(meta['type'], '0')
         return {'type_id': type_id}
 
-    async def get_resolution_id(
+    def get_resolution_id(
         self,
         meta: Meta,
         resolution: Optional[str] = None,
@@ -59,7 +58,7 @@ class A4K(UNIT3D):
         }.get(meta['resolution'], '10')
         return {'resolution_id': resolution_id}
 
-    async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
+    def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         should_continue = True
         if meta.get('resolution') not in ['2160p', '4320p']:
             if not meta.get('unattended'):
@@ -100,32 +99,26 @@ class A4K(UNIT3D):
                                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                     console.print(f"[bold red]Could not determine video bitrate from mediainfo for {self.tracker} upload.[/bold red]")
                                     console.print("[yellow]Bitrate must be above 15000 kbps for movies and 10000 kbps for TV shows.[/yellow]")
-                                    if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                                        pass
-                                    else:
+                                    if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                                         return False
                         else:
                             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                 console.print(f"[bold red]Could not determine video bitrate from mediainfo for {self.tracker} upload.[/bold red]")
                                 console.print("[yellow]Bitrate must be above 15000 kbps for movies and 10000 kbps for TV shows.[/yellow]")
-                                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                                    pass
-                                else:
+                                if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                                     return False
                     else:
                         if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                             console.print(f"[bold red]Could not determine video bitrate from mediainfo for {self.tracker} upload.[/bold red]")
                             console.print("[yellow]Bitrate must be above 15000 kbps for movies and 10000 kbps for TV shows.[/yellow]")
-                            if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                                pass
-                            else:
+                            if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                                 return False
 
         return should_continue
 
-    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+    def get_additional_data(self, meta: Meta) -> dict[str, Any]:
         data = {
-            'modq': await self.get_flag(meta, 'modq'),
+            'modq': self.get_flag(meta, 'modq'),
         }
 
         return data
@@ -145,4 +138,3 @@ class A4K(UNIT3D):
             img_host_index=1,
             approved_image_hosts=self.approved_image_hosts,
         )
-        return

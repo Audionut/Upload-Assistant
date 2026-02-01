@@ -28,7 +28,7 @@ class CBR(UNIT3D):
             "Tigole", "TSP", "TSPxL", "TWA", "UnKn0wn", "VXT", "Vyndros", "W32", "Will1869", "x0r", "YIFY", "YTS.MX", "YTS"
         ]
 
-    async def get_category_id(
+    def get_category_id(
         self, meta: dict[str, Any], category: str = "", reverse: bool = False, mapping_only: bool = False
     ) -> dict[str, str]:
         category_id: dict[str, str] = {
@@ -51,7 +51,7 @@ class CBR(UNIT3D):
 
         return {"category_id": "0"}
 
-    async def get_type_id(
+    def get_type_id(
         self, meta: dict[str, Any], type: str = "", reverse: bool = False, mapping_only: bool = False
     ) -> dict[str, str]:
         type_id = {
@@ -75,7 +75,7 @@ class CBR(UNIT3D):
             resolved_id = type_id.get(meta_type, "0")
             return {"type_id": resolved_id}
 
-    async def get_resolution_id(
+    def get_resolution_id(
         self, meta: dict[str, Any], resolution: str = "", reverse: bool = False, mapping_only: bool = False
     ) -> dict[str, str]:
         resolution_id = {
@@ -102,7 +102,7 @@ class CBR(UNIT3D):
             resolved_id = resolution_id.get(meta_resolution, "10")
             return {"resolution_id": resolved_id}
 
-    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         name = (
             str(meta["name"])
             .replace("DD+ ", "DDP")
@@ -178,14 +178,14 @@ class CBR(UNIT3D):
 
         return {"name": re.sub(r"\s{2,}", " ", cbr_name)}
 
-    async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_additional_data(self, meta: dict[str, Any]) -> dict[str, str]:
         data = {
-            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
+            'mod_queue_opt_in': self.get_flag(meta, 'modq'),
         }
 
         return data
 
-    async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
-        return await self.common.check_language_requirements(
+    def get_additional_checks(self, meta: dict[str, Any]) -> bool:
+        return self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=["portuguese", "português"], check_audio=True, check_subtitle=True
         )

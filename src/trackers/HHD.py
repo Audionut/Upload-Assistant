@@ -30,9 +30,8 @@ class HHD(UNIT3D):
             'SasukeducK', 'ShAaNiG', 'Sicario', 'STUTTERSHIT', 'TGALAXY', 'TORRENTGALAXY',
             'TSP', 'TSPxL', 'ViSION', 'VXT', 'WAF', 'WKS', 'x0r', 'YAWNiX', 'YIFY', 'YTS', 'PSA', ['EVO', 'WEB-DL only']
         ]
-        pass
 
-    async def get_additional_checks(self, meta: Meta) -> bool:
+    def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
         if meta['type'] == "DVDRIP":
             console.print("[bold red]DVDRIP uploads are not allowed on HHD.[/bold red]")
@@ -40,7 +39,7 @@ class HHD(UNIT3D):
 
         return should_continue
 
-    async def get_resolution_id(
+    def get_resolution_id(
         self,
         meta: Meta,
         resolution: Optional[str] = None,

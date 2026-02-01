@@ -92,7 +92,6 @@ class CustomTorrent(torf.Torrent):
         if self._precalculated_piece_size is not None:
             self._piece_size = self._precalculated_piece_size
             self.metainfo['info']['piece length'] = self._precalculated_piece_size
-            return
 
 
 class TorrentCreator:
@@ -110,17 +109,18 @@ class TorrentCreator:
         piece_size: Optional[int] = None,
     ) -> int:
         # Set max_size
+        max_size_limit = max_size
         if piece_size:
             try:
-                max_size = min(int(piece_size) * 1024 * 1024, PIECE_SIZE_MAX)
+                max_size_limit = min(int(piece_size) * 1024 * 1024, PIECE_SIZE_MAX)
             except ValueError:
-                max_size = 134217728  # Fallback to default if conversion fails
+                max_size_limit = 134217728  # Fallback to default if conversion fails
         else:
-            max_size = 134217728  # 128 MiB default maximum
+            max_size_limit = 134217728  # 128 MiB default maximum
 
         if meta.get('debug'):
             console.print(f"Content size: {total_size / (1024*1024):.2f} MiB")
-            console.print(f"Max size: {max_size}")
+            console.print(f"Max size: {max_size_limit}")
 
         total_size_mib = total_size / (1024*1024)
 
@@ -155,7 +155,7 @@ class TorrentCreator:
             piece_size = 16 * 1024 * 1024
 
         # Enforce minimum and maximum limits
-        piece_size = max(min_size, min(piece_size, max_size))
+        piece_size = max(min_size, min(piece_size, max_size_limit))
 
         # Calculate number of pieces for debugging
         num_pieces = math.ceil(total_size / piece_size)
@@ -331,7 +331,7 @@ class TorrentCreator:
                                 line = line.strip()
 
                                 # Detect hashing progress, speed, and percentage
-                                match = re.search(r"Hashing pieces.*?\[(\d+(?:\.\d+)? (?:G|M)(?:B|iB)/s)\]\s+(\d+)%", line)
+                                match = re.search(r"Hashing pieces.*?\[(\d+(?:\.\d+)? [GM](?:B|iB)/s)\]\s+(\d+)%", line)
                                 if match:
                                     speed = match.group(1)  # Extract speed (e.g., "1.7 GiB/s")
                                     pieces_done = int(match.group(2))  # Extract percentage (e.g., "14")
@@ -491,10 +491,10 @@ class TorrentCreator:
                 valid_keys.append('length')
 
             # Remove everything not in the whitelist
-            for each in list(info_dict):
+            for each in tuple(info_dict):
                 if each not in valid_keys:
                     info_dict.pop(each, None)  # type: ignore
-            for each in list(base_torrent.metainfo):
+            for each in tuple(base_torrent.metainfo):
                 if each not in ('announce', 'comment', 'creation date', 'created by', 'encoding', 'info'):
                     base_torrent.metainfo.pop(each, None)  # type: ignore
             base_torrent.source = 'L4G'
@@ -524,9 +524,9 @@ class TorrentCreator:
             elif "aarch64" in arch or "arm64" in arch:
                 binary_path = os.path.join(base_dir, "linux", "arm64", "mkbrr")
             else:
-                raise Exception("Unsupported Linux architecture")
+                raise RuntimeError("Unsupported Linux architecture")
         else:
-            raise Exception("Unsupported OS")
+            raise RuntimeError("Unsupported OS")
 
         if not os.path.exists(binary_path):
             raise FileNotFoundError(f"mkbrr binary not found: {binary_path}")

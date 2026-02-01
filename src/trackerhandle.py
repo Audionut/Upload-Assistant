@@ -135,6 +135,8 @@ async def process_trackers(
                         console.print(f"{tracker} (modq: {modq})")
                     if (tracker_caps.get('draft') or tracker_caps.get('draft_live')) and draft in ["Yes", "Draft"]:
                         console.print(f"{tracker} (draft: {draft})")
+                    if tracker == "TOS" and meta.get('keep_nfo', False):
+                        await tracker_class.tos_rehash(meta)
                     is_uploaded = False
                     try:
                         upload_start_time = time.time()

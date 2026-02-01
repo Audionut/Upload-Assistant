@@ -1083,7 +1083,7 @@ async def screenshots(
         kill_all_child_processes()
         gc.collect()
         cleanup_manager.reset_terminal()
-        sys.exit(1)
+        raise
     except Exception:
         await asyncio.sleep(0.1)
         kill_all_child_processes()

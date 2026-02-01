@@ -24,6 +24,7 @@ class AR:
         self.config = config
         self.cookie_validator = CookieValidator(config)
         self.cookie_uploader = CookieAuthUploader(config)
+        self.common = COMMON(config)
         self.tracker = 'AR'
         self.source_flag = 'AlphaRatio'
         trackers_cfg = cast(dict[str, Any], self.config.get('TRACKERS', {}))
@@ -39,9 +40,7 @@ class AR:
         self.user_agent = f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
         self.banned_groups = []
 
-    async def get_type(self, meta: dict[str, Any]) -> str:
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
+    def get_type(self, meta: dict[str, Any]) -> str:
         if (meta['type'] == 'DISC' or meta['type'] == 'REMUX') and meta['source'] == 'Blu-ray':
             return "14"
 
@@ -89,7 +88,7 @@ class AR:
         if meta['category'] == "MOVIE":
             if meta['sd']:
                 return '7'
-            elif any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
+            elif self.common.is_adult_content(meta):
                 return '13'
             else:
                 return {
@@ -238,7 +237,7 @@ class AR:
             lang_tag = audio_lang
         return lang_tag
 
-    async def get_basename(self, meta: dict[str, Any]) -> str:
+    def get_basename(self, meta: dict[str, Any]) -> str:
         filelist = cast(list[str], meta.get('filelist') or [])
         path = filelist[0] if filelist else str(meta.get('path') or "")
         return os.path.basename(path)
@@ -353,7 +352,7 @@ class AR:
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         await self.edit_desc(meta)
-        type_id = await self.get_type(meta)
+        type_id = self.get_type(meta)
 
         # Read the description
         desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"

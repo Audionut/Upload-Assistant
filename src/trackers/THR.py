@@ -31,12 +31,11 @@ class THR:
         self.username = str(config['TRACKERS']['THR'].get('username', ''))
         self.password = str(config['TRACKERS']['THR'].get('password', ''))
         self.banned_groups = [""]
-        pass
 
     async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
-        cat_id = await self.get_cat_id(meta)
+        cat_id = self.get_cat_id(meta)
         subs = self.get_subtitles(meta)
         await self.edit_desc(meta)
         thr_name = unidecode(str(meta.get('name', '')).replace('DD+', 'DDP'))
@@ -156,7 +155,7 @@ class THR:
             await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
             return False
 
-    async def get_cat_id(self, meta: Meta) -> str:
+    def get_cat_id(self, meta: Meta) -> str:
         genres = str(meta.get('genres', '')).lower()
         keywords = str(meta.get('keywords', '')).lower()
         category = str(meta.get('category', ''))
@@ -414,7 +413,7 @@ class THR:
 
         return dupes
 
-    async def _process_search_response(
+    def _process_search_response(
         self,
         response: httpx.Response,
         meta: Meta,

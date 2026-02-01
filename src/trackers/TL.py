@@ -83,15 +83,15 @@ class TL:
         process_screenshot = not self.tracker_config.get("img_rehost", True) or self.tracker_config.get("api_upload", True)
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header())
+        desc_parts.append(builder.get_custom_header())
 
         # Logo
-        logo, logo_size = await builder.get_logo_section(meta)
+        logo, logo_size = builder.get_logo_section(meta)
         if logo and logo_size:
             desc_parts.append(f"""<center><img src="{logo}" style="max-width: {logo_size}px;"></center>""")
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta)
+        title, episode_image, episode_overview = builder.get_tv_info(meta)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
 
@@ -102,21 +102,21 @@ class TL:
 
         # File information
         desc_parts.append(await builder.get_mediainfo_section(meta))
-        desc_parts.append(await builder.get_bdinfo_section(meta))
+        desc_parts.append(builder.get_bdinfo_section(meta))
 
         # NFO
         if meta.get('description_nfo_content', ''):
             desc_parts.append(f"<div style='display: flex; justify-content: center;'><div style='background-color: #000000; color: #ffffff;'>{meta.get('description_nfo_content')}</div></div>")
 
         # User description
-        desc_parts.append(await builder.get_user_description(meta))
+        desc_parts.append(builder.get_user_description(meta))
 
         # Menus Screenshots
         if process_screenshot:
             # Disc menus screenshots header
             menu_images = cast(list[dict[str, Any]], meta.get("menu_images", []))
             if menu_images:
-                desc_parts.append(await builder.menu_screenshot_header(meta))
+                desc_parts.append(builder.menu_screenshot_header(meta))
 
                 # Disc menus screenshots
                 menu_screenshots_block = ""
@@ -131,14 +131,14 @@ class TL:
                     desc_parts.append("<center>" + menu_screenshots_block + "</center>")
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        desc_parts.append(builder.get_tonemapped_header(meta))
 
         # Screenshots Section
         if process_screenshot:
             images = cast(list[dict[str, Any]], meta.get("image_list", []))
             if images:
                 # Screenshot Header
-                desc_parts.append(await builder.screenshot_header())
+                desc_parts.append(builder.screenshot_header())
                 # Screenshots
                 screenshots_block = ""
                 for i, image in enumerate(images):
@@ -420,7 +420,7 @@ class TL:
             return True  # Debug mode - simulated success
         return False
 
-    async def get_cookie_upload_data(self, meta: Meta) -> dict[str, Any]:
+    def get_cookie_upload_data(self, meta: Meta) -> dict[str, Any]:
         tvMazeURL = ''
         if meta.get('category') == 'TV' and meta.get("tvmaze_id"):
             tvMazeURL = f"https://www.tvmaze.com/shows/{meta.get('tvmaze_id')}"
@@ -458,7 +458,7 @@ class TL:
             tracker_status[self.tracker]['status_message'] = "data error: Login with cookies failed."
             return None
 
-        data = await self.get_cookie_upload_data(meta)
+        data = self.get_cookie_upload_data(meta)
 
         if meta.get('debug'):
             console.print("[cyan]TL Request Data:")

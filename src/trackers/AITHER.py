@@ -24,9 +24,8 @@ class AITHER(UNIT3D):
         self.requests_url = f'{self.base_url}/api/requests/filter'
         self.trumping_url = f'{self.base_url}/api/trumping-reports/filter'
         self.banned_groups: list[str] = []
-        pass
 
-    async def get_additional_checks(self, meta: dict[str, Any]):
+    def get_additional_checks(self, meta: dict[str, Any]):
         should_continue = True
         if meta['valid_mi'] is False:
             console.print(f"[bold red]No unique ID in mediainfo, skipping {self.tracker} upload.")
@@ -34,14 +33,14 @@ class AITHER(UNIT3D):
 
         return should_continue
 
-    async def get_additional_data(self, meta: dict[str, Any]):
+    def get_additional_data(self, meta: dict[str, Any]):
         data = {
-            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
+            'mod_queue_opt_in': self.get_flag(meta, 'modq'),
         }
 
         return data
 
-    async def get_name(self, meta: dict[str, Any]):
+    def get_name(self, meta: dict[str, Any]):
         aither_name: str = meta["name"]
         resolution: str = meta.get("resolution", "")
         video_codec: str = meta.get("video_codec", "")
@@ -49,10 +48,8 @@ class AITHER(UNIT3D):
         name_type: str = meta.get("type", "")
         source: str = meta.get("source", "")
 
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
         audio_languages: list[str] = meta['audio_languages']
-        if audio_languages and not await languages_manager.has_english_language(audio_languages):
+        if audio_languages and not languages_manager.has_english_language(audio_languages):
             foreign_lang = audio_languages[0].upper()
             if (name_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD")):
                 aither_name = aither_name.replace(str(meta['year']), f"{meta['year']} {foreign_lang}", 1)
