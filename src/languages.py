@@ -185,7 +185,16 @@ class LanguagesManager:
     async def parsed_mi_dict(self, meta: dict[str, Any]) -> tuple[list[str], list[str]]:
         try:
             mi = meta.get('mediainfo', {})
-            data = json.loads(await mi.read())
+            if isinstance(mi, dict):
+                data = mi
+            elif isinstance(mi, str):
+                data = json.loads(mi)
+            elif hasattr(mi, 'read'):
+                raw_content = await mi.read()
+                content = raw_content.decode('utf-8') if isinstance(raw_content, (bytes, bytearray)) else str(raw_content)
+                data = json.loads(content)
+            else:
+                raise TypeError(f"Unsupported mediainfo type: {type(mi).__name__}")
         except Exception as e:
             console.print(f"[red]Error reading mediainfo from meta: {e}[/red]")
             return [], []

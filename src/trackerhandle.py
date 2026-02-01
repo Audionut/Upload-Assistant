@@ -21,7 +21,7 @@ Meta: TypeAlias = dict[str, Any]
 StatusDict: TypeAlias = dict[str, Any]
 
 
-async def check_mod_q_and_draft(
+def check_mod_q_and_draft(
     tracker_class: Any,
     meta: Meta,
 ) -> tuple[Optional[str], Optional[str], dict[str, Any]]:
@@ -38,16 +38,16 @@ async def check_mod_q_and_draft(
     modq, draft = None, None
     tracker_caps = tracker_capabilities.get(tracker_class.tracker, {})
     if tracker_class.tracker == 'BHD' and tracker_caps.get('draft_live'):
-        draft_int = await tracker_class.get_live(meta)
+        draft_int = tracker_class.get_live(meta)
         draft = "Draft" if draft_int == 0 else "Live"
 
     else:
         if tracker_caps.get('mod_q'):
-            modq_flag = await tracker_class.get_flag(meta, 'modq')
+            modq_flag = tracker_class.get_flag(meta, 'modq')
             modq_enabled = str(modq_flag).lower() in ["1", "true", "yes"]
             modq = 'Yes' if modq_enabled else 'No'
         if tracker_caps.get('draft'):
-            draft_flag = await tracker_class.get_flag(meta, 'draft')
+            draft_flag = tracker_class.get_flag(meta, 'draft')
             draft_enabled = str(draft_flag).lower() in ["1", "true", "yes"]
             draft = 'Yes' if draft_enabled else 'No'
 
@@ -130,7 +130,7 @@ async def process_trackers(
             upload_status = cast(Mapping[str, Any], tracker_status.get(tracker, {})).get('upload', False)
             if upload_status:
                 try:
-                    modq, draft, tracker_caps = await check_mod_q_and_draft(tracker_class, meta)
+                    modq, draft, tracker_caps = check_mod_q_and_draft(tracker_class, meta)
                     if tracker_caps.get('mod_q') and modq == "Yes":
                         console.print(f"{tracker} (modq: {modq})")
                     if (tracker_caps.get('draft') or tracker_caps.get('draft_live')) and draft in ["Yes", "Draft"]:
