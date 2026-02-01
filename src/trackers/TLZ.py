@@ -22,21 +22,6 @@ class TLZ(UNIT3D):
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [""]
 
-    def get_category_id(
-        self,
-        meta: Meta,
-        category: Optional[str] = None,
-        reverse: bool = False,
-        mapping_only: bool = False
-    ) -> dict[str, str]:
-        _ = (category, reverse, mapping_only)
-        category_value = str(meta.get('category', ''))
-        category_id = {
-            'MOVIE': '1',
-            'TV': '2',
-        }.get(category_value, '0')
-        return {'category_id': category_id}
-
     def get_type_id(
         self,
         meta: Meta,
@@ -44,20 +29,26 @@ class TLZ(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False
     ) -> dict[str, str]:
-        _ = (type, reverse, mapping_only)
-        type_value = str(meta.get('type', ''))
         type_id = {
             'FILM': '1',
             'EPISODE': '3',
             'PACK': '4',
-        }.get(type_value, '0')
+        }
+        if mapping_only:
+            return type_id
+        if reverse:
+            return {v: k for k, v in type_id.items()}
+        if type is not None:
+            return {'type_id': type_id.get(type, '0')}
+        type_value = str(meta.get('type', ''))
+        type_id_value = type_id.get(type_value, '0')
 
         if meta.get('tv_pack'):
-            type_id = '4'
-        elif type_id != '4':
-            type_id = '3'
+            type_id_value = '4'
+        elif type_id_value != '4':
+            type_id_value = '3'
 
         if str(meta.get('category', '')) == 'MOVIE':
-            type_id = '1'
+            type_id_value = '1'
 
-        return {'type_id': type_id}
+        return {'type_id': type_id_value}

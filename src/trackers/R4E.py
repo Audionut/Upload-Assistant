@@ -37,7 +37,7 @@ class R4E(UNIT3D):
         category_id = '24'
         # Use stored genre IDs if available
         if meta and meta.get('genre_ids'):
-            genre_ids = str(meta['genre_ids']).split(',')
+            genre_ids = [g.strip() for g in meta['genre_ids'].split(',')]
             is_docu = '99' in genre_ids
 
             if meta['category'] == 'MOVIE':

@@ -385,7 +385,7 @@ class THR:
                         console.print(f"[dim]Searching page {page_count}...")
                     response = await client.get(page_url)
 
-                    page_dupes, has_next_page, next_page_number = await self._process_search_response(
+                    page_dupes, has_next_page, next_page_number = self._process_search_response(
                         response, meta, current_page)
 
                     for dupe in page_dupes:

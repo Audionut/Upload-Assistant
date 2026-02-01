@@ -55,7 +55,8 @@ class OTW(UNIT3D):
             else:
                 return False
 
-        genres = f"{keywords} {combined_genres}"
+        combined_genres_str = ", ".join(combined_genres)
+        genres = f"{keywords} {combined_genres_str}"
         if not self.common.prompt_adult_content(
             meta,
             tracker_name=self.tracker,

@@ -363,7 +363,7 @@ async def update_metadata_from_tracker(
                         if not only_id or meta.get('keep_images'):
                             ptp_imagelist = cast(
                                 list[ImageDict],
-                                tracker_instance.get_ptp_description(ptp_torrent_id, meta, meta.get('is_disc', False)),
+                                await tracker_instance.get_ptp_description(ptp_torrent_id, meta, meta.get('is_disc', False)),
                             )
                         if ptp_imagelist:
                             valid_images = await check_images_concurrently(ptp_imagelist, meta)
@@ -496,42 +496,41 @@ async def update_metadata_from_tracker(
                         else:
                             meta['description'] = description
                             meta['saved_description'] = True
-                    elif meta.get('bhd_nfo'):
-                        if not meta.get('skipit'):
-                            nfo_file_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], "bhd.nfo")
-                            if os.path.exists(nfo_file_path):
-                                nfo_content = await asyncio.to_thread(Path(nfo_file_path).read_text, encoding="utf-8")
-                                console.print("[bold green]Successfully grabbed FraMeSToR description")
-                                console.print(f"Description content:\n{nfo_content[:1000]}...", markup=False)
-                                console.print("[cyan]Do you want to discard or keep the description?[/cyan]")
-                                edit_choice = cli_ui.ask_string("Enter 'd' to discard, or press Enter to keep it as is: ")
+                    elif meta.get('bhd_nfo') and not meta.get('skipit'):
+                        nfo_file_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], "bhd.nfo")
+                        if os.path.exists(nfo_file_path):
+                            nfo_content = await asyncio.to_thread(Path(nfo_file_path).read_text, encoding="utf-8")
+                            console.print("[bold green]Successfully grabbed FraMeSToR description")
+                            console.print(f"Description content:\n{nfo_content[:1000]}...", markup=False)
+                            console.print("[cyan]Do you want to discard or keep the description?[/cyan]")
+                            edit_choice = cli_ui.ask_string("Enter 'd' to discard, or press Enter to keep it as is: ")
 
-                                if (edit_choice or "").lower() == 'd':
-                                    meta['description'] = ""
-                                    meta['image_list'] = []
-                                    nfo_file_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], "bhd.nfo")
+                            if (edit_choice or "").lower() == 'd':
+                                meta['description'] = ""
+                                meta['image_list'] = []
+                                nfo_file_path = os.path.join(meta['base_dir'], 'tmp', meta['uuid'], "bhd.nfo")
 
-                                    try:
-                                        import gc
-                                        gc.collect()  # Force garbage collection to close any lingering handles
-                                        for attempt in range(3):
-                                            try:
-                                                os.remove(nfo_file_path)
-                                                console.print("[yellow]NFO file successfully deleted.[/yellow]")
-                                                break
-                                            except Exception as e:
-                                                if attempt < 2:
-                                                    console.print(f"[yellow]Attempt {attempt+1}: Could not delete file, retrying in 1 second...[/yellow]")
-                                                    await asyncio.sleep(1)
-                                                else:
-                                                    console.print(f"[red]Failed to delete BHD NFO file after 3 attempts: {e}[/red]")
-                                    except Exception as e:
-                                        console.print(f"[red]Error during file cleanup: {e}[/red]")
-                                    meta['nfo'] = False
-                                    meta['bhd_nfo'] = False
-                                    console.print("[yellow]Description discarded.[/yellow]")
-                                else:
-                                    console.print("[green]Keeping the original description.[/green]")
+                                try:
+                                    import gc
+                                    gc.collect()  # Force garbage collection to close any lingering handles
+                                    for attempt in range(3):
+                                        try:
+                                            os.remove(nfo_file_path)
+                                            console.print("[yellow]NFO file successfully deleted.[/yellow]")
+                                            break
+                                        except Exception as e:
+                                            if attempt < 2:
+                                                console.print(f"[yellow]Attempt {attempt+1}: Could not delete file, retrying in 1 second...[/yellow]")
+                                                await asyncio.sleep(1)
+                                            else:
+                                                console.print(f"[red]Failed to delete BHD NFO file after 3 attempts: {e}[/red]")
+                                except Exception as e:
+                                    console.print(f"[red]Error during file cleanup: {e}[/red]")
+                                meta['nfo'] = False
+                                meta['bhd_nfo'] = False
+                                console.print("[yellow]Description discarded.[/yellow]")
+                            else:
+                                console.print("[green]Keeping the original description.[/green]")
 
                     image_list = cast(Optional[Sequence[ImageDict]], meta.get('image_list'))
                     if image_list:

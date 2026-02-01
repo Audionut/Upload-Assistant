@@ -203,10 +203,11 @@ class TrackerDataManager:
 
                 # for just searching, remove any specific trackers already in meta['trackers']
                 # since that tracker was found in client, and remove it from meta['trackers']
-                for tracker in specific_tracker:
-                    if tracker in meta_trackers and meta.get('site_check', False):
-                        specific_tracker.remove(tracker)
-                        meta_trackers.remove(tracker)
+                if meta.get('site_check', False):
+                    overlap = {t for t in specific_tracker if t in meta_trackers}
+                    if overlap:
+                        specific_tracker = [t for t in specific_tracker if t not in overlap]
+                        meta_trackers = [t for t in meta_trackers if t not in overlap]
 
                 # Update meta['trackers'] preserving list format
                 if meta_trackers:

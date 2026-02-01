@@ -25,7 +25,7 @@
 - Web UI mode: use -webui/--webui; server code lives under web_ui/.
 
 ## Lint & type-check expectations
-- Follow Ruff and Pyright settings in pyproject.toml when making changes (line-length 176, Pyright strict). Keep imports ordered per Ruff isort config.
+- Follow Ruff and Pyright settings in pyproject.toml when making changes.
 
 ## SonarQube rules
 - When touching a file, run SonarQube analysis for that file and fix any reported issues.
@@ -36,11 +36,12 @@
 	- python:S117 level off
 	- python:S3358 level off
 	- python:S1192 threshold 10
-  - python:S101 level off
-  - python:S100 level off
-  - python:S5843 level off
-  - python:S1542 level off
-  - python:S1135 level off
+  	- python:S101 level off
+  	- python:S100 level off
+  	- python:S5843 level off
+  	- python:S1542 level off
+  	- python:S1135 level off
+- follow SonarQube ruleset with overrides when adding or modifying code.
 
 ## Codebase conventions
 - Most core functions are async; prefer async IO and `asyncio.to_thread()` for blocking work (e.g., torrent hashing in the torrentcreate module under src/).

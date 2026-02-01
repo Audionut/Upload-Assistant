@@ -68,7 +68,7 @@ class HDS:
             desc_parts.append(f'[center]{episode_overview}[/center]')
 
         # File information
-        mediainfo = builder.get_mediainfo_section(meta)
+        mediainfo = await builder.get_mediainfo_section(meta)
         if mediainfo:
             desc_parts.append(f'[pre]{mediainfo}[/pre]')
 

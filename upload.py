@@ -1176,32 +1176,30 @@ def extract_changelog(content: str, to_version: str) -> Optional[str]:
     return None
 
 
-def update_notification(base_dir: str) -> Optional[str]:
+async def update_notification(base_dir: str) -> Optional[str]:
     version_file = os.path.join(base_dir, 'data', 'version.py')
     remote_version_url = 'https://raw.githubusercontent.com/Audionut/Upload-Assistant/master/data/version.py'
 
     notice = config['DEFAULT'].get('update_notification', True)
     verbose = config['DEFAULT'].get('verbose_notification', False)
 
-    local_version = get_local_version(version_file)
+    local_version = await asyncio.to_thread(get_local_version, version_file)
     if not local_version:
         return None
 
     if not notice:
         return local_version
 
-    remote_version, remote_content = get_remote_version(remote_version_url)
+    remote_version, remote_content = await asyncio.to_thread(get_remote_version, remote_version_url)
     if not remote_version:
         return local_version
 
     if version.parse(remote_version) > version.parse(local_version):
         console.print(f"[red][NOTICE] [green]Update available: v[/green][yellow]{remote_version}")
         console.print(f"[red][NOTICE] [green]Current version: v[/green][yellow]{local_version}")
-        time.sleep(1)
         if verbose and remote_content:
             changelog = extract_changelog(remote_content, remote_version)
             if changelog:
-                time.sleep(1)
                 console.print(f"{changelog}")
             else:
                 console.print("[yellow]Changelog not found between versions.[/yellow]")
@@ -1245,7 +1243,7 @@ async def do_the_thing(base_dir: str) -> None:
             break
 
     meta['ua_name'] = 'Upload Assistant'
-    meta['current_version'] = update_notification(base_dir)
+    meta['current_version'] = await update_notification(base_dir)
 
     signature = 'Created by Upload Assistant'
     if meta.get('current_version', ''):

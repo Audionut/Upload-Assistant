@@ -106,7 +106,7 @@ class PT(UNIT3D):
                         media_info_text = f.read()
 
                     if not found_portuguese_audio:
-                        audio_sections = re.findall(r'Audio(?: #\d+)?\s*\n(.+)(?=\n\n(?:Audio|Video|Text|Menu)|$)', media_info_text, re.DOTALL | re.IGNORECASE)
+                        audio_sections = re.findall(r'Audio(?: #\d+)?\s*\n((?:(?!\n\n(?:Audio|Video|Text|Menu)).)*)', media_info_text, re.DOTALL | re.IGNORECASE)
                         for section in audio_sections:
                             language_match = re.search(r'Language\s*:\s*(.+)', section, re.IGNORECASE)
                             title_match = re.search(r'Title\s*:\s*(.+)', section, re.IGNORECASE)
@@ -153,9 +153,9 @@ class PT(UNIT3D):
                         media_info_text = f.read()
 
                     if not found_portuguese_subtitle:
-                        text_sections = re.findall(r'Text(?: #\d+)?\s*\n(.+)(?=\n\n(?:Audio|Video|Text|Menu)|$)', media_info_text, re.DOTALL | re.IGNORECASE)
+                        text_sections = re.findall(r'Text(?: #\d+)?\s*\n((?:(?!\n\n(?:Audio|Video|Text|Menu)).)*)', media_info_text, re.DOTALL | re.IGNORECASE)
                         if not text_sections:
-                            text_sections = re.findall(r'Subtitle(?: #\d+)?\s*\n(.+)(?=\n\n(?:Audio|Video|Text|Menu)|$)', media_info_text, re.DOTALL | re.IGNORECASE)
+                            text_sections = re.findall(r'Subtitle(?: #\d+)?\s*\n((?:(?!\n\n(?:Audio|Video|Text|Menu)).)*)', media_info_text, re.DOTALL | re.IGNORECASE)
 
                         for section in text_sections:
                             language_match = re.search(r'Language\s*:\s*(.+)', section, re.IGNORECASE)

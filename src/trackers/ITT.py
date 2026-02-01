@@ -3,7 +3,6 @@ import re
 from typing import Any, Optional, cast
 
 from src.console import console
-from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -162,9 +161,7 @@ class ITT(UNIT3D):
 
         return {"name": re.sub(r"\s{2,}", " ", itt_name)}
 
-    async def get_dubs(self, meta: Meta) -> str:
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
+    def get_dubs(self, meta: Meta) -> str:
         dubs = ''
         audio_languages_value = meta.get('audio_languages', [])
         audio_languages: set[str] = set()

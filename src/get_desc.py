@@ -473,7 +473,7 @@ class DescriptionBuilder:
                 release_url = meta["release_url"]
 
             covers = False
-            if self.common.path_exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/covers.json"):
+            if await self.common.path_exists(f"{meta['base_dir']}/tmp/{meta['uuid']}/covers.json"):
                 covers = True
 
             if (

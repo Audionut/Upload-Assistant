@@ -193,7 +193,7 @@ class VideoManager:
                     console.print(f"[bold red]This looks like some *arr renamed file which is not allowed: [yellow]{file}")
                     try:
                         if cli_ui.ask_yes_no("Do you want to upload with this file?", default=False):
-                                continue
+                            continue
                         else:
                             console.print("[red]Exiting on user request[/red]")
                             await cleanup_manager.cleanup()

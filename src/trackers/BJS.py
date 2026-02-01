@@ -344,7 +344,7 @@ class BJS:
 
         # File information
         if meta.get('is_disc', '') == 'DVD':
-            desc_parts.append(f'[hide=DVD MediaInfo][pre]{builder.get_mediainfo_section(meta)}[/pre][/hide]')
+            desc_parts.append(f'[hide=DVD MediaInfo][pre]{await builder.get_mediainfo_section(meta)}[/pre][/hide]')
 
         bd_info = builder.get_bdinfo_section(meta)
         if bd_info:

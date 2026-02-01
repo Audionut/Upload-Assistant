@@ -453,23 +453,23 @@ class ANT:
                 tags = []
                 meta["ant_tagging"] = tags
 
-        if not tags and (not meta.get('unattended', False) or (meta.get('unattended', False) and meta.get('unattended_confirm', False))):
-            console.print(f"[yellow]{self.tracker}: No genres found for tagging. Tag required.")
-            console.print("[yellow]Only use a tag in the approved list found in the site search box.")
-            console.print("[yellow]ANT api will accept this upload, but no tag will be added.\n"
-                            "You must manually add at least one tag from the approved list when uploaded.")
-            user_tag = cli_ui.ask_string("Please enter at least one tag (genre) to use for the upload", default="")
-            if user_tag:
-                tags.append(user_tag.replace(' ', '.').lower())
-                meta["ant_tagging"] = tags
-            else:
-                meta["ant_tagging"] = []
+            if not tags and (not meta.get('unattended', False) or (meta.get('unattended', False) and meta.get('unattended_confirm', False))):
+                console.print(f"[yellow]{self.tracker}: No genres found for tagging. Tag required.")
+                console.print("[yellow]Only use a tag in the approved list found in the site search box.")
+                console.print("[yellow]ANT api will accept this upload, but no tag will be added.\n"
+                                "You must manually add at least one tag from the approved list when uploaded.")
+                user_tag = cli_ui.ask_string("Please enter at least one tag (genre) to use for the upload", default="")
+                if user_tag:
+                    tags.append(user_tag.replace(' ', '.').lower())
+                    meta["ant_tagging"] = tags
+                else:
+                    meta["ant_tagging"] = []
 
-        elif not tags:
-            if not meta['unattended']:
-                console.print(f"[bold red]{self.tracker}: No genres found for tagging in unattended mode.")
-            meta['skipping'] = "ANT"
-            return []
+            elif not tags:
+                if not meta['unattended']:
+                    console.print(f"[bold red]{self.tracker}: No genres found for tagging in unattended mode.")
+                meta['skipping'] = "ANT"
+                return []
 
         dupes: list[dict[str, Any]] = []
         if meta.get('category') == "TV":

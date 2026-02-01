@@ -438,7 +438,7 @@ async def _get_audio_v2(
         additional = ""  # Set empty string if additional is a dictionary
 
     additional_str = str(additional or "")
-    format_str = str(format or "")
+    format_str = str(format_value or "")
     commercial_str = str(commercial or "")
 
     if commercial_str:

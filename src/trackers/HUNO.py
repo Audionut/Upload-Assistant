@@ -7,7 +7,6 @@ import aiofiles
 
 from src.console import console
 from src.get_desc import DescriptionBuilder
-from src.languages import languages_manager
 from src.rehostimages import RehostImagesManager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -162,13 +161,11 @@ class HUNO(UNIT3D):
         _ = meta
         return {}
 
-    async def get_audio(self, meta: dict[str, Any]) -> str:
+    def get_audio(self, meta: dict[str, Any]) -> str:
         channels = str(meta.get('channels', "") or "")
         codec = str(meta.get('audio', "") or "").replace("DD+", "DDP").replace("EX", "").replace("Dual-Audio", "").replace("Dubbed", "").replace(channels, "")
         languages_result = "SKIPPED"
 
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
         audio_languages = meta.get('audio_languages')
         if isinstance(audio_languages, list):
             audio_languages_list = cast(list[Any], audio_languages)

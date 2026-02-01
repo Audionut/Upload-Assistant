@@ -79,12 +79,12 @@ class EMUW(UNIT3D):
 
         return {'name': emuwarez_name}
 
-    async def _get_title(self, meta: dict[str, Any]) -> str:
+    def _get_title(self, meta: dict[str, Any]) -> str:
         """Get Spanish title if available and configured"""
         spanish_title = None
 
         # Try to get from IMDb with priority: country match, then language match
-        imdb_info_raw = meta.get('imdb_info`')
+        imdb_info_raw = meta.get('imdb_info')
         imdb_info: dict[str, Any] = cast(dict[str, Any], imdb_info_raw) if isinstance(imdb_info_raw, dict) else {}
         akas_raw = imdb_info.get('akas', [])
         akas: list[Any] = cast(list[Any], akas_raw) if isinstance(akas_raw, list) else []
@@ -107,11 +107,14 @@ class EMUW(UNIT3D):
         tmdb_id_raw = meta.get('tmdb')
         tmdb_id = int(tmdb_id_raw) if isinstance(tmdb_id_raw, (int, str)) and str(tmdb_id_raw).isdigit() else 0
         if not spanish_title and tmdb_id:
-            spanish_title = await self.tmdb_manager.get_tmdb_translations(
-                tmdb_id=tmdb_id,
-                category=str(meta.get('category', 'MOVIE')),
-                target_language='es',
-                debug=bool(meta.get('debug', False))
+            spanish_title = asyncio.run(
+                asyncio.to_thread(
+                    self.tmdb_manager.get_tmdb_translations,
+                    tmdb_id=tmdb_id,
+                    category=str(meta.get('category', 'MOVIE')),
+                    target_language='es',
+                    debug=bool(meta.get('debug', False))
+                )
             )
 
         # Use Spanish title if configured

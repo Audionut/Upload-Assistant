@@ -453,7 +453,9 @@ class NameManager:
                 if not region_id:
                     region_name = await self._prompt_for_field(meta, "Region code", strictest['region'] == 'mandatory')
                     if region_name and region_name != "SKIPPED":
-                        self.common.unit3d_region_ids(region_name)
+                        console.print(f"Looking up region ID for: {region_name}")
+                        region_id = self.common.unit3d_region_ids(region_name)
+                        console.print(f"Found region ID: {region_id}")
             if not distributor_id:
                 distributor_name = await self._prompt_for_field(meta, "Distributor", strictest['distributor'] == 'mandatory')
                 if distributor_name and distributor_name != "SKIPPED":

@@ -208,13 +208,14 @@ class IHD(UNIT3D):
             if meta.get('debug')
             else None
         )
-        should_continue = self.common.prompt_adult_content(
-            meta,
-            tracker_name=self.tracker,
-            block_message=f'[bold red]Pornographic content is not allowed at {self.tracker}, unless it follows strict rules.',
-            prompt_text=f'Do you have permission to upload this torrent to {self.tracker}?',
-            unattended_message=unattended_message,
-            default=False,
-        )
+        if should_continue:
+            should_continue = self.common.prompt_adult_content(
+                meta,
+                tracker_name=self.tracker,
+                block_message=f'[bold red]Pornographic content is not allowed at {self.tracker}, unless it follows strict rules.',
+                prompt_text=f'Do you have permission to upload this torrent to {self.tracker}?',
+                unattended_message=unattended_message,
+                default=False,
+            )
 
         return should_continue
