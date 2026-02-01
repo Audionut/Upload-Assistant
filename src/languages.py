@@ -199,14 +199,13 @@ class LanguagesManager:
             console.print(f"[red]Error reading mediainfo from meta: {e}[/red]")
             return [], []
 
-        audio_language_display = ""
-        subtitle_language_display = ""
         audio_languages = []
         subtitle_languages = []
         tracks = data.get('media', {}).get('track', [])
         for track in tracks:
             track_type = track.get('@type')
             if track_type == 'Audio':
+                audio_language_display = ""
                 language_info = track.get('Language', '')
                 if "title" in track and "commentary" in track['title'].lower():
                     if meta['debug']:
@@ -228,6 +227,7 @@ class LanguagesManager:
                     audio_languages.append(audio_language_display.title())
 
             if track_type == 'Text':
+                subtitle_language_display = ""
                 language_info = track.get('Language', '')
                 if isinstance(language_info, dict):
                     language_info = ''

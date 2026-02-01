@@ -462,7 +462,8 @@ class COMMON:
             console.print(f"Filename: {filename}")  # Ensure filename is printed if available
 
         if not meta['unattended']:
-            selection = input(f"Do you want to use these IDs from {tracker_name}? (Y/n): ").strip().lower()
+            selection_raw = cli_ui.ask_string(f"Do you want to use these IDs from {tracker_name}? (Y/n)", default="Y")
+            selection = (selection_raw or "").strip().lower()
             try:
                 return bool(selection == '' or selection == 'y' or selection == 'yes')
             except (KeyboardInterrupt, EOFError):
@@ -472,7 +473,8 @@ class COMMON:
 
     def prompt_user_for_confirmation(self, message: str) -> bool:
         try:
-            response = input(f"{message} (Y/n): ")
+            response_raw = cli_ui.ask_string(f"{message} (Y/n)", default="Y")
+            response = response_raw or ""
         except (KeyboardInterrupt, EOFError):
             return False
 
