@@ -69,7 +69,8 @@ class COMMON:
 
             keywords_text = normalize_genres(meta.get("keywords", ""))
             combined_genres_text = normalize_genres(meta.get("combined_genres", ""))
-            genres = f"{keywords_text} {combined_genres_text}".strip()
+            genres_parts = [part.strip() for part in (keywords_text, combined_genres_text) if str(part).strip()]
+            genres = ", ".join(genres_parts)
         return any(
             re.search(rf"(^|,\s*){re.escape(str(keyword))}(\s*,|$)", genres, re.IGNORECASE)
             for keyword in keywords
