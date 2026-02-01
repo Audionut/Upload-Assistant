@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import json
 import os
 import re
 import sys
@@ -7,6 +8,7 @@ from typing import Any, Optional, Union, cast
 import aiofiles
 import cli_ui
 import langcodes
+from langcodes import tag_parser
 from langcodes.tag_parser import LanguageTagError
 
 from src.cleanup import cleanup_manager
@@ -180,6 +182,70 @@ class LanguagesManager:
 
         return parsed_data
 
+    async def parsed_mi_dict(self, meta: dict[str, Any]) -> tuple[list[str], list[str]]:
+        try:
+            mi = meta.get('mediainfo', {})
+            data = json.loads(await mi.read())
+        except Exception as e:
+            console.print(f"[red]Error reading mediainfo from meta: {e}[/red]")
+            return [], []
+
+        audio_language_display = ""
+        subtitle_language_display = ""
+        audio_languages = []
+        subtitle_languages = []
+        tracks = data.get('media', {}).get('track', [])
+        for track in tracks:
+            track_type = track.get('@type')
+            if track_type == 'Audio':
+                language_info = track.get('Language', '')
+                if "title" in track and "commentary" in track['title'].lower():
+                    if meta['debug']:
+                        console.print(f"Skipping commentary track: {track['title']}")
+                    continue
+                if isinstance(language_info, dict):
+                    language_info = ''
+                try:
+                    # Clean up the language code - take only the first part before any dash or underscore
+                    clean_lang = language_info.split('-')[0].split('_')[0].split(',')[0].split(' ')[0].strip().lower()
+                    if clean_lang:
+                        lang = langcodes.Language.get(clean_lang)
+                        audio_language_display = lang.display_name().casefold()
+                except (tag_parser.LanguageTagError, LookupError, AttributeError, ValueError) as e:
+                    if meta.get('debug'):
+                        console.print(f"[yellow]Debug: Unable to convert language code '{language_info}' to full name: {e}[/yellow]")
+
+                if audio_language_display:
+                    audio_languages.append(audio_language_display.title())
+
+            if track_type == 'Text':
+                language_info = track.get('Language', '')
+                if isinstance(language_info, dict):
+                    language_info = ''
+                try:
+                    # Clean up the language code - take only the first part before any dash or underscore
+                    clean_lang = language_info.split('-')[0].split('_')[0].split(',')[0].split(' ')[0].strip().lower()
+                    if clean_lang:
+                        lang = langcodes.Language.get(clean_lang)
+                        subtitle_language_display = lang.display_name().casefold()
+                except (tag_parser.LanguageTagError, LookupError, AttributeError, ValueError) as e:
+                    if meta.get('debug'):
+                        console.print(f"[yellow]Debug: Unable to convert language code '{language_info}' to full name: {e}[/yellow]")
+
+                if subtitle_language_display:
+                    subtitle_languages.append(subtitle_language_display.title())
+
+
+        if audio_languages:
+            audio_languages = [lang.split()[0] for lang in audio_languages]
+            audio_languages = list(dict.fromkeys(audio_languages))
+
+        if subtitle_languages:
+            subtitle_languages = [lang.split()[0] for lang in subtitle_languages]
+            subtitle_languages = list(dict.fromkeys(subtitle_languages))
+
+        return audio_languages, subtitle_languages
+
 
     async def process_desc_language(self, meta: dict[str, Any]) -> None:
         if 'no_subs' not in meta:
@@ -192,13 +258,20 @@ class LanguagesManager:
             meta['write_subtitle_languages'] = False
         if meta['is_disc'] != "BDMV":
             try:
-                parsed_info = await self.parsed_mediainfo(meta)
+                mi_audio_languages, mi_subtitle_languages = await self.parsed_mi_dict(meta)
                 audio_languages_value = meta.get('audio_languages')
                 audio_languages = cast(list[str], audio_languages_value) if isinstance(audio_languages_value, list) else []
                 subtitle_languages_value = meta.get('subtitle_languages')
                 subtitle_languages = cast(list[str], subtitle_languages_value) if isinstance(subtitle_languages_value, list) else []
                 meta['audio_languages'] = audio_languages
                 meta['subtitle_languages'] = subtitle_languages
+                if not audio_languages and mi_audio_languages:
+                    audio_languages.extend(mi_audio_languages)
+                if not subtitle_languages and mi_subtitle_languages:
+                    subtitle_languages.extend(mi_subtitle_languages)
+                parsed_info: dict[str, Any] = {}
+                if not audio_languages or not subtitle_languages:
+                    parsed_info = await self.parsed_mediainfo(meta)
                 if not audio_languages:
                     found_any_language = False
                     tracks_without_language: list[str] = []

@@ -1,7 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
 import importlib
-import json
 import os
 import platform
 import re
@@ -383,69 +382,28 @@ class AZTrackerBase:
 
         return file_info
 
-    async def get_lang(self, meta: Meta) -> dict[str, list[str]]:
+    def get_lang(self, meta: Meta) -> dict[str, list[str]]:
         self.language_map()
         audio_ids: set[str] = set()
         subtitle_ids: set[str] = set()
 
-        if meta.get('is_disc', False):
-            found_subs_strings = meta.get('subtitle_languages', [])
-            for lang_str in found_subs_strings:
-                target_id = self.lang_map.get(lang_str.lower())
-                if target_id:
-                    subtitle_ids.add(target_id)
+        subtitle_languages_value = meta.get('subtitle_languages')
+        found_subs_strings = cast(list[Any], subtitle_languages_value) if isinstance(subtitle_languages_value, list) else []
+        for lang_str in found_subs_strings:
+            if not isinstance(lang_str, str):
+                continue
+            target_id = self.lang_map.get(lang_str.lower())
+            if target_id:
+                subtitle_ids.add(target_id)
 
-            found_audio_strings = meta.get('audio_languages', [])
-            for lang_str in found_audio_strings:
-                target_id = self.lang_map.get(lang_str.lower())
-                if target_id:
-                    audio_ids.add(target_id)
-        else:
-            try:
-                mi = meta.get('mediainfo', {})
-                data = json.loads(await mi.read())
-
-                tracks = data.get('media', {}).get('track', [])
-
-                missing_audio_languages: list[dict[str, Any]] = []
-
-                for track in tracks:
-                    track_type = track.get('@type')
-                    language_code = track.get('Language')
-
-                    if not language_code:
-                        if track_type == 'Audio':
-                            missing_audio_languages.append(track)
-                        continue
-
-                    target_id = self.lang_map.get(language_code.lower())
-
-                    if not target_id and '-' in language_code:
-                        primary_code = language_code.split('-')[0]
-                        target_id = self.lang_map.get(primary_code.lower())
-
-                    if target_id:
-                        if track_type == 'Audio':
-                            audio_ids.add(target_id)
-                        elif track_type == 'Text':
-                            subtitle_ids.add(target_id)
-                    else:
-                        if track_type == 'Audio':
-                            missing_audio_languages.append(track)
-
-                if missing_audio_languages:
-                    console.print('No audio language/s found.')
-                    console.print('You must enter (comma-separated) languages for all audio tracks, eg: English, Spanish: ')
-                    user_input = await self.common.async_input(prompt='[bold yellow]Enter languages: [/bold yellow]')
-
-                    langs = [lang.strip() for lang in user_input.split(',')]
-                    for lang in langs:
-                        target_id = self.lang_map.get(lang.lower())
-                        if target_id:
-                            audio_ids.add(target_id)
-
-            except (json.JSONDecodeError, KeyError, TypeError) as e:
-                console.print(f'Error processing MediaInfo.json for uuid {meta.get("uuid")}: {e}', markup=False)
+        audio_languages_value = meta.get('audio_languages')
+        found_audio_strings = cast(list[Any], audio_languages_value) if isinstance(audio_languages_value, list) else []
+        for lang_str in found_audio_strings:
+            if not isinstance(lang_str, str):
+                continue
+            target_id = self.lang_map.get(lang_str.lower())
+            if target_id:
+                audio_ids.add(target_id)
 
         final_subtitle_ids = sorted(subtitle_ids)
         final_audio_ids = sorted(audio_ids)
@@ -943,7 +901,7 @@ class AZTrackerBase:
         if cookie_jar:
             self.session.cookies = cookie_jar
         task_info = await self.create_task_id(meta)
-        lang_info = await self.get_lang(meta) or {}
+        lang_info = self.get_lang(meta) or {}
 
         data: dict[str, Any] = {
             "_token": self.az_class.secret_token,
