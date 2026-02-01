@@ -1255,7 +1255,7 @@ class Prep:
         filename_patterns = [
             r'(?i)s\d{1,2}e\d{1,2}',
             r'(?i)s\d{1,2}',
-            r'(?i)\d{1,2}x\d{2}',
+            r'(?i)\b\d{1,2}x\d{2}\b',
             r'(?i)(?:season|series)\s*\d+',
             r'(?i)e\d{2,3}\s*\-',
             r'(?i)\d{4}\.\d{1,2}\.\d{1,2}'
@@ -1263,18 +1263,26 @@ class Prep:
 
         path = meta.get('path', '')
         uuid = meta.get('uuid', '')
+        if meta.get('debug', False):
+            console.print(f"[cyan]Checking category for path: {path} and uuid: {uuid}[/cyan]")
 
         for pattern in path_patterns:
             if re.search(pattern, path):
+                if meta.get('debug', False):
+                    console.print(f"[cyan]Matched TV pattern in path: {pattern}[/cyan]")
                 return "TV"
 
         for pattern in filename_patterns:
             if re.search(pattern, uuid) or re.search(pattern, os.path.basename(path)):
+                if meta.get('debug', False):
+                    console.print(f"[cyan]Matched TV pattern in filename: {pattern}[/cyan]")
                 return "TV"
 
         if "subsplease" in path.lower() or "subsplease" in uuid.lower():
             anime_pattern = r'(?:\s-\s)?(\d{1,3})\s*\(\d{3,4}[pi]\)'
             if re.search(anime_pattern, path.lower()) or re.search(anime_pattern, uuid.lower()):
+                if meta.get('debug', False):
+                    console.print(f"[cyan]Matched Anime pattern for SubsPlease: {anime_pattern}[/cyan]")
                 return "TV"
 
         return "MOVIE"
