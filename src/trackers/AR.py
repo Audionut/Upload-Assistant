@@ -1,6 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
-import json
 import os
 import platform
 import re
@@ -209,33 +208,6 @@ class AR:
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf8') as descfile:
             await descfile.write(description)
         return None
-
-    async def get_language_tag(self, meta: dict[str, Any]) -> str:
-        lang_tag = ""
-        has_eng_audio = False
-        audio_lang = ""
-        if meta['is_disc'] != "BDMV":
-            try:
-                async with aiofiles.open(f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json", encoding='utf-8') as f:
-                    mi_content = await f.read()
-                    mi = json.loads(mi_content)
-                for track in mi['media']['track']:
-                    if track['@type'] == "Audio":
-                        if track.get('Language', 'None').startswith('en'):
-                            has_eng_audio = True
-                        if not has_eng_audio:
-                            audio_lang = mi['media']['track'][2].get('Language_String', "").upper()
-            except Exception as e:
-                console.print(f"[red]Error: {e}")
-        else:
-            for audio in meta['bdinfo']['audio']:
-                if audio['language'] == 'English':
-                    has_eng_audio = True
-                if not has_eng_audio:
-                    audio_lang = meta['bdinfo']['audio'][0]['language'].upper()
-        if audio_lang != "":
-            lang_tag = audio_lang
-        return lang_tag
 
     def get_basename(self, meta: dict[str, Any]) -> str:
         filelist = cast(list[str], meta.get('filelist') or [])
@@ -454,10 +426,12 @@ class AR:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
-            lambda: MediaInfo.parse(
-                video_path,
-                output="STRING",
-                full=False,
-                mediainfo_options={"inform": f"file://{template_path}"}
+            lambda: str(
+                MediaInfo.parse(
+                    video_path,
+                    output="STRING",
+                    full=False,
+                    mediainfo_options={"inform": f"file://{template_path}"}
+                )
             )
         )

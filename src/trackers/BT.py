@@ -429,7 +429,7 @@ class BT:
 
         return youtube
 
-    async def get_tags(self, _meta: dict[str, Any]) -> str:
+    async def get_tags(self, meta: dict[str, Any]) -> str:
         tags = ''
 
         genres = self.main_tmdb_data.get('genres')
@@ -455,6 +455,22 @@ class BT:
                     .lower()
                     for name in genre_names
                 )
+
+        if not tags:
+            imdb = meta.get('imdb_info', {})
+            if isinstance(imdb, dict):
+                imdb_genres_value = imdb.get('genres', [])
+                imdb_genres = cast(list[Any], imdb_genres_value) if isinstance(imdb_genres_value, list) else []
+                genre_names = [g for g in imdb_genres if isinstance(g, str)]
+                if genre_names:
+                    tags = ', '.join(
+                        unicodedata.normalize('NFKD', name)
+                        .encode('ASCII', 'ignore')
+                        .decode('utf-8')
+                        .replace(' ', '.')
+                        .lower()
+                        for name in genre_names
+                    )
 
         if not tags:
             tags = await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')

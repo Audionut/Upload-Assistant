@@ -39,7 +39,8 @@ class TTR(UNIT3D):
             console.print("1 = Castellano")
             console.print("2 = Latino")
             console.print("3 = Castellano Latino")
-            return str(self.common.async_input())
+            choice = cli_ui.ask_string("Select 1/2/3: ")
+            return (choice or "").strip()
 
         def get_spanish_type(lang_code: str) -> Optional[str]:
             if not lang_code:

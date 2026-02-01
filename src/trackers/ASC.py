@@ -542,6 +542,15 @@ class ASC:
         )
 
         if not tags:
+            imdb = meta.get('imdb_info', {})
+            if isinstance(imdb, dict):
+                tags = ', '.join(
+                    g.get('name', '')
+                    for g in imdb.get('genres', [])
+                    if isinstance(g.get('name'), str) and g.get('name').strip()
+                )
+
+        if not tags:
             tags = meta.get('genre') or await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')
 
         return tags
