@@ -461,38 +461,6 @@ class BT:
                     tags = ', '.join(normalized_genres)
 
         if not tags:
-            imdb = meta.get('imdb_info', {})
-            if isinstance(imdb, dict):
-                imdb_genres_value = imdb.get('genres', [])
-                imdb_genres = cast(list[Any], imdb_genres_value) if isinstance(imdb_genres_value, list) else []
-                genre_names = []
-                for g in imdb_genres:
-                    if isinstance(g, dict):
-                        name = g.get('name', '')
-                    elif isinstance(g, str):
-                        name = g
-                    else:
-                        continue
-
-                    name = name.strip()
-                    if name:
-                        genre_names.append(name)
-                if genre_names:
-                    normalized_genres = []
-                    for name in genre_names:
-                        normalized = (
-                            unicodedata.normalize('NFKD', name)
-                            .encode('ASCII', 'ignore')
-                            .decode('utf-8')
-                            .replace(' ', '.')
-                            .lower()
-                        )
-                        if normalized:
-                            normalized_genres.append(normalized)
-                    if normalized_genres:
-                        tags = ', '.join(normalized_genres)
-
-        if not tags:
             tags = await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')
 
         return tags
