@@ -53,8 +53,13 @@ class TTR(UNIT3D):
             return None
 
         if meta.get('is_disc') == 'BDMV':
-            spanish_audio = "Spanish" in meta.get('audio_languages', [])
-            spanish_subtitle = "Spanish" in meta.get('subtitle_languages', [])
+            audio_languages_value = meta.get('audio_languages')
+            audio_languages_list = cast(list[Any], audio_languages_value) if isinstance(audio_languages_value, list) else []
+            subtitle_languages_value = meta.get('subtitle_languages')
+            subtitle_languages_list = cast(list[Any], subtitle_languages_value) if isinstance(subtitle_languages_value, list) else []
+
+            spanish_audio = "Spanish" in audio_languages_list
+            spanish_subtitle = "Spanish" in subtitle_languages_list
             unattended = meta.get('unattended', False)
             confirm = meta.get('unattended_confirm', False)
 
@@ -122,8 +127,13 @@ class TTR(UNIT3D):
         return data
 
     def get_additional_checks(self, meta: Meta) -> bool:
-        if "Spanish" not in meta.get('audio_languages', []):
-            if "Spanish" not in meta.get('subtitle_languages', []):
+        audio_languages_value = meta.get('audio_languages')
+        audio_languages_list = cast(list[Any], audio_languages_value) if isinstance(audio_languages_value, list) else []
+        subtitle_languages_value = meta.get('subtitle_languages')
+        subtitle_languages_list = cast(list[Any], subtitle_languages_value) if isinstance(subtitle_languages_value, list) else []
+
+        if "Spanish" not in audio_languages_list:
+            if "Spanish" not in subtitle_languages_list:
                 console.print(
                     "[bold red]TTR requires at least one Spanish audio or subtitle track."
                 )

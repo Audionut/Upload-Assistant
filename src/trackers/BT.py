@@ -16,7 +16,6 @@ from src.bbcode import BBCODE
 from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
-from src.languages import languages_manager
 from src.tmdb import TmdbManager
 from src.trackers.COMMON import COMMON
 
@@ -224,10 +223,7 @@ class BT:
 
         return 'Legendado'
 
-    async def get_subtitle(self, meta: dict[str, Any]) -> tuple[str, list[str]]:
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
-
+    def get_subtitle(self, meta: dict[str, Any]) -> tuple[str, list[str]]:
         raw_subtitle_languages = meta.get('subtitle_languages')
         subtitle_languages_raw: list[Any] = []
         if isinstance(raw_subtitle_languages, list):
@@ -264,9 +260,12 @@ class BT:
                 pass
 
         else:
-            video_mi = meta['mediainfo']['media']['track'][1]
-            width = str(video_mi.get('Width', ''))
-            height = str(video_mi.get('Height', ''))
+            try:
+                video_mi = meta['mediainfo']['media']['track'][1]
+                width = str(video_mi.get('Width', ''))
+                height = str(video_mi.get('Height', ''))
+            except (KeyError, IndexError, TypeError, AttributeError):
+                pass
 
         return width, height
 
@@ -447,14 +446,19 @@ class BT:
                     genre_names.append(name)
 
             if genre_names:
-                tags = ', '.join(
-                    unicodedata.normalize('NFKD', name)
-                    .encode('ASCII', 'ignore')
-                    .decode('utf-8')
-                    .replace(' ', '.')
-                    .lower()
-                    for name in genre_names
-                )
+                normalized_genres = []
+                for name in genre_names:
+                    normalized = (
+                        unicodedata.normalize('NFKD', name)
+                        .encode('ASCII', 'ignore')
+                        .decode('utf-8')
+                        .replace(' ', '.')
+                        .lower()
+                    )
+                    if normalized:
+                        normalized_genres.append(normalized)
+                if normalized_genres:
+                    tags = ', '.join(normalized_genres)
 
         if not tags:
             imdb = meta.get('imdb_info', {})
@@ -474,14 +478,19 @@ class BT:
                     if name:
                         genre_names.append(name)
                 if genre_names:
-                    tags = ', '.join(
-                        unicodedata.normalize('NFKD', name)
-                        .encode('ASCII', 'ignore')
-                        .decode('utf-8')
-                        .replace(' ', '.')
-                        .lower()
-                        for name in genre_names
-                    )
+                    normalized_genres = []
+                    for name in genre_names:
+                        normalized = (
+                            unicodedata.normalize('NFKD', name)
+                            .encode('ASCII', 'ignore')
+                            .decode('utf-8')
+                            .replace(' ', '.')
+                            .lower()
+                        )
+                        if normalized:
+                            normalized_genres.append(normalized)
+                    if normalized_genres:
+                        tags = ', '.join(normalized_genres)
 
         if not tags:
             tags = await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')
@@ -712,7 +721,7 @@ class BT:
 
     async def get_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         await self.load_localized_data(meta)
-        has_pt_subtitles, subtitle_ids = await self.get_subtitle(meta)
+        has_pt_subtitles, subtitle_ids = self.get_subtitle(meta)
         resolution_width, resolution_height = self.get_resolution(meta)
 
         data = {

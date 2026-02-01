@@ -3,6 +3,7 @@ import asyncio
 import os
 import re
 import sys
+import threading
 from collections.abc import MutableMapping, Sequence
 from typing import Any, Callable, Optional, cast
 
@@ -485,11 +486,16 @@ class NameManager:
             return value.upper() if value else "SKIPPED"
         except EOFError:
             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
+            def _run_cleanup() -> None:
                 asyncio.run(cleanup_manager.cleanup())
+
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                _run_cleanup()
             else:
-                loop.create_task(cleanup_manager.cleanup())
+                cleanup_thread = threading.Thread(target=_run_cleanup, daemon=True)
+                cleanup_thread.start()
+                cleanup_thread.join()
             cleanup_manager.reset_terminal()
             sys.exit(1)

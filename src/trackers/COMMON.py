@@ -1163,12 +1163,14 @@ class COMMON:
         :rtype: bool
         """
         try:
-            meta_audio_languages: list[str] = meta.get("audio_languages", [])
-            meta_subtitle_languages: list[str] = meta.get("subtitle_languages", [])
+            audio_languages_value = meta.get("audio_languages")
+            meta_audio_languages = cast(list[Any], audio_languages_value) if isinstance(audio_languages_value, list) else []
+            subtitle_languages_value = meta.get("subtitle_languages")
+            meta_subtitle_languages = cast(list[Any], subtitle_languages_value) if isinstance(subtitle_languages_value, list) else []
 
             languages_to_check = [lang.lower() for lang in languages_to_check]
-            audio_languages = [lang.lower() for lang in meta_audio_languages]
-            subtitle_languages = [lang.lower() for lang in meta_subtitle_languages]
+            audio_languages = [lang.lower() for lang in meta_audio_languages if isinstance(lang, str)]
+            subtitle_languages = [lang.lower() for lang in meta_subtitle_languages if isinstance(lang, str)]
             language_display = None
             original_ok = False
             if original_language:

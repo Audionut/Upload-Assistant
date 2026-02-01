@@ -14,7 +14,6 @@ from cogs.redaction import Redaction
 from src.bbcode import BBCODE
 from src.console import console
 from src.get_desc import DescriptionBuilder
-from src.languages import languages_manager
 
 from .COMMON import COMMON
 
@@ -39,12 +38,13 @@ class SPD:
             'Authorization': api_key,
         }, timeout=30.0)
 
-    async def get_cat_id(self, meta: Meta) -> Optional[str]:
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
+    def get_cat_id(self, meta: Meta) -> Optional[str]:
+        subtitle_value = meta.get('subtitle_languages')
+        subtitle_langs = cast(list[Any], subtitle_value) if isinstance(subtitle_value, list) else []
 
-        subtitle_langs = cast(list[Any], meta.get('subtitle_languages', []))
-        audio_langs = cast(list[Any], meta.get('audio_languages', []))
+        audio_value = meta.get('audio_languages')
+        audio_langs = cast(list[Any], audio_value) if isinstance(audio_value, list) else []
+
         langs = [str(lang).lower() for lang in subtitle_langs + audio_langs]
         romanian = 'romanian' in langs
 
@@ -280,7 +280,7 @@ class SPD:
             'poster': str(meta.get('poster', '')),
             'technicalDetails': await self.edit_desc(meta),
             'screenshots': self.get_screenshots(meta),
-            'type': await self.get_cat_id(meta),
+            'type': self.get_cat_id(meta),
             'url': str(cast(dict[str, Any], meta.get('imdb_info', {})).get('imdb_url', '')),
         }
 

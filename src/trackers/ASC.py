@@ -14,7 +14,6 @@ from pymediainfo import MediaInfo
 
 from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
-from src.languages import languages_manager
 from src.tmdb import TmdbManager
 from src.trackers.COMMON import COMMON
 
@@ -226,7 +225,9 @@ class ASC:
 
         has_pt_subs = (self.get_subtitle(meta)) == 'Embutida'
 
-        audio_languages = {lang.lower() for lang in meta.get('audio_languages', [])}
+        audio_languages_value = meta.get('audio_languages')
+        audio_languages_list = cast(list[Any], audio_languages_value) if isinstance(audio_languages_value, list) else []
+        audio_languages = {lang.lower() for lang in audio_languages_list if isinstance(lang, str)}
         has_pt_audio = any(lang in portuguese_languages for lang in audio_languages)
 
         original_lang = meta.get('original_language', '').lower()
@@ -247,7 +248,9 @@ class ASC:
     def get_subtitle(self, meta: dict[str, Any]) -> str:
         portuguese_languages = {'portuguese', 'português', 'pt'}
 
-        found_languages = {lang.lower() for lang in meta.get('subtitle_languages', [])}
+        subtitle_languages_value = meta.get('subtitle_languages')
+        subtitle_languages_list = cast(list[Any], subtitle_languages_value) if isinstance(subtitle_languages_value, list) else []
+        found_languages = {lang.lower() for lang in subtitle_languages_list if isinstance(lang, str)}
 
         if any(lang in portuguese_languages for lang in found_languages):
             return 'Embutida'
@@ -900,8 +903,6 @@ class ASC:
 
     async def get_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         await self.load_localized_data(meta)
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
         resolution = self.get_resolution(meta)
 
         data = {

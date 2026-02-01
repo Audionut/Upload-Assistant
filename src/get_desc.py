@@ -15,10 +15,12 @@ from pymediainfo import MediaInfo
 
 from src.bbcode import BBCODE
 from src.console import console
-from src.languages import languages_manager
 from src.takescreens import TakeScreensManager
 from src.trackers.COMMON import COMMON
 from src.uploadscreens import UploadScreensManager
+
+CENTER_OPEN = "[center]"
+CENTER_CLOSE_DOUBLE = "[/center]\n\n"
 
 
 def html_to_bbcode(text: str) -> str:
@@ -543,18 +545,20 @@ class DescriptionBuilder:
 
         # Language
         try:
-            if not meta.get("language_checked", False):
-                await languages_manager.process_desc_language(meta, self.tracker)
-            if meta.get("audio_languages") and meta.get("write_audio_languages"):
-                desc_parts.append(f"[code]Audio Language/s: {', '.join(meta['audio_languages'])}[/code]")
+            audio_languages_value = meta.get("audio_languages")
+            audio_languages_list = cast(list[Any], audio_languages_value) if isinstance(audio_languages_value, list) else []
+            if audio_languages_list and meta.get("write_audio_languages"):
+                desc_parts.append(f"[code]Audio Language/s: {', '.join(audio_languages_list)}[/code]")
 
-            if meta["subtitle_languages"] and meta["write_subtitle_languages"]:
+            subtitle_languages_value = meta.get("subtitle_languages")
+            subtitle_languages_list = cast(list[Any], subtitle_languages_value) if isinstance(subtitle_languages_value, list) else []
+            if subtitle_languages_list and meta.get("write_subtitle_languages"):
                 desc_parts.append(
-                    f"[code]Subtitle Language/s: {', '.join(meta['subtitle_languages'])}[/code]"
+                    f"[code]Subtitle Language/s: {', '.join(subtitle_languages_list)}[/code]"
                 )
-            if meta["subtitle_languages"] and meta["write_hc_languages"]:
+            if subtitle_languages_list and meta.get("write_hc_languages"):
                 desc_parts.append(
-                    f"[code]Hardcoded Subtitle Language/s: {', '.join(meta['subtitle_languages'])}[/code]"
+                    f"[code]Hardcoded Subtitle Language/s: {', '.join(subtitle_languages_list)}[/code]"
                 )
         except Exception as e:
             console.print(f"[yellow]Warning: Error processing language: {str(e)}[/yellow]")
@@ -759,14 +763,14 @@ class DescriptionBuilder:
         if len(discs) == 1:
             each = discs[0]
             if each["type"] == "DVD":
-                desc_parts.append("[center]")
+                desc_parts.append(CENTER_OPEN)
                 desc_parts.append(
                     f"[spoiler={os.path.basename(each['vob'])}][code]{each['vob_mi']}[/code][/spoiler]\n\n"
                 )
                 desc_parts.append("[/center]")
             if screenheader is not None:
                 desc_parts.append(screenheader + "\n")
-            desc_parts.append("[center]")
+            desc_parts.append(CENTER_OPEN)
             for img_index in range(len(images[: int(meta["screens"])])):
                 web_url = images[img_index]["web_url"]
                 raw_url = images[img_index]["raw_url"]
@@ -815,27 +819,27 @@ class DescriptionBuilder:
                                     )
 
                         if new_images_key in meta and meta[new_images_key]:
-                            desc_parts.append("[center]\n\n")
+                            desc_parts.append(f"{CENTER_OPEN}\n\n")
                             # Use the summary corresponding to the current bdinfo
                             desc_parts.append(
                                 f"[spoiler={edition}][code]{summary}[/code][/spoiler]\n\n"
                             )
                             if meta["debug"]:
                                 console.print("[yellow]Using original uploaded images for first disc")
-                            desc_parts.append("[center]")
+                            desc_parts.append(CENTER_OPEN)
                             for img in meta[new_images_key]:
                                 web_url = img["web_url"]
                                 raw_url = img["raw_url"]
                                 image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
                                 desc_parts.append(image_str)
-                            desc_parts.append("[/center]\n\n")
+                            desc_parts.append(CENTER_CLOSE_DOUBLE)
                         else:
-                            desc_parts.append("[center]\n\n")
+                            desc_parts.append(f"{CENTER_OPEN}\n\n")
                             # Use the summary corresponding to the current bdinfo
                             desc_parts.append(
                                 f"[spoiler={edition}][code]{summary}[/code][/spoiler]\n\n"
                             )
-                            desc_parts.append("[/center]\n\n")
+                            desc_parts.append(CENTER_CLOSE_DOUBLE)
                             meta["retry_count"] += 1
                             meta[new_images_key] = []
                             new_screens = [os.path.basename(f) for f in glob.glob(
@@ -883,13 +887,13 @@ class DescriptionBuilder:
                                         }
                                     )
 
-                                desc_parts.append("[center]")
+                                desc_parts.append(CENTER_OPEN)
                                 for img in uploaded_images:
                                     web_url = img["web_url"]
                                     raw_url = img["raw_url"]
                                     image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
                                     desc_parts.append(image_str)
-                                desc_parts.append("[/center]\n\n")
+                                desc_parts.append(CENTER_CLOSE_DOUBLE)
 
                             meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
                             async with aiofiles.open(meta_filename, "w") as f:
@@ -912,7 +916,7 @@ class DescriptionBuilder:
                 new_images_key = f"new_images_disc_{i}"
 
                 if i == 0:
-                    desc_parts.append("[center]")
+                    desc_parts.append(CENTER_OPEN)
                     if each["type"] == "BDMV":
                         desc_parts.append(f"{each.get('name', 'BDINFO')}\n\n")
                     elif each["type"] == "DVD":
@@ -927,9 +931,9 @@ class DescriptionBuilder:
                     if meta["debug"]:
                         console.print("[yellow]Using original uploaded images for first disc")
                     if screenheader is not None:
-                        desc_parts.append("[/center]\n\n")
+                        desc_parts.append(CENTER_CLOSE_DOUBLE)
                         desc_parts.append(screenheader + "\n")
-                        desc_parts.append("[center]")
+                        desc_parts.append(CENTER_OPEN)
                     for img_index in range(len(images[: int(meta["screens"])])):
                         web_url = images[img_index]["web_url"]
                         raw_url = images[img_index]["raw_url"]
@@ -937,7 +941,7 @@ class DescriptionBuilder:
                         desc_parts.append(image_str)
                         if screensPerRow and (img_index + 1) % screensPerRow == 0:
                             desc_parts.append("\n")
-                    desc_parts.append("[/center]\n\n")
+                    desc_parts.append(CENTER_CLOSE_DOUBLE)
                 else:
                     if multi_screens != 0:
                         processed_count += 1
@@ -973,7 +977,7 @@ class DescriptionBuilder:
                         if new_images_key in meta and meta[new_images_key]:
                             if meta["debug"]:
                                 console.print(f"[yellow]Found needed image URLs for {new_images_key}")
-                            desc_parts.append("[center]")
+                            desc_parts.append(CENTER_OPEN)
                             if each["type"] == "BDMV":
                                 desc_parts.append(
                                     f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]\n\n"
@@ -986,20 +990,20 @@ class DescriptionBuilder:
                                 desc_parts.append(
                                     f"[spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n"
                                 )
-                            desc_parts.append("[/center]\n\n")
+                            desc_parts.append(CENTER_CLOSE_DOUBLE)
                             # Use existing URLs from meta to write to descfile
-                            desc_parts.append("[center]")
+                            desc_parts.append(CENTER_OPEN)
                             for img in meta[new_images_key]:
                                 web_url = img["web_url"]
                                 raw_url = img["raw_url"]
                                 image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
                                 desc_parts.append(image_str)
-                            desc_parts.append("[/center]\n\n")
+                            desc_parts.append(CENTER_CLOSE_DOUBLE)
                         else:
                             # Increment retry_count for tracking but use unique disc keys for each disc
                             meta["retry_count"] += 1
                             meta[new_images_key] = []
-                            desc_parts.append("[center]")
+                            desc_parts.append(CENTER_OPEN)
                             if each["type"] == "BDMV":
                                 desc_parts.append(
                                     f"[spoiler={each.get('name', 'BDINFO')}][code]{each['summary']}[/code][/spoiler]\n\n"
@@ -1012,7 +1016,7 @@ class DescriptionBuilder:
                                 desc_parts.append(
                                     f"[spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n"
                                 )
-                            desc_parts.append("[/center]\n\n")
+                            desc_parts.append(CENTER_CLOSE_DOUBLE)
                             # Check if new screenshots already exist before running prep.screenshots
                             new_screens: list[str] = []
                             if each["type"] == "BDMV":
@@ -1082,13 +1086,13 @@ class DescriptionBuilder:
                                     )
 
                                 # Write new URLs to descfile
-                                desc_parts.append("[center]")
+                                desc_parts.append(CENTER_OPEN)
                                 for img in uploaded_images:
                                     web_url = img["web_url"]
                                     raw_url = img["raw_url"]
                                     image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url]"
                                     desc_parts.append(image_str)
-                                desc_parts.append("[/center]\n\n")
+                                desc_parts.append(CENTER_CLOSE_DOUBLE)
 
                             # Save the updated meta to `meta.json` after upload
                             meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
@@ -1100,7 +1104,7 @@ class DescriptionBuilder:
         filelist = meta.get("filelist", [])
         if len(filelist) == 1:
             if meta.get("comparison") and meta.get("comparison_groups"):
-                desc_parts.append("[center]")
+                desc_parts.append(CENTER_OPEN)
                 comparison_groups = meta.get("comparison_groups", {})
                 sorted_group_indices = sorted(comparison_groups.keys(), key=lambda x: int(x))
 
@@ -1130,7 +1134,7 @@ class DescriptionBuilder:
 
             if screenheader is not None:
                 desc_parts.append(screenheader + "\n")
-            desc_parts.append("[center]")
+            desc_parts.append(CENTER_OPEN)
             for img_index in range(len(images[: int(meta["screens"])])):
                 web_url = images[img_index]["web_url"]
                 raw_url = images[img_index]["raw_url"]
@@ -1293,8 +1297,8 @@ class DescriptionBuilder:
                         if screenheader is not None:
                             desc_parts.append(screenheader + "\n")
                             char_count += len(screenheader + "\n")
-                        desc_parts.append("[center]")
-                        char_count += len("[center]")
+                        desc_parts.append(CENTER_OPEN)
+                        char_count += len(CENTER_OPEN)
                         for img_index in range(len(images)):
                             web_url = images[img_index]["web_url"]
                             raw_url = images[img_index]["raw_url"]
@@ -1303,19 +1307,19 @@ class DescriptionBuilder:
                             char_count += len(image_str)
                             if screensPerRow and (img_index + 1) % screensPerRow == 0:
                                 desc_parts.append("\n")
-                        desc_parts.append("[/center]\n\n")
-                        char_count += len("[/center]\n\n")
+                        desc_parts.append(CENTER_CLOSE_DOUBLE)
+                        char_count += len(CENTER_CLOSE_DOUBLE)
                 elif multi_screens != 0 and new_images_key in meta and meta[new_images_key]:
-                    desc_parts.append("[center]")
-                    char_count += len("[center]")
+                    desc_parts.append(CENTER_OPEN)
+                    char_count += len(CENTER_OPEN)
                     for img in meta[new_images_key]:
                         web_url = img["web_url"]
                         raw_url = img["raw_url"]
                         image_str = f"[url={web_url}][img={thumb_size}]{raw_url}[/img][/url] "
                         desc_parts.append(image_str)
                         char_count += len(image_str)
-                    desc_parts.append("[/center]\n\n")
-                    char_count += len("[/center]\n\n")
+                    desc_parts.append(CENTER_CLOSE_DOUBLE)
+                    char_count += len(CENTER_CLOSE_DOUBLE)
 
             if other_files_spoiler_open:
                 desc_parts.append("[/spoiler][/center]\n")
@@ -1354,7 +1358,7 @@ class DescriptionBuilder:
                 if disc_menu_header and menu_images:
                     menu_parts.append(disc_menu_header + "\n")
                 if menu_images:
-                    menu_parts.append("[center]")
+                    menu_parts.append(CENTER_OPEN)
                     for img_index, image in enumerate(menu_images):
                         web_url = image.get("web_url")
                         raw_url = image.get("raw_url")
@@ -1365,7 +1369,7 @@ class DescriptionBuilder:
                         )
                         if screensPerRow and (img_index + 1) % screensPerRow == 0:
                             menu_parts.append("\n")
-                    menu_parts.append("[/center]\n\n")
+                    menu_parts.append(CENTER_CLOSE_DOUBLE)
                     menu_image_section = "".join(menu_parts)
         except Exception as e:
             console.print(f"[yellow]Warning: Error processing disc menu section: {str(e)}[/yellow]")

@@ -81,8 +81,6 @@ class OE(UNIT3D):
             base = await f.read()
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf8') as descfile:
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
-
             bbcode = BBCODE()
             if meta.get('discs', []) != []:
                 discs = meta['discs']

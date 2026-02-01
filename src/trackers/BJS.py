@@ -21,7 +21,6 @@ from src.bbcode import BBCODE
 from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
-from src.languages import languages_manager
 from src.tmdb import TmdbManager
 from src.trackers.COMMON import COMMON
 
@@ -171,16 +170,12 @@ class BJS:
         else:
             return 'Outro'
 
-    async def get_audio(self, meta: dict[str, Any]) -> str:
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
-
-        audio_languages = set(meta.get('audio_languages', []))
-
+    def get_audio(self, meta: dict[str, Any]) -> str:
+        audio_languages_value = meta.get('audio_languages')
+        audio_languages_list = cast(list[Any], audio_languages_value) if isinstance(audio_languages_value, list) else []
+        audio_languages = {lang for lang in audio_languages_list if isinstance(lang, str)}
         portuguese_languages = ['Portuguese', 'Português', 'pt']
-
         has_pt_audio = any(lang in portuguese_languages for lang in audio_languages)
-
         original_lang = str(meta.get('original_language', '')).lower()
         is_original_pt = original_lang in portuguese_languages
 
@@ -194,11 +189,10 @@ class BJS:
 
         return 'Legendado'
 
-    async def get_subtitle(self, meta: dict[str, Any]) -> str:
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
-        found_language_strings = meta.get('subtitle_languages', [])
-
+    def get_subtitle(self, meta: dict[str, Any]) -> str:
+        subtitle_languages_value = meta.get('subtitle_languages')
+        subtitle_languages_list = cast(list[Any], subtitle_languages_value) if isinstance(subtitle_languages_value, list) else []
+        found_language_strings = [lang for lang in subtitle_languages_list if isinstance(lang, str)]
         subtitle_type = 'Nenhuma'
 
         if 'Portuguese' in found_language_strings:
@@ -415,14 +409,19 @@ class BJS:
                 genre_names.append(name)
 
             if genre_names:
-                tags = ', '.join(
-                    unicodedata.normalize('NFKD', name)
-                    .encode('ASCII', 'ignore')
-                    .decode('utf-8')
-                    .replace(' ', '.')
-                    .lower()
-                    for name in genre_names
-                )
+                normalized_genres = []
+                for name in genre_names:
+                    normalized = (
+                        unicodedata.normalize('NFKD', name)
+                        .encode('ASCII', 'ignore')
+                        .decode('utf-8')
+                        .replace(' ', '.')
+                        .lower()
+                    )
+                    if normalized:
+                        normalized_genres.append(normalized)
+                if normalized_genres:
+                    tags = ', '.join(normalized_genres)
 
         if not tags:
             imdb = meta.get('imdb_info', {})
@@ -442,14 +441,19 @@ class BJS:
                     if name:
                         genre_names.append(name)
                 if genre_names:
-                    tags = ', '.join(
-                        unicodedata.normalize('NFKD', name)
-                        .encode('ASCII', 'ignore')
-                        .decode('utf-8')
-                        .replace(' ', '.')
-                        .lower()
-                        for name in genre_names
-                    )
+                    normalized_genres = []
+                    for name in genre_names:
+                        normalized = (
+                            unicodedata.normalize('NFKD', name)
+                            .encode('ASCII', 'ignore')
+                            .decode('utf-8')
+                            .replace(' ', '.')
+                            .lower()
+                        )
+                        if normalized:
+                            normalized_genres.append(normalized)
+                    if normalized_genres:
+                        tags = ', '.join(normalized_genres)
 
         if not tags:
             tags = await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')
@@ -1237,7 +1241,7 @@ class BJS:
 
         # These fields are common across all upload types
         data.update({
-            'audio': await self.get_audio(meta),
+            'audio': self.get_audio(meta),
             'auth': BJS.secret_token,
             'codecaudio': self.get_audio_codec(meta),
             'codecvideo': self.get_video_codec(meta),
@@ -1256,7 +1260,7 @@ class BJS:
             'sinopse': await self.get_overview(),
             'submit': 'true',
             'tags': await self.get_tags(meta),
-            'tipolegenda': await self.get_subtitle(meta),
+            'tipolegenda': self.get_subtitle(meta),
             'title': original_title,
             'titulobrasileiro': brazilian_title,
             'traileryoutube': self.get_trailer(meta),

@@ -13,7 +13,6 @@ from cogs.redaction import Redaction
 from src.bbcode import BBCODE
 from src.console import console
 from src.get_desc import DescriptionBuilder
-from src.languages import languages_manager
 from src.rehostimages import RehostImagesManager
 from src.tmdb import TmdbManager
 from src.trackers.COMMON import COMMON
@@ -106,27 +105,23 @@ class GPW:
 
         return 'Other'
 
-    async def get_subtitle(self, meta: dict[str, Any]) -> list[str]:
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
-
+    def get_subtitle(self, meta: dict[str, Any]) -> list[str]:
         found_language_strings_raw = meta.get('subtitle_languages')
         if not isinstance(found_language_strings_raw, list):
             return []
 
         found_language_strings_list = cast(list[Any], found_language_strings_raw)
         found_language_strings = [lang for lang in found_language_strings_list if isinstance(lang, str)]
+        found_language_strings = [lang.split()[0] for lang in found_language_strings if lang.split()]
         return [lang.lower() for lang in found_language_strings]
 
-    async def get_ch_dubs(self, meta: dict[str, Any]) -> bool:
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
-
+    def get_ch_dubs(self, meta: dict[str, Any]) -> bool:
         found_language_strings_raw = meta.get('audio_languages')
         if not isinstance(found_language_strings_raw, list):
             return False
         found_language_strings_list = cast(list[Any], found_language_strings_raw)
         found_language_strings = [lang for lang in found_language_strings_list if isinstance(lang, str)]
+        found_language_strings = [lang.split()[0] for lang in found_language_strings if lang.split()]
 
         chinese_languages = {'mandarin', 'chinese', 'zh', 'zh-cn', 'zh-hans', 'zh-hant', 'putonghua', '国语', '普通话'}
         return any(lang.strip().lower() in chinese_languages for lang in found_language_strings)
@@ -325,14 +320,19 @@ class GPW:
         if genres and isinstance(genres, str):
             genre_names = [g.strip() for g in genres.split(',') if g.strip()]
             if genre_names:
-                tags = ', '.join(
-                    unicodedata.normalize('NFKD', name)
-                    .encode('ASCII', 'ignore')
-                    .decode('utf-8')
-                    .replace(' ', '.')
-                    .lower()
-                    for name in genre_names
-                )
+                normalized_genres = []
+                for name in genre_names:
+                    normalized = (
+                        unicodedata.normalize('NFKD', name)
+                        .encode('ASCII', 'ignore')
+                        .decode('utf-8')
+                        .replace(' ', '.')
+                        .lower()
+                    )
+                    if normalized:
+                        normalized_genres.append(normalized)
+                if normalized_genres:
+                    tags = ', '.join(normalized_genres)
 
         if not tags:
             imdb = meta.get('imdb_info', {})
@@ -352,14 +352,19 @@ class GPW:
                     if name:
                         genre_names.append(name)
                 if genre_names:
-                    tags = ', '.join(
-                        unicodedata.normalize('NFKD', name)
-                        .encode('ASCII', 'ignore')
-                        .decode('utf-8')
-                        .replace(' ', '.')
-                        .lower()
-                        for name in genre_names
-                    )
+                    normalized_genres = []
+                    for name in genre_names:
+                        normalized = (
+                            unicodedata.normalize('NFKD', name)
+                            .encode('ASCII', 'ignore')
+                            .decode('utf-8')
+                            .replace(' ', '.')
+                            .lower()
+                        )
+                        if normalized:
+                            normalized_genres.append(normalized)
+                    if normalized_genres:
+                        tags = ', '.join(normalized_genres)
 
         if not tags:
             tags = await self.common.async_input(prompt=f'Enter the genres (in {self.tracker} format): ')
@@ -904,11 +909,11 @@ class GPW:
                 "source": self.get_source(meta),
                 "submit": "true",
                 "subtitle_type": ("2" if meta.get("hardcoded_subs", False) else "1" if meta.get("subtitle_languages", []) else "3"),
-                "subtitles[]": await self.get_subtitle(meta),
+                "subtitles[]": self.get_subtitle(meta),
             }
         )
 
-        if await self.get_ch_dubs(meta):
+        if self.get_ch_dubs(meta):
             data.update({
                 'chinese_dubbed': 'on'
             })

@@ -206,7 +206,7 @@ class TVC:
         image_list = [cast(dict[str, Any], img) for img in image_list_seq]
 
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
-        self.get_tmdb_data(meta)
+        await self.get_tmdb_data(meta)
 
         # load MediaInfo.json
         try:
@@ -450,7 +450,7 @@ class TVC:
                 audio_langs.add(lang.title())
         return sorted(audio_langs) if audio_langs else []
 
-    def get_tmdb_data(self, meta: Meta) -> dict[str, Any]:
+    async def get_tmdb_data(self, meta: Meta) -> dict[str, Any]:
         # Origin country codes (shared for both movies and TV)
         origin_country_code: list[str] = []
         origin_country = meta.get('origin_country')
@@ -478,8 +478,9 @@ class TVC:
             # Everything movie-specific is already handled
             if meta['debug']:
                 console.print("[yellow]Fetching TMDb movie details[/yellow]")
-                movie = tmdb.Movies(meta['tmdb'])
-                response = cast(Any, movie).info()
+                response = await asyncio.to_thread(
+                    lambda: cast(Any, tmdb.Movies(meta['tmdb'])).info()
+                )
                 console.print(f"[cyan]DEBUG: Movie data: {response}[/cyan]")
             return {}
 
@@ -493,7 +494,9 @@ class TVC:
                     if 'tmdb_episode_data' not in meta or not meta['tmdb_episode_data']:
                         episode_info = cast(
                             dict[str, Any],
-                            cast(Any, tmdb.TV_Episodes(meta['tmdb'], meta['season_int'], meta['episode_int'])).info(),
+                            await asyncio.to_thread(
+                                lambda: cast(Any, tmdb.TV_Episodes(meta['tmdb'], meta['season_int'], meta['episode_int'])).info()
+                            ),
                         )
                         meta['episode_airdate'] = episode_info.get('air_date', '')
                         meta['episode_name'] = episode_info.get('name', '')
@@ -507,7 +510,9 @@ class TVC:
                     if 'tmdb_season_data' not in meta or not meta['tmdb_season_data']:
                         season_info = cast(
                             dict[str, Any],
-                            cast(Any, tmdb.TV_Seasons(meta['tmdb'], meta['season_int'])).info(),
+                            await asyncio.to_thread(
+                                lambda: cast(Any, tmdb.TV_Seasons(meta['tmdb'], meta['season_int'])).info()
+                            ),
                         )
                         air_date = season_info.get('air_date') or ""
                         meta['season_air_first_date'] = air_date
