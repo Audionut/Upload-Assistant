@@ -1265,7 +1265,7 @@ class QbittorrentClientMixin:
                         timeout=aiohttp.ClientTimeout(total=10),
                         connector=aiohttp.TCPConnector(ssl=ssl_context)
                     )
-                    qbt_proxy_url = proxy_url
+                    qbt_proxy_url = proxy_url.rstrip('/')
 
                 except Exception as e:
                     console.print(f"[bold red]Failed to connect to qBittorrent proxy: {e}")
@@ -1834,6 +1834,7 @@ async def match_tracker_url(tracker_urls: list[str], meta: dict[str, Any]) -> No
         'ldu': ["theldu.to"],
         'lst': ["https://lst.gg"],
         'lt': ["https://lat-team.com"],
+        'lume': ["https://luminarr.me"],
         'mtv': ["tracker.morethantv"],
         'nbl': ["tracker.nebulance"],
         'oe': ["https://onlyencodes.cc"],

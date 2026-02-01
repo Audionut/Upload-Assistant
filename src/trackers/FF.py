@@ -68,11 +68,11 @@ class FF:
             "login": "Login"
         }
 
-        print(f"{self.tracker}: Trying to login...")
+        console.print(f"{self.tracker}: Trying to login...", markup=False)
         response = await self.session.post(login_url, data=payload)
 
         if response.status_code == 302:
-            print(f"{self.tracker}: Login Successful!")
+            console.print(f"{self.tracker}: Login Successful!", markup=False)
 
             async with aiofiles.open(cookie_file, "w") as f:
                 await f.write("# Netscape HTTP Cookie File\n")
@@ -86,9 +86,9 @@ class FF:
                     name = cookie.name
                     value = cookie.value
                     await f.write(f"{domain}\t{include_subdomains}\t{path}\t{secure}\t{expires}\t{name}\t{value}\n")
-            print(f"{self.tracker}: Saving the cookie file...")
+            console.print(f"{self.tracker}: Saving the cookie file...", markup=False)
         else:
-            print(f"{self.tracker}: Login failed. Status code: {response.status_code}")
+            console.print(f"{self.tracker}: Login failed. Status code: {response.status_code}", markup=False)
 
     async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[str]:
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
@@ -173,7 +173,7 @@ class FF:
                 return results
 
             except Exception as e:
-                print(f"An error occurred while fetching requests: {e}")
+                console.print(f"An error occurred while fetching requests: {e}", markup=False)
                 return []
 
     async def generate_description(self, meta: dict[str, Any]) -> str:

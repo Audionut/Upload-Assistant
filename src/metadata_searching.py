@@ -87,7 +87,8 @@ async def all_ids(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: TmdbMan
             poster=meta.get('poster'),
             debug=meta.get('debug', False),
             mode=meta.get('mode', 'cli'),
-            tvdb_id=meta.get('tvdb_id', 0)
+            tvdb_id=meta.get('tvdb_id', 0),
+            filename=meta.get('filename', '')
         ),
         imdb_manager.get_imdb_info_api(
             meta['imdb_id'],
@@ -264,7 +265,8 @@ async def imdb_tmdb_tvdb(meta: dict[str, Any], filename: str, tvdb_handler: Any,
             poster=meta.get('poster'),
             debug=meta.get('debug', False),
             mode=meta.get('mode', 'cli'),
-            tvdb_id=meta.get('tvdb_id', 0)
+            tvdb_id=meta.get('tvdb_id', 0),
+            filename=filename
         ),
 
         imdb_manager.get_imdb_info_api(
@@ -512,7 +514,8 @@ async def imdb_tmdb(meta: dict[str, Any], filename: str, _tvdb_handler: Any, tmd
             debug=meta.get('debug', False),
             mode=meta.get('mode', 'cli'),
             tvdb_id=meta.get('tvdb_id', 0),
-            quickie_search=meta.get('quickie_search', False)
+            quickie_search=meta.get('quickie_search', False),
+            filename=filename
         ),
         imdb_manager.get_imdb_info_api(
             meta['imdb_id'],

@@ -485,15 +485,17 @@ def bloated_check(meta: Meta, audio_languages: Union[Sequence[str], str], is_eng
         audio_languages = [audio_languages]
 
     bloat_is_allowed = ["ASC", "BJS", "BT", "CBR", "DC", "FF", "LCD", "SAM", "SHRI", "SP", "TL", "TOS"]
-    tracker_allowed_bloat_language = {
-        "AITHER": "en",
-        "ANT": "en",
-        "BLU": "en",
-        "ITT": "it",
-        "LT": "es",
-        "PT": "pt",
-        "SPD": "ro",
-        "TTR": "es",
+    # Trackers that allow specific languages (list of allowed language codes per tracker)
+    tracker_allowed_bloat_languages = {
+        "AITHER": ["en"],
+        "ANT": ["en"],
+        "BLU": ["en"],
+        "ITT": ["it"],
+        "LT": ["es"],
+        "PT": ["pt"],
+        "SPD": ["ro"],
+        "TTR": ["es"],
+        "UTP": ["uk", "en"],
     }
 
     # Track whether we've already printed messages
@@ -505,8 +507,11 @@ def bloated_check(meta: Meta, audio_languages: Union[Sequence[str], str], is_eng
         trackers_to_warn: list[str] = []
 
         for tracker in cast(list[str], meta.get("trackers", [])):
-            if tracker in tracker_allowed_bloat_language and audio_language.lower().startswith(tracker_allowed_bloat_language[tracker].lower()):
-                continue
+            # Check if this language is in the tracker's allowed languages list
+            if tracker in tracker_allowed_bloat_languages:
+                allowed_langs = tracker_allowed_bloat_languages[tracker]
+                if any(audio_language.lower().startswith(lang.lower()) for lang in allowed_langs):
+                    continue
             if tracker not in bloat_is_allowed:
                 trackers_to_warn.append(tracker)
 

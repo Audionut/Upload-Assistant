@@ -274,7 +274,7 @@ class DupeChecker:
                     meta[matched_torrent_id] = entry.get('id')
 
             # Aither-specific trumping logic - no internal checking, if it's marked trumpable, it's trumpable
-            if tracker_name == "AITHER" and entry.get('trumpable', False) and res_id and target_resolution == res_id:
+            if tracker_name in ["AITHER", "LST"] and entry.get('trumpable', False) and res_id and target_resolution == res_id:
                 meta['trumpable_id'] = entry.get('id')
                 remember_match('trumpable_id')
 
@@ -465,7 +465,7 @@ class DupeChecker:
                     console.log(f"[debug] Season/Episode match result: {season_episode_match}")
                     console.log(f"[debug] is_season: {is_season}")
                 # Aither episode trumping logic
-                if is_season and tracker_name == "AITHER":
+                if is_season and tracker_name in ["AITHER", "LST"]:
                     # Null-safe normalization for comparisons
                     target_source_lower = (target_source or "").lower()
                     type_id_lower = (type_id or "").lower()
@@ -498,7 +498,7 @@ class DupeChecker:
                                 # Store the matched episode ID/s for later use
                                 # is_season=True means seasons match, which is sufficient for trump targeting
                                 # (season pack can trump individual episodes from same season)
-                                matched_episode_ids = cast(list[dict[str, Any]], meta.setdefault('matched_episode_ids', []))
+                                matched_episode_ids = cast(list[dict[str, Any]], meta.setdefault(f'{tracker_name}_matched_episode_ids', []))
 
                                 entry_id = entry.get('id')
                                 entry_link = entry.get('link')
@@ -524,6 +524,8 @@ class DupeChecker:
                                     })
                                     if meta.get('debug'):
                                         console.log(f"[debug] Added episode ID {entry_id} to matched list")
+                                    # Ensure this matched dupe is recorded for later use
+                                    remember_match('season_pack_contains_episode')
                                     # Don't exclude this entry - it's a valid trump target
                                     return False
                                 if already_exists and meta.get('debug'):

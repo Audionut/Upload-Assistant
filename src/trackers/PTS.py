@@ -152,7 +152,7 @@ class PTS:
         if not mandarin:
             user_input = input("Warning: Mandarin subtitle or audio not found. Do you want to continue with the upload anyway? (y/n): ")
             if user_input.lower() not in ['y', 'yes']:
-                print("Upload cancelled by user.")
+                console.print("Upload cancelled by user.", markup=False)
                 meta['skipping'] = f"{self.tracker}"
                 return
 
@@ -182,7 +182,7 @@ class PTS:
                         found_items.append(torrent_name)
 
         except Exception as e:
-            print(f"An error occurred while searching: {e}")
+            console.print(f"An error occurred while searching: {e}", markup=False)
 
         return found_items
 

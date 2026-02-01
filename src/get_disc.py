@@ -6,7 +6,9 @@ from typing import Any, Optional, cast
 
 import aiofiles
 
+from bin.get_bdinfo import BDInfoBinaryManager
 from bin.MI.get_linux_mi import download_dvd_mediainfo
+from src.console import console
 from src.discparse import DiscParse
 
 Meta = dict[str, Any]
@@ -58,8 +60,15 @@ class DiscInfoManager:
 
         if is_disc == "BDMV":
             if meta.get('site_check', False):
-                print('BDMV disc checking is not supported in site_check mode, yet.')
+                console.print('BDMV disc checking is not supported in site_check mode, yet.', markup=False)
                 raise RuntimeError("BDMV disc checking is not supported in site_check mode.")
+            # Ensure bdinfo binary is present for BDMV processing
+            try:
+                await BDInfoBinaryManager.ensure_bdinfo_binary(meta['base_dir'], meta.get('debug', False), "v1.0.6")
+            except Exception as e:
+                console.print(f"[red]Failed to ensure bdinfo binary: {e}[/red]", markup=False)
+                raise
+
             if meta.get('edit', False) is False:
                 discs, bdinfo = await self._parser.get_bdinfo(meta, discs, meta['uuid'], meta['base_dir'], meta.get('discs', []))
             else:

@@ -32,6 +32,7 @@ def _attr_to_string(value: Union[str, AttributeValueList, None]) -> str:
 class CookieValidator:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
+        self.common = COMMON(config)
         pass
 
     async def load_session_cookies(self, meta: dict[str, Any], tracker: str) -> Optional[http.cookiejar.MozillaCookieJar]:
@@ -133,11 +134,8 @@ class CookieValidator:
                 if 'login.php?act=recover' in response.text or 'Forgot your password' in response.text:
                     console.print(f"{tracker}: [red]Login failed. Please check your username and password.[/red]")
                     if meta.get('debug', False):
-                        failure_path = f"{meta['base_dir']}/tmp/{meta.get('uuid', 'debug')}/[{tracker}]Failed_Login.html"
-                        os.makedirs(os.path.dirname(failure_path), exist_ok=True)
-                        async with aiofiles.open(failure_path, "w", encoding="utf-8") as f:
-                            await f.write(response.text)
-                        console.print(f"Login response saved to [yellow]{failure_path}[/yellow] for debugging.")
+                        failure_path = await self.common.save_html_file(meta, tracker, response.text, "Failed_Login")
+                        console.print(f"{tracker}: Login response saved to [yellow]{failure_path}[/yellow] for debugging.")
                     return False
 
                 # Validate we're logged in by checking the torrents page
@@ -311,10 +309,7 @@ class CookieValidator:
             f"{tracker}: Validation failed. The cookie appears to be expired or invalid.\n"
             f"{tracker}: Please log in through your usual browser and export the cookies again."
         )
-        failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]Failed_Login.html"
-        os.makedirs(os.path.dirname(failure_path), exist_ok=True)
-        async with aiofiles.open(failure_path, "w", encoding="utf-8") as f:
-            await f.write(text)
+        failure_path = await self.common.save_html_file(meta, tracker, text, "Failed_Login")
         console.print(
             f"The web page has been saved to [yellow]{failure_path}[/yellow] for analysis.\n"
             "[red]Do not share this file publicly[/red], as it may contain confidential information such as passkeys, IP address, e-mail, etc.\n"
@@ -714,11 +709,7 @@ class CookieAuthUploader:
         else:
             message.append("Unknown upload error.")
 
-        failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]Failed_Upload.html"
-        os.makedirs(os.path.dirname(failure_path), exist_ok=True)
-        async with aiofiles.open(failure_path, "w", encoding="utf-8") as f:
-            await f.write(response.text)
-
+        failure_path = await self.common.save_html_file(meta, tracker, response.text, "Failed_Upload")
         message.append(
             f"The web page has been saved to [yellow]{failure_path}[/yellow] for analysis.\n"
             "[red]Do not share this file publicly[/red], as it may contain confidential information such as passkeys, IP address, e-mail, etc.\n"

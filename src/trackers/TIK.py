@@ -7,6 +7,7 @@ from typing import Any, Optional, cast
 from urllib.parse import urlparse
 
 import aiofiles
+import cli_ui
 import click
 
 from src.console import console
@@ -198,7 +199,7 @@ class TIK(UNIT3D):
         if meta.get('description_link') or meta.get('description_file'):
             desc = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, comparison=True)
 
-            print(f'Custom Description Link/File Path: {desc}')
+            console.print(f'Custom Description Link/File Path: {desc}', markup=False)
             return {'description': desc}
 
         discs = cast(list[dict[str, Any]], meta.get('discs', []))
@@ -413,9 +414,9 @@ class TIK(UNIT3D):
         # Ask user if they want to edit or keep the description
         console.print(f"Current description: {description}", markup=False)
         console.print("[cyan]Do you want to edit or keep the description?[/cyan]")
-        edit_choice = input("Enter 'e' to edit, or press Enter to keep it as is: ")
+        edit_choice = cli_ui.ask_string("Enter 'e' to edit, or press Enter to keep it as is: ")
 
-        if edit_choice.lower() == 'e':
+        if (edit_choice or "").lower() == 'e':
             edited_description = click.edit(description)
             if edited_description:
                 description = edited_description.strip()

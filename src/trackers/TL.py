@@ -212,13 +212,13 @@ class TL:
                 str(meta.get('type', '')) == 'REMUX' and str(meta.get('source', '')) in ('BluRay', 'HDDVD')
             ):
                 return categories['MovieBluray']
-            elif (str(meta.get('type', '')) == 'ENCODE' and str(meta.get('source', '')) in ('BluRay', 'HDDVD')) or str(meta.get('type', '')) == 'DVDRIP':
+            elif str(meta.get('type', '')) == 'ENCODE' and str(meta.get('source', '')) in ('BluRay', 'HDDVD'):
                 return categories['MovieBlurayRip']
             elif str(meta.get('is_disc', '')) == 'DVD' or (
                 str(meta.get('type', '')) == 'REMUX' and 'DVD' in str(meta.get('source', ''))
             ):
                 return categories['MovieDvd']
-            elif str(meta.get('type', '')) == 'ENCODE' and 'DVD' in str(meta.get('source', '')):
+            elif (str(meta.get('type', '')) == 'ENCODE' and 'DVD' in str(meta.get('source', ''))) or str(meta.get('type', '')) == 'DVDRIP':
                 return categories['MovieDvdRip']
             elif 'WEB' in str(meta.get('type', '')):
                 return categories['MovieWebrip']
@@ -487,12 +487,8 @@ class TL:
 
                 else:
                     meta['tracker_status'][self.tracker]['status_message'] = 'data error - Upload failed: No success redirect found.'
-                    failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]FailedUpload.html"
-                    async with aiofiles.open(failure_path, "w", encoding="utf-8") as failure_file:
-                        await failure_file.write(f"Status Code: {response.status_code}\n")
-                        await failure_file.write(f"Headers: {response.headers}\n")
-                        await failure_file.write(response.text)
-                    console.print(f"[yellow]The response was saved at: '{failure_path}'[/yellow]")
+                    failure_path = await self.common.save_html_file(meta, self.tracker, response.text, "Failed_Upload")
+                    console.print(f"{self.tracker}: Failed upload. The HTML response saved to {failure_path}")
                     return False
 
             except httpx.RequestError as e:

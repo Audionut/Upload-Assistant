@@ -86,7 +86,7 @@ DEFAULT_KEY_TYPES: dict[str, tuple[type, ...]] = {
 # Valid image hosts
 VALID_IMAGE_HOSTS = [
     "imgbb", "ptpimg", "imgbox", "pixhost", "lensdump", "ptscreens",
-    "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn", "sharex", ""
+    "onlyimage", "dalexni", "zipline", "passtheimage", "seedpool_cdn", "sharex", "utppm", ""
 ]
 
 # Image hosts that require API keys and their corresponding config key names
@@ -101,6 +101,7 @@ IMAGE_HOST_API_KEYS: dict[str, str] = {
     "seedpool_cdn": "seedpool_cdn_api",
     "sharex": "sharex_api_key",
     "zipline": "zipline_api_key",
+    "utppm": "utppm_api",
     # imgbox and pixhost don't require API keys
 }
 

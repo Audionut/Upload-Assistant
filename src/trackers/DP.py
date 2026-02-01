@@ -1,12 +1,13 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # import discord
 import re
-from typing import Any
+from typing import Any, cast
 
 import cli_ui
 
 from src.console import console
 from src.get_desc import DescriptionBuilder
+from src.languages import languages_manager
 from src.tmdb import TmdbManager
 from src.trackers.UNIT3D import UNIT3D
 
@@ -99,6 +100,26 @@ class DP(UNIT3D):
 
         return data
 
+    async def get_audio(self, meta: dict[str, Any]) -> str:
+        languages_result = "SKIPPED"
+
+        if not meta.get('language_checked', False):
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
+
+        audio_languages = meta.get('audio_languages')
+        if isinstance(audio_languages, list):
+            audio_languages_list = cast(list[Any], audio_languages)
+            normalized_languages = {str(lang).strip() for lang in audio_languages_list if str(lang).strip()}
+
+            if len(normalized_languages) > 2:
+                languages_result = "MULTi"
+            elif len(normalized_languages) > 1:
+                languages_result = "Dual-Audio"
+            else:
+                languages_result = str(next(iter(normalized_languages), "SKIPPED"))
+
+        return f'{languages_result}'
+
     async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         dp_name = str(meta.get('name', ''))
         invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
@@ -107,4 +128,9 @@ class DP(UNIT3D):
             for invalid_tag in invalid_tags:
                 dp_name = re.sub(f"-{invalid_tag}", "", dp_name, flags=re.IGNORECASE)
             dp_name = f"{dp_name}-NOGROUP"
+
+        audio = await self.get_audio(meta)
+        if audio and audio != "SKIPPED" and "Dual-Audio" in dp_name:
+            dp_name = dp_name.replace("Dual-Audio", audio)
+
         return {'name': dp_name}

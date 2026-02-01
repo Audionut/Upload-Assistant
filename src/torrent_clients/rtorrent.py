@@ -250,8 +250,8 @@ class RtorrentClientMixin:
         rtorrent = xmlrpc.client.Server(client['rtorrent_url'], context=ssl.create_default_context())
         metainfo = _bencode_bread(torrent_path)
         if meta.get('debug', False):
-            print(f"rtorrent: {Redaction.redact_private_info(rtorrent)}")
-            print(f"metainfo: {Redaction.redact_private_info(metainfo)}")
+            console.print(f"rtorrent: {Redaction.redact_private_info(str(rtorrent))}", markup=False)
+            console.print(f"metainfo: {Redaction.redact_private_info(str(metainfo))}", markup=False)
         try:
             # Use dst path if linking was successful, otherwise use original path
             resume_path = dst if (use_symlink or use_hardlink) and os.path.exists(dst) else path

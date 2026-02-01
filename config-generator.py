@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from typing import Any, Callable, Optional, TypedDict, Union, cast
 
+from src.console import console
+
 
 class LinkedSetting(TypedDict):
     condition: Callable[[str], bool]
@@ -24,8 +26,8 @@ def read_example_config() -> tuple[Optional[ConfigDict], ConfigComments]:
     comments: ConfigComments = {}
 
     if not example_path.exists():
-        print("[!] Warning: Could not find data/example-config.py")
-        print("[i] Using built-in default structure instead")
+        console.print("[!] Warning: Could not find data/example-config.py", markup=False)
+        console.print("[i] Using built-in default structure instead", markup=False)
         return None, comments
 
     try:
@@ -75,19 +77,19 @@ def read_example_config() -> tuple[Optional[ConfigDict], ConfigComments]:
         content = ''.join(lines)
         match = re.search(r"config\s*=\s*({.*})", content, re.DOTALL)
         if not match:
-            print("[!] Warning: Could not parse example config")
+            console.print("[!] Warning: Could not parse example config", markup=False)
             return None, comments
 
         config_dict_str = match.group(1)
         example_config = ast.literal_eval(config_dict_str)
         if not isinstance(example_config, dict):
-            print("[!] Warning: Example config is not a dict")
+            console.print("[!] Warning: Example config is not a dict", markup=False)
             return None, comments
 
-        print("[✓] Successfully loaded example config template")
+        console.print("[✓] Successfully loaded example config template", markup=False)
         return cast(ConfigDict, example_config), comments
     except Exception as e:
-        print(f"[!] Error parsing example config: {str(e)}")
+        console.print(f"[!] Error parsing example config: {str(e)}", markup=False)
         return None, comments
 
 
@@ -111,12 +113,12 @@ def load_existing_config() -> tuple[Optional[ConfigDict], Optional[Path]]:
                     # Convert to proper Python dict
                     config_dict = ast.literal_eval(config_dict_str)
                     if not isinstance(config_dict, dict):
-                        print(f"\n[!] Error loading config from {path}: config is not a dict")
+                        console.print(f"\n[!] Error loading config from {path}: config is not a dict", markup=False)
                         continue
-                    print(f"\n[✓] Found existing config at {path}")
+                    console.print(f"\n[✓] Found existing config at {path}", markup=False)
                     return cast(ConfigDict, config_dict), path
             except Exception as e:
-                print(f"\n[!] Error loading config from {path}: {e}")
+                console.print(f"\n[!] Error loading config from {path}: {e}", markup=False)
 
     return None, None
 
@@ -153,12 +155,12 @@ def validate_config(existing_config: ConfigDict, example_config: ConfigDict) -> 
 
     # If unexpected keys were found, ask about each one individually
     if unexpected_keys:
-        print("\n[!] The following keys in your existing configuration are not in the example config:")
+        console.print("\n[!] The following keys in your existing configuration are not in the example config:", markup=False)
         for i, (key_path, _parent_dict, _key) in enumerate(unexpected_keys):
-            print(f"  {i+1}. {key_path}")
+            console.print(f"  {i+1}. {key_path}", markup=False)
 
-        print("\n\n[i] The keys have been removed or renamed.")
-        print("[i] You can choose what to do with each key:")
+        console.print("\n\n[i] The keys have been removed or renamed.", markup=False)
+        console.print("[i] You can choose what to do with each key:", markup=False)
 
         for i, (key_path, parent_dict, key) in enumerate(unexpected_keys):
             value = parent_dict[key]
@@ -170,14 +172,14 @@ def validate_config(existing_config: ConfigDict, example_config: ConfigDict) -> 
             if len(value_display) > 50:
                 value_display = value_display[:47] + "..."
 
-            print(f"\nKey {i+1}/{len(unexpected_keys)}: {key_path} = {value_display}")
+            console.print(f"\nKey {i+1}/{len(unexpected_keys)}: {key_path} = {value_display}", markup=False)
             keep = input("Keep this key? (y/N): ").lower()
 
             # Remove the key if user chooses not to keep it
             if keep == "y":
-                print(f"[i] Keeping key: {key_path}")
+                console.print(f"[i] Keeping key: {key_path}", markup=False)
             else:
-                print(f"[i] Removing key: {key_path}")
+                console.print(f"[i] Removing key: {key_path}", markup=False)
                 del parent_dict[key]
 
         return existing_config
@@ -274,8 +276,8 @@ def configure_default_section(
     Helper to configure the DEFAULT section.
     Returns a dict with the configured DEFAULT values.
     """
-    print("\n====== DEFAULT CONFIGURATION ======")
-    print("\n[i] Press enter to accept the default values/skip, or input your own values.")
+    console.print("\n====== DEFAULT CONFIGURATION ======", markup=False)
+    console.print("\n[i] Press enter to accept the default values/skip, or input your own values.", markup=False)
     config_defaults: dict[str, Any] = {}
 
     # Settings that should only be prompted if a parent setting has a specific value
@@ -314,7 +316,7 @@ def configure_default_section(
     if quick_setup:
         do_quick_setup = input("\n[i] Do you want to quick setup with just essential settings? (y/N): ").lower() == "y"
         if do_quick_setup:
-            print("[i] Quick setup selected. You'll only be prompted for essential settings.")
+            console.print("[i] Quick setup selected. You'll only be prompted for essential settings.", markup=False)
 
     # Define essential settings for quick setup mode
     essential_settings = [
@@ -337,7 +339,7 @@ def configure_default_section(
             continue
 
         if key in config_comments:
-            print("\n[i] " + "\n[i] ".join(config_comments[key]))
+            console.print("\n[i] " + "\n[i] ".join(config_comments[key]), markup=False)
 
         if isinstance(default_value, bool):
             default_str = str(default_value)
@@ -352,7 +354,7 @@ def configure_default_section(
                 linked_group = linked_settings[key]
                 # If the condition is not met, add all linked settings to the skip list
                 if not linked_group["condition"](value):
-                    print(f"[i] Skipping {key}-related settings since {key} is {value}")
+                    console.print(f"[i] Skipping {key}-related settings since {key} is {value}", markup=False)
                     skip_settings.update(linked_group["settings"])
         else:
             is_password = key in ["api_key", "passkey", "rss_key", "tvdb_token", "tmdb_api", "tvdb_api", "btn_api"] or "password" in key.lower() or key.endswith("_key") or key.endswith("_api") or key.endswith("_url")
@@ -371,12 +373,12 @@ def configure_default_section(
             if key in linked_settings:
                 linked_group = linked_settings[key]
                 if not linked_group["condition"](config_defaults[key]):
-                    print(f"[i] Skipping {key}-related settings since {key} is {config_defaults[key]}")
+                    console.print(f"[i] Skipping {key}-related settings since {key} is {config_defaults[key]}", markup=False)
                     skip_settings.update(linked_group["settings"])
 
     if do_quick_setup:
         get_img_host(config_defaults, existing_defaults, example_defaults, config_comments)
-        print("\n[i] Applied default values from example config for non-essential settings.")
+        console.print("\n[i] Applied default values from example config for non-essential settings.", markup=False)
 
     return config_defaults
 
@@ -399,13 +401,14 @@ def get_img_host(
         "passtheimage": "passtheima_ge_api",
         "seedpool_cdn": "seedpool_cdn_api",
         "sharex": ["sharex_url", "sharex_api_key"],
+        "utppm": "utppm_api",
         "imgbox": None,
         "pixhost": None
     }
 
-    print("\n==== IMAGE HOST CONFIGURATION ====")
-    print("[i] Available image hosts: " + ", ".join(img_host_api_map.keys()))
-    print("[i] Note: imgbox and pixhost don't require API keys")
+    console.print("\n==== IMAGE HOST CONFIGURATION ====", markup=False)
+    console.print("[i] Available image hosts: " + ", ".join(img_host_api_map.keys()), markup=False)
+    console.print("[i] Note: imgbox and pixhost don't require API keys", markup=False)
 
     # Get existing image hosts if available
     existing_hosts: list[str] = []
@@ -415,14 +418,14 @@ def get_img_host(
             existing_hosts.append(str(existing_defaults[key]).strip().lower())
 
     if existing_hosts:
-        print(f"\n[i] Your existing image hosts: {', '.join(existing_hosts)}")
+        console.print(f"\n[i] Your existing image hosts: {', '.join(existing_hosts)}", markup=False)
 
     default_count = len(existing_hosts) if existing_hosts else 1
     try:
         number_hosts = int(input(f"\n[i] How many image hosts would you like to configure? (1-10) [default: {default_count}]: ") or default_count)
         number_hosts = max(1, min(10, number_hosts))  # Limit between 1 and 10
     except ValueError:
-        print(f"[!] Invalid input. Defaulting to {default_count} image host(s).")
+        console.print(f"[!] Invalid input. Defaulting to {default_count} image host(s).", markup=False)
         number_hosts = default_count
 
     # Ask for each image host in sequence
@@ -446,7 +449,7 @@ def get_img_host(
                 # Configure API key(s) for this host, if needed
                 api_keys = img_host_api_map.get(host_input)
                 if api_keys is None:
-                    print(f"[i] {host_input} doesn't require an API key.")
+                    console.print(f"[i] {host_input} doesn't require an API key.", markup=False)
                     continue
 
                 # Convert single string to list for consistent handling
@@ -457,7 +460,7 @@ def get_img_host(
                 for api_key in api_keys:
                     if api_key in example_defaults:
                         if api_key in config_comments:
-                            print("\n[i] " + "\n[i] ".join(config_comments[api_key]))
+                            console.print("\n[i] " + "\n[i] ".join(config_comments[api_key]), markup=False)
 
                         is_password = api_key.endswith("_url") or api_key.endswith("_key") or api_key.endswith("_api")
                         config_defaults[api_key] = get_user_input(
@@ -467,7 +470,7 @@ def get_img_host(
                             existing_value=existing_defaults.get(api_key)
                         )
             else:
-                print(f"[!] Invalid host: {host_input}. Available hosts: {', '.join(img_host_api_map.keys())}")
+                console.print(f"[!] Invalid host: {host_input}. Available hosts: {', '.join(img_host_api_map.keys())}", markup=False)
 
     # Set unused image host API keys to empty string
     for api_key_item in img_host_api_map.values():
@@ -491,7 +494,7 @@ def configure_trackers(
     Helper to configure the TRACKERS section.
     Returns a dict with the configured trackers.
     """
-    print("\n====== TRACKERS ======")
+    console.print("\n====== TRACKERS ======", markup=False)
 
     # Get list of trackers to configure
     example_tracker_list = [
@@ -499,9 +502,9 @@ def configure_trackers(
         if t != "default_trackers" and isinstance(example_trackers[t], dict)
     ]
     if example_tracker_list:
-        print(f"[i] Available trackers in example config: \n{', '.join(example_tracker_list)}")
-        print("\n[i] (default trackers list) Only add the trackers you want to upload to on a regular basis.")
-        print("[i] You can add other tracker configs later if needed.")
+        console.print(f"[i] Available trackers in example config: \n{', '.join(example_tracker_list)}", markup=False)
+        console.print("\n[i] (default trackers list) Only add the trackers you want to upload to on a regular basis.", markup=False)
+        console.print("[i] You can add other tracker configs later if needed.", markup=False)
 
     existing_trackers_value = existing_trackers.get("default_trackers", "")
     existing_tracker_str = str(existing_trackers_value) if existing_trackers_value else ""
@@ -532,13 +535,13 @@ def configure_trackers(
     for tracker in trackers_list:
         # Skip if not in update list (unless updating all)
         if not update_all and tracker not in update_trackers_list:
-            print(f"\nSkipping configuration for {tracker}")
+            console.print(f"\nSkipping configuration for {tracker}", markup=False)
             # Copy existing config if available
             if tracker in existing_trackers:
                 trackers_config[tracker] = existing_trackers[tracker]
             continue
 
-        print(f"\n\nConfiguring **{tracker}**:")
+        console.print(f"\n\nConfiguring **{tracker}**:", markup=False)
         existing_tracker_config: ConfigDict = cast(ConfigDict, existing_trackers.get(tracker, {}))
         example_tracker: ConfigDict = cast(ConfigDict, example_trackers.get(tracker, {}))
         tracker_config: dict[str, Any] = {}
@@ -552,7 +555,7 @@ def configure_trackers(
 
                 comment_key = f"TRACKERS.{tracker}.{key}"
                 if comment_key in config_comments:
-                    print("\n[i] " + "\n[i] ".join(config_comments[comment_key]))
+                    console.print("\n[i] " + "\n[i] ".join(config_comments[comment_key]), markup=False)
 
                 if isinstance(default_value, bool):
                     default_str = str(default_value)
@@ -572,17 +575,17 @@ def configure_trackers(
                         existing_value=existing_tracker_config.get(key)
                     )
         else:
-            print(f"[!] No example config found for tracker '{tracker}'.")
+            console.print(f"[!] No example config found for tracker '{tracker}'.", markup=False)
 
         trackers_config[tracker] = tracker_config
 
     # Offer to add more trackers from the example config
     remaining_trackers = [t for t in example_tracker_list if t.upper() not in [x.upper() for x in trackers_list]]
     if remaining_trackers:
-        print("\n[i] Other trackers available in the example config that are not in your default list:")
-        print(", ".join(remaining_trackers))
-        print("\n[i] This just adds the tracker config, not to your list of default trackers.")
-        print("\nFor example so you can use with -tk.")
+        console.print("\n[i] Other trackers available in the example config that are not in your default list:", markup=False)
+        console.print(", ".join(remaining_trackers), markup=False)
+        console.print("\n[i] This just adds the tracker config, not to your list of default trackers.", markup=False)
+        console.print("\nFor example so you can use with -tk.", markup=False)
         add_more = get_user_input(
             "\nEnter any additional tracker acronyms to add (comma separated), or leave blank to skip"
         )
@@ -590,7 +593,7 @@ def configure_trackers(
         for tracker in additional:
             if tracker in trackers_config:
                 continue  # Already configured
-            print(f"\n\nConfiguring **{tracker}**:")
+            console.print(f"\n\nConfiguring **{tracker}**:", markup=False)
             example_tracker = cast(ConfigDict, example_trackers.get(tracker, {}))
             additional_tracker_config: dict[str, Any] = {}
             if example_tracker:
@@ -600,7 +603,7 @@ def configure_trackers(
                         continue
                     comment_key = f"TRACKERS.{tracker}.{key}"
                     if comment_key in config_comments:
-                        print("\n[i] " + "\n[i] ".join(config_comments[comment_key]))
+                        console.print("\n[i] " + "\n[i] ".join(config_comments[comment_key]), markup=False)
 
                     if isinstance(default_value, bool):
                         default_str = str(default_value)
@@ -617,7 +620,7 @@ def configure_trackers(
                             is_announce_url=is_announce_url
                         )
             else:
-                print(f"[!] No example config found for tracker '{tracker}'.")
+                console.print(f"[!] No example config found for tracker '{tracker}'.", markup=False)
             trackers_config[tracker] = additional_tracker_config
 
     return trackers_config
@@ -642,26 +645,26 @@ def configure_torrent_clients(
     if default_client_name and default_client_name in existing_clients:
         keep_existing_client = input(f"\nDo you want to keep the existing client '{default_client_name}'? (y/n): ").lower() == "y"
         if not keep_existing_client:
-            print("What client do you want to use instead?")
-            print("Available clients in example config:")
+            console.print("What client do you want to use instead?", markup=False)
+            console.print("Available clients in example config:", markup=False)
             for client_name in example_clients:
-                print(f"  - {client_name}")
+                console.print(f"  - {client_name}", markup=False)
             new_client = get_user_input("Enter the name of the torrent client to use",
                                         default="qbittorrent",
                                         existing_value=default_client_name)
             default_client_name = new_client
     else:
         # No default client specified or not in existing_clients, ask user to select one
-        print("No default client found. Let's configure one.")
-        print("What client do you want to use?")
-        print("Available clients in example config:")
+        console.print("No default client found. Let's configure one.", markup=False)
+        console.print("What client do you want to use?", markup=False)
+        console.print("Available clients in example config:", markup=False)
         for client_name in example_clients:
-            print(f"  - {client_name}")
+            console.print(f"  - {client_name}", markup=False)
         default_client_name = get_user_input("Enter the name of the torrent client to use",
                                              default="qbittorrent")
 
     # Configure the default client
-    print(f"\nConfiguring default client: {default_client_name}")
+    console.print(f"\nConfiguring default client: {default_client_name}", markup=False)
     config_clients = configure_single_client(default_client_name, existing_clients, example_clients, config_clients, config_comments)
 
     # After configuring the default client, ask if the user wants to add additional clients
@@ -673,28 +676,28 @@ def configure_torrent_clients(
         # Show available clients not yet configured
         available_clients = [c for c in example_clients if c not in config_clients]
         if not available_clients:
-            print("All available clients from the example config have been configured.")
+            console.print("All available clients from the example config have been configured.", markup=False)
             break
 
-        print("\nAvailable clients to configure:")
+        console.print("\nAvailable clients to configure:", markup=False)
         for client_name in available_clients:
-            print(f"  - {client_name}")
+            console.print(f"  - {client_name}", markup=False)
 
         additional_client = get_user_input("Enter the name of the torrent client to configure")
         if not additional_client:
-            print("No client name provided, skipping additional client configuration.")
+            console.print("No client name provided, skipping additional client configuration.", markup=False)
             continue
 
         if additional_client in config_clients:
-            print(f"Client '{additional_client}' is already configured.")
+            console.print(f"Client '{additional_client}' is already configured.", markup=False)
             continue
 
         if additional_client not in example_clients:
-            print(f"Client '{additional_client}' not found in example config. Available clients: {', '.join(available_clients)}")
+            console.print(f"Client '{additional_client}' not found in example config. Available clients: {', '.join(available_clients)}", markup=False)
             continue
 
         # Configure the additional client
-        print(f"\nConfiguring additional client: {additional_client}")
+        console.print(f"\nConfiguring additional client: {additional_client}", markup=False)
         config_clients = configure_single_client(additional_client, existing_clients, example_clients, config_clients, config_comments)
 
     return config_clients, default_client_name
@@ -713,9 +716,9 @@ def configure_single_client(
     example_client_config = cast(ConfigDict, example_clients.get(client_name, {}))
 
     if not example_client_config:
-        print(f"[!] No example config found for client '{client_name}'.")
+        console.print(f"[!] No example config found for client '{client_name}'.", markup=False)
         if existing_client_config:
-            print(f"[i] Using existing config for '{client_name}'")
+            console.print(f"[i] Using existing config for '{client_name}'", markup=False)
             config_clients[client_name] = existing_client_config
         return config_clients
 
@@ -731,9 +734,9 @@ def configure_single_client(
 
         comment_key = f"TORRENT_CLIENTS.{client_name}.{key}"
         if comment_key in config_comments:
-            print("\n[i] " + "\n[i] ".join(config_comments[comment_key]))
+            console.print("\n[i] " + "\n[i] ".join(config_comments[comment_key]), markup=False)
         elif key in config_comments:
-            print("\n[i] " + "\n[i] ".join(config_comments[key]))
+            console.print("\n[i] " + "\n[i] ".join(config_comments[key]), markup=False)
 
         if isinstance(default_value, bool):
             default_str = str(default_value)
@@ -764,8 +767,8 @@ def configure_discord(
     Helper to configure the DISCORD section.
     Returns a dict with the configured Discord settings.
     """
-    print("\n====== DISCORD CONFIGURATION ======")
-    print("[i] Configure Discord bot settings for upload notifications")
+    console.print("\n====== DISCORD CONFIGURATION ======", markup=False)
+    console.print("[i] Configure Discord bot settings for upload notifications", markup=False)
 
     discord_config: ConfigDict = {}
     existing_use_discord = existing_discord.get("use_discord", False)
@@ -778,7 +781,7 @@ def configure_discord(
 
     # If Discord is disabled, set defaults and return
     if enable_discord.lower() != "true":
-        print("[i] Discord disabled. Setting default values for other Discord settings.")
+        console.print("[i] Discord disabled. Setting default values for other Discord settings.", markup=False)
         discord_config = example_discord.copy()
         discord_config["use_discord"] = enable_discord
         return discord_config
@@ -790,7 +793,7 @@ def configure_discord(
 
         comment_key = f"DISCORD.{key}"
         if comment_key in config_comments:
-            print("\n[i] " + "\n[i] ".join(config_comments[comment_key]))
+            console.print("\n[i] " + "\n[i] ".join(config_comments[comment_key]), markup=False)
 
         if isinstance(default_value, bool):
             default_str = str(default_value)
@@ -826,7 +829,7 @@ def generate_config_file(config_data: ConfigDict, existing_path: Optional[Path] 
         if existing_path.exists():
             with open(existing_path, encoding="utf-8") as src, open(backup_path, "w", encoding="utf-8") as dst:
                 dst.write(src.read())
-            print(f"\n[✓] Created backup of existing config at {backup_path}")
+            console.print(f"\n[✓] Created backup of existing config at {backup_path}", markup=False)
     else:
         config_path = Path("data/config.py")
         backup_path = Path("data/config.py.bak")
@@ -835,7 +838,7 @@ def generate_config_file(config_data: ConfigDict, existing_path: Optional[Path] 
             if overwrite == "y":
                 with open(config_path, encoding="utf-8") as src, open(backup_path, "w", encoding="utf-8") as dst:
                     dst.write(src.read())
-                print(f"\n[✓] Created backup of existing config at {backup_path}")
+                console.print(f"\n[✓] Created backup of existing config at {backup_path}", markup=False)
             else:
                 return False
 
@@ -888,19 +891,19 @@ def generate_config_file(config_data: ConfigDict, existing_path: Optional[Path] 
         write_dict(formatted_config)
         file.write("}\n")
 
-    print(f"\n[✓] Configuration file created at {config_path}")
+    console.print(f"\n[✓] Configuration file created at {config_path}", markup=False)
     return True
 
 
 if __name__ == "__main__":
-    print("\nUpload Assistant Configuration Generator")
-    print("========================================")
+    console.print("\nUpload Assistant Configuration Generator", markup=False)
+    console.print("========================================", markup=False)
 
     # Get example configuration structure first
     example_config, config_comments = read_example_config()
 
     if not example_config:
-        print("[!] Example config is missing or invalid. Exiting.")
+        console.print("[!] Example config is missing or invalid. Exiting.", markup=False)
         raise SystemExit(1)
 
     # Try to load existing config
@@ -911,8 +914,8 @@ if __name__ == "__main__":
         if just_updating == "n":
             use_existing = input("\nWould you like to edit existing instead of starting fresh? (Y/n): ").lower()
             if use_existing == "n":
-                print("\n[i] Starting with fresh configuration.")
-                print("Enter to accept the default values/skip, or enter your own values.")
+                console.print("\n[i] Starting with fresh configuration.", markup=False)
+                console.print("Enter to accept the default values/skip, or enter your own values.", markup=False)
                 config_data = {}
 
                 # DEFAULT section
@@ -939,9 +942,9 @@ if __name__ == "__main__":
 
                 generate_config_file(config_data)
             else:
-                print("\n[i] Using existing configuration as a template.")
-                print("[i] Existing config will be renamed config.py.bak.")
-                print("[i] Press enter to accept the default values/skip, or input your own values.")
+                console.print("\n[i] Using existing configuration as a template.", markup=False)
+                console.print("[i] Existing config will be renamed config.py.bak.", markup=False)
+                console.print("[i] Press enter to accept the default values/skip, or input your own values.", markup=False)
 
                 # Check for unexpected keys in existing config
                 existing_config = validate_config(existing_config, example_config)
@@ -950,8 +953,8 @@ if __name__ == "__main__":
                 config_data = existing_config.copy()
 
                 # Ask about updating each main section separately
-                print("\n\n[i] Lets work on one section at a time.")
-                print()
+                console.print("\n\n[i] Lets work on one section at a time.", markup=False)
+                console.print("", markup=False)
 
                 # DEFAULT section
                 update_default = input("Do you want to update something in the DEFAULT section? (y/n): ").lower() == "y"
@@ -962,8 +965,8 @@ if __name__ == "__main__":
                     # Set default client name (if needed)
                     config_data["DEFAULT"]["default_torrent_client"] = config_data["DEFAULT"].get("default_torrent_client", "qbittorrent")
                 else:
-                    print("[i] Keeping existing DEFAULT section")
-                    print()
+                    console.print("[i] Keeping existing DEFAULT section", markup=False)
+                    console.print("", markup=False)
 
                 # TRACKERS section
                 update_trackers = input("Do you want to update something in the TRACKERS section? (y/n): ").lower() == "y"
@@ -972,13 +975,13 @@ if __name__ == "__main__":
                     example_trackers = example_config.get("TRACKERS", {})
                     config_data["TRACKERS"] = configure_trackers(existing_trackers, example_trackers, config_comments)
                 else:
-                    print("[i] Keeping existing TRACKERS section")
-                    print()
+                    console.print("[i] Keeping existing TRACKERS section", markup=False)
+                    console.print("", markup=False)
 
                 # TORRENT_CLIENTS section
                 update_clients = input("\nDo you want to update something in the TORRENT_CLIENTS section? (y/n): ").lower() == "y"
                 if update_clients:
-                    print("\n====== TORRENT CLIENT ======")
+                    console.print("\n====== TORRENT CLIENT ======", markup=False)
                     existing_clients = existing_config.get("TORRENT_CLIENTS", {})
                     example_clients = example_config.get("TORRENT_CLIENTS", {})
                     default_client = config_data["DEFAULT"].get("default_torrent_client", None)
@@ -992,8 +995,8 @@ if __name__ == "__main__":
                     config_data["TORRENT_CLIENTS"] = client_configs
                     config_data["DEFAULT"]["default_torrent_client"] = default_client
                 else:
-                    print("[i] Keeping existing TORRENT_CLIENTS section")
-                    print()
+                    console.print("[i] Keeping existing TORRENT_CLIENTS section", markup=False)
+                    console.print("", markup=False)
 
                 # DISCORD section update
                 update_discord = input("Do you want to update something in the DISCORD section? (y/n): ").lower() == "y"
@@ -1002,8 +1005,8 @@ if __name__ == "__main__":
                     example_discord = example_config.get("DISCORD", {})
                     config_data["DISCORD"] = configure_discord(existing_discord, example_discord, config_comments)
                 else:
-                    print("[i] Keeping existing DISCORD section")
-                    print()
+                    console.print("[i] Keeping existing DISCORD section", markup=False)
+                    console.print("", markup=False)
 
                 missing_discord_keys: list[str] = []
                 missing_default_keys: list[str] = []
@@ -1015,7 +1018,7 @@ if __name__ == "__main__":
                     find_missing_default_keys(cast(ConfigDict, example_config["DEFAULT"]), cast(ConfigDict, config_data["DEFAULT"]))
 
                 if missing_default_keys:
-                    print("\n\n[!] Your existing config is missing these keys from example-config:")
+                    console.print("\n\n[!] Your existing config is missing these keys from example-config:", markup=False)
 
                     # Only prompt for the missing keys
                     missing_defaults = {k: example_config["DEFAULT"][k] for k in missing_default_keys}
@@ -1026,7 +1029,7 @@ if __name__ == "__main__":
                 if "DISCORD" in example_config:
                     if "DISCORD" not in config_data:
                         # Entire DISCORD section is missing
-                        print("\n[!] DISCORD section is missing from your config")
+                        console.print("\n[!] DISCORD section is missing from your config", markup=False)
                         add_discord = input("Do you want to add Discord configuration? (y/n): ").lower() == "y"
                         if add_discord:
                             example_discord = example_config.get("DISCORD", {})
@@ -1042,7 +1045,7 @@ if __name__ == "__main__":
                         find_missing_discord_keys(cast(ConfigDict, example_config["DISCORD"]), cast(ConfigDict, config_data["DISCORD"]))
 
                 if missing_discord_keys:
-                    print(f"\n[!] Your DISCORD config is missing these keys: {', '.join(missing_discord_keys)}")
+                    console.print(f"\n[!] Your DISCORD config is missing these keys: {', '.join(missing_discord_keys)}", markup=False)
                     add_missing_discord = input("Do you want to configure the missing Discord settings? (y/n): ").lower() == "y"
                     if add_missing_discord:
                         missing_discord_config = {k: example_config["DISCORD"][k] for k in missing_discord_keys}
@@ -1066,7 +1069,7 @@ if __name__ == "__main__":
                 find_missing_default_keys(cast(ConfigDict, example_config["DEFAULT"]), cast(ConfigDict, config_data["DEFAULT"]))
 
             if missing_default_keys:
-                print("\n[!] Your existing config is missing these keys from example-config:")
+                console.print("\n[!] Your existing config is missing these keys from example-config:", markup=False)
 
                 # Only prompt for the missing keys
                 missing_defaults = {k: example_config["DEFAULT"][k] for k in missing_default_keys}
@@ -1074,9 +1077,9 @@ if __name__ == "__main__":
                 config_data["DEFAULT"].update(added_defaults)
 
             if "DISCORD" not in config_data and "DISCORD" in example_config:
-                print("\n[!] DISCORD section is missing from your config")
+                console.print("\n[!] DISCORD section is missing from your config", markup=False)
                 config_data["DISCORD"] = example_config["DISCORD"].copy()
-                print("[i] Added DISCORD section with default values")
+                console.print("[i] Added DISCORD section with default values", markup=False)
             elif "DISCORD" in config_data and "DISCORD" in example_config:
                 # Check for missing DISCORD keys
                 missing_discord_keys: list[str] = []
@@ -1085,17 +1088,17 @@ if __name__ == "__main__":
                         missing_discord_keys.append(key)
 
                 if missing_discord_keys:
-                    print(f"\n[!] Your DISCORD config is missing these keys: {', '.join(missing_discord_keys)}")
+                    console.print(f"\n[!] Your DISCORD config is missing these keys: {', '.join(missing_discord_keys)}", markup=False)
                     for key in missing_discord_keys:
                         config_data["DISCORD"][key] = example_config["DISCORD"][key]
-                    print("[i] Added missing DISCORD keys with default values")
+                    console.print("[i] Added missing DISCORD keys with default values", markup=False)
 
             # Generate the updated config file
             generate_config_file(config_data, existing_path)
 
     else:
-        print("\n[i] No existing configuration found. Creating a new one.")
-        print("[i] Enter to accept the default values/skip, or enter your own values.")
+        console.print("\n[i] No existing configuration found. Creating a new one.", markup=False)
+        console.print("[i] Enter to accept the default values/skip, or enter your own values.", markup=False)
 
         config_data: ConfigDict = {}
 
