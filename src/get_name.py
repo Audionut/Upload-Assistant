@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import os
 import re
 import sys
@@ -35,13 +36,13 @@ class NameManager:
         self.config = config
         self.common = COMMON(config=config)
 
-    async def get_name(self, meta: Meta) -> tuple[str, str, str, list[str]]:
+    def get_name_main(self, meta: Meta) -> tuple[str, str, str, list[str]]:
         active_trackers: list[str] = [
             tracker for tracker in TRACKER_DISC_REQUIREMENTS
             if tracker in meta.get('trackers', [])
         ]
         if active_trackers:
-            region, distributor, trackers_to_remove = await self.missing_disc_info(meta, active_trackers)
+            region, distributor, trackers_to_remove = self.missing_disc_info(meta, active_trackers)
             for tracker in trackers_to_remove:
                 if tracker in meta['trackers']:
                     if meta.get('unattended', False):
@@ -435,7 +436,7 @@ class NameManager:
             text = re.sub(re.escape(old), new, text, flags=re.IGNORECASE)
         return text
 
-    async def missing_disc_info(self, meta: Meta, active_trackers: Sequence[str]) -> tuple[str, str, list[str]]:
+    def missing_disc_info(self, meta: Meta, active_trackers: Sequence[str]) -> tuple[str, str, list[str]]:
         distributor_id = self.common.unit3d_distributor_ids(str(meta.get('distributor', "")))
         region_id = self.common.unit3d_region_ids(str(meta.get('region', "")))
         region_name = str(meta.get('region', ""))
@@ -450,14 +451,16 @@ class NameManager:
                     strictest['region'] = 'mandatory'
                 if requirements.get('distributor') == 'mandatory':
                     strictest['distributor'] = 'mandatory'
-                if not region_id:
-                    region_name = await self._prompt_for_field(meta, "Region code", strictest['region'] == 'mandatory')
-                    if region_name and region_name != "SKIPPED":
-                        console.print(f"Looking up region ID for: {region_name}")
-                        region_id = self.common.unit3d_region_ids(region_name)
-                        console.print(f"Found region ID: {region_id}")
+
+            if not region_id:
+                region_name = self._prompt_for_field(meta, "Region code", strictest['region'] == 'mandatory')
+                if region_name and region_name != "SKIPPED":
+                    console.print(f"Looking up region ID for: {region_name}")
+                    region_id = self.common.unit3d_region_ids(region_name)
+                    console.print(f"Found region ID: {region_id}")
+
             if not distributor_id:
-                distributor_name = await self._prompt_for_field(meta, "Distributor", strictest['distributor'] == 'mandatory')
+                distributor_name = self._prompt_for_field(meta, "Distributor", strictest['distributor'] == 'mandatory')
                 if distributor_name and distributor_name != "SKIPPED":
                     console.print(f"Looking up distributor ID for: {distributor_name}")
                     distributor_id = self.common.unit3d_distributor_ids(distributor_name)
@@ -471,7 +474,7 @@ class NameManager:
 
         return region_name, distributor_name, trackers_to_remove
 
-    async def _prompt_for_field(self, meta: Meta, field_name: str, is_mandatory: bool) -> str:
+    def _prompt_for_field(self, meta: Meta, field_name: str, is_mandatory: bool) -> str:
         """Prompt user for disc field with appropriate mandatory/optional text."""
         if meta['unattended'] and not meta.get('unattended_confirm', False):
             return "SKIPPED"
@@ -482,6 +485,6 @@ class NameManager:
             return value.upper() if value else "SKIPPED"
         except EOFError:
             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-            await cleanup_manager.cleanup()
+            asyncio.run(cleanup_manager.cleanup())
             cleanup_manager.reset_terminal()
             sys.exit(1)

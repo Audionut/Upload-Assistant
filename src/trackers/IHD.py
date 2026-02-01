@@ -51,15 +51,14 @@ class IHD(UNIT3D):
         if category_name == 'TV' and anime is True:
             is_anime = True
 
-        if is_anime:
-            return {'category_id': '3'}
-        if is_anime_movie:
-            return {'category_id': '4'}
-
         if mapping_only:
             return category_id
         elif reverse:
             return {v: k for k, v in category_id.items()}
+        if is_anime:
+            return {'category_id': '3'}
+        if is_anime_movie:
+            return {'category_id': '4'}
         elif category is not None:
             return {'category_id': category_id.get(category, '0')}
         else:

@@ -427,7 +427,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                 if tracker in meta['trackers']:
                     meta['trackers'].remove(tracker)
 
-        meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await name_manager.get_name(meta)
+        meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = name_manager.get_name_main(meta)
 
         if meta['debug']:
             console.print(f"Trackers list before editing: {meta['trackers']}")
@@ -456,7 +456,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
     editargs_tracking: tuple[str, ...] = ()
     previous_trackers = meta.get('trackers', [])
     try:
-        confirm = await helper.get_confirmation(meta)
+        confirm = helper.get_confirmation(meta)
     except EOFError:
         console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
         await cleanup_manager.cleanup()
@@ -504,14 +504,17 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             console.print(f"Trackers list during edit process: {meta['trackers']}")
         meta['edit'] = True
         meta = await prep.gather_prep(meta=meta, mode='cli')
-        meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = await name_manager.get_name(meta)
+        meta['name_notag'], meta['name'], meta['clean_name'], meta['potential_missing'] = name_manager.get_name_main(meta)
         try:
-            confirm = await helper.get_confirmation(meta)
+            confirm = helper.get_confirmation(meta)
         except EOFError:
             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
             await cleanup_manager.cleanup()
             cleanup_manager.reset_terminal()
             sys.exit(1)
+
+    async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w', encoding='utf-8') as f:
+        await f.write(json.dumps(meta, indent=4))
 
     if meta.get('emby', False):
         if not meta['debug']:
@@ -1583,7 +1586,7 @@ async def do_the_thing(base_dir: str) -> None:
                         trackers_list = []
                         meta['trackers'] = trackers_list
 
-                    for tracker in trackers_list:
+                    for tracker in trackers_list[:]:
                         tracker_status = cast(dict[str, Any], meta.get('tracker_status', {})).get(tracker, {})
                         if tracker_status.get('upload') is not True:
                             if meta.get('debug'):

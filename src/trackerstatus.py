@@ -190,10 +190,10 @@ class TrackerStatusManager:
                             or (local_meta['unattended'] and local_meta.get('unattended_confirm', False))
                         ) and not we_already_asked:
                             try:
-                                tracker_rename = await tracker_class.get_name(meta)
+                                tracker_rename = tracker_class.get_name(meta)
                             except Exception:
                                 try:
-                                    tracker_rename = await tracker_class.edit_name(meta)
+                                    tracker_rename = tracker_class.edit_name(meta)
                                 except Exception:
                                     tracker_rename = None
 

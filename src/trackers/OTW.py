@@ -56,7 +56,13 @@ class OTW(UNIT3D):
                 return False
 
         combined_genres_str = ", ".join(combined_genres)
-        genres = f"{keywords} {combined_genres_str}"
+        genre_entries = [
+            entry.strip()
+            for chunk in (keywords, combined_genres_str)
+            for entry in str(chunk).split(',')
+            if entry.strip()
+        ]
+        genres = ", ".join(genre_entries)
         if not self.common.prompt_adult_content(
             meta,
             tracker_name=self.tracker,

@@ -653,7 +653,7 @@ class SHRI(UNIT3D):
         except (ValueError, AttributeError, KeyError, UnknownLocaleError):
             return self._get_language_name(iso_code).title()
 
-    def _get_best_italian_audio_format(self, meta: dict[str, Any]) -> str:
+    async def _get_best_italian_audio_format_async(self, meta: dict[str, Any]) -> str:
         """Filter Italian tracks, select best, format via get_audio_v2"""
         # fmt: off
         ITALIAN_LANGS = {"it", "italian", "italiano"}
@@ -692,7 +692,7 @@ class SHRI(UNIT3D):
                 audio_value = meta.get("audio", "")
                 return clean(audio_value if isinstance(audio_value, str) else "")
             best = max(italian, key=lambda t: extract_quality(t, True))
-            audio_str, _, _ = asyncio.run(self.audio_manager.get_audio_v2({}, meta, {"audio": [best]}))
+            audio_str, _, _ = await self.audio_manager.get_audio_v2({}, meta, {"audio": [best]})
         else:
             tracks = meta.get("mediainfo", {}).get("media", {}).get("track", [])
             italian = [
@@ -705,9 +705,12 @@ class SHRI(UNIT3D):
                 audio_value = meta.get("audio", "")
                 return clean(audio_value if isinstance(audio_value, str) else "")
             best = max(italian, key=lambda t: extract_quality(t, False))
-            audio_str, _, _ = asyncio.run(self.audio_manager.get_audio_v2({"media": {"track": [tracks[0], best]}}, meta, None))
+            audio_str, _, _ = await self.audio_manager.get_audio_v2({"media": {"track": [tracks[0], best]}}, meta, None)
 
         return clean(str(audio_str))
+
+    def _get_best_italian_audio_format(self, meta: dict[str, Any]) -> str:
+        return asyncio.run(self._get_best_italian_audio_format_async(meta))
 
     async def get_description(self, meta: dict[str, Any], is_test: bool = False) -> dict[str, str]:
         """Generate Italian BBCode description for ShareIsland"""
@@ -743,7 +746,7 @@ class SHRI(UNIT3D):
         if meta.get("hdr") and meta["hdr"] != "SDR":
             info_parts.append(meta["hdr"])
 
-        audio = self._get_best_italian_audio_format(meta)
+        audio = await self._get_best_italian_audio_format_async(meta)
         if audio:
             info_parts.append(audio)
 

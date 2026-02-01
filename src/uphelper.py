@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import json
 import os
 import sys
@@ -47,10 +48,10 @@ class UploadHelper:
             tracker_class_factory = cast(Callable[..., Any], self.tracker_class_map[tracker_name])
             tracker_class = tracker_class_factory(config=self.config)
             try:
-                tracker_rename = await tracker_class.get_name(meta)
+                tracker_rename = tracker_class.get_name(meta)
             except Exception:
                 try:
-                    tracker_rename = await tracker_class.edit_name(meta)
+                    tracker_rename = tracker_class.edit_name(meta)
                 except Exception:
                     tracker_rename = None
             display_name: Optional[str] = None
@@ -300,7 +301,7 @@ class UploadHelper:
                 console.print("\n".join(results), soft_wrap=True)
                 console.print()
 
-    async def get_confirmation(self, meta: Meta) -> bool:
+    def get_confirmation(self, meta: Meta) -> bool:
         confirm: bool = False
         if meta['debug'] is True:
             console.print("[bold red]DEBUG: True - Will not actually upload!")
@@ -469,21 +470,23 @@ class UploadHelper:
                 }
 
                 # Append to JSON file (as a list of entries)
-                db_data_list: list[dict[str, Any]] = []
-                if os.path.exists(json_file_path):
-                    async with aiofiles.open(json_file_path, encoding='utf-8') as f:
+                async def _load_db_data_list(file_path: str) -> list[dict[str, Any]]:
+                    if not os.path.exists(file_path):
+                        return []
+                    async with aiofiles.open(file_path, encoding='utf-8') as f:
                         try:
                             file_contents = await f.read()
                             if file_contents:
                                 parsed_data = json.loads(file_contents)
                                 if isinstance(parsed_data, list):
-                                    db_data_list = cast(list[dict[str, Any]], parsed_data)
+                                    return cast(list[dict[str, Any]], parsed_data)
                         except Exception:
-                            db_data_list = []
+                            return []
+                    return []
+
+                db_data_list = asyncio.run(_load_db_data_list(json_file_path))
                 db_data_list.append(db_check_entry)
 
-                async with aiofiles.open(json_file_path, 'w', encoding='utf-8') as f:
-                    await f.write(json.dumps(db_data_list, indent=2, ensure_ascii=False))
                 return True
 
         return confirm

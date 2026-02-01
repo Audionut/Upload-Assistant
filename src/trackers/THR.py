@@ -166,7 +166,7 @@ class THR:
         if 'documentary' in genres or 'documentary' in keywords:
             cat = '12'
         elif category == "MOVIE":
-            if is_disc == "BMDV":
+            if is_disc == "BDMV":
                 cat = '40'
             elif is_disc in {"DVD", "HDDVD"}:
                 cat = '14'

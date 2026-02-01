@@ -1348,7 +1348,7 @@ class BJS:
         adult_yes = "1"
         adult_no = "2"
 
-        if meta.get("anime", False) and "hentai" in combined_genres:
+        if meta.get("anime", False) and any(genre.lower() == "hentai" for genre in combined_genres):
             return adult_yes
 
         if self.common.is_adult_content(meta):

@@ -36,7 +36,8 @@ class HUNO(UNIT3D):
     def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         should_continue = True
 
-        if self.get_audio(meta) == "SKIPPED":
+        audio = self.get_audio(meta)
+        if "SKIPPED" in audio:
             console.print(f'{self.tracker}: No audio languages were found, the upload cannot continue.')
             return False
 
