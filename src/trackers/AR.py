@@ -321,8 +321,7 @@ class AR:
     async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
         """Upload torrent to AR using centralized cookie_upload."""
         # Prepare the data for the upload
-        common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         await self.edit_desc(meta)
         type_id = self.get_type(meta)
 

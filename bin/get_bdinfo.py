@@ -16,7 +16,8 @@ try:
     from src.console import console
 except ImportError:
     class SimpleConsole:
-        def print(self, message: str, markup: bool = False) -> None:  # noqa: ARG002
+        def print(self, message: str, markup: bool = False) -> None:
+            _ = markup
             print(message)
 
     console = SimpleConsole()
@@ -57,7 +58,7 @@ class BDInfoBinaryManager:
         }
 
         if system not in platform_map or machine not in platform_map[system]:
-            raise Exception(f"Unsupported platform: {system} {machine}")
+            raise ValueError(f"Unsupported platform: {system} {machine}")
 
         platform_info = platform_map[system][machine]
         file_pattern = platform_info["file"]
@@ -221,6 +222,6 @@ class BDInfoBinaryManager:
                     if debug:
                         console.print(f"[yellow]Warning: Failed to remove temporary archive {temp_archive}: {unlink_exc}[/yellow]")
         except httpx.RequestError as e:
-            raise Exception(f"Failed to download bdinfo binary: {e}") from e
+            raise RuntimeError(f"Failed to download bdinfo binary: {e}") from e
         except (zipfile.BadZipFile, tarfile.TarError) as e:
-            raise Exception(f"Failed to extract bdinfo binary: {e}") from e
+            raise RuntimeError(f"Failed to extract bdinfo binary: {e}") from e

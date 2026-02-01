@@ -71,7 +71,7 @@ class TVC:
         except (ValueError, TypeError):
             return date_str
 
-    async def get_cat_id(self, genres: str) -> str:
+    def get_cat_id(self, genres: str) -> str:
         """
         Determine TVC category ID based on genre list.
 
@@ -93,7 +93,7 @@ class TVC:
         # fallback to holding bin/misc id
         return self.tv_type_map["holding bin"]
 
-    async def get_res_id(self, tv_pack: bool, resolution: str) -> str:
+    def get_res_id(self, tv_pack: bool, resolution: str) -> str:
         if tv_pack:
             resolution_id = {
                 '1080p': 'HD1080p Pack',
@@ -120,7 +120,7 @@ class TVC:
             }.get(resolution, 'SD')
         return resolution_id
 
-    async def append_country_code(self, meta: Meta, name: str) -> str:
+    def append_country_code(self, meta: Meta, name: str) -> str:
         """
         Append ISO country code suffix to release name based on origin_country_code.
 
@@ -191,7 +191,6 @@ class TVC:
             img_host_index=1,
             approved_image_hosts=self.approved_image_hosts
         )
-        return
 
     async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
         common = COMMON(config=self.config)
@@ -207,7 +206,7 @@ class TVC:
         image_list = [cast(dict[str, Any], img) for img in image_list_seq]
 
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
-        await self.get_tmdb_data(meta)
+        self.get_tmdb_data(meta)
 
         # load MediaInfo.json
         try:
@@ -217,7 +216,7 @@ class TVC:
             console.print(f"[yellow]Warning: Could not load MediaInfo.json: {e}")
             mi = {}
 
-        cat_id = await self.get_cat_id(meta.get('genres', '')) if meta.get('category', '') == 'TV' else '44'
+        cat_id = self.get_cat_id(meta.get('genres', '')) if meta.get('category', '') == 'TV' else '44'
         meta['language_checked'] = True
 
         # Foreign category check based on TMDB original_language only
@@ -229,7 +228,7 @@ class TVC:
             audio_langs = self.get_audio_languages(mi)
             if audio_langs and "English" not in audio_langs:
                 cat_id = self.tv_type_map["foreign"]
-        resolution_id = await self.get_res_id(bool(meta.get('tv_pack', 0)), str(meta.get('resolution', '')))
+        resolution_id = self.get_res_id(bool(meta.get('tv_pack', 0)), str(meta.get('resolution', '')))
 
         anon = 0 if meta['anon'] == 0 and not self.config['TRACKERS'][self.tracker].get('anon', False) else 1
 
@@ -251,12 +250,12 @@ class TVC:
         if meta['type'] == "ENCODE" and ("bluray" in str(meta['path']).lower() or
                                          "brrip" in str(meta['path']).lower() or
                                          "bdrip" in str(meta['path']).lower()):
-            type = "BRRip"
+            type_label = "BRRip"
         else:
-            type = meta['type'].replace('WEBDL', 'WEB-DL')
+            type_label = meta['type'].replace('WEBDL', 'WEB-DL')
 
         if meta['category'] == "MOVIE":
-            tvc_name = f"{meta['title']} ({meta['year']}) [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]"
+            tvc_name = f"{meta['title']} ({meta['year']}) [{meta['resolution']} {type_label} {str(meta['video'][-3:]).upper()}]"
         elif meta['category'] == "TV":
             # Use safe lookups to avoid KeyError if 'search_year' is missing
             search_year = meta.get('search_year', '')
@@ -271,19 +270,19 @@ class TVC:
                 season_year = season_first or year
                 tvc_name = (
                     f"{meta['title']} - Series {meta['season_int']} ({season_year}) "
-                    f"[{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]"
+                    f"[{meta['resolution']} {type_label} {str(meta['video'][-3:]).upper()}]"
                 )
             else:
                 if 'episode_airdate' in meta:
                     formatted_date = self.format_date_ddmmyyyy(meta['episode_airdate'])
                     tvc_name = (
                         f"{meta['title']}{year_str} {meta['season']}{meta['episode']} "
-                        f"({formatted_date}) [{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]"
+                        f"({formatted_date}) [{meta['resolution']} {type_label} {str(meta['video'][-3:]).upper()}]"
                     )
                 else:
                     tvc_name = (
                         f"{meta['title']}{year_str} {meta['season']}{meta['episode']} "
-                        f"[{meta['resolution']} {type} {str(meta['video'][-3:]).upper()}]"
+                        f"[{meta['resolution']} {type_label} {str(meta['video'][-3:]).upper()}]"
                     )
         else:
             # Defensive guard for unsupported categories
@@ -304,7 +303,7 @@ class TVC:
         if meta.get('sdh_subs'):
             tvc_name = tvc_name.replace(' SUBS]', ' (ENG + SDH SUBS)]') if meta.get('eng_subs') else tvc_name.replace(']', ' (SDH SUBS)]')
 
-        tvc_name = await self.append_country_code(meta, tvc_name)
+        tvc_name = self.append_country_code(meta, tvc_name)
 
         upload_to_tvc = True
         if meta.get('unattended', False) is False:
@@ -451,7 +450,7 @@ class TVC:
                 audio_langs.add(lang.title())
         return sorted(audio_langs) if audio_langs else []
 
-    async def get_tmdb_data(self, meta: Meta) -> dict[str, Any]:
+    def get_tmdb_data(self, meta: Meta) -> dict[str, Any]:
         # Origin country codes (shared for both movies and TV)
         origin_country_code: list[str] = []
         origin_country = meta.get('origin_country')
@@ -816,7 +815,6 @@ class TVC:
     # used in naming conventions
 
     def get_subs_info(self, meta: Meta, mi: dict[str, Any]) -> None:
-        subs = ""
         subs_num = 0
         media = cast(dict[str, Any], mi.get("media") or {})
         tracks_raw: list[Any] = []
@@ -842,7 +840,6 @@ class TVC:
                 if lang and subs_num > 0:
                     lang_str = str(lang).strip()
                     if lang_str:
-                        subs += lang_str + ", "
                         lowered = lang_str.lower()
                         if lowered in {"en", "eng", "en-us", "en-gb", "en-ie", "en-au", "english"}:
                             meta['eng_subs'] = 1

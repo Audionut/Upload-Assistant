@@ -21,7 +21,8 @@ try:
 except ImportError:
     # Fallback for Docker builds where rich is not yet installed
     class SimpleConsole:
-        def print(self, message: str, markup: bool = False) -> None:  # noqa: ARG002
+        def print(self, message: str, markup: bool = False) -> None:
+            _ = markup
             print(message)
 
     console = SimpleConsole()
@@ -106,7 +107,7 @@ def extract_linux_binaries(cli_archive: Path, lib_archive: Path, output_dir: Pat
                 console.print(f"Extracted CLI binary: {mediainfo_file}", markup=False)
                 break
         else:
-            raise Exception("MediaInfo CLI binary not found in archive")
+            raise FileNotFoundError("MediaInfo CLI binary not found in archive")
 
     # Extract MediaInfo library
     with zipfile.ZipFile(lib_archive, "r") as zip_ref:
@@ -146,7 +147,7 @@ def extract_linux_binaries(cli_archive: Path, lib_archive: Path, output_dir: Pat
                 console.print(f"Extracted library: {lib_file}", markup=False)
                 break
         else:
-            raise Exception("MediaInfo library not found in archive")
+            raise FileNotFoundError("MediaInfo library not found in archive")
 
     # Clean up empty lib directory if it exists
     lib_dir = output_dir.parent / "lib"
@@ -162,7 +163,7 @@ def download_dvd_mediainfo_docker():
     console.print(f"System: {system}, Architecture: {machine}", markup=False)
 
     if system != "linux":
-        raise Exception(f"This script is only for Linux containers, got: {system}")
+        raise RuntimeError(f"This script is only for Linux containers, got: {system}")
 
     # Normalize architecture names
     if machine in ["amd64", "x86_64"]:
@@ -170,7 +171,7 @@ def download_dvd_mediainfo_docker():
     elif machine in ["arm64", "aarch64"]:
         arch = "arm64"
     else:
-        raise Exception(f"Unsupported architecture: {machine}")
+        raise ValueError(f"Unsupported architecture: {machine}")
 
     # Set up output directory in the container
     base_dir = Path("/Upload-Assistant")
@@ -226,20 +227,20 @@ def download_dvd_mediainfo_docker():
             if is_executable:
                 console.print(f"✓ Set secure executable permissions on: {cli_file} (mode: {oct(file_stat.st_mode)})", markup=False)
             else:
-                raise Exception(f"Failed to set executable permissions on: {cli_file}")
+                raise OSError(f"Failed to set executable permissions on: {cli_file}")
         else:
-            raise Exception(f"CLI binary not found for permission setting: {cli_file}")
+            raise FileNotFoundError(f"CLI binary not found for permission setting: {cli_file}")
 
     # Verify installation and permissions
     if not cli_file.exists():
-        raise Exception(f"Failed to install CLI binary: {cli_file}")
+        raise FileNotFoundError(f"Failed to install CLI binary: {cli_file}")
     if not lib_file.exists():
-        raise Exception(f"Failed to install library: {lib_file}")
+        raise FileNotFoundError(f"Failed to install library: {lib_file}")
 
     # Final executable verification
     cli_stat = cli_file.stat()
     if not (cli_stat.st_mode & 0o111):
-        raise Exception(f"CLI binary is not executable: {cli_file}")
+        raise PermissionError(f"CLI binary is not executable: {cli_file}")
     else:
         console.print(f"✓ CLI binary is executable: {oct(cli_stat.st_mode)}", markup=False)
 

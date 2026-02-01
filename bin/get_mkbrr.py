@@ -15,7 +15,8 @@ try:
 except ImportError:
     # Fallback for Docker builds where rich is not yet installed
     class SimpleConsole:
-        def print(self, message: str, markup: bool = False) -> None:  # noqa: ARG002
+        def print(self, message: str, markup: bool = False) -> None:
+            _ = markup
             print(message)
 
     console = SimpleConsole()
@@ -55,7 +56,7 @@ class MkbrrBinaryManager:
         }
 
         if system not in platform_map or machine not in platform_map[system]:
-            raise Exception(f"Unsupported platform: {system} {machine}")
+            raise ValueError(f"Unsupported platform: {system} {machine}")
 
         platform_info = platform_map[system][machine]
         file_pattern = platform_info["file"]
@@ -210,16 +211,16 @@ class MkbrrBinaryManager:
                 binary_path.chmod(binary_path.stat().st_mode | stat.S_IEXEC)
 
             if not binary_path.exists():
-                raise Exception(f"Failed to extract mkbrr binary to {binary_path}")
+                raise RuntimeError(f"Failed to extract mkbrr binary to {binary_path}")
 
             async with aiofiles.open(version_path, "w", encoding="utf-8") as version_file:
                 await version_file.write(f"mkbrr version {version} installed successfully.")
             return str(binary_path)
 
         except httpx.RequestError as e:
-            raise Exception(f"Failed to download mkbrr binary: {e}") from e
+            raise RuntimeError(f"Failed to download mkbrr binary: {e}") from e
         except (zipfile.BadZipFile, tarfile.TarError) as e:
-            raise Exception(f"Failed to extract mkbrr binary: {e}") from e
+            raise RuntimeError(f"Failed to extract mkbrr binary: {e}") from e
 
     @staticmethod
     def download_mkbrr_for_docker(base_dir: Union[str, Path] = ".", version: str = "v1.18.0") -> str:
@@ -229,7 +230,7 @@ class MkbrrBinaryManager:
         console.print(f"Detected system: {system}, architecture: {machine}", markup=False)
 
         if system != "linux":
-            raise Exception(f"This script is for Docker/Linux only, detected: {system}")
+            raise RuntimeError(f"This script is for Docker/Linux only, detected: {system}")
 
         platform_map = {
             "x86_64": {"file": "linux_x86_64.tar.gz", "folder": "linux/amd64"},
@@ -241,7 +242,7 @@ class MkbrrBinaryManager:
         }
 
         if machine not in platform_map:
-            raise Exception(f"Unsupported architecture: {machine}")
+            raise ValueError(f"Unsupported architecture: {machine}")
 
         platform_info = platform_map[machine]
         file_pattern = platform_info["file"]
@@ -356,7 +357,7 @@ class MkbrrBinaryManager:
 
                 return str(binary_path)
 
-            raise Exception(f"Failed to extract mkbrr binary to {binary_path}")
+            raise RuntimeError(f"Failed to extract mkbrr binary to {binary_path}")
 
         except Exception as e:
-            raise Exception(f"Error downloading mkbrr: {e}") from e
+            raise RuntimeError(f"Error downloading mkbrr: {e}") from e

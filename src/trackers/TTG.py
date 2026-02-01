@@ -113,7 +113,7 @@ class TTG:
             # 60 = TV Shows
         return type_id
 
-    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
+    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:  # NOSONAR
         common = COMMON(config=self.config)
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
         await self.edit_desc(meta)

@@ -485,6 +485,11 @@ class NameManager:
             return value.upper() if value else "SKIPPED"
         except EOFError:
             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-            asyncio.run(cleanup_manager.cleanup())
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                asyncio.run(cleanup_manager.cleanup())
+            else:
+                loop.create_task(cleanup_manager.cleanup())
             cleanup_manager.reset_terminal()
             sys.exit(1)

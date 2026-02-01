@@ -429,7 +429,18 @@ class BJS:
             if isinstance(imdb, dict):
                 imdb_genres_value = imdb.get('genres', [])
                 imdb_genres = cast(list[Any], imdb_genres_value) if isinstance(imdb_genres_value, list) else []
-                genre_names = [g for g in imdb_genres if isinstance(g, str)]
+                genre_names = []
+                for g in imdb_genres:
+                    if isinstance(g, dict):
+                        name = g.get('name', '')
+                    elif isinstance(g, str):
+                        name = g
+                    else:
+                        continue
+
+                    name = name.strip()
+                    if name:
+                        genre_names.append(name)
                 if genre_names:
                     tags = ', '.join(
                         unicodedata.normalize('NFKD', name)

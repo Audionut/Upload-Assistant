@@ -28,7 +28,7 @@ class FfmpegBinaryManager:
         console.print(f"[blue]Detected system: {system}[/blue]")
 
         if 'linux' not in system:
-            raise Exception(f"This script is for Docker/Linux only, detected: {system}")
+            raise RuntimeError(f"This script is for Docker/Linux only, detected: {system}")
 
         base = Path(base_dir)
         ff_root = base / 'bin' / 'ffmpeg'

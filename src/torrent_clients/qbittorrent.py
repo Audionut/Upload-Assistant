@@ -1,6 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
 import collections
+import contextlib
 import os
 import platform
 import re
@@ -23,6 +24,8 @@ from src.torrentcreate import TorrentCreator
 # These have to be global variables to be shared across all instances since a new instance is made every time
 qbittorrent_cached_clients: dict[tuple[str, int, str], qbittorrentapi.Client] = {}  # Cache for qbittorrent clients that have been successfully logged into
 qbittorrent_locks: collections.defaultdict[tuple[str, int, str], asyncio.Lock] = collections.defaultdict(asyncio.Lock)  # Locks for qbittorrent clients to prevent concurrent logins
+
+TRACKER_ID_PATH_PATTERN = r'/(\d+)$'
 
 
 class _CandidateEntry(TypedDict):
@@ -236,10 +239,15 @@ class QbittorrentClientMixin:
 
     def create_ssl_context_for_client(self, client_config: dict[str, Any]) -> ssl.SSLContext:
         """Create SSL context for qBittorrent client based on VERIFY_WEBUI_CERTIFICATE setting."""
-        ssl_context = ssl.create_default_context()
+        ssl_context = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)  # NOSONAR - hostname verification toggled per VERIFY_WEBUI_CERTIFICATE
+        with contextlib.suppress(AttributeError):
+            ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
         if not client_config.get('VERIFY_WEBUI_CERTIFICATE', True):
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
+            ssl_context.check_hostname = False  # NOSONAR - user-configured insecure mode
+            ssl_context.verify_mode = ssl.CERT_NONE  # NOSONAR - user-configured insecure mode
+        else:
+            ssl_context.check_hostname = True
+            ssl_context.verify_mode = ssl.CERT_REQUIRED
         return ssl_context
 
     async def retry_qbt_operation(self, operation_func: Callable[[], Awaitable[Any]], operation_name: str, max_retries: int = 2, initial_timeout: float = 10.0) -> Any:
@@ -1240,20 +1248,20 @@ class QbittorrentClientMixin:
         try:
             tracker_patterns = {
                 'ptp': {"url": "passthepopcorn.me", "pattern": r'torrentid=(\d+)'},
-                'aither': {"url": "https://aither.cc", "pattern": r'/(\d+)$'},
-                'lst': {"url": "https://lst.gg", "pattern": r'/(\d+)$'},
-                'oe': {"url": "https://onlyencodes.cc", "pattern": r'/(\d+)$'},
-                'blu': {"url": "https://blutopia.cc", "pattern": r'/(\d+)$'},
+                'aither': {"url": "https://aither.cc", "pattern": TRACKER_ID_PATH_PATTERN},
+                'lst': {"url": "https://lst.gg", "pattern": TRACKER_ID_PATH_PATTERN},
+                'oe': {"url": "https://onlyencodes.cc", "pattern": TRACKER_ID_PATH_PATTERN},
+                'blu': {"url": "https://blutopia.cc", "pattern": TRACKER_ID_PATH_PATTERN},
                 'hdb': {"url": "https://hdbits.org", "pattern": r'id=(\d+)'},
                 'btn': {"url": "https://broadcasthe.net", "pattern": r'id=(\d+)'},
                 'bhd': {"url": "https://beyond-hd.me", "pattern": r'details/(\d+)'},
-                'huno': {"url": "https://hawke.uno", "pattern": r'/(\d+)$'},
-                'ulcx': {"url": "https://upload.cx", "pattern": r'/(\d+)$'},
-                'rf': {"url": "https://reelflix.xyz", "pattern": r'/(\d+)$'},
-                'otw': {"url": "https://oldtoons.world", "pattern": r'/(\d+)$'},
-                'yus': {"url": "https://yu-scene.net", "pattern": r'/(\d+)$'},
-                'dp': {"url": "https://darkpeers.org", "pattern": r'/(\d+)$'},
-                'sp': {"url": "https://seedpool.org", "pattern": r'/(\d+)$'},
+                'huno': {"url": "https://hawke.uno", "pattern": TRACKER_ID_PATH_PATTERN},
+                'ulcx': {"url": "https://upload.cx", "pattern": TRACKER_ID_PATH_PATTERN},
+                'rf': {"url": "https://reelflix.xyz", "pattern": TRACKER_ID_PATH_PATTERN},
+                'otw': {"url": "https://oldtoons.world", "pattern": TRACKER_ID_PATH_PATTERN},
+                'yus': {"url": "https://yu-scene.net", "pattern": TRACKER_ID_PATH_PATTERN},
+                'dp': {"url": "https://darkpeers.org", "pattern": TRACKER_ID_PATH_PATTERN},
+                'sp': {"url": "https://seedpool.org", "pattern": TRACKER_ID_PATH_PATTERN},
             }
 
             tracker_priority = ['aither', 'ulcx', 'lst', 'blu', 'oe', 'btn', 'bhd', 'huno', 'hdb', 'rf', 'otw', 'yus', 'dp', 'sp', 'ptp']

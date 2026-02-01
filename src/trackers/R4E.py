@@ -80,14 +80,14 @@ class R4E(UNIT3D):
         _ = meta
         return {}
 
-    def get_internal(self, meta: Meta) -> dict[str, str]:
+    def get_internal(self, meta: Meta) -> dict[str, str]:  # NOSONAR
         _ = meta
         return {}
 
     def get_featured(self, _meta: Meta) -> dict[str, str]:
         return {}
 
-    def get_free(self, meta: Meta) -> dict[str, str]:
+    def get_free(self, meta: Meta) -> dict[str, str]:  # NOSONAR
         _ = meta
         return {}
 

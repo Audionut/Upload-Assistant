@@ -143,7 +143,7 @@ class HUNO(UNIT3D):
         _ = meta
         return {}
 
-    def get_personal_release(self, meta: dict[str, Any]) -> dict[str, Any]:
+    def get_personal_release(self, meta: dict[str, Any]) -> dict[str, Any]:  # NOSONAR
         _ = meta
         return {}
 
@@ -158,7 +158,7 @@ class HUNO(UNIT3D):
 
         return {'internal': str(internal)}
 
-    async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, Any]:
+    async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, Any]:  # NOSONAR
         _ = meta
         return {}
 
@@ -272,7 +272,7 @@ class HUNO(UNIT3D):
                     name = f"{title} ({year}) {season}{episode} {distributor} {edition} {hc} ({resolution} {source} {dvd_size} {hybrid} {video_codec} {hdr} {audio} {tag}) {repack}"
                 elif meta['is_disc'] == 'HDDVD':
                     name = f"{title} ({year}) {season}{episode} {edition} ({resolution} {source} {hybrid} {video_codec} {hdr} {audio} {tag}) {repack}"
-            elif format_type == "REMUX" and source == "BluRay":  # BluRay Remux
+            elif format_type == "REMUX" and source.endswith("BluRay"):  # BluRay / UHD BluRay Remux
                 name = f"{title} ({year}) {season}{episode} {edition} ({resolution} {three_d} {source} {hybrid} REMUX {video_codec} {hdr} {hfr} {audio} {tag}) {repack}"  # SOURCE
             elif format_type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):  # DVD Remux
                 name = f"{title} ({year}) {season}{episode} {edition} ({resolution} {source} {hybrid} REMUX {video_codec} {hdr} {audio} {tag}) {repack}"  # SOURCE

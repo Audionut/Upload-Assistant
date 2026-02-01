@@ -52,6 +52,9 @@ except Exception:
 
 access_logger = AccessLogger(cfg_dir) if AccessLogger is not None else None
 
+ERROR_AUTH_REQUIRED_WEB = "Authentication required (web session)"
+ERROR_CSRF_ORIGIN_FAILED = "CSRF/Origin validation failed"
+
 # Helper: simple file-backed config store under the auth config dir. Values
 # are stored as raw text. This replaces OS keyring usage and allows Docker
 # and non-Docker deployments to persist credentials via the configured
@@ -763,8 +766,25 @@ def _verify_remember_token(token: str) -> Optional[str]:
 
 
 
+def _get_recovery_salt() -> bytes:
+    stored = _cfg_read("recovery_salt")
+    if stored:
+        try:
+            return bytes.fromhex(stored.strip())
+        except Exception:
+            return stored.encode("utf-8")
+
+    try:
+        salt = secrets.token_bytes(32)
+        _cfg_write("recovery_salt", salt.hex())
+        return salt
+    except Exception:
+        return hashlib.sha256(session_secret + b":recovery_salt").digest()
+
+
 def _hash_code(code: str) -> str:
-    return hashlib.pbkdf2_hmac('sha256', code.encode('utf-8'), b'upload-assistant-recovery-salt', 100000).hex()
+    salt = _get_recovery_salt()
+    return hashlib.pbkdf2_hmac("sha256", code.encode("utf-8"), salt, 100000).hex()
 
 
 def _generate_recovery_codes(n: int = 10, length: int = 10) -> list[str]:
@@ -2118,7 +2138,7 @@ def csrf_token():
     """Return the per-session CSRF token for use by the frontend."""
     # Require authenticated web session for CSRF token access
     if not _is_authenticated():
-        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+        return jsonify({"success": False, "error": ERROR_AUTH_REQUIRED_WEB}), 401
 
     try:
         token = _session_get("csrf_token") or ""
@@ -2134,11 +2154,11 @@ def twofa_status():
     """Check 2FA status"""
     # Require authenticated web session for 2FA status
     if not _is_authenticated():
-        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+        return jsonify({"success": False, "error": ERROR_AUTH_REQUIRED_WEB}), 401
 
     # Require CSRF and same-origin for reads of auth/2fa state
     if not _verify_csrf_header() or not _verify_same_origin():
-        return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+        return jsonify({"success": False, "error": ERROR_CSRF_ORIGIN_FAILED}), 403
 
     return jsonify({"enabled": _totp_enabled(), "success": True})
 
@@ -2155,9 +2175,9 @@ def access_log_level_api():
     if request.method == "GET":
         # Require authenticated web session and CSRF + same-origin for reads
         if not _is_authenticated():
-            return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+            return jsonify({"success": False, "error": ERROR_AUTH_REQUIRED_WEB}), 401
         if not _verify_csrf_header() or not _verify_same_origin():
-            return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+            return jsonify({"success": False, "error": ERROR_CSRF_ORIGIN_FAILED}), 403
 
         if access_logger is None:
             return jsonify({"success": False, "error": "Access logging unavailable"}), 500
@@ -2169,7 +2189,7 @@ def access_log_level_api():
 
     # POST: require authenticated web session and CSRF
     if not _is_authenticated():
-        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+        return jsonify({"success": False, "error": ERROR_AUTH_REQUIRED_WEB}), 401
     if not _verify_csrf_header():
         return jsonify({"success": False, "error": "CSRF validation failed"}), 403
     # Require same-origin for token management actions
@@ -2199,11 +2219,11 @@ def access_log_entries_api():
     """
     # Require authenticated web session
     if not _is_authenticated():
-        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+        return jsonify({"success": False, "error": ERROR_AUTH_REQUIRED_WEB}), 401
 
     # Require CSRF + same-origin for reads of access-log entries
     if not _verify_csrf_header() or not _verify_same_origin():
-        return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+        return jsonify({"success": False, "error": ERROR_CSRF_ORIGIN_FAILED}), 403
 
     if access_logger is None:
         return jsonify({"success": False, "error": "Access logging unavailable"}), 500
@@ -2233,12 +2253,12 @@ def ip_control_api():
     """
     # Require authenticated web session
     if not _is_authenticated():
-        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+        return jsonify({"success": False, "error": ERROR_AUTH_REQUIRED_WEB}), 401
 
     if request.method == "GET":
         # Require CSRF + same-origin for reads of IP control settings
         if not _verify_csrf_header() or not _verify_same_origin():
-            return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+            return jsonify({"success": False, "error": ERROR_CSRF_ORIGIN_FAILED}), 403
         try:
             whitelist = _get_ip_whitelist()
             blacklist = _get_ip_blacklist()
@@ -2249,7 +2269,7 @@ def ip_control_api():
     elif request.method == "POST":
         # Require CSRF and same-origin for POST
         if not _verify_csrf_header() or not _verify_same_origin():
-            return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+            return jsonify({"success": False, "error": ERROR_CSRF_ORIGIN_FAILED}), 403
         try:
             data = request.get_json()
             if not data:
@@ -2285,10 +2305,10 @@ def twofa_setup():
     """Setup 2FA - generate secret and return QR code URI"""
     # Require an authenticated web session (disallow API token / basic auth)
     if not _is_authenticated():
-        return jsonify({"error": "Authentication required (web session)", "success": False}), 401
+        return jsonify({"error": ERROR_AUTH_REQUIRED_WEB, "success": False}), 401
     # Require CSRF + same-origin for 2FA setup (sensitive auth action)
     if not _verify_csrf_header() or not _verify_same_origin():
-        return jsonify({"error": "CSRF/Origin validation failed", "success": False}), 403
+        return jsonify({"error": ERROR_CSRF_ORIGIN_FAILED, "success": False}), 403
     if _totp_enabled():
         return jsonify({"error": "2FA already enabled", "success": False}), 400
 
@@ -2315,10 +2335,10 @@ def twofa_enable():
     """Enable 2FA after verification"""
     # Require an authenticated web session (disallow API token / basic auth)
     if not _is_authenticated():
-        return jsonify({"error": "Authentication required (web session)", "success": False}), 401
+        return jsonify({"error": ERROR_AUTH_REQUIRED_WEB, "success": False}), 401
     # Require CSRF + same-origin for enabling 2FA
     if not _verify_csrf_header() or not _verify_same_origin():
-        return jsonify({"error": "CSRF/Origin validation failed", "success": False}), 403
+        return jsonify({"error": ERROR_CSRF_ORIGIN_FAILED, "success": False}), 403
     data = request.json or {}
     code = data.get("code", "").strip()
 
@@ -2359,10 +2379,10 @@ def twofa_disable():
     """Disable 2FA"""
     # Require an authenticated web session (disallow API token / basic auth)
     if not _is_authenticated():
-        return jsonify({"error": "Authentication required (web session)", "success": False}), 401
+        return jsonify({"error": ERROR_AUTH_REQUIRED_WEB, "success": False}), 401
     # Require CSRF + same-origin for disabling 2FA
     if not _verify_csrf_header() or not _verify_same_origin():
-        return jsonify({"error": "CSRF/Origin validation failed", "success": False}), 403
+        return jsonify({"error": ERROR_CSRF_ORIGIN_FAILED, "success": False}), 403
     if not _totp_enabled():
         return jsonify({"error": "2FA not enabled", "success": False}), 400
 
@@ -2405,11 +2425,11 @@ def config_options():
     """Return config options based on example-config.py with overrides from config.py"""
     # Require an authenticated web session; disallow bearer/basic API auth for config access
     if not _is_authenticated():
-        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+        return jsonify({"success": False, "error": ERROR_AUTH_REQUIRED_WEB}), 401
 
     # Require CSRF and same-origin for reading configuration options
     if not _verify_csrf_header() or not _verify_same_origin():
-        return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+        return jsonify({"success": False, "error": ERROR_CSRF_ORIGIN_FAILED}), 403
 
     base_dir = Path(__file__).parent.parent
     example_path = base_dir / "data" / "example-config.py"
@@ -2482,11 +2502,11 @@ def torrent_clients():
     """Return list of available torrent client names from TORRENT_CLIENTS section"""
     # Require web session for config listing (disallow bearer token access)
     if not _is_authenticated():
-        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+        return jsonify({"success": False, "error": ERROR_AUTH_REQUIRED_WEB}), 401
 
     # Require CSRF + same-origin for config-related reads
     if not _verify_csrf_header() or not _verify_same_origin():
-        return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+        return jsonify({"success": False, "error": ERROR_CSRF_ORIGIN_FAILED}), 403
 
     base_dir = Path(__file__).parent.parent
     config_path = base_dir / "data" / "config.py"
@@ -2497,7 +2517,7 @@ def torrent_clients():
     user_clients = user_config.get("TORRENT_CLIENTS", {})
 
     # Include all configured clients in the dropdown
-    client_names = list(user_clients.keys())
+    client_names = user_clients.keys()
 
     return jsonify({"success": True, "clients": sorted(client_names)})
 
@@ -2507,10 +2527,10 @@ def config_update():
     """Update a config value in data/config.py"""
     # Require authenticated web session and CSRF protection; disallow bearer/basic API auth
     if not _is_authenticated():
-        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+        return jsonify({"success": False, "error": ERROR_AUTH_REQUIRED_WEB}), 401
     # Require CSRF + same-origin for config updates
     if not _verify_csrf_header() or not _verify_same_origin():
-        return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+        return jsonify({"success": False, "error": ERROR_CSRF_ORIGIN_FAILED}), 403
     data = request.json or {}
     path = data.get("path")
     raw_value = data.get("value")
@@ -2588,10 +2608,10 @@ def config_remove_subsection():
     """Remove a subsection (top-level key) from the user's config.py if present"""
     # Require authenticated web session and CSRF protection; disallow bearer/basic API auth
     if not _is_authenticated():
-        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+        return jsonify({"success": False, "error": ERROR_AUTH_REQUIRED_WEB}), 401
     # Require CSRF + same-origin for config removal
     if not _verify_csrf_header() or not _verify_same_origin():
-        return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+        return jsonify({"success": False, "error": ERROR_CSRF_ORIGIN_FAILED}), 403
 
     data = request.json or {}
     path = data.get("path")
@@ -2627,7 +2647,7 @@ def api_tokens():
     # Use the encrypted-session helpers so we read values stored inside the
     # encrypted `enc` payload rather than top-level Flask session keys.
     if not _is_authenticated():
-        return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+        return jsonify({"success": False, "error": ERROR_AUTH_REQUIRED_WEB}), 401
     if not _verify_csrf_header():
         return jsonify({"success": False, "error": "CSRF validation failed"}), 403
 
@@ -2753,7 +2773,7 @@ def browse_path():
                             continue
 
                     items.append({"name": item, "path": full_path, "type": "folder" if is_dir else "file", "children": [] if is_dir else None})
-                except (PermissionError, OSError):
+                except OSError:
                     continue
 
             console.print(f"Found {len(items)} items in {path}", markup=False)
@@ -2772,9 +2792,9 @@ def browse_path():
         else:
             # Require session-based callers to be authenticated and provide CSRF + Origin
             if not _is_authenticated():
-                return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+                return jsonify({"success": False, "error": ERROR_AUTH_REQUIRED_WEB}), 401
             if not _verify_csrf_header() or not _verify_same_origin():
-                return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+                return jsonify({"success": False, "error": ERROR_CSRF_ORIGIN_FAILED}), 403
 
         return jsonify({"items": items, "success": True, "path": path, "count": len(items)})
 
@@ -2833,7 +2853,7 @@ def execute_command():
                     # Quick normalization: single -> double quotes
                     candidate = raw.replace("'", '"')
                     # Quote unquoted keys like: {path:...} -> {"path":...}
-                    candidate = re.sub(r'([\{\s,])([A-Za-z0-9_]+)\s*:', r'\1"\2":', candidate)
+                    candidate = re.sub(r'([\{\s,])(\w+)\s*:', r'\1"\2":', candidate)
                     try:
                         data = json.loads(candidate)
                     except Exception:
@@ -2854,7 +2874,7 @@ def execute_command():
                             # Strip any trailing `,session_id` fragment or any
                             # comma followed by a session_id key so args remain
                             # clean.
-                            raw_args = re.split(r',\s*(?:"?session_id|session_id)\b', raw_args)[0]
+                            raw_args = re.split(r',\s*"?session_id\b', raw_args)[0]
                             raw_args = raw_args.rstrip(',').strip().strip('"').strip("'")
                             d['args'] = raw_args
                         if d:
@@ -3000,8 +3020,6 @@ def execute_command():
                                     return input_queue.get(timeout=0.5)
                                 except queue.Empty:
                                     continue
-                                except Exception:
-                                    raise
 
                         orig_console.input = cast(Any, wrapped_input)
                     else:
@@ -3027,8 +3045,6 @@ def execute_command():
                                     resp = input_queue.get(timeout=0.5)
                                 except queue.Empty:
                                     continue
-                                except Exception:
-                                    raise
                                 resp = (resp or "").strip().lower()
                                 if resp in ("y", "yes"):
                                     return True
@@ -3061,8 +3077,6 @@ def execute_command():
                                         return resp
                                     except queue.Empty:
                                         continue
-                                    except Exception:
-                                        raise
 
                             _cli_ui.ask_string = wrapped_ask_string
                             # Save original ask_string for external cleanup
@@ -3444,7 +3458,7 @@ def execute_command():
                                 yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
 
                         # Flush remaining buffers as HTML
-                        for t, remaining in list(buffers.items()):
+                        for t, remaining in buffers.items():
                             if remaining:
                                 try:
                                     if ansi_to_html:
@@ -3525,7 +3539,7 @@ def send_input():
         else:
             # Require a web session for non-token callers
             if not _is_authenticated():
-                return jsonify({"error": "Authentication required (web session)" , "success": False}), 401
+                return jsonify({"error": ERROR_AUTH_REQUIRED_WEB, "success": False}), 401
 
         if session_id not in active_processes:
             return jsonify({"error": "No active process", "success": False}), 404
@@ -3588,7 +3602,7 @@ def kill_process():
                 return jsonify({"error": "Forbidden (invalid token)", "success": False}), 403
         else:
             if not _is_authenticated():
-                return jsonify({"error": "Authentication required (web session)" , "success": False}), 401
+                return jsonify({"error": ERROR_AUTH_REQUIRED_WEB, "success": False}), 401
 
         if session_id not in active_processes:
             return jsonify({"error": "No active process", "success": False}), 404
