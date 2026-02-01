@@ -462,12 +462,15 @@ class COMMON:
             console.print(f"Filename: {filename}")  # Ensure filename is printed if available
 
         if not meta['unattended']:
-            selection_raw = cli_ui.ask_string(f"Do you want to use these IDs from {tracker_name}? (Y/n)", default="Y")
-            selection = (selection_raw or "").strip().lower()
             try:
-                return bool(selection == '' or selection == 'y' or selection == 'yes')
+                selection_raw = cli_ui.ask_string(
+                    f"Do you want to use these IDs from {tracker_name}? (Y/n)",
+                    default="Y",
+                )
             except (KeyboardInterrupt, EOFError):
                 sys.exit(1)
+            selection = (selection_raw or "").strip().lower()
+            return selection in {"", "y", "yes"}
         else:
             return True
 
