@@ -29,6 +29,7 @@
 
 ## Lint & type-check expectations
 - Follow Ruff and Pyright settings in pyproject.toml when making changes.
+- All changes must be python version 3.9+ compatible.
 
 ## SonarQube rules
 - When touching a file, run SonarQube analysis for that file and fix any reported issues.

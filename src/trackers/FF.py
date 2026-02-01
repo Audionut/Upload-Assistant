@@ -14,7 +14,6 @@ from src.bbcode import BBCODE
 from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
-from src.languages import languages_manager
 
 
 class FF:
@@ -487,10 +486,7 @@ class FF:
 
         return ff_name
 
-    async def languages(self, meta: dict[str, Any]) -> dict[str, list[str]]:
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
-
+    def languages(self, meta: dict[str, Any]) -> dict[str, list[str]]:
         lang_map = {
             'english': 'en',
             'japanese': 'jp',
@@ -591,7 +587,7 @@ class FF:
         return {}
 
     async def get_data(self, meta: dict[str, Any]) -> dict[str, Any]:
-        languages = await self.languages(meta)
+        languages = self.languages(meta)
         self.file_information(meta)
 
         data: dict[str, Any] = {

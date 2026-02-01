@@ -167,7 +167,7 @@ class BT:
     def get_container(self, meta: dict[str, Any]) -> str:
         container = meta.get('container', '')
         container_str = str(container) if container is not None else ''
-        if container_str in ['avi', 'm2ts', 'm4v', 'mkv', 'mp4', 'ts', 'vob', 'wmv', 'mkv']:
+        if container_str in ['avi', 'm2ts', 'm4v', 'mkv', 'mp4', 'ts', 'vob', 'wmv']:
             return container_str.upper()
 
         return 'Outro'

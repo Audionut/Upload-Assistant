@@ -173,10 +173,15 @@ class BJS:
     def get_audio(self, meta: dict[str, Any]) -> str:
         audio_languages_value = meta.get('audio_languages')
         audio_languages_list = cast(list[Any], audio_languages_value) if isinstance(audio_languages_value, list) else []
-        audio_languages = {lang for lang in audio_languages_list if isinstance(lang, str)}
-        portuguese_languages = ['Portuguese', 'Português', 'pt']
+        audio_languages = {
+            self._normalize_language_tag(lang)
+            for lang in audio_languages_list
+            if isinstance(lang, str)
+        }
+        audio_languages.discard('')
+        portuguese_languages = {'portuguese', 'portugues', 'pt', 'por'}
         has_pt_audio = any(lang in portuguese_languages for lang in audio_languages)
-        original_lang = str(meta.get('original_language', '')).lower()
+        original_lang = self._normalize_language_tag(str(meta.get('original_language', '')))
         is_original_pt = original_lang in portuguese_languages
 
         if has_pt_audio:
@@ -192,13 +197,31 @@ class BJS:
     def get_subtitle(self, meta: dict[str, Any]) -> str:
         subtitle_languages_value = meta.get('subtitle_languages')
         subtitle_languages_list = cast(list[Any], subtitle_languages_value) if isinstance(subtitle_languages_value, list) else []
-        found_language_strings = [lang for lang in subtitle_languages_list if isinstance(lang, str)]
+        found_language_strings = {
+            self._normalize_language_tag(lang)
+            for lang in subtitle_languages_list
+            if isinstance(lang, str)
+        }
+        found_language_strings.discard('')
         subtitle_type = 'Nenhuma'
 
-        if 'Portuguese' in found_language_strings:
+        portuguese_languages = {'portuguese', 'portugues', 'pt', 'por'}
+        if found_language_strings.intersection(portuguese_languages):
             subtitle_type = 'Embutida'
 
         return subtitle_type
+
+    def _normalize_language_tag(self, language: str) -> str:
+        lowered = language.strip().lower()
+        if not lowered:
+            return ''
+        primary = re.split(r'[\s()\-_/]+', lowered, maxsplit=1)[0]
+        normalized = (
+            unicodedata.normalize('NFKD', primary)
+            .encode('ASCII', 'ignore')
+            .decode('utf-8')
+        )
+        return normalized or primary
 
     def get_resolution(self, meta: dict[str, Any]) -> tuple[str, str]:
         width, height = '0', '0'

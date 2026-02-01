@@ -85,8 +85,8 @@ class TVC:
         # Uses tv_type_map dict for genre → category ID mapping
         if not genres:
             return self.tv_type_map["holding bin"]
-        for g in genres.split(', '):
-            g = g.lower().replace(",", "").strip()
+        for g in genres.split(','):
+            g = g.lower().strip()
             if g and g in self.tv_type_map:
                 return self.tv_type_map[g]
 

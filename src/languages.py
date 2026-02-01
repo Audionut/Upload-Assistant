@@ -199,10 +199,6 @@ class LanguagesManager:
                 subtitle_languages = cast(list[str], subtitle_languages_value) if isinstance(subtitle_languages_value, list) else []
                 meta['audio_languages'] = audio_languages
                 meta['subtitle_languages'] = subtitle_languages
-                if 'write_audio_languages' not in meta:
-                    meta['write_audio_languages'] = False
-                if 'write_subtitle_languages' not in meta:
-                    meta['write_subtitle_languages'] = False
                 if not audio_languages:
                     found_any_language = False
                     tracks_without_language: list[str] = []

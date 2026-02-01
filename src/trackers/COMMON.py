@@ -120,7 +120,8 @@ class COMMON:
         if await self.path_exists(path):
             loop = asyncio.get_running_loop()
             new_torrent = await loop.run_in_executor(None, Torrent.read, path)
-            for each in new_torrent.metainfo:
+            metainfo_keys = list(new_torrent.metainfo)
+            for each in metainfo_keys:
                 if each not in ('announce', 'comment', 'creation date', 'created by', 'encoding', 'info'):
                     new_torrent.metainfo.pop(each, None)  # type: ignore
             if announce_url:
@@ -470,8 +471,13 @@ class COMMON:
             return True
 
     def prompt_user_for_confirmation(self, message: str) -> bool:
-        response = input(f"{message} (Y/n): ").strip().lower()
-        return bool(response == '' or response == 'y')
+        try:
+            response = input(f"{message} (Y/n): ")
+        except (KeyboardInterrupt, EOFError):
+            return False
+
+        response_normalized = response.strip().lower()
+        return response_normalized in {'', 'y', 'yes'}
 
     async def unit3d_region_distributor(self, meta: dict[str, Any], tracker: str, torrent_url: str, id: str = "") -> None:
         """Get region and distributor information from API response"""

@@ -158,13 +158,13 @@ def mi_resolution(
     return resolution
 
 
-def _coerce_mediainfo_text(value: str | MediaInfo) -> str:
+def _coerce_mediainfo_text(value: Union[str, MediaInfo]) -> str:
     if isinstance(value, MediaInfo):
         return str(value)
     return value
 
 
-def _coerce_mediainfo_json(value: str | MediaInfo) -> str:
+def _coerce_mediainfo_json(value: Union[str, MediaInfo]) -> str:
     if isinstance(value, MediaInfo):
         return str(value)
     return value

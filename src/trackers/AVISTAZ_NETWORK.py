@@ -19,7 +19,6 @@ from cogs.redaction import Redaction
 from src.console import console
 from src.cookie_auth import CookieValidator
 from src.get_desc import DescriptionBuilder
-from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 
 Meta = dict[str, Any]
@@ -390,9 +389,6 @@ class AZTrackerBase:
         subtitle_ids: set[str] = set()
 
         if meta.get('is_disc', False):
-            if not meta.get('language_checked', False):
-                await languages_manager.process_desc_language(meta, tracker=self.tracker)
-
             found_subs_strings = meta.get('subtitle_languages', [])
             for lang_str in found_subs_strings:
                 target_id = self.lang_map.get(lang_str.lower())
@@ -406,9 +402,8 @@ class AZTrackerBase:
                     audio_ids.add(target_id)
         else:
             try:
-                media_info_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json"
-                async with aiofiles.open(media_info_path, encoding='utf-8') as f:
-                    data = json.loads(await f.read())
+                mi = meta.get('mediainfo', {})
+                data = json.loads(await mi.read())
 
                 tracks = data.get('media', {}).get('track', [])
 
@@ -449,8 +444,6 @@ class AZTrackerBase:
                         if target_id:
                             audio_ids.add(target_id)
 
-            except FileNotFoundError:
-                console.print(f'Warning: MediaInfo.json not found for uuid {meta.get("uuid")}. No languages will be processed.', markup=False)
             except (json.JSONDecodeError, KeyError, TypeError) as e:
                 console.print(f'Error processing MediaInfo.json for uuid {meta.get("uuid")}: {e}', markup=False)
 

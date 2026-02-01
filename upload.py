@@ -554,11 +554,10 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         subtitle_languages_list = cast(list[Any], subtitle_languages_value) if isinstance(subtitle_languages_value, list) else []
 
         if (not audio_languages_list or not subtitle_languages_list) and meta.get('is_disc', False) != "BDMV":
-            for tracker in ["AITHER", "ASC", "BJS", "BT", "CBR", "DP", "FF", "GPW", "HUNO", "IHD", "LDU", "LT", "OE", "PTS", "SAM", "SHRI", "SPD", "TTR", "TVC", "ULCX"]:
-                if tracker in trackers:
+            for tracker in ["AITHER", "ASC", "AZ", "BJS", "BT", "CBR", "CZ", "DP", "FF", "GPW", "HUNO", "IHD", "LDU", "LT", "OE", "PHD", "PTS", "SAM", "SHRI", "SPD", "TTR", "TVC", "ULCX"]:
+                while tracker in meta['trackers']:
                     meta['trackers'].remove(tracker)
                     console.print(f"[yellow]Removing {tracker} as it requires audio/subtitle language detection, but none were found.[/yellow]")
-                    break
 
         await asyncio.sleep(0.2)
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w', encoding='utf-8') as f:

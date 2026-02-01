@@ -9,7 +9,7 @@ import traceback
 from collections import OrderedDict, defaultdict
 from glob import glob
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Optional, Union, cast
 
 import cli_ui
 import defusedxml.ElementTree as ET
@@ -24,13 +24,13 @@ PlaylistItem = dict[str, Any]
 PlaylistInfo = dict[str, Any]
 
 
-def _coerce_mediainfo_text(value: str | MediaInfo) -> str:
+def _coerce_mediainfo_text(value: Union[str, MediaInfo]) -> str:
     if isinstance(value, MediaInfo):
         return str(value)
     return value
 
 
-def _coerce_mediainfo_json(value: str | MediaInfo) -> str:
+def _coerce_mediainfo_json(value: Union[str, MediaInfo]) -> str:
     if isinstance(value, MediaInfo):
         return str(value)
     return value
