@@ -576,6 +576,15 @@ class DescriptionBuilder:
             desc_parts.append(f"[center]{cover_images}[/center]\n")
 
         # TV
+        if meta.get('imdb_tv_series', False) and meta.get('tvdb_episode_data') and meta.get('category') == "MOVIE":
+            # TMDB lists this as a movie, but it is probably actually a TV show
+            desc_parts.append("[center][size=4]Note: This title appears to be a TV series rather than a movie as listed on TMDB.[/size][/center]")
+            desc_parts.append(f"[center][size=4]TVDB: https://www.thetvdb.com/?id={meta['tvdb_id']}&tab=series[/size][/center]")
+            if meta.get('tvmaze_episode_data', {}):
+                desc_parts.append(f"[center][size=4]TVMaze: https://www.tvmaze.com/shows/{meta['tvmaze_id']}[/size][/center]\n")
+            else:
+                desc_parts.append("\n")
+
         title, _, episode_overview = self.get_tv_info(meta)
         if episode_overview:
             if self.tracker == "HUNO":

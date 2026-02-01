@@ -101,6 +101,25 @@ class Prep:
         self.sonarr_manager = SonarrManager(config)
         self.rehost_images_manager = RehostImagesManager(config)
 
+    def _match_imdb_episode_id(self, meta: dict[str, Any], imdb_info: dict[str, Any]) -> Optional[str]:
+        episodes = cast(list[dict[str, Any]], imdb_info.get('episodes', []))
+        if not episodes:
+            return None
+
+        season_int = _to_int(meta.get('season_int'))
+        episode_int = _to_int(meta.get('episode_int'))
+        if season_int == 0 or episode_int == 0:
+            return None
+
+        for episode in episodes:
+            episode_season = _to_int(episode.get('season'))
+            episode_number = _to_int(episode.get('episode_number'))
+            if episode_season == season_int and episode_number == episode_int:
+                episode_id = str(episode.get('id') or "").strip()
+                return episode_id or None
+
+        return None
+
     async def gather_prep(self, meta: dict[str, Any], mode: str) -> dict[str, Any]:
         # set a timer to check speed
         meta_start_time = time.time()
@@ -756,6 +775,7 @@ class Prep:
         duration = meta.get('video_duration', None)
 
         unattended = not (not meta['unattended'] or meta['unattended'] and meta.get('unattended_confirm', False))
+
         debug = bool(meta.get('emby_debug', False) or meta['debug'])
 
         # run a search to find tmdb and imdb ids if we don't have them
@@ -812,15 +832,50 @@ class Prep:
                 search_year_value,
                 filename,
                 debug=meta.get('debug', False),
-                mode=meta.get('mode', 'discord'),
                 category_preference=meta.get('category'),
-                imdb_info=meta.get('imdb_info', None)
+                imdb_info=meta.get('imdb_info', None),
+                unattended=unattended,
             )
 
             meta['category'] = category
             meta['tmdb_id'] = _to_int(tmdb_id)
             meta['original_language'] = original_language
             meta['no_ids'] = filename_search
+
+        meta['imdb_tv_series'] = False
+        # If we have an IMDb and still don't have a TMDb ID, and it's a TV show, we probably have a series IMDb ID
+        # lets grab the episode IMDb, and try getting TMDB from that
+        if int(meta.get('imdb_id') or 0) != 0 and int(meta.get('tmdb_id') or 0) == 0 and meta.get('category') == "TV" and not meta.get('anime', False) and not meta.get('quickie_search', False):
+            if meta.get('debug', False):
+                console.print("[yellow]No TMDB ID found for TV show, attempting to fetch from episode IMDb...[/yellow]")
+            imdb_info = await imdb_manager.get_imdb_info_api(imdbID=_to_int(meta.get('imdb_id')), manual_language=meta.get('manual_language', None), debug=meta.get('debug', False))
+            if imdb_info:
+                episode_info = imdb_info.get('episodes', None)
+                # IMDb has episode data, lets try
+                if episode_info:
+                    meta = await self.season_episode_manager.get_season_episode(video, meta)
+                    if meta.get('season_int') is not None and meta.get('episode_int') is not None:
+                        imdb_episode_id = self._match_imdb_episode_id(meta, imdb_info)
+                        if imdb_episode_id:
+                            category, tmdb_id, original_language, filename_search = await self.tmdb_manager.get_tmdb_from_imdb(
+                                imdb_episode_id,
+                                None,
+                                None,
+                                filename,
+                                debug=meta.get('debug', False),
+                                category_preference=meta.get('category'),
+                                imdb_info=None,
+                                unattended=unattended,
+                            )
+
+                            if category != meta.get('category'):
+                                if meta.get('debug', False):
+                                    console.print(f"[yellow]TMDB category '{category}' did not match expected category '{meta.get('category')}'.[/yellow]")
+                                meta['imdb_tv_series'] = True
+                            meta['category'] = category
+                            meta['tmdb_id'] = _to_int(tmdb_id)
+                            meta['original_language'] = original_language
+                            meta['no_ids'] = filename_search
 
         # if we have all of the ids, search everything all at once
         if int(meta.get('imdb_id') or 0) != 0 and int(meta.get('tvdb_id') or 0) != 0 and int(meta.get('tmdb_id') or 0) != 0 and int(meta.get('tvmaze_id') or 0) != 0:
@@ -882,9 +937,9 @@ class Prep:
                 search_year_value,
                 filename,
                 debug=meta.get('debug', False),
-                mode=meta.get('mode', 'discord'),
                 category_preference=meta.get('category'),
-                imdb_info=meta.get('imdb_info', None)
+                imdb_info=meta.get('imdb_info', None),
+                unattended=unattended,
             )
 
             meta['category'] = category
@@ -957,7 +1012,7 @@ class Prep:
                 console.print(f"[yellow]Identified as TV Movie based on IMDb type: {is_tv_movie}[/yellow]")
             meta['tv_movie'] = True
 
-        if meta['category'] == "TV" or meta.get('tv_movie', False):
+        if meta['category'] == "TV" or meta.get('tv_movie', False) or meta.get('imdb_tv_series', False):
             both_ids_searched = False
             search_year_value = _normalize_search_year(meta.get('search_year'))
             if meta.get('tvmaze_id', 0) == 0 and meta.get('tvdb_id', 0) == 0:

@@ -71,9 +71,9 @@ class TmdbManager:
         search_year: Optional[Union[str, int]] = None,
         filename: Optional[str] = None,
         debug: bool = False,
-        mode: str = "discord",
         category_preference: Optional[str] = None,
         imdb_info: Optional[dict[str, Any]] = None,
+        unattended: bool = False,
     ) -> tuple[str, Union[int, str], str, bool]:
         return await get_tmdb_from_imdb(
             imdb_id=imdb_id,
@@ -81,9 +81,9 @@ class TmdbManager:
             search_year=search_year,
             filename=filename,
             debug=debug,
-            mode=mode,
             category_preference=category_preference,
             imdb_info=imdb_info,
+            unattended=unattended,
         )
 
     async def get_tmdb_id(
@@ -132,6 +132,7 @@ class TmdbManager:
         tvdb_id: int = 0,
         quickie_search: bool = False,
         filename: Optional[str] = None,
+        unattended: bool = False,
     ) -> dict[str, Any]:
         return await tmdb_other_meta(
             tmdb_id=tmdb_id,
@@ -150,6 +151,7 @@ class TmdbManager:
             tvdb_id=tvdb_id,
             quickie_search=quickie_search,
             filename=filename,
+            unattended=unattended,
         )
 
     async def get_keywords(self, tmdb_id: int, category: str) -> str:
@@ -292,9 +294,9 @@ async def get_tmdb_from_imdb(
     search_year: Optional[Union[str, int]] = None,
     filename: Optional[str] = None,
     debug: bool = False,
-    mode: str = "discord",
     category_preference: Optional[str] = None,
-    imdb_info: Optional[dict[str, Any]] = None
+    imdb_info: Optional[dict[str, Any]] = None,
+    unattended: bool = False,
 ) -> tuple[str, Union[int, str], str, bool]:
     """Fetches TMDb ID using IMDb or TVDb ID.
 
@@ -377,24 +379,30 @@ async def get_tmdb_from_imdb(
 
     console.print(f"[yellow]TMDb was unable to find anything from external IDs, searching TMDb for {title} ({year})[/yellow]")
 
-    # Try as movie first
-    fallback_movie_title = str(imdb_info.get('original title') or imdb_info.get('localized title') or "")
-    tmdb_id, category = await get_tmdb_id(
-        title,
-        year,
-        "MOVIE",
-        secondary_title=fallback_movie_title,
-        debug=debug
-    )
+    fallback_title = str(imdb_info.get('original title') or imdb_info.get('localized title') or "")
+    tmdb_id = 0
+    category = category_preference or "MOVIE"
+
+    if category_preference == "MOVIE":
+        tmdb_id, category = await get_tmdb_id(
+            title,
+            year,
+            "MOVIE",
+            secondary_title=fallback_title,
+            debug=debug,
+            unattended=unattended
+        )
 
     # If no results, try as TV
-    if tmdb_id == 0:
+    elif category_preference == "TV":
         tmdb_id, category = await get_tmdb_id(
             title,
             year,
             "TV",
-            secondary_title=fallback_movie_title,
-            debug=debug
+            secondary_title=fallback_title,
+            debug=debug,
+            unattended=unattended,
+            dont_switch=True
         )
 
     # Extract necessary values from the result
@@ -402,7 +410,7 @@ async def get_tmdb_from_imdb(
     category = category or "MOVIE"
 
     # **User Prompt for Manual TMDb ID Entry**
-    if tmdb_id in ('None', '', None, 0, '0') and mode == "cli":
+    if tmdb_id in ('None', '', None, 0, '0') and not unattended and category_preference != "TV":
         console.print('[yellow]Unable to find a matching TMDb entry[/yellow]')
         tmdb_input = console.input("Please enter TMDb ID (format: tv/12345 or movie/12345): ") or ""
         category, tmdb_id = _get_parser().parse_tmdb_id(tmdb_input, category)
@@ -422,6 +430,7 @@ async def get_tmdb_id(
     final_attempt: Optional[bool] = None,
     new_category: Optional[str] = None,
     unattended: bool = False,
+    dont_switch: bool = False,
 ) -> tuple[int, str]:
     search_results: dict[str, Any] = {"results": []}
     category_value = category.get("category", "MOVIE") if isinstance(category, dict) else category
@@ -871,7 +880,7 @@ async def get_tmdb_id(
                 return result
 
     # Try switching category
-    if not search_results.get('results'):
+    if not search_results.get('results') and not dont_switch:
         new_category = "TV" if category == "MOVIE" else "MOVIE"
         if debug:
             console.print(f"[bold yellow]Switching category to {new_category} and retrying...[/bold yellow]")
@@ -895,7 +904,7 @@ async def get_tmdb_id(
             search_results = {"results": []}
 
     # Try with less words in the title
-    if not search_results.get('results'):
+    if not search_results.get('results') and not dont_switch:
         try:
             words = filename.split()
             extensions = ['mp4', 'mkv', 'avi', 'webm', 'mov', 'wmv']
@@ -920,7 +929,7 @@ async def get_tmdb_id(
             search_results = {"results": []}
 
     # Try with even less words
-    if not search_results.get('results'):
+    if not search_results.get('results') and not dont_switch:
         try:
             words = filename.split()
             extensions = ['mp4', 'mkv', 'avi', 'webm', 'mov', 'wmv']
@@ -944,18 +953,23 @@ async def get_tmdb_id(
             console.print(f"[bold red]Reduced name search error:[/bold red] {e}")
             search_results = {"results": []}
 
-    # No match found, prompt user if in CLI mode
-    console.print("[bold red]Unable to find TMDb match using any search[/bold red]")
-    try:
-        tmdb_input = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
-    except EOFError:
-        console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-        await cleanup_manager.cleanup()
-        cleanup_manager.reset_terminal()
-        sys.exit(1)
-    if tmdb_input is None:
-        tmdb_input = ""
-    category, tmdb_id = _get_parser().parse_tmdb_id(tmdb_input, category)
+    # No match found, prompt user
+    if not dont_switch:
+        console.print("[bold red]Unable to find TMDb match using any search[/bold red]")
+        try:
+            tmdb_input = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
+        except EOFError:
+            console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+            await cleanup_manager.cleanup()
+            cleanup_manager.reset_terminal()
+            sys.exit(1)
+        if tmdb_input is None:
+            tmdb_input = ""
+        category, tmdb_id = _get_parser().parse_tmdb_id(tmdb_input, category)
+    else:
+        if debug:
+            console.print("[bold red]Unable to find TMDb match using any search, but we'll double check TV based IMDb first[/bold red]")
+        tmdb_id = 0
 
     return tmdb_id, category
 
@@ -976,7 +990,8 @@ async def tmdb_other_meta(
     mode: str = "discord",
     tvdb_id: int = 0,
     quickie_search: bool = False,
-    filename: Optional[str] = None
+    filename: Optional[str] = None,
+    unattended: bool = False,
 ) -> dict[str, Any]:
     """
     Fetch metadata from TMDB for a movie or TV show.
@@ -1024,7 +1039,7 @@ async def tmdb_other_meta(
                 str(guessit_fn(title, {"excludes": ["country", "language"]}).get('title', '')),
                 search_year,
                 {'tmdb_id': 0, 'search_year': search_year, 'debug': debug, 'category': category, 'mode': mode},
-                category
+                category, unattended=unattended
             )
 
             if tmdb_id == 0:
@@ -1032,7 +1047,7 @@ async def tmdb_other_meta(
                     title,
                     "",
                     {'tmdb_id': 0, 'search_year': "", 'debug': debug, 'category': category, 'mode': mode},
-                    category
+                    category, unattended=unattended
                 )
 
             if tmdb_id == 0:
@@ -2037,6 +2052,7 @@ async def set_tmdb_metadata(meta: dict[str, Any], filename: Optional[str] = None
                     tvdb_id=meta.get('tvdb_id', 0),
                     quickie_search=meta.get('quickie_search', False),
                     filename=filename,
+                    unattended=meta.get('unattended', False),
                 )
 
                 if tmdb_metadata and all(tmdb_metadata.get(field) for field in ['title', 'year']):

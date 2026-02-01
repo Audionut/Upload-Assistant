@@ -88,7 +88,8 @@ async def all_ids(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: TmdbMan
             debug=meta.get('debug', False),
             mode=meta.get('mode', 'cli'),
             tvdb_id=meta.get('tvdb_id', 0),
-            filename=meta.get('filename', '')
+            filename=meta.get('filename', ''),
+            unattended=meta.get('unattended', False)
         ),
         imdb_manager.get_imdb_info_api(
             meta['imdb_id'],
@@ -266,7 +267,8 @@ async def imdb_tmdb_tvdb(meta: dict[str, Any], filename: str, tvdb_handler: Any,
             debug=meta.get('debug', False),
             mode=meta.get('mode', 'cli'),
             tvdb_id=meta.get('tvdb_id', 0),
-            filename=filename
+            filename=filename,
+            unattended=meta.get('unattended', False),
         ),
 
         imdb_manager.get_imdb_info_api(
@@ -421,8 +423,8 @@ async def imdb_tvdb(meta: dict[str, Any], filename: str, tvdb_handler: Any, tmdb
             meta.get('search_year'),
             filename,
             debug=meta.get('debug', False),
-            mode=meta.get('mode', 'discord'),
-            category_preference=meta.get('category')
+            category_preference=meta.get('category'),
+            unattended=meta.get('unattended', False)
         ),
         tvmaze_manager.search_tvmaze(
             filename, meta['search_year'], meta.get('imdb_id', 0), meta.get('tvdb_id', 0),
@@ -515,7 +517,8 @@ async def imdb_tmdb(meta: dict[str, Any], filename: str, _tvdb_handler: Any, tmd
             mode=meta.get('mode', 'cli'),
             tvdb_id=meta.get('tvdb_id', 0),
             quickie_search=meta.get('quickie_search', False),
-            filename=filename
+            filename=filename,
+            unattended=meta.get('unattended', False),
         ),
         imdb_manager.get_imdb_info_api(
             meta['imdb_id'],
@@ -776,7 +779,7 @@ async def get_tv_data(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: Tmd
 
         if meta.get('tvdb_episode_data', None) and meta.get('tvdb_id', 0):
             try:
-                meta['tvdb_season_name'], meta['tvdb_episode_name'], meta['tvdb_overview'], meta['tvdb_season'], meta['tvdb_episode'], meta['tvdb_episode_year'], meta['tvdb_episode_id'] = await tvdb_handler.get_specific_episode_data(
+                meta['tvdb_season_name'], meta['tvdb_episode_name'], meta['tvdb_overview'], meta['tvdb_season'], meta['tvdb_episode'], meta['tvdb_episode_year'], meta['tvdb_episode_id'] = tvdb_handler.get_specific_episode_data(
                     meta['tvdb_episode_data'],
                     meta.get('season_int', None),
                     meta.get('episode_int', None),
@@ -895,7 +898,7 @@ async def get_tv_data(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: Tmd
 
         if meta.get('tvdb_episode_data', None) and meta.get('tvdb_id', 0):
             try:
-                meta['tvdb_season_name'], meta['tvdb_episode_name'], meta['tvdb_overview'], meta['tvdb_season'], meta['tvdb_episode'], meta['tvdb_episode_year'], meta['tvdb_episode_id'] = await tvdb_handler.get_specific_episode_data(
+                meta['tvdb_season_name'], meta['tvdb_episode_name'], meta['tvdb_overview'], meta['tvdb_season'], meta['tvdb_episode'], meta['tvdb_episode_year'], meta['tvdb_episode_id'] = tvdb_handler.get_specific_episode_data(
                     meta['tvdb_episode_data'],
                     meta.get('season_int', None),
                     meta.get('episode_int', None),

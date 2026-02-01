@@ -428,7 +428,7 @@ class BT:
 
         return youtube
 
-    async def get_tags(self, meta: dict[str, Any]) -> str:
+    async def get_tags(self, _meta: dict[str, Any]) -> str:
         tags = ''
 
         genres = self.main_tmdb_data.get('genres')

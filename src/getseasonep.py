@@ -151,7 +151,7 @@ class SeasonEpisodeManager:
                     if meta.get('tmdb_id') == 0:
                         year = str(parsed.get('anime_year', str(seasonYear)))
                         guess_title = _guessit_data(str(parsed.get('anime_title', '')), {"excludes": ["country", "language"]}).get('title', '')
-                        tmdb_id_value, category_value = await self.tmdb_manager.get_tmdb_id(str(guess_title), year, meta, meta['category'])
+                        tmdb_id_value, category_value = await self.tmdb_manager.get_tmdb_id(str(guess_title), year, meta, meta['category'], unattended=meta.get('unattended', False))
                         meta['tmdb_id'] = tmdb_id_value
                         meta['category'] = category_value
                     # meta = await tmdb_other_meta(meta)

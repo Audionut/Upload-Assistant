@@ -507,13 +507,13 @@ class TRACKER_SETUP:
                     return False
 
                 # Get name-to-ID mappings directly
-                type_mapping = cast(JsonDict, await tracker_instance.get_type_id(meta, mapping_only=True))
+                type_mapping = cast(JsonDict, tracker_instance.get_type_id(meta, mapping_only=True))
                 type_name = meta.get('type', '')
                 type_ids: list[Any] = [type_mapping.get(type_name)] if type_name else []
                 if None in type_ids:
                     console.print("[yellow]Warning: Type in meta not found in tracker type mapping.[/yellow]")
 
-                resolution_mapping = cast(JsonDict, await tracker_instance.get_resolution_id(meta, mapping_only=True))
+                resolution_mapping = cast(JsonDict, tracker_instance.get_resolution_id(meta, mapping_only=True))
                 resolution_name = meta.get('resolution', '')
                 resolution_ids: list[Any] = [resolution_mapping.get(resolution_name)] if resolution_name else []
                 if None in resolution_ids:
@@ -725,19 +725,19 @@ class TRACKER_SETUP:
                 if not url:
                     return False
                 requests = await self.get_tracker_requests(meta, tracker_name, url)
-                type_mapping = cast(JsonDict, await tracker_instance.get_type_id(meta, mapping_only=True))
+                type_mapping = cast(JsonDict, tracker_instance.get_type_id(meta, mapping_only=True))
                 type_name = meta.get('type', '')
                 type_ids: list[Any] = [type_mapping.get(type_name)] if type_name else []
                 if None in type_ids:
                     console.print("[yellow]Warning: Type in meta not found in tracker type mapping.[/yellow]")
 
-                resolution_mapping = cast(JsonDict, await tracker_instance.get_resolution_id(meta, mapping_only=True))
+                resolution_mapping = cast(JsonDict, tracker_instance.get_resolution_id(meta, mapping_only=True))
                 resolution_name = meta.get('resolution', '')
                 resolution_ids: list[Any] = [resolution_mapping.get(resolution_name)] if resolution_name else []
                 if None in resolution_ids:
                     console.print("[yellow]Warning: Resolution in meta not found in tracker resolution mapping.[/yellow]")
 
-                category_mapping = cast(JsonDict, await tracker_instance.get_category_id(meta, mapping_only=True))
+                category_mapping = cast(JsonDict, tracker_instance.get_category_id(meta, mapping_only=True))
                 category_name = meta.get('category', '')
                 category_ids: list[Any] = [category_mapping.get(category_name)] if category_name else []
                 if None in category_ids:
