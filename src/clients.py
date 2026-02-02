@@ -99,13 +99,13 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
         else:
             torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         if meta.get('no_seed', False) is True:
-            console.print("[bold red]--no-seed was passed, so the torrent will not be added to the client")
-            console.print("[bold yellow]Add torrent manually to the client")
+            await asyncio.to_thread(console.print, "[bold red]--no-seed was passed, so the torrent will not be added to the client")
+            await asyncio.to_thread(console.print, "[bold yellow]Add torrent manually to the client")
             return
         if os.path.exists(torrent_path):
-            torrent = Torrent.read(torrent_path)
+            torrent = await asyncio.to_thread(Torrent.read, torrent_path)
         else:
-            console.print(f"[bold red]Torrent file {torrent_path} does not exist, cannot add to client")
+            await asyncio.to_thread(console.print, f"[bold red]Torrent file {torrent_path} does not exist, cannot add to client")
             return
 
         inject_clients: list[str] = []
@@ -113,10 +113,10 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
         if isinstance(client_value, str) and client_value != 'none':
             inject_clients = [client_value]
             if meta['debug']:
-                console.print(f"[cyan]DEBUG: Using client from meta: {inject_clients}[/cyan]")
+                await asyncio.to_thread(console.print, f"[cyan]DEBUG: Using client from meta: {inject_clients}[/cyan]")
         elif client_value == 'none':
             if meta['debug']:
-                console.print("[cyan]DEBUG: meta client is 'none', skipping adding to client[/cyan]")
+                await asyncio.to_thread(console.print, "[cyan]DEBUG: meta client is 'none', skipping adding to client[/cyan]")
             return
         else:
             try:
@@ -124,40 +124,40 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                 if isinstance(inject_clients_config, str) and inject_clients_config.strip():
                     inject_clients = [inject_clients_config]
                     if meta['debug']:
-                        console.print(f"[cyan]DEBUG: Converted injecting_client_list string to list: {inject_clients}[/cyan]")
+                        await asyncio.to_thread(console.print, f"[cyan]DEBUG: Converted injecting_client_list string to list: {inject_clients}[/cyan]")
                 elif isinstance(inject_clients_config, list):
                     # Filter out empty strings and whitespace-only strings
                     inject_clients_list = cast(list[Any], inject_clients_config)
                     inject_clients = [str(c).strip() for c in inject_clients_list if str(c).strip()]
                     if meta['debug']:
-                        console.print(f"[cyan]DEBUG: Using injecting_client_list from config: {inject_clients}[/cyan]")
+                        await asyncio.to_thread(console.print, f"[cyan]DEBUG: Using injecting_client_list from config: {inject_clients}[/cyan]")
                 else:
                     inject_clients = []
             except Exception as e:
                 if meta['debug']:
-                    console.print(f"[cyan]DEBUG: Error reading injecting_client_list from config: {e}[/cyan]")
+                    await asyncio.to_thread(console.print, f"[cyan]DEBUG: Error reading injecting_client_list from config: {e}[/cyan]")
 
             if not inject_clients:
                 default_client = self.config['DEFAULT'].get('default_torrent_client')
                 if isinstance(default_client, str) and default_client != 'none':
                     if meta['debug']:
-                        console.print(f"[cyan]DEBUG: Falling back to default_torrent_client: {default_client}[/cyan]")
+                        await asyncio.to_thread(console.print, f"[cyan]DEBUG: Falling back to default_torrent_client: {default_client}[/cyan]")
                     inject_clients = [default_client]
 
         if not inject_clients:
             if meta['debug']:
-                console.print("[cyan]DEBUG: No clients configured for injecting[/cyan]")
+                await asyncio.to_thread(console.print, "[cyan]DEBUG: No clients configured for injecting[/cyan]")
             return
 
         if meta['debug']:
-            console.print(f"[cyan]DEBUG: Clients to inject into: {inject_clients}[/cyan]")
+            await asyncio.to_thread(console.print, f"[cyan]DEBUG: Clients to inject into: {inject_clients}[/cyan]")
 
         for client_name in inject_clients:
             if client_name == "none" or not client_name:
                 continue
 
             if client_name not in self.config['TORRENT_CLIENTS']:
-                console.print(f"[bold red]Torrent client '{client_name}' not found in config.")
+                await asyncio.to_thread(console.print, f"[bold red]Torrent client '{client_name}' not found in config.")
                 continue
 
             client = self.config['TORRENT_CLIENTS'][client_name]
@@ -168,7 +168,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
             local_path, remote_path = await self.remote_path_map(meta, client_name)
 
             if meta['debug']:
-                console.print(f"[bold green]Adding to {client_name} ({torrent_client})")
+                await asyncio.to_thread(console.print, f"[bold green]Adding to {client_name} ({torrent_client})")
 
             try:
                 if torrent_client.lower() == "rtorrent":
@@ -180,9 +180,9 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                 elif torrent_client.lower() == "transmission":
                     self.transmission(meta['path'], torrent, local_path, remote_path, client, meta)
                 elif torrent_client.lower() == "watch":
-                    shutil.copy(torrent_path, client['watch_folder'])
+                    await asyncio.to_thread(shutil.copy, torrent_path, client['watch_folder'])
             except Exception as e:
-                console.print(f"[bold red]Failed to add torrent to {client_name}: {e}")
+                await asyncio.to_thread(console.print, f"[bold red]Failed to add torrent to {client_name}: {e}")
 
     async def inject_delay(self, meta: dict[str, Any], tracker: str, client_name: str) -> None:
         """
@@ -207,20 +207,20 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                 inject_delay = int(inject_delay)
             except (ValueError, TypeError):
                 if has_tracker_delay:
-                    console.print(f"{tracker}: [bold red]CONFIG ERROR: 'inject_delay' must be an integer")
+                    await asyncio.to_thread(console.print, f"{tracker}: [bold red]CONFIG ERROR: 'inject_delay' must be an integer")
                 else:
-                    console.print("[bold red]CONFIG ERROR: 'inject_delay' must be an integer")
+                    await asyncio.to_thread(console.print, "[bold red]CONFIG ERROR: 'inject_delay' must be an integer")
                 inject_delay = 0
 
             if inject_delay < 0:
-                console.print("[bold red]CONFIG ERROR: 'inject_delay' must be >= 0")
+                await asyncio.to_thread(console.print, "[bold red]CONFIG ERROR: 'inject_delay' must be >= 0")
                 inject_delay = 0
             if inject_delay > 0:
                 if meta["debug"] or inject_delay > 5:
                     if has_tracker_delay:
-                        console.print(f"{tracker}: [cyan]Waiting {inject_delay} seconds before adding to client '{client_name}'[/cyan]")
+                        await asyncio.to_thread(console.print, f"{tracker}: [cyan]Waiting {inject_delay} seconds before adding to client '{client_name}'[/cyan]")
                     else:
-                        console.print(f"[cyan]Waiting {inject_delay} seconds before adding to client '{client_name}'[/cyan]")
+                        await asyncio.to_thread(console.print, f"[cyan]Waiting {inject_delay} seconds before adding to client '{client_name}'[/cyan]")
                 await asyncio.sleep(inject_delay)
 
     async def find_existing_torrent(self, meta: dict[str, Any]) -> Optional[str]:
@@ -496,7 +496,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                     console.print("[cyan]DEBUG: Skipping validation because found_hash is None[/cyan]")
 
                 if valid:
-                    torrent = Torrent.read(resolved_path)
+                    torrent = await asyncio.to_thread(Torrent.read, resolved_path)
                     piece_size = torrent.piece_size
                     piece_in_mib = int(piece_size) / 1024 / 1024
 
@@ -540,7 +540,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
         # Check if torrent file exists
         if os.path.exists(torrent_path):
             try:
-                torrent = Torrent.read(torrent_path)
+                torrent = await asyncio.to_thread(Torrent.read, torrent_path)
             except Exception as e:
                 console.print(f'[bold red]Error reading torrent file: {e}')
                 return valid, torrent_path
@@ -591,7 +591,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
         if valid:
             if os.path.exists(torrent_path):
                 try:
-                    reuse_torrent = Torrent.read(torrent_path)
+                    reuse_torrent = await asyncio.to_thread(Torrent.read, torrent_path)
                     piece_size = reuse_torrent.piece_size
                     piece_in_mib = int(piece_size) / 1024 / 1024
                     torrent_storage_dir_valid = torrent_path

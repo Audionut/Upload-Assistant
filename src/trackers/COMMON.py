@@ -179,8 +179,8 @@ class COMMON:
                 return None
 
             except Exception as e:
-                console.print(f"[yellow]Warning: Could not download torrent file: {str(e)}[/yellow]")
-                console.print("[yellow]Download manually from the tracker.[/yellow]")
+                await asyncio.to_thread(console.print, f"[yellow]Warning: Could not download torrent file: {str(e)}[/yellow]")
+                await asyncio.to_thread(console.print, "[yellow]Download manually from the tracker.[/yellow]")
                 return None
 
         return None
