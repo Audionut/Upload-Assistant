@@ -62,7 +62,7 @@ class SeasonEpisodeManager:
             if not meta.get('anime'):
                 try:
                     daily_match = re.search(r"\d{4}[-\.]\d{2}[-\.]\d{2}", video)
-                    if meta.get('manual_date') or daily_match:
+                    if (meta.get('manual_date') or daily_match) and not meta.get('manual_season'):
                         # Handle daily episodes
                         # The user either provided the --daily argument or a date was found in the filename
 
@@ -291,6 +291,7 @@ class SeasonEpisodeManager:
                 meta['season'] = season
             else:
                 manual_season_str = str(meta['manual_season']).lower().replace('s', '')
+                meta['daily_episode_title'] = None  # Clear daily episode title if manual season is set
                 season_int = _safe_int(manual_season_str, 1)
                 meta['season'] = f"S{manual_season_str.zfill(2)}"
             if meta.get('manual_episode', None) is None:
