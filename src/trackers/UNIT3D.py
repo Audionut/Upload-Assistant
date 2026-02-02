@@ -1,7 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # import discord
 import asyncio
-import glob
 import json
 import os
 import platform
@@ -112,7 +111,8 @@ class UNIT3D:
                 response = await client.get(url=self.search_url, headers=headers, params=request_params)
                 response.raise_for_status()
                 if response.status_code == 200:
-                    data = response.json()
+                    response_body = await response.aread()
+                    data = await asyncio.to_thread(json.loads, response_body)
                     for each in data["data"]:
                         torrent_id = each.get("id", None)
                         attributes = each.get("attributes", {})
@@ -439,11 +439,16 @@ class UNIT3D:
         files: dict[str, tuple[str, bytes, str]] = {}
         base_dir = meta["base_dir"]
         uuid = meta["uuid"]
-        specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
-        nfo_files = glob.glob(specified_dir_path)
-        if not nfo_files and meta.get('keep_nfo', False) and (meta.get('keep_folder', False) or meta.get('isdir', False)):
+        tmp_dir = os.path.join(base_dir, "tmp", uuid)
+        nfo_files = await asyncio.to_thread(self._list_nfo_files, tmp_dir)
+
+        if (
+            not nfo_files
+            and meta.get("keep_nfo", False)
+            and (meta.get("keep_folder", False) or meta.get("isdir", False))
+        ):
             search_dir = os.path.dirname(meta["path"])
-            nfo_files = glob.glob(os.path.join(search_dir, "*.nfo"))
+            nfo_files = await asyncio.to_thread(self._list_nfo_files, search_dir)
 
         if nfo_files:
             async with aiofiles.open(nfo_files[0], "rb") as f:
@@ -479,7 +484,8 @@ class UNIT3D:
                         )
                         response.raise_for_status()
 
-                        response_data = response.json()
+                        response_body = await response.aread()
+                        response_data = await asyncio.to_thread(json.loads, response_body)
 
                         # Verify API success before proceeding
                         if not response_data.get("success"):
@@ -601,3 +607,18 @@ class UNIT3D:
         if error_msg:
             return f"API response: {error_msg}"
         return f"API response: {response_data}"
+
+    def _list_nfo_files(self, directory: str) -> list[str]:
+        files: list[str] = []
+        try:
+            entries = os.listdir(directory)
+        except OSError:
+            return files
+
+        for entry in entries:
+            if not entry.lower().endswith(".nfo"):
+                continue
+            absolute_path = os.path.join(directory, entry)
+            if os.path.isfile(absolute_path):
+                files.append(absolute_path)
+        return files

@@ -1,6 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # import discord
 import asyncio
+import json
 import os
 import platform
 import re
@@ -141,14 +142,16 @@ class BHD:
             try:
                 async with httpx.AsyncClient(timeout=60) as client:
                     response = await client.post(url=url, files=files, data=data, headers=headers)
-                    response_json = cast(dict[str, Any], response.json())
+                    response_body = await response.aread()
+                    response_json = cast(dict[str, Any], await asyncio.to_thread(json.loads, response_body))
                     if int(response_json['status_code']) == 0:
                         console.print(f"[red]{response_json['status_message']}")
                         if response_json['status_message'].startswith('Invalid imdb_id'):
                             console.print('[yellow]RETRYING UPLOAD')
                             data['imdb_id'] = 1
                             response = await client.post(url=url, files=files, data=data, headers=headers)
-                            response_json = cast(dict[str, Any], response.json())
+                            response_body = await response.aread()
+                            response_json = cast(dict[str, Any], await asyncio.to_thread(json.loads, response_body))
                         elif response_json['status_message'].startswith('Invalid name value'):
                             console.print(f"[bold yellow]Submitted Name: {bhd_name}")
 
@@ -398,7 +401,8 @@ class BHD:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.post(url, params=data)
                 if response.status_code == 200:
-                    response_data = cast(dict[str, Any], response.json())
+                    response_body = await response.aread()
+                    response_data = cast(dict[str, Any], await asyncio.to_thread(json.loads, response_body))
                     if response_data.get('status_code') == 1:
                         results = cast(list[dict[str, Any]], response_data.get('results', []))
                         for each in results:

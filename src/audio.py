@@ -303,8 +303,8 @@ async def _get_audio_v2(
 
         # Enhanced channel count determination based on MediaArea AudioChannelLayout
         if meta.get('debug'):
-            console.print(f"DEBUG: Channels: {channels}, Channel Layout: {channel_layout}, Additional: {additional}, Format: {format}")
-        chan = determine_channel_count(channels, channel_layout, additional, format)
+            console.print(f"DEBUG: Channels: {channels}, Channel Layout: {channel_layout}, Additional: {additional}, Format: {format_value}")
+        chan = determine_channel_count(channels, channel_layout, additional, format_value)
 
         if meta.get('dual_audio', False):
             dual = "Dual-Audio"
