@@ -431,20 +431,20 @@ class BJS:
             if name.strip():
                 genre_names.append(name)
 
-            if genre_names:
-                normalized_genres = []
-                for name in genre_names:
-                    normalized = (
-                        unicodedata.normalize('NFKD', name)
-                        .encode('ASCII', 'ignore')
-                        .decode('utf-8')
-                        .replace(' ', '.')
-                        .lower()
-                    )
-                    if normalized:
-                        normalized_genres.append(normalized)
-                if normalized_genres:
-                    tags = ', '.join(normalized_genres)
+        if genre_names:
+            normalized_genres = []
+            for name in genre_names:
+                normalized = (
+                    unicodedata.normalize('NFKD', name)
+                    .encode('ASCII', 'ignore')
+                    .decode('utf-8')
+                    .replace(' ', '.')
+                    .lower()
+                )
+                if normalized:
+                    normalized_genres.append(normalized)
+            if normalized_genres:
+                tags = ', '.join(normalized_genres)
 
         if not tags:
             tags = await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')

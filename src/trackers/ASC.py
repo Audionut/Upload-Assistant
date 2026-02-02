@@ -538,11 +538,15 @@ class ASC:
         return youtube
 
     async def get_tags(self, meta: dict[str, Any]) -> str:
-        tags = ', '.join(
-            g.get('name', '')
-            for g in self.main_tmdb_data.get('genres', [])
-            if isinstance(g.get('name'), str) and g.get('name').strip()
-        )
+        genre_names: list[str] = []
+        for g in self.main_tmdb_data.get('genres', []):
+            if isinstance(g, str) and g.strip():
+                genre_names.append(g)
+            elif isinstance(g, dict):
+                name = g.get('name')
+                if isinstance(name, str) and name.strip():
+                    genre_names.append(name)
+        tags = ', '.join(genre_names)
 
         if not tags:
             tags = meta.get('genre') or await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')

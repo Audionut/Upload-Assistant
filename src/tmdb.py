@@ -383,6 +383,7 @@ async def get_tmdb_from_imdb(
     tmdb_id = 0
     category = category_preference or "MOVIE"
 
+    # maintain strict category preference if set
     if category_preference == "MOVIE":
         tmdb_id, category = await get_tmdb_id(
             title,
@@ -393,7 +394,6 @@ async def get_tmdb_from_imdb(
             unattended=unattended
         )
 
-    # If no results, try as TV
     elif category_preference == "TV":
         tmdb_id, category = await get_tmdb_id(
             title,
@@ -410,6 +410,7 @@ async def get_tmdb_from_imdb(
     category = category or "MOVIE"
 
     # **User Prompt for Manual TMDb ID Entry**
+    # gate behind category_preference to allow a later automated tv specific handling to match first
     if tmdb_id in ('None', '', None, 0, '0') and not unattended and category_preference != "TV":
         console.print('[yellow]Unable to find a matching TMDb entry[/yellow]')
         tmdb_input = console.input("Please enter TMDb ID (format: tv/12345 or movie/12345): ") or ""
@@ -880,6 +881,7 @@ async def get_tmdb_id(
                 return result
 
     # Try switching category
+    # gate the category
     if not search_results.get('results') and not dont_switch:
         new_category = "TV" if category == "MOVIE" else "MOVIE"
         if debug:
@@ -904,6 +906,8 @@ async def get_tmdb_id(
             search_results = {"results": []}
 
     # Try with less words in the title
+    # gate the remaining attempts behind dont_switch, since the chances of finding something
+    # are practically non-existent
     if not search_results.get('results') and not dont_switch:
         try:
             words = filename.split()
@@ -954,7 +958,8 @@ async def get_tmdb_id(
             search_results = {"results": []}
 
     # No match found, prompt user
-    if not dont_switch:
+    # don't bother in dont_switch mode, since we'll try something else first before prompting
+    if not dont_switch and not unattended:
         console.print("[bold red]Unable to find TMDb match using any search[/bold red]")
         try:
             tmdb_input = cli_ui.ask_string("Please enter TMDb ID in this format: tv/12345 or movie/12345")
@@ -966,10 +971,12 @@ async def get_tmdb_id(
         if tmdb_input is None:
             tmdb_input = ""
         category, tmdb_id = _get_parser().parse_tmdb_id(tmdb_input, category)
-    else:
+    elif dont_switch:
         if debug:
             console.print("[bold red]Unable to find TMDb match using any search, but we'll double check TV based IMDb first[/bold red]")
         tmdb_id = 0
+    else:
+        raise ValueError("Unable to find TMDb match using any search in unattended mode")
 
     return tmdb_id, category
 

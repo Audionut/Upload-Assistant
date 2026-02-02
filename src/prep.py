@@ -875,7 +875,6 @@ class Prep:
                             meta['category'] = category
                             meta['tmdb_id'] = _to_int(tmdb_id)
                             meta['original_language'] = original_language
-                            meta['no_ids'] = filename_search
 
         # if we have all of the ids, search everything all at once
         if int(meta.get('imdb_id') or 0) != 0 and int(meta.get('tvdb_id') or 0) != 0 and int(meta.get('tmdb_id') or 0) != 0 and int(meta.get('tvmaze_id') or 0) != 0:

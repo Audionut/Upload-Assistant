@@ -833,6 +833,7 @@ class DescriptionBuilder:
                             desc_parts.append(
                                 f"[spoiler={edition}][code]{summary}[/code][/spoiler]\n\n"
                             )
+                            desc_parts.append(CENTER_CLOSE_DOUBLE)
                             if meta["debug"]:
                                 console.print("[yellow]Using original uploaded images for first disc")
                             desc_parts.append(CENTER_OPEN)

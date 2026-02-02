@@ -910,7 +910,7 @@ async def get_tv_data(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: Tmd
 
         tvdb_episode_id = meta.get('tvdb_episode_id')
         if tvdb_episode_id is not None:
-            meta['tvdb_imdb_id'] = await tvdb_handler.get_imdb_id_from_tvdb_episode_id(tvdb_episode_id, debug=meta.get('debug', False))
+            meta['tvdb_imdb_id'] = tvdb_handler.get_imdb_id_from_tvdb_episode_id(tvdb_episode_id, debug=meta.get('debug', False))
 
     return meta
 
