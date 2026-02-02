@@ -25,8 +25,9 @@ from src.exportmi import exportInfo
 class COMMON:
     DEFAULT_ADULT_KEYWORDS = ["xxx", "erotic", "porn", "adult", "orgy", "hentai", "adult animation", "softcore"]
 
-    def __init__(self, config: dict[str, Any]) -> None:
+    def __init__(self, config: dict[str, Any], http_client: Any = None) -> None:
         self.config = config
+        self.http_client = http_client
         self.parser = self.MediaInfoParser()
 
     async def path_exists(self, path: str) -> bool:
@@ -164,11 +165,19 @@ class COMMON:
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}_cross].torrent" if cross else f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         if downurl:
             try:
-                async with httpx.AsyncClient(headers=headers, params=params, timeout=30.0) as session, session.stream("GET", downurl) as r:
-                    r.raise_for_status()
-                    async with aiofiles.open(path, "wb") as f:
-                        async for chunk in r.aiter_bytes():
-                            await f.write(chunk)
+                # Use shared client if available, otherwise create temporary one
+                if self.http_client:
+                    async with self.http_client.stream("GET", downurl, headers=headers, params=params, timeout=30.0) as r:
+                        r.raise_for_status()
+                        async with aiofiles.open(path, "wb") as f:
+                            async for chunk in r.aiter_bytes():
+                                await f.write(chunk)
+                else:
+                    async with httpx.AsyncClient(headers=headers, params=params, timeout=30.0) as session, session.stream("GET", downurl) as r:
+                        r.raise_for_status()
+                        async with aiofiles.open(path, "wb") as f:
+                            async for chunk in r.aiter_bytes():
+                                await f.write(chunk)
 
                 if cross:
                     return None
@@ -492,9 +501,14 @@ class COMMON:
         params: dict[str, str] = {'api_token': api_key}
         url = f"{torrent_url}{id}"
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url=url, params=params)
+            # Use shared client if available, otherwise create temporary one
+            if self.http_client:
+                response = await self.http_client.get(url=url, params=params)
                 json_response = response.json()
+            else:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.get(url=url, params=params)
+                    json_response = response.json()
         except (httpx.RequestError, httpx.TimeoutException) as e:
             console.print(f"[yellow]Request error in unit3d_region_distributor: {e}[/yellow]")
             return
@@ -606,9 +620,14 @@ class COMMON:
 
         # Make the GET request with proper encoding handled by 'params'
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url=url, params=params)
+            # Use shared client if available, otherwise create temporary one
+            if self.http_client:
+                response = await self.http_client.get(url=url, params=params)
                 json_response = response.json()
+            else:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.get(url=url, params=params)
+                    json_response = response.json()
         except (httpx.RequestError, httpx.TimeoutException) as e:
             console.print(f"[yellow]Request error in unit3d_torrent_info: {e}[/yellow]")
             return None, None, None, None, None, None, None, [], None
@@ -760,16 +779,17 @@ class COMMON:
                 return None
 
         try:
-            async with httpx.AsyncClient() as client:
+            # Use shared client if available, otherwise create temporary one
+            if self.http_client:
                 # get douban url
                 if int(meta.get('imdb_id', 0)) != 0:
                     data['search'] = f"tt{meta['imdb_id']}"
-                    ptgen_json = await fetch_ptgen(client, url, data)
+                    ptgen_json = await fetch_ptgen(self.http_client, url, data)
 
                     # Check for error and retry if needed
                     if ptgen_json is None or ptgen_json.get("error") is not None:
                         for _retry in range(ptgen_retry):
-                            ptgen_json = await fetch_ptgen(client, url, data)
+                            ptgen_json = await fetch_ptgen(self.http_client, url, data)
                             if ptgen_json is not None and ptgen_json.get("error") is None:
                                 break
 
@@ -787,12 +807,46 @@ class COMMON:
                     params['url'] = console.input("[red]Please enter [yellow]Douban[/yellow] link: ")
 
                 # Fetch with douban URL
-                ptgen_json = await fetch_ptgen(client, url, params)
+                ptgen_json = await fetch_ptgen(self.http_client, url, params)
                 if ptgen_json is None or ptgen_json.get("error") is not None:
                     for _retry in range(ptgen_retry):
-                        ptgen_json = await fetch_ptgen(client, url, params)
+                        ptgen_json = await fetch_ptgen(self.http_client, url, params)
                         if ptgen_json is not None and ptgen_json.get("error") is None:
                             break
+            else:
+                async with httpx.AsyncClient() as client:
+                    # get douban url
+                    if int(meta.get('imdb_id', 0)) != 0:
+                        data['search'] = f"tt{meta['imdb_id']}"
+                        ptgen_json = await fetch_ptgen(client, url, data)
+
+                        # Check for error and retry if needed
+                        if ptgen_json is None or ptgen_json.get("error") is not None:
+                            for _retry in range(ptgen_retry):
+                                ptgen_json = await fetch_ptgen(client, url, data)
+                                if ptgen_json is not None and ptgen_json.get("error") is None:
+                                    break
+
+                        # Try to extract douban link
+                        try:
+                            if ptgen_json and 'data' in ptgen_json and ptgen_json['data']:
+                                params['url'] = ptgen_json['data'][0]['link']
+                            else:
+                                raise KeyError("No data in response")
+                        except (KeyError, IndexError, TypeError):
+                            console.print("[red]Unable to get data from ptgen using IMDb")
+                            params['url'] = console.input("[red]Please enter [yellow]Douban[/yellow] link: ")
+                    else:
+                        console.print("[red]No IMDb id was found.")
+                        params['url'] = console.input("[red]Please enter [yellow]Douban[/yellow] link: ")
+
+                    # Fetch with douban URL
+                    ptgen_json = await fetch_ptgen(client, url, params)
+                    if ptgen_json is None or ptgen_json.get("error") is not None:
+                        for _retry in range(ptgen_retry):
+                            ptgen_json = await fetch_ptgen(client, url, params)
+                            if ptgen_json is not None and ptgen_json.get("error") is None:
+                                break
 
                 if ptgen_json is None:
                     console.print("[bold red]Failed to get valid ptgen response after retries")

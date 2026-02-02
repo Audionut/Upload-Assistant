@@ -20,6 +20,7 @@ from typing import Any, Optional, cast
 import aiofiles
 import cli_ui
 import discord
+import httpx
 import requests
 from packaging import version
 from torf import Torrent
@@ -355,7 +356,7 @@ async def validate_tracker_logins(meta: Meta, trackers: Optional[list[str]] = No
         await asyncio.gather(*[validate_single_tracker(tracker) for tracker in valid_trackers])
 
 
-async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
+async def process_meta(meta: Meta, base_dir: str, bot: Any = None, http_client: Any = None) -> None:
     """Process the metadata for each queued path."""
     if use_discord and bot:
         await DiscordNotifier.send_discord_notification(
@@ -450,7 +451,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                 search_term = os.path.basename(meta['filelist'][0]) if meta['filelist'] else None
                 search_file_folder = 'file'
             await tracker_data_manager.get_tracker_data(
-                meta['video'], meta, search_term, search_file_folder, meta['category'], only_id=meta['only_id']
+                meta['video'], meta, search_term, search_file_folder, meta['category'], only_id=meta['only_id'], http_client=http_client
             )
 
     editargs_tracking: tuple[str, ...] = ()
@@ -570,7 +571,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         except Exception as e:
             console.print(f"[yellow]Warning: Tracker validation encountered an error: {e}[/yellow]")
 
-        successful_trackers = await TrackerStatusManager(config=config).process_all_trackers(meta)
+        successful_trackers = await TrackerStatusManager(config=config).process_all_trackers(meta, http_client=http_client)
 
         if meta.get('trackers_pass') is not None:
             meta['skip_uploading'] = meta.get('trackers_pass')
@@ -589,7 +590,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
     else:
         meta['we_are_uploading'] = True
-        common = COMMON(config)
+        common = COMMON(config, http_client=http_client)
         if meta.get('site_check', False):
             tracker_status = cast(dict[str, dict[str, Any]], meta.get('tracker_status', {}))
             for tracker in meta['trackers']:
@@ -1250,6 +1251,7 @@ async def do_the_thing(base_dir: str) -> None:
     connect_task: Optional[asyncio.Task[None]] = None
     meta: Meta = {}
     paths: list[str] = []
+    http_client: Any = None  # Persistent httpx client for all UNIT3D trackers
     for each in sys.argv[1:]:
         if os.path.exists(each):
             paths.append(os.path.abspath(each))
@@ -1269,6 +1271,14 @@ async def do_the_thing(base_dir: str) -> None:
     sanitize_meta = config['DEFAULT'].get('sanitize_meta', True)
 
     try:
+        # Create persistent httpx client for all UNIT3D trackers (API trackers)
+        # This enables connection pooling and reuse across all tracker uploads within this run
+        http_client = httpx.AsyncClient(timeout=60.0, limits=httpx.Limits(max_keepalive_connections=10, max_connections=20))
+
+        # Update tracker_data_manager with the shared http_client
+        tracker_data_manager.http_client = http_client
+        tracker_data_manager.tracker_meta_manager.http_client = http_client
+
         # If cleanup is the only operation, use a dummy path to satisfy the parser
         if cleanup_only:
             args_list = sys.argv[1:] + ['dummy_path']
@@ -1533,11 +1543,11 @@ async def do_the_thing(base_dir: str) -> None:
 
             console.print(f"[green]Gathering info for {os.path.basename(path)}")
 
-            await process_meta(meta, base_dir, bot=bot)
-            tracker_setup = TRACKER_SETUP(config=config)
+            await process_meta(meta, base_dir, bot=bot, http_client=http_client)
+            tracker_setup = TRACKER_SETUP(config=config, http_client=http_client)
             if 'we_are_uploading' not in meta or not meta.get('we_are_uploading', False):
                 if config['DEFAULT'].get('cross_seeding', True):
-                    await process_cross_seeds(meta)
+                    await process_cross_seeds(meta, http_client=http_client)
                 if not meta.get('site_check', False):
                     if not meta.get('emby', False):
                         console.print("we are not uploading.......")
@@ -1609,7 +1619,7 @@ async def do_the_thing(base_dir: str) -> None:
                             continue
 
                     if trackers_list:
-                        successful_trackers = await TrackerStatusManager(config=config).process_all_trackers(meta)
+                        successful_trackers = await TrackerStatusManager(config=config).process_all_trackers(meta, http_client=http_client)
                     else:
                         successful_trackers = 0
 
@@ -1628,12 +1638,13 @@ async def do_the_thing(base_dir: str) -> None:
                         tracker_class_map,
                         list(http_trackers),
                         list(other_api_trackers),
+                        http_client=http_client,
                     )
                     if use_discord and bot:
                         await DiscordNotifier.send_upload_status_notification(config, bot, meta)
 
                     if config['DEFAULT'].get('cross_seeding', True):
-                        await process_cross_seeds(meta)
+                        await process_cross_seeds(meta, http_client=http_client)
 
                     if 'queue' in meta and meta.get('queue') is not None:
                         processed_files_count += 1
@@ -1763,6 +1774,14 @@ async def do_the_thing(base_dir: str) -> None:
         cleanup_manager.reset_terminal()
 
     finally:
+        # Close the persistent httpx client
+        if http_client is not None:
+            try:
+                await http_client.aclose()
+            except Exception:
+                if not meta.get('debug', False):
+                    pass  # Silently ignore httpx client close errors
+
         if bot is not None:
             await bot.close()
         if connect_task is not None:
@@ -1773,7 +1792,7 @@ async def do_the_thing(base_dir: str) -> None:
             cleanup_manager.reset_terminal()
 
 
-async def process_cross_seeds(meta: Meta) -> None:
+async def process_cross_seeds(meta: Meta, http_client: Any = None) -> None:
     all_trackers: set[str] = set(api_trackers) | set(http_trackers) | set(other_api_trackers)
 
     # Get list of trackers to exclude (already in client)
@@ -1886,7 +1905,7 @@ async def process_cross_seeds(meta: Meta) -> None:
 
     console.print(f"[cyan]Valid trackers for cross-seed check: {valid_trackers}[/cyan]")
 
-    common = COMMON(config)
+    common = COMMON(config, http_client=http_client)
     try:
         concurrency_limit = int(config.get('DEFAULT', {}).get('cross_seed_concurrency', 8))
     except (TypeError, ValueError):

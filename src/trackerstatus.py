@@ -29,11 +29,11 @@ class TrackerStatusManager:
         self.config = config
         self.trackers_config = cast(Mapping[str, Mapping[str, Any]], config.get('TRACKERS', {}))
 
-    async def process_all_trackers(self, meta: Meta) -> int:
+    async def process_all_trackers(self, meta: Meta, http_client: Any = None) -> int:
         tracker_status: dict[str, dict[str, bool]] = {}
         successful_trackers = 0
         client: Any = Clients(config=self.config)
-        tracker_setup: Any = TRACKER_SETUP(config=self.config)
+        tracker_setup: Any = TRACKER_SETUP(config=self.config, http_client=http_client)
         helper: Any = UploadHelper(self.config)
         dupe_checker = DupeChecker(self.config)
         meta_lock = asyncio.Lock()
@@ -59,7 +59,14 @@ class TrackerStatusManager:
                 successful_trackers += 1
 
             if tracker_name in tracker_class_map:
-                tracker_class: Any = tracker_class_map[tracker_name](config=self.config)
+                # Try to pass http_client to UNIT3D-based trackers, fall back otherwise
+                if tracker_name in ["A4K", "AITHER", "BLU", "CBR", "DP", "EMUW", "FRIKI", "FNP", "HHD", "HUNO", "IHD", "ITT", "LCD", "LDU", "LUME", "LST", "LT", "OE", "OTW", "PT", "PTT", "R4E", "RAS", "RF", "SAM", "SHRI", "SP", "STC", "TIK", "TLZ", "TOS", "TTR", "ULCX", "UTP", "YOINK", "YUS"]:
+                    try:
+                        tracker_class: Any = tracker_class_map[tracker_name](config=self.config, http_client=http_client)
+                    except TypeError:
+                        tracker_class: Any = tracker_class_map[tracker_name](config=self.config)
+                else:
+                    tracker_class: Any = tracker_class_map[tracker_name](config=self.config)
                 if tracker_name in {"THR", "PTP"} and local_meta.get('imdb_id', 0) == 0:
                     while True:
                         if local_meta.get('unattended', False):

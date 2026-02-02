@@ -63,8 +63,9 @@ async def process_trackers(
     tracker_class_map: Mapping[str, Any],
     http_trackers: Sequence[str],
     other_api_trackers: Sequence[str],
+    http_client: Any = None,
 ) -> None:
-    tracker_setup = TRACKER_SETUP(config=config)
+    tracker_setup = TRACKER_SETUP(config=config, http_client=http_client)
     tracker_setup_any = cast(Any, tracker_setup)
     enabled_trackers = list(cast(Sequence[str], tracker_setup_any.trackers_enabled(meta)))
     manual_packager = ManualPackageManager(config)
@@ -117,7 +118,14 @@ async def process_trackers(
     async def process_single_tracker(tracker: str) -> None:
         tracker_class: Any = None
         if tracker not in {"MANUAL", "THR", "PTP"}:
-            tracker_class = tracker_class_map[tracker](config=config)
+            # Try to pass http_client to UNIT3D-based trackers, fall back otherwise
+            if tracker in ["A4K", "AITHER", "BLU", "CBR", "DP", "EMUW", "FRIKI", "FNP", "HHD", "HUNO", "IHD", "ITT", "LCD", "LDU", "LUME", "LST", "LT", "OE", "OTW", "PT", "PTT", "R4E", "RAS", "RF", "SAM", "SHRI", "SP", "STC", "TIK", "TLZ", "TOS", "TTR", "ULCX", "UTP", "YOINK", "YUS"]:
+                try:
+                    tracker_class = tracker_class_map[tracker](config=config, http_client=http_client)
+                except TypeError:
+                    tracker_class = tracker_class_map[tracker](config=config)
+            else:
+                tracker_class = tracker_class_map[tracker](config=config)
         if str(meta.get('name', '')).endswith('DUPE?'):
             meta['name'] = str(meta.get('name', '')).replace(' DUPE?', '')
 

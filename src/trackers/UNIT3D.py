@@ -20,11 +20,12 @@ ParamsList: TypeAlias = list[tuple[str, QueryValue]]
 
 
 class UNIT3D:
-    def __init__(self, config: dict[str, Any], tracker_name: str):
+    def __init__(self, config: dict[str, Any], tracker_name: str, http_client: Optional[httpx.AsyncClient] = None):
         self.config = config
         self.tracker = tracker_name
-        self.common = COMMON(config)
+        self.common = COMMON(config, http_client=http_client)
         self.tracker_config: dict[str, Any] = self.config["TRACKERS"].get(self.tracker, {})
+        self.http_client = http_client
 
         # Normalize announce_url: must be a non-empty string after stripping
         raw_announce = self.tracker_config.get("announce_url")
@@ -108,8 +109,9 @@ class UNIT3D:
         request_params = params_list if params_list is not None else list(params_dict.items())
 
         try:
-            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-                response = await client.get(url=self.search_url, headers=headers, params=request_params)
+            # Use shared client if available, otherwise create temporary one
+            if self.http_client:
+                response = await self.http_client.get(url=self.search_url, headers=headers, params=request_params)
                 response.raise_for_status()
                 if response.status_code == 200:
                     response_body = await response.aread()
@@ -165,6 +167,64 @@ class UNIT3D:
                         dupes.append(result)
                 else:
                     await asyncio.to_thread(console.print, f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
+            else:
+                async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                    response = await client.get(url=self.search_url, headers=headers, params=request_params)
+                    response.raise_for_status()
+                    if response.status_code == 200:
+                        response_body = await response.aread()
+                        data = await asyncio.to_thread(json.loads, response_body)
+                        for each in data["data"]:
+                            torrent_id = each.get("id", None)
+                            attributes = each.get("attributes", {})
+                            name = attributes.get("name", "")
+                            size = attributes.get("size", 0)
+                            result: dict[str, Any]
+                            if not meta["is_disc"]:
+                                result = {
+                                    "name": name,
+                                    "size": size,
+                                    "files": [
+                                        file["name"]
+                                        for file in attributes.get("files", [])
+                                        if isinstance(file, dict) and "name" in file
+                                    ],
+                                    "file_count": (
+                                        len(attributes.get("files", []))
+                                        if isinstance(attributes.get("files"), list)
+                                        else 0
+                                    ),
+                                    "trumpable": attributes.get("trumpable", False),
+                                    "link": attributes.get("details_link", None),
+                                    "download": attributes.get("download_link", None),
+                                    "id": torrent_id,
+                                    "type": attributes.get("type", None),
+                                    "res": attributes.get("resolution", None),
+                                    "internal": attributes.get("internal", False),
+                                }
+                            else:
+                                result = {
+                                    "name": name,
+                                    "size": size,
+                                    "files": [],
+                                    "file_count": (
+                                        len(attributes.get("files", []))
+                                        if isinstance(attributes.get("files"), list)
+                                        else 0
+                                    ),
+                                    "trumpable": attributes.get("trumpable", False),
+                                    "link": attributes.get("details_link", None),
+                                    "download": attributes.get("download_link", None),
+                                    "id": torrent_id,
+                                    "type": attributes.get("type", None),
+                                    "res": attributes.get("resolution", None),
+                                    "internal": attributes.get("internal", False),
+                                    "bd_info": attributes.get("bd_info", ""),
+                                    "description": attributes.get("description", ""),
+                                }
+                            dupes.append(result)
+                    else:
+                        await asyncio.to_thread(console.print, f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 302:
                 meta["tracker_status"][self.tracker][
@@ -472,18 +532,21 @@ class UNIT3D:
         }
 
         if meta["debug"] is False:
-            response_data = {}
             max_retries = 2
             retry_delay = 5
             timeout = 40.0
 
             # Use higher limits for concurrent uploads
             limits = httpx.Limits(max_keepalive_connections=10, max_connections=20)
-            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=limits) as client:
+
+            async def perform_upload(client: httpx.AsyncClient) -> tuple[bool, dict[str, Any]]:
+                """Perform the upload with retry logic."""
+                nonlocal timeout
+                response_data: dict[str, Any] = {}
                 for attempt in range(max_retries):
                     try:  # noqa: PERF203
                         response = await client.post(
-                            url=self.upload_url, files=files, data=data, headers=headers
+                            url=self.upload_url, files=files, data=data, headers=headers, timeout=timeout
                         )
                         response.raise_for_status()
 
@@ -495,7 +558,7 @@ class UNIT3D:
                             error_msg = response_data.get("message", "Unknown error")
                             meta["tracker_status"][self.tracker]["status_message"] = f"API error: {error_msg}"
                             await asyncio.to_thread(console.print, f"[yellow]Upload to {self.tracker} failed: {error_msg}[/yellow]")
-                            return False
+                            return False, response_data
 
                         meta["tracker_status"][self.tracker]["status_message"] = (
                             self.process_response_data(response_data)
@@ -506,7 +569,7 @@ class UNIT3D:
                         await self.common.download_tracker_torrent(
                             meta, self.tracker, headers=headers, downurl=response_data["data"]
                         )
-                        return True  # Success
+                        return True, response_data  # Success
 
                     except httpx.HTTPStatusError as e:  # noqa: PERF203
                         if e.response.status_code in [403, 302]:
@@ -519,7 +582,7 @@ class UNIT3D:
                                 meta["tracker_status"][self.tracker][
                                     "status_message"
                                 ] = f"data error: Redirect (302). This may indicate a problem with authentication. {e.response.text}"
-                            return False  # Auth/permission error
+                            return False, response_data  # Auth/permission error
                         elif e.response.status_code in [401, 404, 422]:
                             meta["tracker_status"][self.tracker][
                                 "status_message"
@@ -543,7 +606,7 @@ class UNIT3D:
                                     meta["tracker_status"][self.tracker][
                                         "status_message"
                                     ] = f"data error: HTTP {e.response.status_code} - {e.response.text}"
-                                return False  # HTTP error after all retries
+                                return False, response_data  # HTTP error after all retries
                     except httpx.TimeoutException:
                         if attempt < max_retries - 1:
                             timeout = timeout * 1.5  # Increase timeout by 50% for next retry
@@ -554,10 +617,8 @@ class UNIT3D:
                             await asyncio.sleep(retry_delay)
                             continue
                         else:
-                            meta["tracker_status"][self.tracker][
-                                "status_message"
-                            ] = "data error: Request timed out after multiple attempts"
-                            return False  # Timeout after all retries
+                            meta["tracker_status"][self.tracker]["status_message"] = "data error: Request timed out after multiple attempts"
+                            return False, response_data
                     except httpx.RequestError as e:
                         if attempt < max_retries - 1:
                             await asyncio.to_thread(
@@ -570,12 +631,24 @@ class UNIT3D:
                             meta["tracker_status"][self.tracker][
                                 "status_message"
                             ] = f"data error: Unable to upload. Error: {e}.\nResponse: {response_data}"
-                            return False  # Request error after all retries
+                            return False, response_data
                     except json.JSONDecodeError as e:
                         meta["tracker_status"][self.tracker][
                             "status_message"
                         ] = f"data error: Invalid JSON response from {self.tracker}. Error: {e}"
-                        return False  # JSON parsing error
+                        return False, response_data
+
+                # All retries exhausted
+                return False, response_data
+
+            # Use shared client if available, otherwise create temporary one
+            if self.http_client:
+                success, _ = await perform_upload(self.http_client)
+                return success
+            else:
+                async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=limits) as client:
+                    success, _ = await perform_upload(client)
+                    return success
         else:
             await asyncio.to_thread(console.print, f"[cyan]{self.tracker} Request Data:")
             await asyncio.to_thread(console.print, data)

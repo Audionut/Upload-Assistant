@@ -8,9 +8,9 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Optional, cast
 
-import aiohttp
 import cli_ui
 import click
+import httpx
 from PIL import Image
 from typing_extensions import TypeAlias
 
@@ -40,23 +40,24 @@ def _apply_config(next_config: dict[str, Any]) -> None:
 
 
 class TrackerMetaManager:
-    def __init__(self, config: dict[str, Any]) -> None:
+    def __init__(self, config: dict[str, Any], http_client: Any = None) -> None:
         self.config = config
+        self.http_client = http_client
         _apply_config(config)
 
     def prompt_user_for_confirmation(self, message: str) -> bool:
         return prompt_user_for_confirmation(message)
 
-    async def check_images_concurrently(self, imagelist: Sequence[ImageDict], meta: Meta) -> list[ImageDict]:
-        return await check_images_concurrently(imagelist, meta)
+    async def check_images_concurrently(self, imagelist: Sequence[ImageDict], meta: Meta, http_client: Any = None) -> list[ImageDict]:
+        return await check_images_concurrently(imagelist, meta, http_client or self.http_client)
 
-    async def check_image_link(self, url: str, timeout: Optional[aiohttp.ClientTimeout] = None) -> bool:
-        return await check_image_link(url, timeout)
+    async def check_image_link(self, url: str, timeout: Optional[httpx.Timeout] = None, http_client: Any = None) -> bool:
+        return await check_image_link(url, timeout, http_client or self.http_client)
 
     async def update_meta_with_unit3d_data(
-        self, meta: Meta, tracker_data: Sequence[Any], tracker_name: str, only_id: bool = False
+        self, meta: Meta, tracker_data: Sequence[Any], tracker_name: str, only_id: bool = False, http_client: Any = None
     ) -> bool:
-        return await update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id)
+        return await update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id, http_client or self.http_client)
 
     async def update_metadata_from_tracker(
         self,
@@ -66,6 +67,7 @@ class TrackerMetaManager:
         search_term: str,
         search_file_folder: str,
         only_id: bool = False,
+        http_client: Any = None,
     ) -> tuple[Meta, bool]:
         return await update_metadata_from_tracker(
             tracker_name,
@@ -74,6 +76,7 @@ class TrackerMetaManager:
             search_term,
             search_file_folder,
             only_id,
+            http_client or self.http_client,
         )
 
     def handle_image_list(
@@ -90,7 +93,7 @@ def prompt_user_for_confirmation(message: str) -> bool:
         sys.exit(1)
 
 
-async def check_images_concurrently(imagelist: Sequence[ImageDict], meta: Meta) -> list[ImageDict]:
+async def check_images_concurrently(imagelist: Sequence[ImageDict], meta: Meta, http_client: Any = None) -> list[ImageDict]:
     # Ensure meta['image_sizes'] exists
     if 'image_sizes' not in meta:
         meta['image_sizes'] = {}
@@ -136,7 +139,7 @@ async def check_images_concurrently(imagelist: Sequence[ImageDict], meta: Meta) 
     # Function to check each image's URL, host, and log resolution
     save_directory = os.path.join(str(meta.get('base_dir', '')), 'tmp', str(meta.get('uuid', '')))
 
-    timeout = aiohttp.ClientTimeout(total=15, connect=5, sock_connect=5, sock_read=5)
+    timeout = httpx.Timeout(15.0)
 
     async def check_and_collect(image_dict: ImageDict) -> Optional[ImageDict]:
         img_url = cast(Optional[str], image_dict.get('raw_url'))
@@ -154,13 +157,53 @@ async def check_images_concurrently(imagelist: Sequence[ImageDict], meta: Meta) 
 
         # Verify the image link
         try:
-            if await check_image_link(img_url, timeout):
+            if await check_image_link(img_url, timeout, http_client):
                 try:
-                    async with aiohttp.ClientSession(timeout=timeout) as session:
-                        try:
-                            async with session.get(img_url) as response:
-                                if response.status == 200:
-                                    image_content = await response.read()
+                    if http_client:
+                        response = await http_client.get(img_url, timeout=timeout)
+                        if response.status_code == 200:
+                            image_content = response.content
+
+                            try:
+                                image = Image.open(BytesIO(image_content))
+                                vertical_resolution = image.height
+                                lower_bound = expected_vertical_resolution * 0.70
+                                upper_bound = expected_vertical_resolution * (1.30 if meta.get('is_disc') == "DVD" else 1.00)
+
+                                if not (lower_bound <= vertical_resolution <= upper_bound):
+                                    console.print(
+                                        f"[red]Image {img_url} resolution ({vertical_resolution}p) "
+                                        f"is outside the allowed range ({int(lower_bound)}-{int(upper_bound)}p). Skipping.[/red]"
+                                    )
+                                    return None
+
+                                # Save image
+                                os.makedirs(save_directory, exist_ok=True)
+                                image_filename = os.path.join(save_directory, os.path.basename(img_url))
+                                await asyncio.to_thread(Path(image_filename).write_bytes, image_content)
+
+                                console.print(f"Saved {img_url} as {image_filename}")
+
+                                meta['image_sizes'][img_url] = len(image_content)
+
+                                if meta['debug']:
+                                    console.print(
+                                        f"Valid image {img_url} with resolution {image.width}x{image.height} "
+                                        f"and size {len(image_content) / 1024:.2f} KiB"
+                                    )
+                                return image_dict
+                            except Exception as e:
+                                console.print(f"[red]Failed to process image {img_url}: {e}")
+                                return None
+                        else:
+                            console.print(f"[red]Failed to fetch image {img_url}. Status: {response.status_code}. Skipping.")
+                            return None
+                    else:
+                        async with httpx.AsyncClient(timeout=timeout) as client:
+                            try:
+                                response = await client.get(img_url)
+                                if response.status_code == 200:
+                                    image_content = response.content
 
                                     try:
                                         image = Image.open(BytesIO(image_content))
@@ -194,14 +237,14 @@ async def check_images_concurrently(imagelist: Sequence[ImageDict], meta: Meta) 
                                         console.print(f"[red]Failed to process image {img_url}: {e}")
                                         return None
                                 else:
-                                    console.print(f"[red]Failed to fetch image {img_url}. Status: {response.status}. Skipping.")
+                                    console.print(f"[red]Failed to fetch image {img_url}. Status: {response.status_code}. Skipping.")
                                     return None
-                        except asyncio.TimeoutError:
-                            console.print(f"[red]Timeout downloading image: {img_url}")
-                            return None
-                        except aiohttp.ClientError as e:
-                            console.print(f"[red]Client error downloading image: {img_url} - {e}")
-                            return None
+                            except asyncio.TimeoutError:
+                                console.print(f"[red]Timeout downloading image: {img_url}")
+                                return None
+                            except httpx.RequestError as e:
+                                console.print(f"[red]Request error downloading image: {img_url} - {e}")
+                                return None
                 except Exception as e:
                     console.print(f"[red]Session error for image: {img_url} - {e}")
                     return None
@@ -234,24 +277,43 @@ async def check_images_concurrently(imagelist: Sequence[ImageDict], meta: Meta) 
     return valid_images
 
 
-async def check_image_link(url: str, timeout: Optional[aiohttp.ClientTimeout] = None) -> bool:
+async def check_image_link(url: str, timeout: Optional[httpx.Timeout] = None, http_client: Any = None) -> bool:
     # Handle when pixhost url points to web_url and convert to raw_url
     if url.startswith("https://pixhost.to/show/"):
         url = url.replace("https://pixhost.to/show/", "https://img1.pixhost.to/images/", 1)
     if timeout is None:
-        timeout = aiohttp.ClientTimeout(total=20, connect=10, sock_connect=10)
-
-    connector = aiohttp.TCPConnector(ssl=False)  # Disable SSL verification for testing
+        timeout = httpx.Timeout(20.0)
 
     try:
-        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-            try:
-                async with session.get(url) as response:
-                    if response.status == 200:
+        if http_client:
+            response = await http_client.get(url, timeout=timeout)
+            if response.status_code == 200:
+                content_type = response.headers.get('Content-Type', '').lower()
+                if 'image' in content_type:
+                    # Attempt to load the image
+                    image_data = response.content
+                    try:
+                        image = Image.open(io.BytesIO(image_data))
+                        image.verify()  # This will check if the image is broken
+                        return True
+                    except (OSError, SyntaxError) as e:
+                        console.print(f"[red]Image verification failed (corrupt image): {url} {e}[/red]")
+                        return False
+                else:
+                    console.print(f"[red]Content type is not an image: {url}[/red]")
+                    return False
+            else:
+                console.print(f"[red]Failed to retrieve image: {url} (status code: {response.status_code})[/red]")
+                return False
+        else:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                try:
+                    response = await client.get(url)
+                    if response.status_code == 200:
                         content_type = response.headers.get('Content-Type', '').lower()
                         if 'image' in content_type:
                             # Attempt to load the image
-                            image_data = await response.read()
+                            image_data = response.content
                             try:
                                 image = Image.open(io.BytesIO(image_data))
                                 image.verify()  # This will check if the image is broken
@@ -263,20 +325,23 @@ async def check_image_link(url: str, timeout: Optional[aiohttp.ClientTimeout] = 
                             console.print(f"[red]Content type is not an image: {url}[/red]")
                             return False
                     else:
-                        console.print(f"[red]Failed to retrieve image: {url} (status code: {response.status})[/red]")
+                        console.print(f"[red]Failed to retrieve image: {url} (status code: {response.status_code})[/red]")
                         return False
-            except asyncio.TimeoutError:
-                console.print(f"[red]Timeout checking image link: {url}[/red]")
-                return False
-            except Exception as e:
-                console.print(f"[red]Exception occurred while checking image: {url} - {str(e)}[/red]")
-                return False
+                except asyncio.TimeoutError:
+                    console.print(f"[red]Timeout checking image link: {url}[/red]")
+                    return False
+                except Exception as e:
+                    console.print(f"[red]Exception occurred while checking image: {url} - {str(e)}[/red]")
+                    return False
+    except asyncio.TimeoutError:
+        console.print(f"[red]Timeout checking image link: {url}[/red]")
+        return False
     except Exception as e:
         console.print(f"[red]Session creation failed for: {url} - {str(e)}[/red]")
         return False
 
 
-async def update_meta_with_unit3d_data(meta: Meta, tracker_data: Sequence[Any], tracker_name: str, only_id: bool = False) -> bool:
+async def update_meta_with_unit3d_data(meta: Meta, tracker_data: Sequence[Any], tracker_name: str, only_id: bool = False, http_client: Any = None) -> bool:
     # Unpack the expected 9 elements, ignoring any additional ones
     tmdb, imdb, tvdb, mal, desc, category, _infohash, imagelist, filename, *_rest = tracker_data
     if tmdb:
@@ -312,7 +377,7 @@ async def update_meta_with_unit3d_data(meta: Meta, tracker_data: Sequence[Any], 
 
     imagelist_typed = cast(Optional[list[ImageDict]], imagelist)
     if imagelist_typed:  # Ensure imagelist is not empty before setting
-        valid_images = await check_images_concurrently(imagelist_typed, meta)
+        valid_images = await check_images_concurrently(imagelist_typed, meta, http_client)
         if valid_images:
             meta['image_list'] = valid_images
             if (
@@ -339,6 +404,7 @@ async def update_metadata_from_tracker(
     search_term: str,
     search_file_folder: str,
     only_id: bool = False,
+    http_client: Any = None,
 ) -> tuple[Meta, bool]:
     tracker_key = tracker_name.lower()
     manual_key = f"{tracker_key}_manual"
@@ -366,7 +432,7 @@ async def update_metadata_from_tracker(
                                 await tracker_instance.get_ptp_description(ptp_torrent_id, meta, meta.get('is_disc', False)),
                             )
                         if ptp_imagelist:
-                            valid_images = await check_images_concurrently(ptp_imagelist, meta)
+                            valid_images = await check_images_concurrently(ptp_imagelist, meta, http_client)
                             if valid_images:
                                 meta['image_list'] = valid_images
                                 handle_image_list(meta, tracker_name, valid_images)
@@ -387,7 +453,7 @@ async def update_metadata_from_tracker(
                             await tracker_instance.get_ptp_description(ptp_torrent_id, meta, meta.get('is_disc', False)),
                         )
                     if ptp_imagelist:
-                        valid_images = await check_images_concurrently(ptp_imagelist, meta)
+                        valid_images = await check_images_concurrently(ptp_imagelist, meta, http_client)
                         if valid_images:
                             meta['image_list'] = valid_images
             else:
@@ -411,7 +477,7 @@ async def update_metadata_from_tracker(
                         await tracker_instance.get_ptp_description(meta['ptp'], meta, meta.get('is_disc', False)),
                     )
                 if ptp_imagelist:
-                    valid_images = await check_images_concurrently(ptp_imagelist, meta)
+                    valid_images = await check_images_concurrently(ptp_imagelist, meta, http_client)
                     if valid_images:
                         meta['image_list'] = valid_images
                         console.print("[green]PTP images added to metadata.[/green]")
@@ -534,7 +600,7 @@ async def update_metadata_from_tracker(
 
                     image_list = cast(Optional[Sequence[ImageDict]], meta.get('image_list'))
                     if image_list:
-                        valid_images = await check_images_concurrently(image_list, meta)
+                        valid_images = await check_images_concurrently(image_list, meta, http_client)
                         if valid_images:
                             meta['image_list'] = valid_images
                             handle_image_list(meta, tracker_name, valid_images)
@@ -569,7 +635,7 @@ async def update_metadata_from_tracker(
                     found_match = True
                     image_list = cast(Optional[Sequence[ImageDict]], meta.get('image_list'))
                     if image_list:
-                        valid_images = await check_images_concurrently(image_list, meta)
+                        valid_images = await check_images_concurrently(image_list, meta, http_client)
                         if valid_images:
                             meta['image_list'] = valid_images
                         else:
@@ -589,7 +655,7 @@ async def update_metadata_from_tracker(
                 console.print(f"[cyan]{tracker_name} ID found in meta, reusing existing ID: {meta[tracker_key]}[/cyan]")
             tracker_data = cast(
                 Sequence[Any],
-                await COMMON(config).unit3d_torrent_info(
+                await COMMON(config, http_client=http_client).unit3d_torrent_info(
                 tracker_name,
                 tracker_instance.id_url,
                 tracker_instance.search_url,
@@ -603,7 +669,7 @@ async def update_metadata_from_tracker(
                 console.print(f"[yellow]No ID found in meta for {tracker_name}, searching by file name[/yellow]")
             tracker_data = cast(
                 Sequence[Any],
-                await COMMON(config).unit3d_torrent_info(
+                await COMMON(config, http_client=http_client).unit3d_torrent_info(
                 tracker_name,
                 tracker_instance.id_url,
                 tracker_instance.search_url,
@@ -616,7 +682,7 @@ async def update_metadata_from_tracker(
         if any(item not in [None, 0] for item in tracker_data[:3]):  # Check for valid tmdb, imdb, or tvdb
             if meta['debug']:
                 console.print(f"[green]Valid data found on {tracker_name}[/green]")
-            selected = await update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id)
+            selected = await update_meta_with_unit3d_data(meta, tracker_data, tracker_name, only_id, http_client)
             found_match = bool(selected)
         else:
             if meta['debug']:
@@ -653,7 +719,7 @@ async def update_metadata_from_tracker(
                 else:
                     console.print("[yellow]HDB description empty[/yellow]")
                 if image_list and meta.get('keep_images'):
-                    valid_images = await check_images_concurrently(image_list, meta)
+                    valid_images = await check_images_concurrently(image_list, meta, http_client)
                     if valid_images:
                         meta['image_list'] = valid_images
                         handle_image_list(meta, tracker_name, valid_images)
@@ -715,7 +781,7 @@ async def update_metadata_from_tracker(
                         else:
                             console.print("[yellow]HDB description empty[/yellow]")
                         if image_list and meta.get('keep_images'):
-                            valid_images = await check_images_concurrently(image_list, meta)
+                            valid_images = await check_images_concurrently(image_list, meta, http_client)
                             if valid_images:
                                 meta['image_list'] = valid_images
                                 handle_image_list(meta, tracker_name, valid_images)
@@ -740,7 +806,7 @@ async def update_metadata_from_tracker(
                         meta['description'] = description
                         meta['saved_description'] = True
                     if image_list and meta.get('keep_images'):
-                        valid_images = await check_images_concurrently(image_list, meta)
+                        valid_images = await check_images_concurrently(image_list, meta, http_client)
                         if valid_images:
                             meta['image_list'] = valid_images
                             handle_image_list(meta, tracker_name, valid_images)
