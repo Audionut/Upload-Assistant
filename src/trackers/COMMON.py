@@ -484,16 +484,6 @@ class COMMON:
         else:
             return True
 
-    def prompt_user_for_confirmation(self, message: str) -> bool:
-        try:
-            response_raw = cli_ui.ask_string(f"{message} (Y/n)", default="Y")
-            response = response_raw or ""
-        except (KeyboardInterrupt, EOFError):
-            return False
-
-        response_normalized = response.strip().lower()
-        return response_normalized in {'', 'y', 'yes'}
-
     async def unit3d_region_distributor(self, meta: dict[str, Any], tracker: str, torrent_url: str, id: str = "") -> None:
         """Get region and distributor information from API response"""
         raw_api_key = self.config['TRACKERS'][tracker].get('api_key')

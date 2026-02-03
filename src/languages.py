@@ -332,9 +332,9 @@ class LanguagesManager:
                                 audio_languages.extend([lang.strip() for lang in audio_lang.split(',')])
                                 meta['write_audio_languages'] = True
                             else:
-                                meta['audio_languages'] = None
+                                meta['audio_languages'] = []
                         else:
-                            meta['audio_languages'] = None
+                            meta['audio_languages'] = []
                             if meta.get('debug', False):
                                 meta['audio_languages'] = ['DEBUG_AUDIO']
                                 meta['write_audio_languages'] = True
@@ -375,9 +375,9 @@ class LanguagesManager:
                                     subtitle_languages.extend([lang.strip() for lang in subtitle_lang.split(',')])
                                     meta['write_subtitle_languages'] = True
                                 else:
-                                    meta['subtitle_languages'] = None
+                                    meta['subtitle_languages'] = []
                             else:
-                                meta['subtitle_languages'] = None
+                                meta['subtitle_languages'] = []
                                 if meta['debug']:
                                     meta['subtitle_languages'] = ['DEBUG_SUBS']
                                     meta['write_subtitle_languages'] = True
@@ -400,9 +400,9 @@ class LanguagesManager:
                                 meta['subtitle_languages'] = [lang.strip() for lang in hc_lang.split(',')]
                                 meta['write_hc_languages'] = True
                             else:
-                                meta['subtitle_languages'] = None
+                                meta['subtitle_languages'] = []
                         else:
-                            meta['subtitle_languages'] = None
+                            meta['subtitle_languages'] = []
                             if meta.get('debug', False):
                                 meta['subtitle_languages'] = ["DEBUG_HC_SUBS"]
                                 meta['write_hc_languages'] = True

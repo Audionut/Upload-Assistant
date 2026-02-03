@@ -93,13 +93,14 @@ class TRACKER_SETUP:
         self.http_client: Any = http_client
 
     def _create_tracker_instance(self, tracker: str, http_client: Any = None) -> Optional[Any]:
+        resolved_http_client = self.http_client if http_client is None else http_client
         tracker_class = tracker_class_map.get(tracker.upper())
         if tracker_class is None:
             return None
         # Pass http_client to UNIT3D-based trackers
         if tracker.upper() in ["A4K", "AITHER", "BLU", "CBR", "DP", "EMUW", "FRIKI", "FNP", "HHD", "HUNO", "IHD", "ITT", "LCD", "LDU", "LUME", "LST", "LT", "OE", "OTW", "PT", "PTT", "R4E", "RAS", "RF", "SAM", "SHRI", "SP", "STC", "TIK", "TLZ", "TOS", "TTR", "ULCX", "UTP", "YOINK", "YUS"]:
             try:
-                return tracker_class(self.config, http_client=http_client)
+                return tracker_class(self.config, http_client=resolved_http_client)
             except TypeError:
                 # Fallback for subclasses that don't accept http_client
                 return tracker_class(self.config)

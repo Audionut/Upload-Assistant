@@ -157,8 +157,8 @@ class Prep:
         meta['we_checked_tvdb'] = False
         meta['we_checked_tmdb'] = False
         meta['we_asked_tvmaze'] = False
-        meta['audio_languages'] = None
-        meta['subtitle_languages'] = None
+        meta['audio_languages'] = []
+        meta['subtitle_languages'] = []
         meta['aither_trumpable'] = None
 
         folder_id = os.path.basename(meta['path'])
