@@ -256,7 +256,12 @@ class SPD:
             base64_encoded_data = base64.b64encode(binary_file_data)
             return base64_encoded_data.decode('utf-8')
 
-    async def get_nfo(self, meta: Meta) -> Optional[str]:
+    async def get_nfo(self, meta: Meta, nfo_bytes: Optional[bytes] = None) -> Optional[str]:
+        if nfo_bytes is not None:
+            return base64.b64encode(nfo_bytes).decode("utf-8")
+        cached_bytes = meta.get("cached_nfo_bytes")
+        if cached_bytes:
+            return base64.b64encode(bytes(cached_bytes)).decode("utf-8")
         nfo_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
         nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
 
@@ -266,7 +271,12 @@ class SPD:
 
         return None
 
-    async def fetch_data(self, meta: Meta, torrent_bytes: Optional[bytes] = None) -> dict[str, Any]:
+    async def fetch_data(
+        self,
+        meta: Meta,
+        torrent_bytes: Optional[bytes] = None,
+        nfo_bytes: Optional[bytes] = None,
+    ) -> dict[str, Any]:
         media_info, bd_info = await self.get_file_info(meta)
 
         data: dict[str, Any] = {
@@ -275,7 +285,7 @@ class SPD:
             'description': str(meta.get('genres', '')),
             'media_info': media_info,
             'name': self.edit_name(meta),
-            'nfo': await self.get_nfo(meta),
+            'nfo': await self.get_nfo(meta, nfo_bytes=nfo_bytes),
             'plot': str(meta.get('overview_meta', '') or meta.get('overview', '')),
             'poster': str(meta.get('poster', '')),
             'technicalDetails': await self.edit_desc(meta),
@@ -296,7 +306,8 @@ class SPD:
         return data
 
     async def upload(self, meta: Meta, _disctype: str, torrent_bytes: Optional[bytes] = None) -> Optional[bool]:
-        data = await self.fetch_data(meta, torrent_bytes)
+        nfo_bytes = cast(Optional[bytes], meta.get("cached_nfo_bytes"))
+        data = await self.fetch_data(meta, torrent_bytes, nfo_bytes=nfo_bytes)
         tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
         tracker_status.setdefault(self.tracker, {})
 

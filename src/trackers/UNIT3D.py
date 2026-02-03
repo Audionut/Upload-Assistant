@@ -6,7 +6,7 @@ import os
 import platform
 import re
 import time
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 
 import aiofiles
 import httpx
@@ -255,22 +255,32 @@ class UNIT3D:
             )
         }
 
-    async def get_mediainfo(self, meta: dict[str, Any]) -> dict[str, str]:
+    async def get_mediainfo(self, meta: dict[str, Any], mediainfo_bytes: Optional[bytes] = None) -> dict[str, str]:
         if meta.get("bdinfo") is not None:
             mediainfo = ""
         else:
-            async with aiofiles.open(
-                f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding="utf-8"
-            ) as f:
-                mediainfo = await f.read()
+            if mediainfo_bytes is not None:
+                mediainfo = mediainfo_bytes.decode("utf-8")
+            elif meta.get("cached_mediainfo_missing") is True:
+                mediainfo = ""
+            else:
+                async with aiofiles.open(
+                    f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding="utf-8"
+                ) as f:
+                    mediainfo = await f.read()
         return {"mediainfo": mediainfo}
 
-    async def get_bdinfo(self, meta: dict[str, Any]) -> dict[str, str]:
+    async def get_bdinfo(self, meta: dict[str, Any], bdinfo_bytes: Optional[bytes] = None) -> dict[str, str]:
         if meta.get("bdinfo") is not None:
-            async with aiofiles.open(
-                f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding="utf-8"
-            ) as f:
-                bdinfo = await f.read()
+            if bdinfo_bytes is not None:
+                bdinfo = bdinfo_bytes.decode("utf-8")
+            elif meta.get("cached_bdinfo_missing") is True:
+                bdinfo = ""
+            else:
+                async with aiofiles.open(
+                    f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding="utf-8"
+                ) as f:
+                    bdinfo = await f.read()
         else:
             bdinfo = ""
         return {"bdinfo": bdinfo}
@@ -452,10 +462,13 @@ class UNIT3D:
         return {"sticky": "0"}
 
     async def get_data(self, meta: dict[str, Any]) -> dict[str, str]:
+        mediainfo_bytes = cast(Optional[bytes], meta.get("cached_mediainfo_bytes"))
+        bdinfo_bytes = cast(Optional[bytes], meta.get("cached_bdinfo_bytes"))
+
         description, mediainfo, bdinfo = await asyncio.gather(
             self.get_description(meta),
-            self.get_mediainfo(meta),
-            self.get_bdinfo(meta),
+            self.get_mediainfo(meta, mediainfo_bytes=mediainfo_bytes),
+            self.get_bdinfo(meta, bdinfo_bytes=bdinfo_bytes),
         )
 
         merged: dict[str, str] = {}
@@ -499,8 +512,21 @@ class UNIT3D:
 
         return merged
 
-    async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, tuple[str, bytes, str]]:
+    async def get_additional_files(
+        self,
+        meta: dict[str, Any],
+        nfo_bytes: Optional[bytes] = None,
+        nfo_name: Optional[str] = None,
+    ) -> dict[str, tuple[str, bytes, str]]:
         files: dict[str, tuple[str, bytes, str]] = {}
+        if meta.get("cached_nfo_missing") is True and nfo_bytes is None:
+            return files
+        cached_bytes = nfo_bytes if nfo_bytes is not None else meta.get("cached_nfo_bytes")
+        cached_name = nfo_name if nfo_name is not None else meta.get("cached_nfo_name")
+        if isinstance(cached_bytes, (bytes, bytearray)):
+            nfo_name = str(cached_name) if cached_name else "nfo_file.nfo"
+            files["nfo"] = (nfo_name, bytes(cached_bytes), "text/plain")
+            return files
         base_dir = meta["base_dir"]
         uuid = meta["uuid"]
         tmp_dir = os.path.join(base_dir, "tmp", uuid)
@@ -548,8 +574,11 @@ class UNIT3D:
             log_timing("read BASE.torrent (preloaded)")
         files = {"torrent": ("torrent.torrent", torrent_bytes, "application/x-bittorrent")}
         additional_files_start = time.perf_counter()
-        files.update(await self.get_additional_files(meta))
-        log_timing("get_additional_files()", additional_files_start)
+        nfo_bytes = cast(Optional[bytes], meta.get("cached_nfo_bytes"))
+        nfo_name = cast(Optional[str], meta.get("cached_nfo_name"))
+        files.update(await self.get_additional_files(meta, nfo_bytes=nfo_bytes, nfo_name=nfo_name))
+        nfo_source = ("cached" if nfo_bytes is not None else "disk") if "nfo" in files else "none"
+        log_timing(f"get_additional_files() [{nfo_source}]", additional_files_start)
         headers = {
             "User-Agent": f'{meta["ua_name"]} {meta.get("current_version", "")} ({platform.system()} {platform.release()})',
             "authorization": f"Bearer {self.api_key}",

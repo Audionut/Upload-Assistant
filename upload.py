@@ -386,6 +386,9 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None, http_client: 
     prep = Prep(screens=meta['screens'], img_host=meta['imghost'], config=config)
     try:
         meta = await prep.gather_prep(meta=meta, mode='cli')
+    except RuntimeError as e:
+        console.print(f"[red]Preparation failed: {e}[/red]")
+        return
     except Exception as e:
         console.print(f"Error in gather_prep: {e}")
         console.print(traceback.format_exc())

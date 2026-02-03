@@ -570,7 +570,32 @@ class FF:
 
         return None
 
-    def get_nfo(self, meta: dict[str, Any]) -> dict[str, tuple[str, Any, str]]:
+    def get_nfo(
+        self,
+        meta: dict[str, Any],
+        nfo_bytes: Optional[bytes] = None,
+        nfo_name: Optional[str] = None,
+    ) -> dict[str, tuple[str, Any, str]]:
+        if nfo_bytes is not None:
+            nfo_filename = nfo_name if nfo_name else "nfo_file.nfo"
+            return {
+                'nfo': (
+                    nfo_filename,
+                    nfo_bytes,
+                    "application/octet-stream"
+                )
+            }
+        cached_bytes = meta.get("cached_nfo_bytes")
+        cached_name = meta.get("cached_nfo_name")
+        if cached_bytes:
+            nfo_filename = str(cached_name) if cached_name else "nfo_file.nfo"
+            return {
+                'nfo': (
+                    nfo_filename,
+                    bytes(cached_bytes),
+                    "application/octet-stream"
+                )
+            }
         nfo_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
         nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
 
@@ -643,7 +668,9 @@ class FF:
         poster = await self.get_poster(meta)
         if poster:
             files['poster'] = poster
-        nfo = self.get_nfo(meta)
+        nfo_bytes = cast(Optional[bytes], meta.get("cached_nfo_bytes"))
+        nfo_name = cast(Optional[str], meta.get("cached_nfo_name"))
+        nfo = self.get_nfo(meta, nfo_bytes=nfo_bytes, nfo_name=nfo_name)
         if nfo:
             files['nfo'] = nfo['nfo']
 

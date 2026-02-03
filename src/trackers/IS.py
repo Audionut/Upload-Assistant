@@ -3,7 +3,7 @@ import glob
 import os
 import platform
 import re
-from typing import Any, Union, cast
+from typing import Any, Optional, Union, cast
 
 import aiofiles
 import httpx
@@ -259,7 +259,20 @@ class IS:
 
         return 0
 
-    async def get_nfo(self, meta: Meta) -> dict[str, tuple[str, bytes, str]]:
+    async def get_nfo(
+        self,
+        meta: Meta,
+        nfo_bytes: Optional[bytes] = None,
+        nfo_name: Optional[str] = None,
+    ) -> dict[str, tuple[str, bytes, str]]:
+        if nfo_bytes is not None:
+            nfo_filename = nfo_name if nfo_name else f"{meta.get('scene_name', meta['uuid'])}.nfo"
+            return {'nfofile': (nfo_filename, nfo_bytes, "application/octet-stream")}
+        cached_bytes = meta.get("cached_nfo_bytes")
+        cached_name = meta.get("cached_nfo_name")
+        if cached_bytes:
+            nfo_filename = str(cached_name) if cached_name else f"{meta.get('scene_name', meta['uuid'])}.nfo"
+            return {'nfofile': (nfo_filename, bytes(cached_bytes), "application/octet-stream")}
         nfo_dir = os.path.join(str(meta.get('base_dir', '')), "tmp", str(meta.get('uuid', '')))
         nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
 
@@ -319,7 +332,9 @@ class IS:
         if cookies is not None:
             self.session.cookies.update(cookies)
         data = self.get_data(meta)
-        files = await self.get_nfo(meta)
+        nfo_bytes = cast(Optional[bytes], meta.get("cached_nfo_bytes"))
+        nfo_name = cast(Optional[str], meta.get("cached_nfo_name"))
+        files = await self.get_nfo(meta, nfo_bytes=nfo_bytes, nfo_name=nfo_name)
 
         is_uploaded = await self.cookie_auth_uploader.handle_upload(
             meta=meta,

@@ -905,10 +905,6 @@ class DescriptionBuilder:
                                     desc_parts.append(image_str)
                                 desc_parts.append(CENTER_CLOSE_DOUBLE)
 
-                            meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                            async with aiofiles.open(meta_filename, "w") as f:
-                                await f.write(json.dumps(meta, indent=4))
-
         # Handle multiple discs case
         elif len(discs) > 1:
             # Initialize retry_count if not already set
@@ -1106,8 +1102,9 @@ class DescriptionBuilder:
 
                             # Save the updated meta to `meta.json` after upload
                             meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
+                            meta_serializable = {k: v for k, v in meta.items() if not isinstance(v, bytes)}
                             async with aiofiles.open(meta_filename, "w") as f:
-                                await f.write(json.dumps(meta, indent=4))
+                                await f.write(json.dumps(meta_serializable, indent=4))
                         console.print()
 
         # Handle single file case
@@ -1257,10 +1254,11 @@ class DescriptionBuilder:
 
                 await asyncio.sleep(0.05)
 
-        # Save updated meta
+        # Save updated meta (exclude cached bytes that can't be serialized)
         meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
+        meta_serializable = {k: v for k, v in meta.items() if not isinstance(v, bytes)}
         async with aiofiles.open(meta_filename, "w") as f:
-            await f.write(json.dumps(meta, indent=4))
+            await f.write(json.dumps(meta_serializable, indent=4))
         await asyncio.sleep(0.1)
 
         # Second Pass: Process MediaInfo and Write Descriptions

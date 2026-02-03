@@ -1,5 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
+import os
 import sys
 import time
 import traceback
@@ -72,6 +73,45 @@ async def process_trackers(
     manual_packager = ManualPackageManager(config)
     timing_enabled = True
 
+    unit3d_trackers = {
+        "A4K",
+        "AITHER",
+        "BLU",
+        "CBR",
+        "DP",
+        "EMUW",
+        "FRIKI",
+        "FNP",
+        "HHD",
+        "HUNO",
+        "IHD",
+        "ITT",
+        "LCD",
+        "LDU",
+        "LUME",
+        "LST",
+        "LT",
+        "OE",
+        "OTW",
+        "PT",
+        "PTT",
+        "R4E",
+        "RAS",
+        "RF",
+        "SAM",
+        "SHRI",
+        "SP",
+        "STC",
+        "TIK",
+        "TLZ",
+        "TOS",
+        "TTR",
+        "ULCX",
+        "UTP",
+        "YOINK",
+        "YUS",
+    }
+
 
     tracker_status = cast(StatusDict, meta.get('tracker_status') or {})
     active_trackers: list[str] = []
@@ -100,6 +140,86 @@ async def process_trackers(
         else:
             console.print(f"[cyan]{tracker} timing: {label}[/cyan]")
 
+    async def preload_nfo(meta: Meta) -> None:
+        if meta.get("cached_nfo_bytes") is not None or meta.get("cached_nfo_missing") is True:
+            return
+        base_dir = meta.get("base_dir")
+        uuid = meta.get("uuid")
+        if not base_dir or not uuid:
+            return
+
+        def list_nfo_files(directory: str) -> list[str]:
+            files: list[str] = []
+            try:
+                entries = os.listdir(directory)
+            except OSError:
+                return files
+            for entry in entries:
+                if not entry.lower().endswith(".nfo"):
+                    continue
+                absolute_path = os.path.join(directory, entry)
+                if os.path.isfile(absolute_path):
+                    files.append(absolute_path)
+            return files
+
+        tmp_dir = os.path.join(base_dir, "tmp", uuid)
+        nfo_files = await asyncio.to_thread(list_nfo_files, tmp_dir)
+
+        if (
+            not nfo_files
+            and meta.get("keep_nfo", False)
+            and (meta.get("keep_folder", False) or meta.get("isdir", False))
+        ):
+            search_dir = os.path.dirname(cast(str, meta.get("path", "")))
+            if search_dir:
+                nfo_files = await asyncio.to_thread(list_nfo_files, search_dir)
+
+        if nfo_files:
+            async with aiofiles.open(nfo_files[0], "rb") as f:
+                nfo_bytes = await f.read()
+            meta["cached_nfo_bytes"] = nfo_bytes
+            meta["cached_nfo_name"] = os.path.basename(nfo_files[0])
+        else:
+            meta["cached_nfo_missing"] = True
+
+    async def preload_mediainfo(meta: Meta) -> None:
+        if meta.get("cached_mediainfo_bytes") is not None or meta.get("cached_mediainfo_missing") is True:
+            return
+        base_dir = meta.get("base_dir")
+        uuid = meta.get("uuid")
+        if not base_dir or not uuid:
+            return
+
+        mediainfo_path = os.path.join(base_dir, "tmp", uuid, "MEDIAINFO_CLEANPATH.txt")
+        try:
+            if os.path.isfile(mediainfo_path):
+                async with aiofiles.open(mediainfo_path, "rb") as f:
+                    mediainfo_bytes = await f.read()
+                meta["cached_mediainfo_bytes"] = mediainfo_bytes
+            else:
+                meta["cached_mediainfo_missing"] = True
+        except OSError:
+            meta["cached_mediainfo_missing"] = True
+
+    async def preload_bdinfo(meta: Meta) -> None:
+        if meta.get("cached_bdinfo_bytes") is not None or meta.get("cached_bdinfo_missing") is True:
+            return
+        base_dir = meta.get("base_dir")
+        uuid = meta.get("uuid")
+        if not base_dir or not uuid:
+            return
+
+        bdinfo_path = os.path.join(base_dir, "tmp", uuid, "BD_SUMMARY_00.txt")
+        try:
+            if os.path.isfile(bdinfo_path):
+                async with aiofiles.open(bdinfo_path, "rb") as f:
+                    bdinfo_bytes = await f.read()
+                meta["cached_bdinfo_bytes"] = bdinfo_bytes
+            else:
+                meta["cached_bdinfo_missing"] = True
+        except OSError:
+            meta["cached_bdinfo_missing"] = True
+
     base_torrent_bytes: Optional[bytes] = None
     if active_trackers:
         try:
@@ -111,6 +231,43 @@ async def process_trackers(
         except Exception as e:
             console.print(f"[yellow]Warning: Unable to preload BASE.torrent for tracker uploads: {e}[/yellow]")
             base_torrent_bytes = None
+
+    if any(tracker in unit3d_trackers for tracker in active_trackers):
+        try:
+            nfo_start = time.perf_counter()
+            await preload_nfo(meta)
+            if meta.get("cached_nfo_bytes") is not None:
+                log_timing("UNIT3D", "preload NFO (found)", nfo_start)
+            elif meta.get("cached_nfo_missing") is True:
+                log_timing("UNIT3D", "preload NFO (missing)", nfo_start)
+            else:
+                log_timing("UNIT3D", "preload NFO", nfo_start)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Unable to preload NFO for UNIT3D uploads: {e}[/yellow]")
+
+        try:
+            mediainfo_start = time.perf_counter()
+            await preload_mediainfo(meta)
+            if meta.get("cached_mediainfo_bytes") is not None:
+                log_timing("UNIT3D", "preload MEDIAINFO (found)", mediainfo_start)
+            elif meta.get("cached_mediainfo_missing") is True:
+                log_timing("UNIT3D", "preload MEDIAINFO (missing)", mediainfo_start)
+            else:
+                log_timing("UNIT3D", "preload MEDIAINFO", mediainfo_start)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Unable to preload MEDIAINFO for UNIT3D uploads: {e}[/yellow]")
+
+        try:
+            bdinfo_start = time.perf_counter()
+            await preload_bdinfo(meta)
+            if meta.get("cached_bdinfo_bytes") is not None:
+                log_timing("UNIT3D", "preload BDINFO (found)", bdinfo_start)
+            elif meta.get("cached_bdinfo_missing") is True:
+                log_timing("UNIT3D", "preload BDINFO (missing)", bdinfo_start)
+            else:
+                log_timing("UNIT3D", "preload BDINFO", bdinfo_start)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Unable to preload BDINFO for UNIT3D uploads: {e}[/yellow]")
 
     def print_tracker_result(
         tracker: str,

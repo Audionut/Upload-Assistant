@@ -945,10 +945,6 @@ class PTP:
                                 raw_url = str(img.get('raw_url', ''))
                                 desc.write(f"[img]{raw_url}[/img]\n")
 
-                        meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                        async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
-                            await f.write(json.dumps(meta, indent=4))
-
         # Handle multiple discs case
         elif len(discs) > 1:
             if 'retry_count' not in meta:
@@ -1024,10 +1020,6 @@ class PTP:
                                     desc.write(f"[img]{raw_url}[/img]\n")
                                 desc.write("\n")
 
-                            meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                            async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
-                                await f.write(json.dumps(meta, indent=4))
-
                 elif each['type'] == "DVD":
                     if i == 0:
                         desc.write(f"[b][size=3]{each['name']}:[/size][/b]\n")
@@ -1092,10 +1084,6 @@ class PTP:
                                     raw_url = img['raw_url']
                                     desc.write(f"[img]{raw_url}[/img]\n")
                                 desc.write("\n")
-
-                        meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                        async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
-                            await f.write(json.dumps(meta, indent=4))
 
         # Handle single file case
         elif len(filelist) == 1:
@@ -1223,10 +1211,6 @@ class PTP:
                                 raw_url = img['raw_url']
                                 desc.write(f"[img]{raw_url}[/img]\n")
                             desc.write("\n")
-
-                    meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                    async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
-                        await f.write(json.dumps(meta, indent=4))
 
         async with aiofiles.open(
             f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt",

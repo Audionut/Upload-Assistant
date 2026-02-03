@@ -481,9 +481,8 @@ class Prep:
         if not meta['is_disc'] and not meta.get('emby', False):
             try:
                 valid_mi = validate_mediainfo(meta, debug=meta['debug'])
-            except Exception as e:
-                console.print(f"[red]MediaInfo validation failed: {str(e)}[/red]")
-                raise RuntimeError(f"Upload Assistant does not support no audio media. Details: {str(e)}") from e
+            except Exception:
+                raise RuntimeError("Upload Assistant does not support no audio media.") from None
             if not valid_mi:
                 console.print("[red]MediaInfo validation failed. This file does not contain (Unique ID).")
                 meta['valid_mi'] = False

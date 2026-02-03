@@ -854,10 +854,6 @@ class COMMON:
                     console.print("[bold red]Failed to get valid ptgen response after retries")
                     return ""
 
-                meta['ptgen'] = ptgen_json
-                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w', encoding='utf-8') as f:
-                    await f.write(json.dumps(meta, indent=4))
-
                 ptgen_text = ptgen_json.get('format', '')
                 if "[/img]" in ptgen_text:
                     ptgen_text = ptgen_text.split("[/img]")[1]
