@@ -143,7 +143,7 @@ async def get_service(video: Optional[str] = None, tag: Optional[str] = None, au
         'SWEET': 'SWEET',
         'KS': 'KS', 'Kyivstar': 'KS', 'KyivstarTV': 'KS', 'Kyivstar TV': 'KS', 'kyivstar': 'KS',
         'PKO': 'PKO', 'Planeta Kino Online': 'PKO',
-        'TF': 'TF', 'takflix': 'TF', 'Takflix': 'TFs'
+        'TF': 'TF', 'takflix': 'TF', 'Takflix': 'TF'
     }  # fmt: off
 
     if get_services_only:
