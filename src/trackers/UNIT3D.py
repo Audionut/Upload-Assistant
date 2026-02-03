@@ -166,7 +166,7 @@ class UNIT3D:
                             }
                         dupes.append(result)
                 else:
-                    await asyncio.to_thread(console.print, f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
+                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
             else:
                 async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                     response = await client.get(url=self.search_url, headers=headers, params=request_params)
@@ -224,7 +224,7 @@ class UNIT3D:
                                 }
                             dupes.append(result)
                     else:
-                        await asyncio.to_thread(console.print, f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
+                        console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 302:
                 meta["tracker_status"][self.tracker][
@@ -235,11 +235,11 @@ class UNIT3D:
                     "status_message"
                 ] = f"data error: HTTP {e.response.status_code} - {e.response.text}"
         except httpx.TimeoutException:
-            await asyncio.to_thread(console.print, "[bold red]Request timed out after 10 seconds")
+            console.print("[bold red]Request timed out after 10 seconds")
         except httpx.RequestError as e:
-            await asyncio.to_thread(console.print, f"[bold red]Unable to search for existing torrents: {e}")
+            console.print(f"[bold red]Unable to search for existing torrents: {e}")
         except Exception as e:
-            await asyncio.to_thread(console.print, f"[bold red]Unexpected error: {e}")
+            console.print(f"[bold red]Unexpected error: {e}")
             await asyncio.sleep(5)
 
         return dupes
@@ -557,7 +557,7 @@ class UNIT3D:
                         if not response_data.get("success"):
                             error_msg = response_data.get("message", "Unknown error")
                             meta["tracker_status"][self.tracker]["status_message"] = f"API error: {error_msg}"
-                            await asyncio.to_thread(console.print, f"[yellow]Upload to {self.tracker} failed: {error_msg}[/yellow]")
+                            console.print(f"[yellow]Upload to {self.tracker} failed: {error_msg}[/yellow]")
                             return False, response_data
 
                         meta["tracker_status"][self.tracker]["status_message"] = (
@@ -590,8 +590,7 @@ class UNIT3D:
                         else:
                             # Retry other HTTP errors
                             if attempt < max_retries - 1:
-                                await asyncio.to_thread(
-                                    console.print,
+                                console.print(
                                     f"[yellow]{self.tracker}: HTTP {e.response.status_code} error, retrying in {retry_delay} seconds... (attempt {attempt + 1}/{max_retries})[/yellow]"
                                 )
                                 await asyncio.sleep(retry_delay)
@@ -610,8 +609,7 @@ class UNIT3D:
                     except httpx.TimeoutException:
                         if attempt < max_retries - 1:
                             timeout = timeout * 1.5  # Increase timeout by 50% for next retry
-                            await asyncio.to_thread(
-                                console.print,
+                            console.print(
                                 f"[yellow]{self.tracker}: Request timed out, retrying in {retry_delay} seconds with {timeout}s timeout... (attempt {attempt + 1}/{max_retries})[/yellow]"
                             )
                             await asyncio.sleep(retry_delay)
@@ -621,8 +619,7 @@ class UNIT3D:
                             return False, response_data
                     except httpx.RequestError as e:
                         if attempt < max_retries - 1:
-                            await asyncio.to_thread(
-                                console.print,
+                            console.print(
                                 f"[yellow]{self.tracker}: Request error, retrying in {retry_delay} seconds... (attempt {attempt + 1}/{max_retries})[/yellow]"
                             )
                             await asyncio.sleep(retry_delay)
@@ -650,8 +647,8 @@ class UNIT3D:
                     success, _ = await perform_upload(client)
                     return success
         else:
-            await asyncio.to_thread(console.print, f"[cyan]{self.tracker} Request Data:")
-            await asyncio.to_thread(console.print, data)
+            console.print(f"[cyan]{self.tracker} Request Data:")
+            console.print(data)
             meta["tracker_status"][self.tracker][
                 "status_message"
             ] = f"Debug mode enabled, not uploading: {self.tracker}."
@@ -673,7 +670,7 @@ class UNIT3D:
             if match:
                 torrent_id = match.group(1)
         except (IndexError, KeyError):
-            await asyncio.to_thread(console.print, "Could not parse torrent_id from response data.")
+            console.print("Could not parse torrent_id from response data.")
         return torrent_id
 
     def process_response_data(self, response_data: dict[str, Any]) -> str:

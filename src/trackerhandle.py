@@ -102,7 +102,7 @@ async def process_trackers(
                     message = f"{tracker}: {Redaction.redact_private_info(status['status_message'])}"
             else:
                 if 'status_message' in status and "data error" in str(status['status_message']):
-                    await asyncio.to_thread(console.print, f"[red]{tracker}: {str(status['status_message'])}[/red]")
+                    console.print(f"[red]{tracker}: {str(status['status_message'])}[/red]")
                     return
 
             if message is not None:
@@ -111,9 +111,9 @@ async def process_trackers(
                     if duration and isinstance(duration, (int, float)):
                         color = "#21ff00" if duration < 5 else "#9fd600" if duration < 10 else "#cfaa00" if duration < 15 else "#f17100" if duration < 20 else "#ff0000"
                         message += f" [[{color}]{duration:.2f}s[/{color}]]"
-                await asyncio.to_thread(console.print, message)
+                console.print(message)
         except Exception as e:
-            await asyncio.to_thread(console.print, f"[red]Error printing {tracker} result: {e}[/red]")
+            console.print(f"[red]Error printing {tracker} result: {e}[/red]")
 
     async def process_single_tracker(tracker: str) -> None:
         tracker_class: Any = None
@@ -140,9 +140,9 @@ async def process_trackers(
                 try:
                     modq, draft, tracker_caps = check_mod_q_and_draft(tracker_class, meta)
                     if tracker_caps.get('mod_q') and modq == "Yes":
-                        await asyncio.to_thread(console.print, f"{tracker} (modq: {modq})")
+                        console.print(f"{tracker} (modq: {modq})")
                     if (tracker_caps.get('draft') or tracker_caps.get('draft_live')) and draft in ["Yes", "Draft"]:
-                        await asyncio.to_thread(console.print, f"{tracker} (draft: {draft})")
+                        console.print(f"{tracker} (draft: {draft})")
                     if tracker == "TOS" and meta.get('keep_nfo', False):
                         await tracker_class.tos_rehash(meta)
                     is_uploaded = False
@@ -152,15 +152,15 @@ async def process_trackers(
                         upload_duration = time.time() - upload_start_time
                         meta[f'{tracker}_upload_duration'] = upload_duration
                     except Exception as e:
-                        await asyncio.to_thread(console.print, f"[red]Upload failed: {e}")
-                        await asyncio.to_thread(console.print, traceback.format_exc())
+                        console.print(f"[red]Upload failed: {e}")
+                        console.print(traceback.format_exc())
                         return
                 except Exception:
-                    await asyncio.to_thread(console.print, traceback.format_exc())
+                    console.print(traceback.format_exc())
                     return
 
                 if is_uploaded is None:
-                    await asyncio.to_thread(console.print, f"[yellow]Warning: {tracker_class.tracker} upload method returned None instead of boolean. Treating as failed upload.[/yellow]")
+                    console.print(f"[yellow]Warning: {tracker_class.tracker} upload method returned None instead of boolean. Treating as failed upload.[/yellow]")
                     is_uploaded = False
 
                 status = cast(StatusDict, meta.get('tracker_status') or {}).get(tracker_class.tracker, {})
@@ -169,7 +169,7 @@ async def process_trackers(
                     await print_tracker_result(tracker, tracker_class, status, True)
                 else:
                     await print_tracker_result(tracker, tracker_class, status, False)
-                    await asyncio.to_thread(console.print, f"[red]{tracker} upload failed or returned data error.[/red]")
+                    console.print(f"[red]{tracker} upload failed or returned data error.[/red]")
 
         elif tracker in other_api_trackers:
             tracker_status = cast(StatusDict, meta.get('tracker_status') or {})
@@ -183,18 +183,18 @@ async def process_trackers(
                         upload_duration = time.time() - upload_start_time
                         meta[f'{tracker}_upload_duration'] = upload_duration
                     except Exception as e:
-                        await asyncio.to_thread(console.print, f"[red]Upload failed: {e}")
-                        await asyncio.to_thread(console.print, traceback.format_exc())
+                        console.print(f"[red]Upload failed: {e}")
+                        console.print(traceback.format_exc())
                         return
                     if tracker == 'SN':
                         await asyncio.sleep(16)
                 except Exception:
-                    await asyncio.to_thread(console.print, traceback.format_exc())
+                    console.print(traceback.format_exc())
                     return
 
                 # Detect and handle None return value from upload method
                 if is_uploaded is None:
-                    await asyncio.to_thread(console.print, f"[yellow]Warning: {tracker_class.tracker} upload method returned None instead of boolean. Treating as failed upload.[/yellow]")
+                    console.print(f"[yellow]Warning: {tracker_class.tracker} upload method returned None instead of boolean. Treating as failed upload.[/yellow]")
                     is_uploaded = False
 
                 status = cast(StatusDict, meta.get('tracker_status') or {}).get(tracker_class.tracker, {})
@@ -203,7 +203,7 @@ async def process_trackers(
                     await print_tracker_result(tracker, tracker_class, status, True)
                 else:
                     await print_tracker_result(tracker, tracker_class, status, False)
-                    await asyncio.to_thread(console.print, f"[red]{tracker} upload failed or returned data error.[/red]")
+                    console.print(f"[red]{tracker} upload failed or returned data error.[/red]")
 
         elif tracker in http_trackers:
             tracker_status = cast(StatusDict, meta.get('tracker_status') or {})
@@ -217,17 +217,17 @@ async def process_trackers(
                         upload_duration = time.time() - upload_start_time
                         meta[f'{tracker}_upload_duration'] = upload_duration
                     except Exception as e:
-                        await asyncio.to_thread(console.print, f"[red]Upload failed: {e}")
-                        await asyncio.to_thread(console.print, traceback.format_exc())
+                        console.print(f"[red]Upload failed: {e}")
+                        console.print(traceback.format_exc())
                         return
 
                 except Exception:
-                    await asyncio.to_thread(console.print, traceback.format_exc())
+                    console.print(traceback.format_exc())
                     return
 
                 # Detect and handle None return value from upload method
                 if is_uploaded is None:
-                    await asyncio.to_thread(console.print, f"[yellow]Warning: {tracker_class.tracker} upload method returned None instead of boolean. Treating as failed upload.[/yellow]")
+                    console.print(f"[yellow]Warning: {tracker_class.tracker} upload method returned None instead of boolean. Treating as failed upload.[/yellow]")
                     is_uploaded = False
 
                 status = cast(StatusDict, meta.get('tracker_status') or {}).get(tracker_class.tracker, {})
@@ -236,7 +236,7 @@ async def process_trackers(
                     await print_tracker_result(tracker, tracker_class, status, True)
                 else:
                     await print_tracker_result(tracker, tracker_class, status, False)
-                    await asyncio.to_thread(console.print, f"[red]{tracker} upload failed or returned data error.[/red]")
+                    console.print(f"[red]{tracker} upload failed or returned data error.[/red]")
 
         elif tracker == "MANUAL":
             if meta['unattended']:
@@ -245,7 +245,7 @@ async def process_trackers(
                 try:
                     do_manual = cli_ui.ask_yes_no("Get files for manual upload?", default=True)
                 except EOFError:
-                    await asyncio.to_thread(console.print, "\n[red]Exiting on user request (Ctrl+C)[/red]")
+                    console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                     await cleanup_manager.cleanup()
                     cleanup_manager.reset_terminal()
                     sys.exit(1)
@@ -260,10 +260,10 @@ async def process_trackers(
                             await tracker_class.edit_desc(meta)
                 url = await manual_packager.package(meta)
                 if url is False:
-                    await asyncio.to_thread(console.print, f"[yellow]Unable to upload prep files, they can be found at `tmp/{meta['uuid']}")
+                    console.print(f"[yellow]Unable to upload prep files, they can be found at `tmp/{meta['uuid']}")
                 else:
-                    await asyncio.to_thread(console.print, f"[green]{meta['name']}")
-                    await asyncio.to_thread(console.print, f"[green]Files can be found at: [yellow]{url}[/yellow]")
+                    console.print(f"[green]{meta['name']}")
+                    console.print(f"[green]Files can be found at: [yellow]{url}[/yellow]")
 
         elif tracker == "THR":
             tracker_status = cast(StatusDict, meta.get('tracker_status') or {})
@@ -278,8 +278,8 @@ async def process_trackers(
                     upload_duration = time.time() - upload_start_time
                     meta[f'{tracker}_upload_duration'] = upload_duration
                 except Exception as e:
-                    await asyncio.to_thread(console.print, f"[red]Upload failed: {e}")
-                    await asyncio.to_thread(console.print, traceback.format_exc())
+                    console.print(f"[red]Upload failed: {e}")
+                    console.print(traceback.format_exc())
                     return
                 if is_uploaded:
                     await client.add_to_client(meta, "THR")
@@ -288,7 +288,7 @@ async def process_trackers(
                 else:
                     status = cast(StatusDict, meta.get('tracker_status') or {}).get('THR', {})
                     await print_tracker_result(tracker, thr, status, False)
-                    await asyncio.to_thread(console.print, f"[red]{tracker} upload failed or returned data error.[/red]")
+                    console.print(f"[red]{tracker} upload failed or returned data error.[/red]")
 
         elif tracker == "PTP":
             tracker_status = cast(StatusDict, meta.get('tracker_status') or {})
@@ -306,8 +306,8 @@ async def process_trackers(
                         meta[f'{tracker}_upload_duration'] = upload_duration
                         await asyncio.sleep(5)
                     except Exception as e:
-                        await asyncio.to_thread(console.print, f"[red]Upload failed: {e}")
-                        await asyncio.to_thread(console.print, traceback.format_exc())
+                        console.print(f"[red]Upload failed: {e}")
+                        console.print(traceback.format_exc())
                         return
                     status = cast(StatusDict, meta.get('tracker_status') or {}).get(ptp.tracker, {})
                     if is_uploaded and 'status_message' in status and "data error" not in str(status['status_message']):
@@ -315,9 +315,9 @@ async def process_trackers(
                         await print_tracker_result(tracker, ptp, status, True)
                     else:
                         await print_tracker_result(tracker, ptp, status, False)
-                        await asyncio.to_thread(console.print, f"[red]{tracker} upload failed or returned data error.[/red]")
+                        console.print(f"[red]{tracker} upload failed or returned data error.[/red]")
                 except Exception:
-                    await asyncio.to_thread(console.print, traceback.format_exc())
+                    console.print(traceback.format_exc())
                     return
 
     multi_screens = int(config['DEFAULT'].get('multiScreens', 2))
@@ -341,12 +341,12 @@ async def process_trackers(
         # Log any exceptions that occurred
         for (tracker, _), result in zip(tasks, results):
             if isinstance(result, Exception):
-                await asyncio.to_thread(console.print, f"[red]{tracker} encountered an error: {result}[/red]")
+                console.print(f"[red]{tracker} encountered an error: {result}[/red]")
                 if meta.get('debug'):
-                    await asyncio.to_thread(console.print, traceback.format_exception(type(result), result, result.__traceback__))
+                    console.print(traceback.format_exception(type(result), result, result.__traceback__))
     else:
         # Process each tracker sequentially
         for tracker in enabled_trackers:
             await process_single_tracker(tracker)
 
-    await asyncio.to_thread(console.print, "[green]All tracker uploads processed.[/green]")
+    console.print("[green]All tracker uploads processed.[/green]")
