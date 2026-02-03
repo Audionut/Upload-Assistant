@@ -249,16 +249,20 @@ class UNIT3D:
         return {"name": meta["name"]}
 
     async def get_description(self, meta: dict[str, Any], cached_description: Optional[str] = None) -> dict[str, str]:
-        cached_desc = cached_description or meta.get("cached_description")
+        tracker_cached = meta.get(f"{self.tracker}_cached_description")
+        cached_desc = cached_description or tracker_cached or meta.get("cached_description")
         if cached_desc is not None:
+            meta[f"{self.tracker}_description_cache_hit"] = True
             console.print(f"[yellow]{self.tracker} - using cached description[/yellow]")
             return {"description": cast(str, cached_desc)}
         console.print(f"[yellow]{self.tracker} - building fresh description[/yellow]")
-        return {
-            "description": await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(
-                meta, comparison=True
-            )
-        }
+        description = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(
+            meta, comparison=True
+        )
+        meta[f"{self.tracker}_description_cache_hit"] = False
+        meta[f"{self.tracker}_cached_description"] = description
+        meta[f"{self.tracker}_cached_description_has_logo"] = bool(meta.get("logo"))
+        return {"description": description}
 
     async def get_mediainfo(self, meta: dict[str, Any], mediainfo_text: Optional[str] = None) -> dict[str, str]:
         if meta.get("bdinfo") is not None:
@@ -479,7 +483,20 @@ class UNIT3D:
     async def get_data(self, meta: dict[str, Any]) -> dict[str, str]:
         def log_step(label: str, start_time: float) -> None:
             elapsed = time.perf_counter() - start_time
-            console.print(f"[cyan]{self.tracker} timing: {label} {elapsed:.2f}s[/cyan]")
+            message = (
+                f"[cyan]{self.tracker} timing: {label} {elapsed:.2f}s[/cyan]"
+                if elapsed is not None
+                else f"[cyan]{self.tracker} timing: {label}[/cyan]"
+            )
+            if self.config.get("DEFAULT", {}).get("async_timing_logs", True):
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    console.print(message)
+                else:
+                    loop.create_task(asyncio.to_thread(console.print, message))
+            else:
+                console.print(message)
 
         cached_description = cast(Optional[str], meta.get("cached_description"))
         mediainfo_text = cast(Optional[str], meta.get("cached_mediainfo_text"))
@@ -612,10 +629,21 @@ class UNIT3D:
             elapsed = None
             if start_time is not None:
                 elapsed = time.perf_counter() - start_time
-            if elapsed is not None:
-                console.print(f"[cyan]{self.tracker} timing: {label} {elapsed:.2f}s[/cyan]")
+            message = (
+                f"[cyan]{self.tracker} timing: {label} {elapsed:.2f}s[/cyan]"
+                if elapsed is not None
+                else f"[cyan]{self.tracker} timing: {label}[/cyan]"
+            )
+
+            if self.config.get("DEFAULT", {}).get("async_timing_logs", True):
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    console.print(message)
+                else:
+                    loop.create_task(asyncio.to_thread(console.print, message))
             else:
-                console.print(f"[cyan]{self.tracker} timing: {label}[/cyan]")
+                console.print(message)
 
         data_start = time.perf_counter()
         data = await self.get_data(meta)
@@ -635,11 +663,14 @@ class UNIT3D:
         files.update(await self.get_additional_files(meta, nfo_bytes=nfo_bytes, nfo_name=nfo_name))
         nfo_source = ("cached" if nfo_bytes is not None else "disk") if "nfo" in files else "none"
         log_timing(f"get_additional_files() [{nfo_source}]", additional_files_start)
+
+        request_prep_start = time.perf_counter()
         headers = {
             "User-Agent": f'{meta["ua_name"]} {meta.get("current_version", "")} ({platform.system()} {platform.release()})',
             "authorization": f"Bearer {self.api_key}",
             "accept": "application/json",
         }
+        log_timing("prepare_request_headers", request_prep_start)
 
         if meta["debug"] is False:
             max_retries = 2
@@ -661,9 +692,13 @@ class UNIT3D:
                         )
                         response.raise_for_status()
                         log_timing(f"upload attempt {attempt + 1} response", attempt_start)
+                        response_read_start = time.perf_counter()
                         response_body = await response.aread()
+                        log_timing(f"upload attempt {attempt + 1} read body", response_read_start)
+
+                        response_parse_start = time.perf_counter()
                         response_data = await asyncio.to_thread(json.loads, response_body)
-                        log_timing(f"upload attempt {attempt + 1} parse", attempt_start)
+                        log_timing(f"upload attempt {attempt + 1} parse", response_parse_start)
 
                         # Verify API success before proceeding
                         if not response_data.get("success"):

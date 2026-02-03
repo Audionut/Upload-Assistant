@@ -65,7 +65,15 @@ class DP(UNIT3D):
 
         return should_continue
 
-    async def get_description(self, meta: dict[str, Any], cached_description: Optional[str] = None) -> dict[str, str]:  # noqa: ARG002
+    async def get_description(self, meta: dict[str, Any], cached_description: Optional[str] = None) -> dict[str, str]:
+        tracker_cached = meta.get(f"{self.tracker}_cached_description")
+        cached_desc = cached_description or tracker_cached or meta.get("cached_description")
+        cached_has_logo = bool(meta.get(f"{self.tracker}_cached_description_has_logo") or meta.get("cached_description_has_logo"))
+
+        if cached_desc is not None and (cached_has_logo or meta.get("logo")):
+            meta[f"{self.tracker}_description_cache_hit"] = True
+            return {'description': cast(str, cached_desc)}
+
         if meta.get('logo', "") == "":
             TMDB_API_KEY = self.config['DEFAULT'].get('tmdb_api')
             TMDB_BASE_URL = "https://api.themoviedb.org/3"
@@ -87,7 +95,15 @@ class DP(UNIT3D):
                 if logo_path:
                     meta['logo'] = logo_path
 
-        return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta)}
+        if cached_desc is not None and not meta.get("logo"):
+            meta[f"{self.tracker}_description_cache_hit"] = True
+            return {'description': cast(str, cached_desc)}
+
+        description = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta)
+        meta[f"{self.tracker}_description_cache_hit"] = False
+        meta[f"{self.tracker}_cached_description"] = description
+        meta[f"{self.tracker}_cached_description_has_logo"] = bool(meta.get("logo"))
+        return {'description': description}
 
     def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         data = {

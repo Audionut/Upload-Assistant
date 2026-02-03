@@ -6,7 +6,7 @@ import os
 import re
 import time
 import urllib.parse
-from typing import Any, Union, cast
+from typing import Any, Optional, Union, cast
 from urllib.parse import ParseResult
 
 import aiofiles
@@ -358,7 +358,8 @@ class DescriptionBuilder:
 
         if template_exists:
             try:
-                media_info_result = MediaInfo.parse(
+                media_info_result = await asyncio.to_thread(
+                    MediaInfo.parse,
                     video_file,
                     output="STRING",
                     full=False,
@@ -758,6 +759,24 @@ class DescriptionBuilder:
 
         overall_start = time.perf_counter()
 
+        # Check if we can use cached disc/screenshot section
+        # Cache is valid only for single file (no discs) with no tracker-specific image filtering
+        discs = meta.get("discs", [])
+        filelist = meta.get("filelist", [])
+        cached_section = cast(Optional[str], meta.get("cached_discs_and_screenshots"))
+
+        # Use cache if: no discs, single file, and no tracker-specific image host filtering
+        use_cache = (
+            cached_section
+            and len(discs) == 0
+            and len(filelist) <= 1
+            and not approved_image_hosts
+        )
+
+        if use_cache:
+            log_step("OVERALL _handle_discs_and_screenshots (using cache)", overall_start)
+            return cast(str, cached_section)
+
         try:
             screenheader = self.screenshot_header()
         except Exception:
@@ -774,8 +793,6 @@ class DescriptionBuilder:
         screensPerRow = self.get_screens_per_row()
 
         desc_parts: list[str] = []
-
-        discs = meta.get("discs", [])
         if len(discs) == 1:
             each = discs[0]
             if each["type"] == "DVD":
@@ -1306,8 +1323,12 @@ class DescriptionBuilder:
                 # Write filename in BBCode format with MediaInfo in spoiler if not the first file
                 if multi_screens != 0:
                     if i > 0 and char_count < max_char_limit:
-                        mi_dump = MediaInfo.parse(
-                            file, output="STRING", full=False, mediainfo_options={"inform_version": "1"}
+                        mi_dump = await asyncio.to_thread(
+                            MediaInfo.parse,
+                            file,
+                            output="STRING",
+                            full=False,
+                            mediainfo_options={"inform_version": "1"},
                         )
                         parsed_mediainfo = self.parser.parse_mediainfo(str(mi_dump))
                         formatted_bbcode = self.parser.format_bbcode(parsed_mediainfo)

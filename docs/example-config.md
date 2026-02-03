@@ -203,6 +203,7 @@ Implementation notes:
 ### Logging / output
 - `keep_meta` (bool): Do not delete existing `meta.json` before running (NOT recommended).
 - `show_upload_duration` (bool): Print how long each tracker upload took.
+- `async_timing_logs` (bool): Print timing logs using a background thread to reduce async loop blocking.
 - `print_tracker_messages` (bool): Print tracker API messages returned during upload.
 - `print_tracker_links` (bool): Print direct torrent links after upload.
 - `inject_delay` (int): Delay (in seconds) before injecting the torrent to allow the tracker to register the hash and avoid 'unregistered torrent' errors.

@@ -135,10 +135,21 @@ async def process_trackers(
         elapsed = None
         if start_time is not None:
             elapsed = time.perf_counter() - start_time
-        if elapsed is not None:
-            console.print(f"[cyan]{tracker} timing: {label} {elapsed:.2f}s[/cyan]")
+        message = (
+            f"[cyan]{tracker} timing: {label} {elapsed:.2f}s[/cyan]"
+            if elapsed is not None
+            else f"[cyan]{tracker} timing: {label}[/cyan]"
+        )
+
+        if config.get("DEFAULT", {}).get("async_timing_logs", True):
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                console.print(message)
+            else:
+                loop.create_task(asyncio.to_thread(console.print, message))
         else:
-            console.print(f"[cyan]{tracker} timing: {label}[/cyan]")
+            console.print(message)
 
     async def preload_nfo(meta: Meta) -> None:
         if meta.get("cached_nfo_bytes") is not None or meta.get("cached_nfo_missing") is True:
@@ -269,19 +280,48 @@ async def process_trackers(
         except Exception as e:
             console.print(f"[yellow]Warning: Unable to preload BDINFO for UNIT3D uploads: {e}[/yellow]")
 
+        # Get first active UNIT3D tracker for preload
+        active_unit3d_trackers = [t for t in active_trackers if t in unit3d_trackers]
+        tracker_for_preload = active_unit3d_trackers[0] if active_unit3d_trackers else "UNIT3D"
+
         try:
+            # Preload disc/screenshot section once (skip for single file with no discs)
+            discs_start = time.perf_counter()
+            builder = DescriptionBuilder(tracker_for_preload, config)
+
+            # Call the disc/screenshot handler directly and cache the result
+            discs = meta.get("discs", [])
+            images = meta.get("image_list", [])
+            multi_screens = int(config["DEFAULT"].get("multiScreens", 2)) if not meta.get("sorted_filelist") else 0
+
+            if not meta.get("skip_disc_screenshot_preload"):  # Allow skipping if user prefers
+                cached_discs_and_screenshots = await builder._handle_discs_and_screenshots(
+                    meta,
+                    [],  # approved_image_hosts empty for preload - trackers will filter
+                    images,
+                    multi_screens
+                )
+                meta["cached_discs_and_screenshots"] = cached_discs_and_screenshots
+                log_timing("UNIT3D", "preload disc/screenshot section", discs_start)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Unable to preload disc/screenshot section for UNIT3D uploads: {e}[/yellow]")
+            meta["cached_discs_and_screenshots"] = None
+
+        try:
+            # Preload full description (uses cached disc/screenshot section internally)
             description_start = time.perf_counter()
-            # Get the first active UNIT3D tracker for description building
-            active_unit3d_trackers = [t for t in active_trackers if t in unit3d_trackers]
-            tracker_for_desc = active_unit3d_trackers[0] if active_unit3d_trackers else "UNIT3D"
-            description = await DescriptionBuilder(tracker_for_desc, config).unit3d_edit_desc(
+            description = await DescriptionBuilder(tracker_for_preload, config).unit3d_edit_desc(
                 meta, comparison=True
             )
             meta["cached_description"] = description
-            log_timing("UNIT3D", "preload description", description_start)
+            meta["cached_description_has_logo"] = bool(meta.get("logo"))
+            meta[f"{tracker_for_preload}_cached_description"] = description
+            meta[f"{tracker_for_preload}_cached_description_has_logo"] = bool(meta.get("logo"))
+            log_timing("UNIT3D", "preload full description", description_start)
         except Exception as e:
             console.print(f"[yellow]Warning: Unable to preload description for UNIT3D uploads: {e}[/yellow]")
             meta["cached_description"] = None
+            meta["cached_description_has_logo"] = False
 
     def print_tracker_result(
         tracker: str,
@@ -585,6 +625,9 @@ async def process_trackers(
         add_time = tracker_timings.get("add_to_client")
         if add_time is not None:
             summary_parts.append(f"add_to_client {add_time:.2f}s")
+        cache_hit = meta.get(f"{tracker}_description_cache_hit")
+        if isinstance(cache_hit, bool):
+            summary_parts.append(f"desc_cache {'hit' if cache_hit else 'miss'}")
         console.print(f"[cyan]{tracker} timing summary: {', '.join(summary_parts)}[/cyan]")
 
     multi_screens = int(config['DEFAULT'].get('multiScreens', 2))
