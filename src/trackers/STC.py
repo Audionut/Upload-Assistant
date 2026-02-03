@@ -80,7 +80,7 @@ class STC(UNIT3D):
             approved_image_hosts=self.approved_image_hosts,
         )
 
-    async def get_description(self, meta: Meta) -> dict[str, str]:
+    async def get_description(self, meta: Meta, cached_description: Optional[str] = None) -> dict[str, str]:  # noqa: ARG002
         image_list = meta['STC_images_key'] if 'STC_images_key' in meta else meta.get('image_list', [])
         image_list = cast(list[Any], image_list)
 

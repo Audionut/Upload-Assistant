@@ -1,7 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
 import re
-from typing import Any, cast
+from typing import Any, Optional, cast
 
 import aiofiles
 
@@ -105,7 +105,7 @@ class HUNO(UNIT3D):
             approved_image_hosts=self.approved_image_hosts,
         )
 
-    async def get_description(self, meta: dict[str, Any]) -> dict[str, str]:
+    async def get_description(self, meta: dict[str, Any], cached_description: Optional[str] = None) -> dict[str, str]:  # noqa: ARG002
         image_list = meta['HUNO_images_key'] if 'HUNO_images_key' in meta else meta['image_list']
 
         return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, image_list=image_list, approved_image_hosts=self.approved_image_hosts)}

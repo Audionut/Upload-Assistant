@@ -188,7 +188,7 @@ class TIK(UNIT3D):
         }.get(str(meta.get('resolution', '')), '10')
         return {'resolution_id': resolution_id}
 
-    async def get_description(self, meta: Meta) -> dict[str, str]:
+    async def get_description(self, meta: Meta, cached_description: Optional[str] = None) -> dict[str, str]:  # noqa: ARG002
         if meta.get('description_link') or meta.get('description_file'):
             desc = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, comparison=True)
 

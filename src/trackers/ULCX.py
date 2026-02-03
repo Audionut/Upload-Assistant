@@ -1,6 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import re
-from typing import Any
+from typing import Any, Optional
 
 import aiofiles
 import cli_ui
@@ -75,8 +75,8 @@ class ULCX(UNIT3D):
 
         return data
 
-    async def get_description(self, meta: Meta) -> dict[str, str]:
-        desc = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, comparison=True)
+    async def get_description(self, meta: Meta, cached_description: Optional[str] = None) -> dict[str, str]:
+        desc = cached_description or await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, comparison=True)
 
         if self.common.is_adult_content(meta):
             pattern = r'(\[center\](?:(?!\[/center\]).)*\[/center\])'

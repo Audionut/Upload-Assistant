@@ -150,8 +150,10 @@ class Redaction:
             del meta['matched_episode_ids']
 
         output_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
+        # Filter out bytes that can't be JSON serialized (cached preload data)
+        meta_serializable = {k: v for k, v in meta.items() if not isinstance(v, bytes)}
         async with aiofiles.open(output_path, 'w', encoding='utf-8') as f:
-            await f.write(json.dumps(meta, indent=4))
+            await f.write(json.dumps(meta_serializable, indent=4))
 
         return meta
 

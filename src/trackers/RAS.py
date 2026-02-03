@@ -1,5 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-from typing import Any
+from typing import Any, Optional
 
 from src.get_desc import DescriptionBuilder
 from src.tmdb import TmdbManager
@@ -34,7 +34,7 @@ class RAS(UNIT3D):
 
         return should_continue
 
-    async def get_description(self, meta: Meta) -> dict[str, str]:
+    async def get_description(self, meta: Meta, cached_description: Optional[str] = None) -> dict[str, str]:  # noqa: ARG002
         if meta.get('logo', "") == "":
             TMDB_API_KEY = str(self.config['DEFAULT'].get('tmdb_api', ''))
             TMDB_BASE_URL = "https://api.themoviedb.org/3"

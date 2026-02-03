@@ -712,7 +712,7 @@ class SHRI(UNIT3D):
     def _get_best_italian_audio_format(self, meta: dict[str, Any]) -> str:
         return asyncio.run(self._get_best_italian_audio_format_async(meta))
 
-    async def get_description(self, meta: dict[str, Any], is_test: bool = False) -> dict[str, str]:
+    async def get_description(self, meta: dict[str, Any], cached_description: Optional[str] = None, is_test: bool = False) -> dict[str, str]:  # noqa: ARG002
         """Generate Italian BBCode description for ShareIsland"""
         title = meta.get("title", "Unknown")
         italian_title = self._get_italian_title(meta.get("imdb_info", {}))

@@ -1,7 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # import discord
 import re
-from typing import Any, cast
+from typing import Any, Optional, cast
 
 import cli_ui
 
@@ -65,7 +65,7 @@ class DP(UNIT3D):
 
         return should_continue
 
-    async def get_description(self, meta: dict[str, Any]) -> dict[str, str]:
+    async def get_description(self, meta: dict[str, Any], cached_description: Optional[str] = None) -> dict[str, str]:  # noqa: ARG002
         if meta.get('logo', "") == "":
             TMDB_API_KEY = self.config['DEFAULT'].get('tmdb_api')
             TMDB_BASE_URL = "https://api.themoviedb.org/3"

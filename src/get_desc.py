@@ -4,6 +4,7 @@ import glob
 import json
 import os
 import re
+import time
 import urllib.parse
 from typing import Any, Union, cast
 from urllib.parse import ParseResult
@@ -751,13 +752,19 @@ class DescriptionBuilder:
         return pack_images_data
 
     async def _handle_discs_and_screenshots(self, meta: dict[str, Any], approved_image_hosts: list[str], images: list[dict[str, str]], multi_screens: int) -> str:
+        def log_step(label: str, start_time: float) -> None:
+            elapsed = time.perf_counter() - start_time
+            console.print(f"[cyan]_handle_discs_and_screenshots timing: {label} {elapsed:.2f}s[/cyan]")
+
+        overall_start = time.perf_counter()
+
         try:
             screenheader = self.screenshot_header()
         except Exception:
             screenheader = None
 
-        # Check for saved pack_image_links.json file
-        pack_images_data = await self._check_saved_pack_image_links(meta, approved_image_hosts)
+        # Only load pack_image_links if needed (multi_screens != 0 or multiple BD playlists)
+        pack_images_data = None
 
         char_limit = int(self.config["DEFAULT"].get("charLimit", 14000))
         file_limit = int(self.config["DEFAULT"].get("fileLimit", 5))
@@ -792,6 +799,12 @@ class DescriptionBuilder:
             if each["type"] == "BDMV":
                 bdinfo_keys = [key for key in each if key.startswith("bdinfo")]
                 if len(bdinfo_keys) > 1:
+                    # Lazy load pack_images_data only when needed for multiple BD playlists
+                    if pack_images_data is None:
+                        pack_load_start = time.perf_counter()
+                        pack_images_data = await self._check_saved_pack_image_links(meta, approved_image_hosts)
+                        log_step("_check_saved_pack_image_links (multiple playlists)", pack_load_start)
+
                     if "retry_count" not in meta:
                         meta["retry_count"] = 0
 
@@ -907,6 +920,12 @@ class DescriptionBuilder:
 
         # Handle multiple discs case
         elif len(discs) > 1:
+            # Lazy load pack_images_data only when needed for multi_screens processing
+            if multi_screens != 0 and pack_images_data is None:
+                pack_load_start = time.perf_counter()
+                pack_images_data = await self._check_saved_pack_image_links(meta, approved_image_hosts)
+                log_step("_check_saved_pack_image_links (multiple discs)", pack_load_start)
+
             # Initialize retry_count if not already set
             if "retry_count" not in meta:
                 meta["retry_count"] = 0
@@ -1159,6 +1178,13 @@ class DescriptionBuilder:
         other_files_spoiler_open = False  # Track if "Other files" spoiler has been opened
         total_files_to_process = min(len(filelist), process_limit)
         processed_count = 0
+
+        # Lazy load pack_images_data only when needed for multi_screens file processing
+        if multi_screens != 0 and total_files_to_process > 1 and pack_images_data is None:
+            pack_load_start = time.perf_counter()
+            pack_images_data = await self._check_saved_pack_image_links(meta, approved_image_hosts)
+            log_step("_check_saved_pack_image_links (multiple files)", pack_load_start)
+
         if multi_screens != 0 and total_files_to_process > 1:
             console.print("[cyan]Processing screenshots for packed content (multiScreens)[/cyan]")
             console.print(f"[cyan]{total_files_to_process} files (processLimit)[/cyan]")
@@ -1340,6 +1366,7 @@ class DescriptionBuilder:
 
         description = "".join(p for p in desc_parts if p)
 
+        log_step("OVERALL _handle_discs_and_screenshots", overall_start)
         return description
 
     def get_screens_per_row(self) -> int:

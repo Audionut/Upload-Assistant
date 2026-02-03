@@ -76,7 +76,7 @@ class OE(UNIT3D):
             approved_image_hosts=self.approved_image_hosts,
         )
 
-    async def get_description(self, meta: Meta) -> dict[str, str]:
+    async def get_description(self, meta: Meta, cached_description: Optional[str] = None) -> dict[str, str]:  # noqa: ARG002
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf8') as f:
             base = await f.read()
 

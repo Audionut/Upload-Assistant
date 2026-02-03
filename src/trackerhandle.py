@@ -183,7 +183,7 @@ async def process_trackers(
             meta["cached_nfo_missing"] = True
 
     async def preload_mediainfo(meta: Meta) -> None:
-        if meta.get("cached_mediainfo_bytes") is not None or meta.get("cached_mediainfo_missing") is True:
+        if meta.get("cached_mediainfo_text") is not None or meta.get("cached_mediainfo_missing") is True:
             return
         base_dir = meta.get("base_dir")
         uuid = meta.get("uuid")
@@ -193,16 +193,16 @@ async def process_trackers(
         mediainfo_path = os.path.join(base_dir, "tmp", uuid, "MEDIAINFO_CLEANPATH.txt")
         try:
             if os.path.isfile(mediainfo_path):
-                async with aiofiles.open(mediainfo_path, "rb") as f:
-                    mediainfo_bytes = await f.read()
-                meta["cached_mediainfo_bytes"] = mediainfo_bytes
+                async with aiofiles.open(mediainfo_path, encoding="utf-8") as f:
+                    mediainfo_text = await f.read()
+                meta["cached_mediainfo_text"] = mediainfo_text
             else:
                 meta["cached_mediainfo_missing"] = True
         except OSError:
             meta["cached_mediainfo_missing"] = True
 
     async def preload_bdinfo(meta: Meta) -> None:
-        if meta.get("cached_bdinfo_bytes") is not None or meta.get("cached_bdinfo_missing") is True:
+        if meta.get("cached_bdinfo_text") is not None or meta.get("cached_bdinfo_missing") is True:
             return
         base_dir = meta.get("base_dir")
         uuid = meta.get("uuid")
@@ -212,9 +212,9 @@ async def process_trackers(
         bdinfo_path = os.path.join(base_dir, "tmp", uuid, "BD_SUMMARY_00.txt")
         try:
             if os.path.isfile(bdinfo_path):
-                async with aiofiles.open(bdinfo_path, "rb") as f:
-                    bdinfo_bytes = await f.read()
-                meta["cached_bdinfo_bytes"] = bdinfo_bytes
+                async with aiofiles.open(bdinfo_path, encoding="utf-8") as f:
+                    bdinfo_text = await f.read()
+                meta["cached_bdinfo_text"] = bdinfo_text
             else:
                 meta["cached_bdinfo_missing"] = True
         except OSError:
@@ -248,7 +248,7 @@ async def process_trackers(
         try:
             mediainfo_start = time.perf_counter()
             await preload_mediainfo(meta)
-            if meta.get("cached_mediainfo_bytes") is not None:
+            if meta.get("cached_mediainfo_text") is not None or meta.get("cached_mediainfo_bytes") is not None:
                 log_timing("UNIT3D", "preload MEDIAINFO (found)", mediainfo_start)
             elif meta.get("cached_mediainfo_missing") is True:
                 log_timing("UNIT3D", "preload MEDIAINFO (missing)", mediainfo_start)
@@ -260,7 +260,7 @@ async def process_trackers(
         try:
             bdinfo_start = time.perf_counter()
             await preload_bdinfo(meta)
-            if meta.get("cached_bdinfo_bytes") is not None:
+            if meta.get("cached_bdinfo_text") is not None or meta.get("cached_bdinfo_bytes") is not None:
                 log_timing("UNIT3D", "preload BDINFO (found)", bdinfo_start)
             elif meta.get("cached_bdinfo_missing") is True:
                 log_timing("UNIT3D", "preload BDINFO (missing)", bdinfo_start)
@@ -268,6 +268,20 @@ async def process_trackers(
                 log_timing("UNIT3D", "preload BDINFO", bdinfo_start)
         except Exception as e:
             console.print(f"[yellow]Warning: Unable to preload BDINFO for UNIT3D uploads: {e}[/yellow]")
+
+        try:
+            description_start = time.perf_counter()
+            # Get the first active UNIT3D tracker for description building
+            active_unit3d_trackers = [t for t in active_trackers if t in unit3d_trackers]
+            tracker_for_desc = active_unit3d_trackers[0] if active_unit3d_trackers else "UNIT3D"
+            description = await DescriptionBuilder(tracker_for_desc, config).unit3d_edit_desc(
+                meta, comparison=True
+            )
+            meta["cached_description"] = description
+            log_timing("UNIT3D", "preload description", description_start)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Unable to preload description for UNIT3D uploads: {e}[/yellow]")
+            meta["cached_description"] = None
 
     def print_tracker_result(
         tracker: str,

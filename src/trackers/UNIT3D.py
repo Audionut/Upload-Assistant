@@ -248,39 +248,54 @@ class UNIT3D:
     def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         return {"name": meta["name"]}
 
-    async def get_description(self, meta: dict[str, Any]) -> dict[str, str]:
+    async def get_description(self, meta: dict[str, Any], cached_description: Optional[str] = None) -> dict[str, str]:
+        cached_desc = cached_description or meta.get("cached_description")
+        if cached_desc is not None:
+            console.print(f"[yellow]{self.tracker} - using cached description[/yellow]")
+            return {"description": cast(str, cached_desc)}
+        console.print(f"[yellow]{self.tracker} - building fresh description[/yellow]")
         return {
             "description": await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(
                 meta, comparison=True
             )
         }
 
-    async def get_mediainfo(self, meta: dict[str, Any], mediainfo_bytes: Optional[bytes] = None) -> dict[str, str]:
+    async def get_mediainfo(self, meta: dict[str, Any], mediainfo_text: Optional[str] = None) -> dict[str, str]:
         if meta.get("bdinfo") is not None:
             mediainfo = ""
         else:
-            if mediainfo_bytes is not None:
-                mediainfo = mediainfo_bytes.decode("utf-8")
-            elif meta.get("cached_mediainfo_missing") is True:
-                mediainfo = ""
+            cached_text = mediainfo_text or cast(Optional[str], meta.get("cached_mediainfo_text"))
+            if cached_text is not None:
+                mediainfo = cached_text
             else:
-                async with aiofiles.open(
-                    f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding="utf-8"
-                ) as f:
-                    mediainfo = await f.read()
+                cached_bytes = cast(Optional[bytes], meta.get("cached_mediainfo_bytes"))
+                if cached_bytes is not None:
+                    mediainfo = cached_bytes.decode("utf-8")
+                elif meta.get("cached_mediainfo_missing") is True:
+                    mediainfo = ""
+                else:
+                    async with aiofiles.open(
+                        f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding="utf-8"
+                    ) as f:
+                        mediainfo = await f.read()
         return {"mediainfo": mediainfo}
 
-    async def get_bdinfo(self, meta: dict[str, Any], bdinfo_bytes: Optional[bytes] = None) -> dict[str, str]:
+    async def get_bdinfo(self, meta: dict[str, Any], bdinfo_text: Optional[str] = None) -> dict[str, str]:
         if meta.get("bdinfo") is not None:
-            if bdinfo_bytes is not None:
-                bdinfo = bdinfo_bytes.decode("utf-8")
-            elif meta.get("cached_bdinfo_missing") is True:
-                bdinfo = ""
+            cached_text = bdinfo_text or cast(Optional[str], meta.get("cached_bdinfo_text"))
+            if cached_text is not None:
+                bdinfo = cached_text
             else:
-                async with aiofiles.open(
-                    f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding="utf-8"
-                ) as f:
-                    bdinfo = await f.read()
+                cached_bytes = cast(Optional[bytes], meta.get("cached_bdinfo_bytes"))
+                if cached_bytes is not None:
+                    bdinfo = cached_bytes.decode("utf-8")
+                elif meta.get("cached_bdinfo_missing") is True:
+                    bdinfo = ""
+                else:
+                    async with aiofiles.open(
+                        f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding="utf-8"
+                    ) as f:
+                        bdinfo = await f.read()
         else:
             bdinfo = ""
         return {"bdinfo": bdinfo}
@@ -462,45 +477,86 @@ class UNIT3D:
         return {"sticky": "0"}
 
     async def get_data(self, meta: dict[str, Any]) -> dict[str, str]:
-        mediainfo_bytes = cast(Optional[bytes], meta.get("cached_mediainfo_bytes"))
-        bdinfo_bytes = cast(Optional[bytes], meta.get("cached_bdinfo_bytes"))
+        def log_step(label: str, start_time: float) -> None:
+            elapsed = time.perf_counter() - start_time
+            console.print(f"[cyan]{self.tracker} timing: {label} {elapsed:.2f}s[/cyan]")
 
-        description, mediainfo, bdinfo = await asyncio.gather(
-            self.get_description(meta),
-            self.get_mediainfo(meta, mediainfo_bytes=mediainfo_bytes),
-            self.get_bdinfo(meta, bdinfo_bytes=bdinfo_bytes),
-        )
+        cached_description = cast(Optional[str], meta.get("cached_description"))
+        mediainfo_text = cast(Optional[str], meta.get("cached_mediainfo_text"))
+        bdinfo_text = cast(Optional[str], meta.get("cached_bdinfo_text"))
+
+        gather_start = time.perf_counter()
+
+        # Create tasks to track when each completes
+        desc_task = asyncio.create_task(self.get_description(meta, cached_description=cached_description))
+        mediainfo_task = asyncio.create_task(self.get_mediainfo(meta, mediainfo_text=mediainfo_text))
+        bdinfo_task = asyncio.create_task(self.get_bdinfo(meta, bdinfo_text=bdinfo_text))
+
+        description = await desc_task
+        desc_time = time.perf_counter() - gather_start
+        console.print(f"[cyan]{self.tracker} timing: get_description (completed) {desc_time:.2f}s[/cyan]")
+
+        mediainfo = await mediainfo_task
+        mediainfo_time = time.perf_counter() - gather_start
+        console.print(f"[cyan]{self.tracker} timing: get_mediainfo (completed) {mediainfo_time:.2f}s[/cyan]")
+
+        bdinfo = await bdinfo_task
+        bdinfo_time = time.perf_counter() - gather_start
+        console.print(f"[cyan]{self.tracker} timing: get_bdinfo (completed) {bdinfo_time:.2f}s[/cyan]")
+
+        log_step("get_description/mediainfo/bdinfo (all completed)", gather_start)
 
         merged: dict[str, str] = {}
+        step_start = time.perf_counter()
         merged.update(self.get_name(meta))
+        log_step("get_name()", step_start)
         merged.update(description)
         merged.update(mediainfo)
         merged.update(bdinfo)
+        step_start = time.perf_counter()
         merged.update(self.get_category_id(meta))
+        log_step("get_category_id()", step_start)
+        step_start = time.perf_counter()
         merged.update(self.get_type_id(meta))
+        log_step("get_type_id()", step_start)
+        step_start = time.perf_counter()
         merged.update(self.get_resolution_id(meta))
+        log_step("get_resolution_id()", step_start)
+
+        step_start = time.perf_counter()
         merged.update(self.get_tmdb(meta))
         merged.update(self.get_imdb(meta))
         merged.update(self.get_tvdb(meta))
         merged.update(self.get_mal(meta))
         merged.update(self.get_igdb(meta))
+        log_step("get_ids()", step_start)
+
+        step_start = time.perf_counter()
         merged.update(self.get_anonymous(meta))
         merged.update(self.get_stream(meta))
         merged.update(self.get_sd(meta))
         merged.update(self.get_keywords(meta))
         merged.update(self.get_personal_release(meta))
         merged.update(self.get_internal(meta))
+        log_step("get_flags()", step_start)
+
+        step_start = time.perf_counter()
         merged.update(self.get_season_number(meta))
         merged.update(self.get_episode_number(meta))
         merged.update(self.get_featured(meta))
         merged.update(self.get_free(meta))
         merged.update(self.get_doubleup(meta))
         merged.update(self.get_sticky(meta))
+        log_step("get_episode_flags()", step_start)
+
         additional_start = time.perf_counter()
         merged.update(self.get_additional_data(meta))
-        console.print(f"[cyan]{self.tracker} timing: get_additional_data() {time.perf_counter() - additional_start:.2f}s[/cyan]")
+        log_step("get_additional_data()", additional_start)
+
+        step_start = time.perf_counter()
         merged.update(self.get_region_id(meta))
         merged.update(self.get_distributor_id(meta))
+        log_step("get_region_distributor()", step_start)
 
         # Handle exclusive flag centrally for all UNIT3D trackers
         # Priority: meta['exclusive'] > tracker config > default (not set)
