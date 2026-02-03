@@ -573,11 +573,16 @@ class ASC:
         }
 
     async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[dict[str, str]]:
+        found_items: list[dict[str, str]] = []
+        if not meta.get("imdb_id") and not meta.get("anime"):
+            console.print(f"{self.tracker}: [bold red]Ignorando upload devido à ausência de IMDb.[/bold red]")
+            meta["skipping"] = f"{self.tracker}"
+            return found_items
+
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar is not None:
             self.session.cookies = cast(Any, cookie_jar)
 
-        found_items: list[dict[str, str]] = []
         if meta.get('anime'):
             await self.load_localized_data(meta)
             search_name = await self.get_title(meta)
