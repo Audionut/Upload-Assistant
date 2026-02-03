@@ -192,7 +192,7 @@ class TVC:
             approved_image_hosts=self.approved_image_hosts
         )
 
-    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
+    async def upload(self, meta: Meta, _disctype: str, _torrent_bytes: Any = None) -> Optional[bool]:
         common = COMMON(config=self.config)
 
         raw_images = meta.get('TVC_images_key', meta.get('image_list', []))
@@ -205,7 +205,7 @@ class TVC:
             image_list_seq = []
         image_list = [cast(dict[str, Any], img) for img in image_list_seq]
 
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
         await self.get_tmdb_data(meta)
 
         # load MediaInfo.json
@@ -416,7 +416,13 @@ class TVC:
             tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
             tracker_status.setdefault(self.tracker, {})
             tracker_status[self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
 
     def get_audio_languages(self, mi: dict[str, Any]) -> list[str]:

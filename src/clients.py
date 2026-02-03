@@ -172,13 +172,40 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
 
             try:
                 if torrent_client.lower() == "rtorrent":
-                    self.rtorrent(meta['path'], torrent_path, torrent, meta, local_path, remote_path, client, tracker)
+                    await asyncio.to_thread(
+                        self.rtorrent,
+                        meta['path'],
+                        torrent_path,
+                        torrent,
+                        meta,
+                        local_path,
+                        remote_path,
+                        client,
+                        tracker,
+                    )
                 elif torrent_client == "qbit":
                     await self.qbittorrent(meta['path'], torrent, local_path, remote_path, client, meta['is_disc'], meta['filelist'], meta, tracker, cross)
                 elif torrent_client.lower() == "deluge":
-                    self.deluge(meta['path'], torrent_path, torrent, local_path, remote_path, client, meta)
+                    await asyncio.to_thread(
+                        self.deluge,
+                        meta['path'],
+                        torrent_path,
+                        torrent,
+                        local_path,
+                        remote_path,
+                        client,
+                        meta,
+                    )
                 elif torrent_client.lower() == "transmission":
-                    self.transmission(meta['path'], torrent, local_path, remote_path, client, meta)
+                    await asyncio.to_thread(
+                        self.transmission,
+                        meta['path'],
+                        torrent,
+                        local_path,
+                        remote_path,
+                        client,
+                        meta,
+                    )
                 elif torrent_client.lower() == "watch":
                     await asyncio.to_thread(shutil.copy, torrent_path, client['watch_folder'])
             except Exception as e:

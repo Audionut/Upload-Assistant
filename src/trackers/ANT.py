@@ -122,10 +122,13 @@ class ANT:
 
         return antType
 
-    async def upload(self, meta: Meta, _) -> bool:
+    async def upload(self, meta: Meta, _, _torrent_bytes: Any = None) -> bool:
         torrent_filename = "BASE"
-        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
-        torrent_file_size_kib = os.path.getsize(torrent_path) / 1024
+        if _torrent_bytes is not None:
+            torrent_file_size_kib = len(_torrent_bytes) / 1024
+        else:
+            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
+            torrent_file_size_kib = os.path.getsize(torrent_path) / 1024
         tracker_url: str = ''
         if meta.get('mkbrr', False):
             tracker_url = self.tracker_config.get('announce_url', "https://fake.tracker").strip()
@@ -137,7 +140,13 @@ class ANT:
             await TorrentCreator.create_torrent(meta, str(Path(meta['path'])), "ANT", tracker_url=tracker_url)
             torrent_filename = "ANT"
 
-        await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_filename)
+        await self.common.create_torrent_for_upload(
+            meta,
+            self.tracker,
+            self.source_flag,
+            torrent_filename=torrent_filename,
+            torrent_bytes=_torrent_bytes,
+        )
         flags = self.get_flags(meta)
         audioformat = self.get_audio(meta)
         if not audioformat:
@@ -296,7 +305,13 @@ class ANT:
                 console.print("[cyan]ANT Request Data:")
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-                await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+                await self.common.create_torrent_for_upload(
+                    meta,
+                    f"{self.tracker}" + "_DEBUG",
+                    f"{self.tracker}" + "_DEBUG",
+                    announce_url="https://fake.tracker",
+                    torrent_bytes=_torrent_bytes,
+                )
                 return True
         except httpx.TimeoutException:
             meta['tracker_status'][self.tracker]['status_message'] = "data error: ANT request timed out while uploading."

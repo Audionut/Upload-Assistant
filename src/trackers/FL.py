@@ -135,9 +135,9 @@ class FL:
 
         return {}
 
-    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str, _torrent_bytes: Any = None) -> bool:
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
         await self.edit_desc(meta)
         fl_name = self.edit_name(meta)
         cat_id = self.get_category_id(meta)
@@ -215,7 +215,13 @@ class FL:
             console.print(url)
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
         else:
             cookiefile_json = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.json")

@@ -1,6 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
 import hashlib
+import io
 import json
 import os
 import re
@@ -117,11 +118,22 @@ class COMMON:
         source_flag: str,
         torrent_filename: str = "BASE",
         announce_url: str = "",
+        torrent_bytes: Optional[bytes] = None,
     ) -> None:
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"
         if await self.path_exists(path):
             loop = asyncio.get_running_loop()
-            new_torrent = await loop.run_in_executor(None, Torrent.read, path)
+            new_torrent: Torrent
+            if torrent_bytes is not None and torrent_filename == "BASE":
+                try:
+                    new_torrent = await loop.run_in_executor(
+                        None,
+                        lambda: Torrent.read(cast(Any, io.BytesIO(torrent_bytes))),
+                    )
+                except Exception:
+                    new_torrent = await loop.run_in_executor(None, Torrent.read, path)
+            else:
+                new_torrent = await loop.run_in_executor(None, Torrent.read, path)
             metainfo_keys = list(new_torrent.metainfo)
             for each in metainfo_keys:
                 if each not in ('announce', 'comment', 'creation date', 'created by', 'encoding', 'info'):

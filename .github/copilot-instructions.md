@@ -29,6 +29,8 @@
 
 ## Lint & type-check expectations
 - Follow Ruff and Pyright settings in pyproject.toml when making changes.
+
+## Python version
 - All changes must be python version 3.9+ compatible.
 
 ## SonarQube rules
@@ -40,17 +42,18 @@
 	- python:S117 level off
 	- python:S3358 level off
 	- python:S1192 threshold 10
-  	- python:S101 level off
-  	- python:S100 level off
-  	- python:S5843 level off
-  	- python:S1542 level off
-  	- python:S1135 level off
+	- python:S101 level off
+	- python:S100 level off
+	- python:S5843 level off
+	- python:S1542 level off
+	- python:S1135 level off
 - Follow SonarQube ruleset with overrides when adding or modifying code.
 
 ## Codebase conventions
 - Ensure metadata gathering, tracker status management, and upload processing follow established async patterns:
-- Minimize blocking calls within async functions; use `await` for I/O-bound operations.
-- Minimize async overhead, and only use async where it provides clear benefits (e.g., concurrent network calls).
+- In unattended mode `meta['unattended']` is True; avoid prompts and use concurrent task firing where appropriate.
+- Ensure no blocking calls within async functions; use non-blocking features to allow individual tasks to complete immediately, independent of other tasks, especially for I/O-bound operations.
+- Minimize async overhead, and only use async where it provides clear benefits (e.g., concurrent network, CPU-bound or I/O calls).
 - `meta` keys are widely reused across modules; Do not rename keys.
 - `Prep.gather_prep()` sets `meta['uuid']` to the folder name when not provided and creates tmp/<uuid>/; new features should write artifacts there and reuse the same `meta['uuid']` value.
 - Tracker status uses per-tracker deep copies of `meta` and merges selective fields under a lock in the trackerstatus module under src/; avoid writing shared `meta` outside the lock when adding new tracker flags.

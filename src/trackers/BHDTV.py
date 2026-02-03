@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import os
 import traceback
 from typing import Any, Optional, Union, cast
@@ -31,9 +32,9 @@ class BHDTV:
         # self.forum_link = 'https://www.bit-hdtv.com/rules.php'
         self.banned_groups = []
 
-    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str, _torrent_bytes: Any = None) -> bool:
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
         await self.edit_desc(meta)
         cat_id = self.get_cat_id(meta)
         sub_cat_id = ""
@@ -121,7 +122,13 @@ class BHDTV:
         console.print("[cyan]BHDTV Request Data:")
         console.print(Redaction.redact_private_info(data))
         meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-        await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+        await common.create_torrent_for_upload(
+            meta,
+            f"{self.tracker}" + "_DEBUG",
+            f"{self.tracker}" + "_DEBUG",
+            announce_url="https://fake.tracker",
+            torrent_bytes=_torrent_bytes,
+        )
         return True
 
     def get_cat_id(self, meta: dict[str, Any]) -> str:
@@ -209,6 +216,7 @@ class BHDTV:
         return None
 
     async def search_existing(self, _meta: dict[str, Any], _disctype: str) -> list[str]:
+        await asyncio.sleep(0)
         console.print("[red]Dupes must be checked Manually")
         return ['Dupes must be checked Manually']
         # hopefully someone else has the time to implement this.

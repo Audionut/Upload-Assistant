@@ -32,9 +32,9 @@ class THR:
         self.password = str(config['TRACKERS']['THR'].get('password', ''))
         self.banned_groups = [""]
 
-    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
+    async def upload(self, meta: Meta, _disctype: str, _torrent_bytes: Any = None) -> Optional[bool]:
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
         cat_id = self.get_cat_id(meta)
         subs = self.get_subtitles(meta)
         await self.edit_desc(meta)
@@ -152,7 +152,13 @@ class THR:
             tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
             tracker_status.setdefault(self.tracker, {})
             tracker_status[self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return False
 
     def get_cat_id(self, meta: Meta) -> str:

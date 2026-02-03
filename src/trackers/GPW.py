@@ -935,8 +935,8 @@ class GPW:
 
         return data
 
-    async def upload(self, meta: Meta, disctype: str) -> bool:
-        await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+    async def upload(self, meta: Meta, disctype: str, _torrent_bytes: Any = None) -> bool:
+        await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
         data = await self.fetch_data(meta, disctype)
 
         if not meta.get('debug', False):
@@ -985,5 +985,11 @@ class GPW:
             console.print("[cyan]GPW Request Data:")
             console.print(Redaction.redact_private_info(data))
             meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading.'
-            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await self.common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True

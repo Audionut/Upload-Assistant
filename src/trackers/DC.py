@@ -269,7 +269,7 @@ class DC:
 
         return data
 
-    async def upload(self, meta: Meta, _) -> bool:
+    async def upload(self, meta: Meta, _, _torrent_bytes: Any = None) -> bool:
         data = await self.fetch_data(meta)
         torrent_title = self.edit_name(meta)
         response = None
@@ -277,7 +277,12 @@ class DC:
         if not meta.get('debug', False):
             try:
                 upload_url = f'{self.api_base_url}/upload'
-                await self.common.create_torrent_for_upload(meta, self.tracker, 'DigitalCore.club')
+                await self.common.create_torrent_for_upload(
+                    meta,
+                    self.tracker,
+                    'DigitalCore.club',
+                    torrent_bytes=_torrent_bytes,
+                )
                 torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
                 async with aiofiles.open(torrent_path, 'rb') as torrent_file:
@@ -325,5 +330,11 @@ class DC:
             console.print("[cyan]DC Request Data:")
             console.print(Redaction.redact_private_info(data))
             meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading'
-            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await self.common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success

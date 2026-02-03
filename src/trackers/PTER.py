@@ -369,10 +369,10 @@ class PTER:
                     return 'yes'
         return None
 
-    async def upload(self, meta: Meta, _disctype: str) -> bool:
+    async def upload(self, meta: Meta, _disctype: str, _torrent_bytes: Any = None) -> bool:
 
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
 
         desc_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
         if not os.path.exists(desc_file):
@@ -437,7 +437,13 @@ class PTER:
             console.print(url)
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
         else:
             cookiefile = f"{meta['base_dir']}/data/cookies/PTER.txt"

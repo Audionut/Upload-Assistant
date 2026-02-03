@@ -39,7 +39,7 @@ class RTF:
         self.forum_link = 'https://retroflix.club/forums.php?action=viewtopic&topicid=3619'
         self.banned_groups: list[str] = []
 
-    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str, _torrent_bytes: Any = None) -> bool:
         """Upload a torrent to RetroFlix tracker.
 
         Args:
@@ -50,7 +50,7 @@ class RTF:
             True if upload was successful, False otherwise.
         """
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
         await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, signature=self.forum_link)
         if meta['bdinfo'] is not None:
             mi_dump = None
@@ -183,7 +183,13 @@ class RTF:
                 debug_data['file'] = f"{str(debug_data['file'])[:10]}..."
             console.print(debug_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
 
     async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[dict[str, Any]]:

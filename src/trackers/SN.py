@@ -33,9 +33,9 @@ class SN:
         }.get(type, '0')
         return type_id
 
-    async def upload(self, meta: Meta, _disctype: str) -> bool:
+    async def upload(self, meta: Meta, _disctype: str, _torrent_bytes: Any = None) -> bool:
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
         # await common.unit3d_edit_desc(meta, self.tracker, self.forum_link)
         await self.edit_desc(meta)
         cat_id = ""
@@ -159,7 +159,13 @@ class SN:
             tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
             tracker_status.setdefault(self.tracker, {})
             tracker_status[self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
 
     async def edit_desc(self, meta: Meta) -> None:

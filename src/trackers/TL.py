@@ -345,17 +345,17 @@ class TL:
             media = cast(dict[str, Any], data.get('data', {})).get('Media')
             return media['id'] if media else None
 
-    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
-        await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+    async def upload(self, meta: Meta, _disctype: str, _torrent_bytes: Any = None) -> Optional[bool]:
+        await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
 
         if self.api_upload:
-            is_uploaded = await self.upload_api(meta)
+            is_uploaded = await self.upload_api(meta, _torrent_bytes)
             return is_uploaded
         else:
-            is_uploaded = await self.cookie_upload(meta)
+            is_uploaded = await self.cookie_upload(meta, _torrent_bytes)
             return is_uploaded
 
-    async def upload_api(self, meta: Meta) -> bool:
+    async def upload_api(self, meta: Meta, _torrent_bytes: Any = None) -> bool:
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
         async with aiofiles.open(torrent_path, 'rb') as open_torrent:
@@ -416,7 +416,13 @@ class TL:
         else:
             console.print("[cyan]TL Request Data:")
             console.print(Redaction.redact_private_info(data))
-            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await self.common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
         return False
 
@@ -447,7 +453,7 @@ class TL:
 
         return data
 
-    async def cookie_upload(self, meta: Meta) -> Optional[bool]:
+    async def cookie_upload(self, meta: Meta, _torrent_bytes: Any = None) -> Optional[bool]:
         await self.generate_description(meta)
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", encoding='utf-8') as f:
             description_content = await f.read()
@@ -463,7 +469,13 @@ class TL:
         if meta.get('debug'):
             console.print("[cyan]TL Request Data:")
             console.print(Redaction.redact_private_info(data))
-            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await self.common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
         else:
             try:

@@ -5,6 +5,7 @@ import json
 import os
 import platform
 import re
+import time
 from typing import Any, Optional, Union
 
 import aiofiles
@@ -482,7 +483,9 @@ class UNIT3D:
         merged.update(self.get_free(meta))
         merged.update(self.get_doubleup(meta))
         merged.update(self.get_sticky(meta))
+        additional_start = time.perf_counter()
         merged.update(self.get_additional_data(meta))
+        console.print(f"[cyan]{self.tracker} timing: get_additional_data() {time.perf_counter() - additional_start:.2f}s[/cyan]")
         merged.update(self.get_region_id(meta))
         merged.update(self.get_distributor_id(meta))
 
@@ -518,13 +521,35 @@ class UNIT3D:
 
         return files
 
-    async def upload(self, meta: dict[str, Any], _: Any) -> bool:
+    async def upload(self, meta: dict[str, Any], _: Any, torrent_bytes: Optional[bytes] = None) -> bool:
+        timing_enabled = True
+
+        def log_timing(label: str, start_time: Optional[float] = None) -> None:
+            if not timing_enabled:
+                return
+            elapsed = None
+            if start_time is not None:
+                elapsed = time.perf_counter() - start_time
+            if elapsed is not None:
+                console.print(f"[cyan]{self.tracker} timing: {label} {elapsed:.2f}s[/cyan]")
+            else:
+                console.print(f"[cyan]{self.tracker} timing: {label}[/cyan]")
+
+        data_start = time.perf_counter()
         data = await self.get_data(meta)
-        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
-        async with aiofiles.open(torrent_file_path, "rb") as f:
-            torrent_bytes = await f.read()
+        log_timing("get_data()", data_start)
+        if torrent_bytes is None:
+            torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
+            torrent_read_start = time.perf_counter()
+            async with aiofiles.open(torrent_file_path, "rb") as f:
+                torrent_bytes = await f.read()
+            log_timing("read BASE.torrent", torrent_read_start)
+        else:
+            log_timing("read BASE.torrent (preloaded)")
         files = {"torrent": ("torrent.torrent", torrent_bytes, "application/x-bittorrent")}
+        additional_files_start = time.perf_counter()
         files.update(await self.get_additional_files(meta))
+        log_timing("get_additional_files()", additional_files_start)
         headers = {
             "User-Agent": f'{meta["ua_name"]} {meta.get("current_version", "")} ({platform.system()} {platform.release()})',
             "authorization": f"Bearer {self.api_key}",
@@ -544,14 +569,16 @@ class UNIT3D:
                 nonlocal timeout
                 response_data: dict[str, Any] = {}
                 for attempt in range(max_retries):
+                    attempt_start = time.perf_counter()
                     try:  # noqa: PERF203
                         response = await client.post(
                             url=self.upload_url, files=files, data=data, headers=headers, timeout=timeout
                         )
                         response.raise_for_status()
-
+                        log_timing(f"upload attempt {attempt + 1} response", attempt_start)
                         response_body = await response.aread()
                         response_data = await asyncio.to_thread(json.loads, response_body)
+                        log_timing(f"upload attempt {attempt + 1} parse", attempt_start)
 
                         # Verify API success before proceeding
                         if not response_data.get("success"):
@@ -563,12 +590,14 @@ class UNIT3D:
                         meta["tracker_status"][self.tracker]["status_message"] = (
                             self.process_response_data(response_data)
                         )
-                        torrent_id = await self.get_torrent_id(response_data)
+                        torrent_id = self.get_torrent_id(response_data)
 
                         meta["tracker_status"][self.tracker]["torrent_id"] = torrent_id
+                        download_start = time.perf_counter()
                         await self.common.download_tracker_torrent(
                             meta, self.tracker, headers=headers, downurl=response_data["data"]
                         )
+                        log_timing("download_tracker_torrent()", download_start)
                         return True, response_data  # Success
 
                     except httpx.HTTPStatusError as e:  # noqa: PERF203
@@ -657,12 +686,13 @@ class UNIT3D:
                 f"{self.tracker}" + "_DEBUG",
                 f"{self.tracker}" + "_DEBUG",
                 announce_url="https://fake.tracker",
+                torrent_bytes=torrent_bytes,
             )
             return True  # Debug mode - simulated success
 
         return False
 
-    async def get_torrent_id(self, response_data: dict[str, Any]) -> str:
+    def get_torrent_id(self, response_data: dict[str, Any]) -> str:
         """Matches /12345.abcde and returns 12345"""
         torrent_id = ""
         try:

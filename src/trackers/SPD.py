@@ -266,7 +266,7 @@ class SPD:
 
         return None
 
-    async def fetch_data(self, meta: Meta) -> dict[str, Any]:
+    async def fetch_data(self, meta: Meta, torrent_bytes: Optional[bytes] = None) -> dict[str, Any]:
         media_info, bd_info = await self.get_file_info(meta)
 
         data: dict[str, Any] = {
@@ -284,7 +284,10 @@ class SPD:
             'url': str(cast(dict[str, Any], meta.get('imdb_info', {})).get('imdb_url', '')),
         }
 
-        data['file'] = await self.encode_to_base64(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
+        if torrent_bytes is None:
+            data['file'] = await self.encode_to_base64(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
+        else:
+            data['file'] = base64.b64encode(torrent_bytes).decode('utf-8')
         if meta.get('debug') is True:
             data['file'] = str(data['file'])[:50] + '...[DEBUG MODE]'
             if data.get('nfo'):
@@ -292,8 +295,8 @@ class SPD:
 
         return data
 
-    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
-        data = await self.fetch_data(meta)
+    async def upload(self, meta: Meta, _disctype: str, torrent_bytes: Optional[bytes] = None) -> Optional[bool]:
+        data = await self.fetch_data(meta, torrent_bytes)
         tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
         tracker_status.setdefault(self.tracker, {})
 
@@ -363,5 +366,11 @@ class SPD:
             console.print("[cyan]SPD Request Data:")
             console.print(Redaction.redact_private_info(data))
             tracker_status[self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await self.common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=torrent_bytes,
+            )
             return True  # Debug mode - simulated success

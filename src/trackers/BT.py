@@ -774,7 +774,7 @@ class BT:
 
         return data
 
-    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str, _torrent_bytes: Any = None) -> bool:
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar is None:
             return False

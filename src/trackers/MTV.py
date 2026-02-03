@@ -77,7 +77,7 @@ class MTV:
             approved_image_hosts=self.approved_image_hosts,
         )
 
-    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
+    async def upload(self, meta: Meta, _disctype: str, _torrent_bytes: Any = None) -> Optional[bool]:
         cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/MTV.json")
         base_piece_mb = int(meta.get('base_torrent_piece_mb', 0) or 0)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -97,13 +97,19 @@ class MTV:
                     await asyncio.sleep(cooldown)  # Small cooldown before rehashing
 
                 await TorrentCreator.create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
-                await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
+                await self.common.create_torrent_for_upload(
+                    meta,
+                    self.tracker,
+                    self.source_flag,
+                    torrent_filename=torrent_create,
+                    torrent_bytes=_torrent_bytes,
+                )
 
             else:
                 console.print("[red]Piece size is OVER 8M and skip_if_rehash enabled. Skipping upload.")
                 return
         else:
-            await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+            await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
 
         cat_id = self.get_cat_id(meta)
         resolution_id = self.get_res_id(meta['resolution'])
@@ -211,7 +217,13 @@ class MTV:
                 debug_data['auth'] = f"{auth_value[:3]}..." if len(auth_value) > 3 else '***'
             console.print(debug_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await self.common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
 
     async def edit_desc(self, meta: Meta) -> None:

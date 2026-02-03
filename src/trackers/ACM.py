@@ -181,8 +181,8 @@ class ACM:
             return ' [No Eng subs]'
         return f" [{subs[0]} subs only]"
 
-    async def upload(self, meta: dict[str, Any], _) -> bool:
-        await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+    async def upload(self, meta: dict[str, Any], _, _torrent_bytes: Any = None) -> bool:
+        await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
         cat_id = self.get_cat_id(meta['category'])
         type_id = self.get_type_id(meta)
         resolution_id = self.get_resolution_id(meta)
@@ -278,7 +278,13 @@ class ACM:
             console.print("[cyan]ACM Request Data:")
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await self.common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True
 
     async def search_existing(self, meta: dict[str, Any], _) -> list[str]:

@@ -222,7 +222,7 @@ class HDB:
 
         return hdb_name
 
-    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
+    async def upload(self, meta: Meta, _disctype: str, _torrent_bytes: Any = None) -> Optional[bool]:
         common = COMMON(config=self.config)
         await self.edit_desc(meta)
         hdb_name = self.edit_name(meta)
@@ -261,9 +261,15 @@ class HDB:
                 await asyncio.sleep(cooldown)  # Small cooldown before rehashing
 
             await TorrentCreator.create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
-            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
+            await common.create_torrent_for_upload(
+                meta,
+                self.tracker,
+                self.source_flag,
+                torrent_filename=torrent_create,
+                torrent_bytes=_torrent_bytes,
+            )
         else:
-            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
 
         # Proceed with the upload process
         async with aiofiles.open(torrent_file_path, 'rb') as torrent_file:
@@ -316,7 +322,13 @@ class HDB:
             console.print(url)
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
         else:
             cookiefile = f"{meta['base_dir']}/data/cookies/HDB.txt"

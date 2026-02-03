@@ -1540,7 +1540,7 @@ class PTP:
 
         return url, data
 
-    async def upload(self, meta: dict[str, Any], url: str, data: dict[str, Any], _disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], url: str, data: dict[str, Any], _disctype: str, _torrent_bytes: Any = None) -> bool:
         common = COMMON(config=self.config)
         base_piece_mb = int(meta.get('base_torrent_piece_mb', 0) or 0)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -1559,9 +1559,15 @@ class PTP:
                 await asyncio.sleep(cooldown)  # Small cooldown before rehashing
 
             await TorrentCreator.create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
-            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
+            await common.create_torrent_for_upload(
+                meta,
+                self.tracker,
+                self.source_flag,
+                torrent_filename=torrent_create,
+                torrent_bytes=_torrent_bytes,
+            )
         else:
-            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
 
         # Proceed with the upload process
         async with aiofiles.open(torrent_file_path, 'rb') as torrentFile:
@@ -1582,7 +1588,13 @@ class PTP:
             console.log(url)
             console.log(Redaction.redact_private_info(debug_data))
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
         else:
             failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]PTP_upload_failure.html"

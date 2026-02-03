@@ -1432,7 +1432,7 @@ class BJS:
 
         return ""
 
-    async def upload(self, meta: dict[str, Any], _):
+    async def upload(self, meta: dict[str, Any], _, _torrent_bytes: Any = None):
         data = await self.get_data(meta)
 
         issue = self.check_data(meta, data)

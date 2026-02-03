@@ -313,7 +313,7 @@ class IS:
 
         return data
 
-    async def upload(self, meta: Meta, _disctype: str) -> bool:
+    async def upload(self, meta: Meta, _disctype: str, _torrent_bytes: Any = None) -> bool:
         cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         self.session.cookies.clear()
         if cookies is not None:
