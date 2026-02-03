@@ -468,13 +468,14 @@ class BT:
 
     async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[str]:
         found_items: list[str] = []
-        if not meta.get("imdb_id") and not meta.get("anime"):
+        imdb_info: dict[str, Any] = meta.get("imdb_info", {})
+        if not imdb_info.get("imdbID") and not meta.get("anime"):
             console.print(f"{self.tracker}: [bold red]Ignorando upload devido à ausência de IMDb.[/bold red]")
             meta["skipping"] = f"{self.tracker}"
             return found_items
 
         is_tv_pack = bool(meta.get("tv_pack"))
-        searchstr = meta["title"] if meta.get("anime") else meta["imdb_info"]["imdbID"]
+        searchstr = meta["title"] if meta.get("anime") else imdb_info.get("imdbID")
 
         search_url = f"{self.base_url}/torrents.php?searchstr={searchstr}"
         try:
