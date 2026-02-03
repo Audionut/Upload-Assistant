@@ -122,13 +122,7 @@ class DP(UNIT3D):
 
     async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         dp_name = str(meta.get('name', ''))
-        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-        tag_lower = meta['tag'].lower()
-        if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
-            for invalid_tag in invalid_tags:
-                dp_name = re.sub(f"-{invalid_tag}", "", dp_name, flags=re.IGNORECASE)
-            dp_name = f"{dp_name}-NOGROUP"
-
+   
         audio = await self.get_audio(meta)
         if audio and audio != "SKIPPED" and "Dual-Audio" in dp_name:
             dp_name = dp_name.replace("Dual-Audio", audio)
