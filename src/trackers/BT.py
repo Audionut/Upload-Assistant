@@ -7,6 +7,8 @@ import unicodedata
 from typing import Any, Optional, cast
 
 import aiofiles
+import asyncio
+import cli_ui
 import httpx
 import langcodes
 from bs4 import BeautifulSoup
@@ -462,7 +464,8 @@ class BT:
                 )
 
         if not tags:
-            tags = await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')
+            tags_raw = await asyncio.to_thread(cli_ui.ask_string, f'Digite os gêneros (no formato do {self.tracker}): ')
+            tags = (tags_raw or "").strip()
 
         return tags
 
