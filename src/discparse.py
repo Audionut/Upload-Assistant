@@ -14,8 +14,8 @@ from typing import Any, Optional, cast
 import defusedxml.ElementTree as ET
 from langcodes import Language
 from pymediainfo import MediaInfo
-from pyparsebluray import mpls
 
+from bin.get_playlist import MplsParser
 from src.console import console
 from src.exportmi import setup_mediainfo_library
 
@@ -27,6 +27,49 @@ class DiscParse:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.mediainfo_config: Optional[dict[str, Any]] = None
+
+    def _calculate_playlist_score(self, playlist: PlaylistInfo) -> float:
+        """Calculate weighted score for playlist selection.
+
+        Weighted scoring system:
+        - Largest file size: 40% (strongest indicator of main feature)
+        - Total file size: 30% (overall content size)
+        - Duration: 20% (longer is typically main feature)
+        - File concentration: 10% (high ratio = fewer large files = likely main feature)
+        """
+        if not playlist.get('items'):
+            return 0.0
+
+        # Get metrics
+        file_sizes = [item['size'] for item in playlist['items']]
+        largest_file = max(file_sizes) if file_sizes else 0
+        total_size = sum(file_sizes)
+        duration = playlist.get('duration', 0.0)
+
+        # File concentration: ratio of unique files to total references
+        # Higher concentration means fewer duplicates (better)
+        total_files = len(playlist['items'])
+        unique_files = len({item['file'] for item in playlist['items']})
+        file_concentration = unique_files / total_files if total_files > 0 else 0.0
+
+        score = 0.0
+
+        # Normalize largest file size (assume max possible is 100GB = 100*1024*1024*1024 bytes)
+        max_file_size = 100.0 * 1024 * 1024 * 1024
+        score += (largest_file / max_file_size) * 40.0
+
+        # Normalize total size (assume max is 150GB)
+        max_total_size = 150.0 * 1024 * 1024 * 1024
+        score += (total_size / max_total_size) * 30.0
+
+        # Normalize duration (assume max is 4 hours = 14400 seconds)
+        max_duration = 14400.0
+        score += (duration / max_duration) * 20.0
+
+        # File concentration (already 0-1 ratio)
+        score += file_concentration * 10.0
+
+        return score
 
     def setup_mediainfo_for_dvd(self, base_dir: Optional[str], debug: bool = False) -> Optional[str]:
         """Setup MediaInfo binary for DVD processing using the complete setup from exportmi"""
@@ -78,9 +121,10 @@ class DiscParse:
 
                 def _load_mpls(mpls_path: str) -> tuple[Any, Any]:
                     with open(mpls_path, "rb") as mpls_file:
-                        header = mpls.load_movie_playlist(mpls_file)
+                        parser = MplsParser(mpls_file)
+                        header = parser.load_movie_playlist()
                         mpls_file.seek(header.playlist_start_address, os.SEEK_SET)
-                        playlist_data = mpls.load_playlist(mpls_file)
+                        playlist_data = parser.load_playlist()
                     return header, playlist_data
 
                 # Parse playlists
@@ -231,14 +275,15 @@ class DiscParse:
 
                     if all_playlists:
                         console.print("[yellow]Using available playlists with any duration")
-                        # Select the largest playlist by total size
-                        largest_playlist = max(all_playlists, key=lambda p: sum(item['size'] for item in p['items']))
-                        console.print(f"[green]Selected largest playlist {largest_playlist['file']} with duration {largest_playlist['duration']:.2f} seconds")
-                        valid_playlists = [largest_playlist]
+                        # Select the best playlist using weighted scoring
+                        scored_playlists = [(p, self._calculate_playlist_score(p)) for p in all_playlists]
+                        best_playlist, best_score = max(scored_playlists, key=lambda x: x[1])
+                        console.print(f"[green]Selected best playlist {best_playlist['file']} with score {best_score:.2f} (duration: {best_playlist['duration']:.2f}s)")
+                        valid_playlists = [best_playlist]
                     else:
-                        # Final fallback: find playlists >= 10 minutes regardless of file duplicates
+                        # Final fallback: find playlists >= 5 minutes regardless of file duplicates
                         if meta.get('debug'):
-                            console.print("[yellow]No playlists passed fallback checks. Using final fallback: any playlist >= 10 min...")
+                            console.print("[yellow]No playlists passed fallback checks. Using final fallback: any playlist >= 5 min...")
                         final_fallback_playlists: list[PlaylistInfo] = []
                         for file_name in os.listdir(playlists_path):
                             if file_name.endswith(".mpls"):
@@ -268,8 +313,8 @@ class DiscParse:
                                         except AttributeError:
                                             pass
 
-                                    # Accept any playlist >= 10 minutes
-                                    if duration_final >= 600:
+                                    # Accept any playlist >= 5 minutes
+                                    if duration_final >= 300:
                                         items_final = [{"file": file, "size": size} for file, size in file_sizes_final.items()]
                                         final_fallback_playlists.append({
                                             "file": file_name,
@@ -284,17 +329,21 @@ class DiscParse:
                                         console.print(f"[red]Error in final fallback for {file_name}: {e}")
 
                         if final_fallback_playlists:
-                            console.print("[yellow]Using final fallback: playlists >= 10 minutes (ignoring duplicates)")
-                            largest_playlist = max(final_fallback_playlists, key=lambda p: sum(item['size'] for item in p['items']))
-                            console.print(f"[green]Selected largest playlist {largest_playlist['file']} with duration {largest_playlist['duration']:.2f} seconds")
-                            valid_playlists = [largest_playlist]
+                            console.print("[yellow]Using final fallback: playlists >= 5 minutes (ignoring duplicates)")
+                            scored_playlists = [(p, self._calculate_playlist_score(p)) for p in final_fallback_playlists]
+                            best_playlist, best_score = max(scored_playlists, key=lambda x: x[1])
+                            console.print(f"[green]Selected best playlist {best_playlist['file']} with score {best_score:.2f} (duration: {best_playlist['duration']:.2f}s)")
+                            valid_playlists = [best_playlist]
                         else:
                             console.print(f"[bold red]No playlists found for disc {path}")
                             continue
 
                 if use_largest:
-                    console.print("[yellow]Auto-selecting the largest playlist based on configuration.")
-                    selected_playlists = [max(valid_playlists, key=lambda p: sum(item['size'] for item in p['items']))]
+                    console.print("[yellow]Auto-selecting the best playlist using weighted scoring.")
+                    scored_playlists = [(p, self._calculate_playlist_score(p)) for p in valid_playlists]
+                    best_playlist, best_score = max(scored_playlists, key=lambda x: x[1])
+                    console.print(f"[green]Selected best playlist {best_playlist['file']} with score {best_score:.2f}")
+                    selected_playlists = [best_playlist]
                 else:
                     # Allow user to select playlists
                     if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
