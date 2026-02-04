@@ -1,6 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # import discord
-import re
 from typing import Any, cast
 
 import cli_ui
@@ -122,7 +121,7 @@ class DP(UNIT3D):
 
     async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         dp_name = str(meta.get('name', ''))
-   
+
         audio = await self.get_audio(meta)
         if audio and audio != "SKIPPED" and "Dual-Audio" in dp_name:
             dp_name = dp_name.replace("Dual-Audio", audio)
