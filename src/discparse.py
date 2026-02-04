@@ -11,6 +11,7 @@ from glob import glob
 from pathlib import Path
 from typing import Any, Optional, cast
 
+import cli_ui
 import defusedxml.ElementTree as ET
 from langcodes import Language
 from pymediainfo import MediaInfo
@@ -359,7 +360,8 @@ class DiscParse:
                                     console.print(f"[{idx}] {playlist['file']} - {duration_str} - {items_str}")
 
                                 console.print("[bold yellow]Enter playlist numbers separated by commas, 'ALL' to select all, or press Enter to select the biggest playlist:")
-                                user_input = input("Select playlists: ").strip()
+                                user_input_raw = cli_ui.ask_string("Select playlists: ")
+                                user_input = (user_input_raw or "").strip().lower()
 
                                 if user_input.lower() == "all":
                                     selected_playlists = valid_playlists
@@ -489,7 +491,8 @@ class DiscParse:
 
                                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                     console.print("[bold green]You can create a custom Edition for this playlist.")
-                                    user_input = input(f"Enter a new Edition title for playlist {playlist['file']} (or press Enter to keep the current label): ").strip()
+                                    user_input_raw = cli_ui.ask_string(f"Enter a new Edition title for playlist {playlist['file']} (or press Enter to keep the current label): ")
+                                    user_input = (user_input_raw or "").strip()
                                     if user_input:
                                         bdinfo['edition'] = user_input
                                         selected_playlists[idx]['edition'] = user_input
@@ -903,7 +906,8 @@ class DiscParse:
                             additional_info_str = ", ".join(additional_info)
                             console.print(f"{idx}: Duration: {duration} Playlist: {title_number}" + (f" ({additional_info_str})" if additional_info else ""))
 
-                        user_input = input("Enter the number of the playlist you want to select: ").strip()
+                        user_input_raw = cli_ui.ask_string("Enter the number of the playlist you want to select: ")
+                        user_input = (user_input_raw or "").strip()
 
                         try:
                             selected_indices = [int(x) - 1 for x in user_input.split(",")]
