@@ -1,7 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # import discord
-import re
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import cli_ui
 
@@ -131,12 +130,6 @@ class DP(UNIT3D):
 
     def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         dp_name = str(meta.get('name', ''))
-        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-        tag_lower = meta['tag'].lower()
-        if meta['tag'] == "" or any(invalid_tag in tag_lower for invalid_tag in invalid_tags):
-            for invalid_tag in invalid_tags:
-                dp_name = re.sub(f"-{invalid_tag}", "", dp_name, flags=re.IGNORECASE)
-            dp_name = f"{dp_name}-NOGROUP"
 
         audio = self.get_audio(meta)
         if audio and audio != "SKIPPED" and "Dual-Audio" in dp_name:
