@@ -73,6 +73,9 @@ class DiscParse:
                     console.print(f"[bold red]PLAYLIST directory not found for disc {path}")
                     continue
 
+                if meta.get('debug'):
+                    console.print(f"[cyan]Parsing playlists from: {playlists_path}")
+
                 def _load_mpls(mpls_path: str) -> tuple[Any, Any]:
                     with open(mpls_path, "rb") as mpls_file:
                         header = mpls.load_movie_playlist(mpls_file)
@@ -85,6 +88,8 @@ class DiscParse:
                 for file_name in os.listdir(playlists_path):
                     if file_name.endswith(".mpls"):
                         mpls_path = os.path.join(playlists_path, file_name)
+                        if meta.get('debug'):
+                            console.print(f"[cyan]Processing playlist: {file_name}")
                         try:
                             _, playlist_data = await asyncio.to_thread(_load_mpls, mpls_path)
                             duration: float = 0.0
@@ -95,7 +100,12 @@ class DiscParse:
 
                             play_items = getattr(playlist_data, "play_items", None)
                             if not play_items:
+                                if meta.get('debug'):
+                                    console.print(f"[yellow]  No play_items found in {file_name}")
                                 continue
+
+                            if meta.get('debug'):
+                                console.print(f"[cyan]  Found {len(play_items)} play items in {file_name}")
 
                             for item in play_items:
                                 intime = getattr(item, "intime", None)
@@ -115,11 +125,20 @@ class DiscParse:
                                         size = os.path.getsize(m2ts_file)
                                         file_counts[m2ts_file] += 1  # Increment the count
                                         file_sizes[m2ts_file] = size  # Store individual file size
+                                    elif meta.get('debug'):
+                                        console.print(f"[yellow]    Missing m2ts file: {clip_name}.m2ts")
                                 except AttributeError as e:
                                     console.print(f"[bold red]Error accessing clip information for item in {file_name}: {e}")
 
-                            # Process unique playlists with only one instance of each file
-                            if all(count == 1 for count in file_counts.values()):
+                            # Process playlists, allowing small files to be duplicated (common for warnings/credits)
+                            # Only reject if large files (>100MB or >3% of total) appear multiple times
+                            total_size = sum(file_sizes.values())
+                            large_file_duplicates = [
+                                f for f, c in file_counts.items()
+                                if c > 1 and file_sizes[f] > 100 * 1024 * 1024 and file_sizes[f] > total_size * 0.03
+                            ]
+
+                            if not large_file_duplicates:
                                 items = [{"file": file, "size": file_sizes[file]} for file in file_counts]
 
                                 # Save playlists with duration >= 10 minutes
@@ -130,10 +149,25 @@ class DiscParse:
                                         "path": mpls_path,
                                         "items": items
                                     })
+                                    if meta.get('debug'):
+                                        small_duplicates = [f for f, c in file_counts.items() if c > 1]
+                                        if small_duplicates:
+                                            console.print(f"[green]  ✓ Added {file_name}: {duration:.1f}s, {len(file_sizes)} unique files ({len(small_duplicates)} small files repeated), {total_size // (1024 * 1024)} MB total")
+                                        else:
+                                            console.print(f"[green]  ✓ Added {file_name}: {duration:.1f}s, {len(items)} unique files, {total_size // (1024 * 1024)} MB total")
+                                elif meta.get('debug'):
+                                    console.print(f"[yellow]  ✗ Skipped {file_name}: duration {duration:.1f}s < 600s (10 min)")
+                            elif meta.get('debug'):
+                                console.print(f"[yellow]  ✗ Skipped {file_name}: large file duplicates detected ({len(large_file_duplicates)} files >100MB appear multiple times)")
                         except Exception as e:
                             console.print(f"[bold red]Error parsing playlist {mpls_path}: {e}")
 
+                if meta.get('debug'):
+                    console.print(f"[cyan]Finished parsing. Found {len(valid_playlists)} valid playlists (>= 10 min, unique files)")
+
                 if not valid_playlists:
+                    if meta.get('debug'):
+                        console.print("[yellow]No valid playlists found with >= 10 min duration. Checking all playlists...")
                     # Find all playlists regardless of duration
                     all_playlists: list[PlaylistInfo] = []
                     for file_name in os.listdir(playlists_path):
@@ -172,7 +206,14 @@ class DiscParse:
                                     except AttributeError as e:
                                         console.print(f"[bold red]Error accessing clip info for item in {file_name}: {e}")
 
-                                if all(count == 1 for count in file_counts_all.values()):
+                                # Allow small file duplicates in fallback parsing
+                                # Only reject if the same file is repeated more than 5 times
+                                excessive_duplicates = [
+                                    f for f, c in file_counts_all.items()
+                                    if c > 5
+                                ]
+
+                                if not excessive_duplicates:
                                     items_all = [{"file": file, "size": file_sizes_all[file]} for file in file_counts_all]
                                     all_playlists.append({
                                         "file": file_name,
@@ -180,6 +221,11 @@ class DiscParse:
                                         "path": mpls_path,
                                         "items": items_all
                                     })
+                                    if meta.get('debug'):
+                                        max_count = max(file_counts_all.values()) if file_counts_all else 0
+                                        console.print(f"[cyan]  Added to fallback: {file_name}, duration: {duration_all:.1f}s, max file repeat: {max_count}")
+                                elif meta.get('debug'):
+                                    console.print(f"[yellow]  Skipped {file_name}: {len(excessive_duplicates)} files repeated >5 times")
                             except Exception as e:
                                 console.print(f"[bold red]Error parsing playlist {mpls_path}: {e}")
 
@@ -190,8 +236,61 @@ class DiscParse:
                         console.print(f"[green]Selected largest playlist {largest_playlist['file']} with duration {largest_playlist['duration']:.2f} seconds")
                         valid_playlists = [largest_playlist]
                     else:
-                        console.print(f"[bold red]No playlists found for disc {path}")
-                        continue
+                        # Final fallback: find playlists >= 10 minutes regardless of file duplicates
+                        if meta.get('debug'):
+                            console.print("[yellow]No playlists passed fallback checks. Using final fallback: any playlist >= 10 min...")
+                        final_fallback_playlists: list[PlaylistInfo] = []
+                        for file_name in os.listdir(playlists_path):
+                            if file_name.endswith(".mpls"):
+                                mpls_path = os.path.join(playlists_path, file_name)
+                                try:
+                                    _, playlist_data = await asyncio.to_thread(_load_mpls, mpls_path)
+                                    duration_final: float = 0.0
+                                    stream_directory = os.path.join(path, "STREAM")
+                                    file_sizes_final: dict[str, int] = {}
+
+                                    play_items = getattr(playlist_data, "play_items", None)
+                                    if not play_items:
+                                        continue
+
+                                    for item in play_items:
+                                        intime = getattr(item, "intime", None)
+                                        outtime = getattr(item, "outtime", None)
+                                        if intime is None or outtime is None:
+                                            continue
+                                        duration_final += (outtime - intime) / 45000.0
+                                        try:
+                                            clip_name = getattr(item, "clip_information_filename", None)
+                                            if isinstance(clip_name, str) and clip_name.strip():
+                                                m2ts_file = os.path.join(stream_directory, clip_name.strip() + ".m2ts")
+                                                if os.path.exists(m2ts_file) and m2ts_file not in file_sizes_final:
+                                                    file_sizes_final[m2ts_file] = os.path.getsize(m2ts_file)
+                                        except AttributeError:
+                                            pass
+
+                                    # Accept any playlist >= 10 minutes
+                                    if duration_final >= 600:
+                                        items_final = [{"file": file, "size": size} for file, size in file_sizes_final.items()]
+                                        final_fallback_playlists.append({
+                                            "file": file_name,
+                                            "duration": duration_final,
+                                            "path": mpls_path,
+                                            "items": items_final
+                                        })
+                                        if meta.get('debug'):
+                                            console.print(f"[cyan]  Final fallback: {file_name}, duration: {duration_final:.1f}s")
+                                except Exception as e:
+                                    if meta.get('debug'):
+                                        console.print(f"[red]Error in final fallback for {file_name}: {e}")
+
+                        if final_fallback_playlists:
+                            console.print("[yellow]Using final fallback: playlists >= 10 minutes (ignoring duplicates)")
+                            largest_playlist = max(final_fallback_playlists, key=lambda p: sum(item['size'] for item in p['items']))
+                            console.print(f"[green]Selected largest playlist {largest_playlist['file']} with duration {largest_playlist['duration']:.2f} seconds")
+                            valid_playlists = [largest_playlist]
+                        else:
+                            console.print(f"[bold red]No playlists found for disc {path}")
+                            continue
 
                 if use_largest:
                     console.print("[yellow]Auto-selecting the largest playlist based on configuration.")
