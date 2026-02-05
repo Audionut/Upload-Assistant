@@ -964,7 +964,7 @@ class Prep:
             both_ids_searched = False
             search_year_value = _normalize_search_year(meta.get('search_year'))
             if meta.get('tvmaze_id', 0) == 0 and meta.get('tvdb_id', 0) == 0:
-                tvmaze, tvdb, tvdb_data = await self.metadata_searching_manager.get_tvmaze_tvdb(
+                tvmaze, tvdb, tvdb_data, tvdb_name = await self.metadata_searching_manager.get_tvmaze_tvdb(
                     filename,
                     search_year_value or "",
                     meta.get('imdb_id', 0),
@@ -988,6 +988,10 @@ class Prep:
                     meta['tvdb_search_results'] = tvdb_data
                     if meta['debug']:
                         console.print("[blue]Found TVDB search results from search.[/blue]")
+                if tvdb_name:
+                    meta['tvdb_series_name'] = tvdb_name
+                    if meta['debug']:
+                        console.print(f"[blue]Found TVDB series name from search: {tvdb_name}[/blue]")
             if meta.get('tvmaze_id', 0) == 0 and not both_ids_searched:
                 if meta['debug']:
                     console.print("[yellow]No TVMAZE ID found, attempting to fetch...[/yellow]")

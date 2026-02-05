@@ -95,7 +95,7 @@ async def get_service(video: Optional[str] = None, tag: Optional[str] = None, au
         'Amazon Prime': 'AMZN', 'ANLB': 'ANLB', 'AnimeLab': 'ANLB', 'ANPL': 'ANPL', 'Animal Planet': 'ANPL',
         'AOL': 'AOL', 'ARD': 'ARD', 'AS': 'AS', 'Adult Swim': 'AS', 'ATK': 'ATK', "America's Test Kitchen": 'ATK', 'ATV': 'ATV', 'Apple TV': 'ATV',
         'ATVP': 'ATVP', 'Apple TV+': 'ATVP', 'AUBC': 'AUBC', 'ABC Australia': 'AUBC', 'BCORE': 'BCORE', 'Bilibili': 'BILI', 'BILI': 'BILI', 'BKPL': 'BKPL',
-        'Blackpills': 'BKPL', 'BluTV': 'BLU', 'Binge': 'BNGE', 'BOOM': 'BOOM', 'Boomerang': 'BOOM', 'BRAV': 'BRAV',
+        'Blackpills': 'BKPL', 'BluTV': 'BLU', 'Binge': 'BNGE', 'BOOM': 'BOOM', 'Boomerang': 'BOOM', 'Brasil Paralelo': 'BP', 'BP': 'BP', 'BRAV': 'BRAV',
         'BravoTV': 'BRAV', 'CBC': 'CBC', 'CBS': 'CBS', 'CC': 'CC', 'Comedy Central': 'CC', 'CCGC': 'CCGC',
         'Comedians in Cars Getting Coffee': 'CCGC', 'CHGD': 'CHGD', 'CHRGD': 'CHGD', 'CMAX': 'CMAX', 'Cinemax': 'CMAX',
         'CMOR': 'CMOR', 'CMT': 'CMT', 'Country Music Television': 'CMT', 'CN': 'CN', 'Cartoon Network': 'CN', 'CNBC': 'CNBC',
@@ -144,7 +144,7 @@ async def get_service(video: Optional[str] = None, tag: Optional[str] = None, au
         'KS': 'KS', 'Kyivstar': 'KS', 'KyivstarTV': 'KS', 'Kyivstar TV': 'KS', 'kyivstar': 'KS',
         'PKO': 'PKO', 'Planeta Kino Online': 'PKO',
         'TF': 'TF', 'takflix': 'TF', 'Takflix': 'TF'
-    }
+    }  # fmt: off
 
     if get_services_only:
         return services

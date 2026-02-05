@@ -11,11 +11,12 @@ from glob import glob
 from pathlib import Path
 from typing import Any, Optional, cast
 
+import cli_ui
 import defusedxml.ElementTree as ET
 from langcodes import Language
 from pymediainfo import MediaInfo
-from pyparsebluray import mpls
 
+from bin.get_playlist import MplsParser
 from src.console import console
 from src.exportmi import setup_mediainfo_library
 
@@ -27,6 +28,49 @@ class DiscParse:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.mediainfo_config: Optional[dict[str, Any]] = None
+
+    def _calculate_playlist_score(self, playlist: PlaylistInfo) -> float:
+        """Calculate weighted score for playlist selection.
+
+        Weighted scoring system:
+        - Largest file size: 40% (strongest indicator of main feature)
+        - Total file size: 30% (overall content size)
+        - Duration: 20% (longer is typically main feature)
+        - File concentration: 10% (high ratio = fewer large files = likely main feature)
+        """
+        if not playlist.get('items'):
+            return 0.0
+
+        # Get metrics
+        file_sizes = [item['size'] for item in playlist['items']]
+        largest_file = max(file_sizes) if file_sizes else 0
+        total_size = sum(file_sizes)
+        duration = playlist.get('duration', 0.0)
+
+        # File concentration: ratio of unique files to total references
+        # Higher concentration means fewer duplicates (better)
+        total_files = len(playlist['items'])
+        unique_files = len({item['file'] for item in playlist['items']})
+        file_concentration = unique_files / total_files if total_files > 0 else 0.0
+
+        score = 0.0
+
+        # Normalize largest file size (assume max possible is 100GB = 100*1024*1024*1024 bytes)
+        max_file_size = 100.0 * 1024 * 1024 * 1024
+        score += (largest_file / max_file_size) * 40.0
+
+        # Normalize total size (assume max is 150GB)
+        max_total_size = 150.0 * 1024 * 1024 * 1024
+        score += (total_size / max_total_size) * 30.0
+
+        # Normalize duration (assume max is 4 hours = 14400 seconds)
+        max_duration = 14400.0
+        score += (duration / max_duration) * 20.0
+
+        # File concentration (already 0-1 ratio)
+        score += file_concentration * 10.0
+
+        return score
 
     def setup_mediainfo_for_dvd(self, base_dir: Optional[str], debug: bool = False) -> Optional[str]:
         """Setup MediaInfo binary for DVD processing using the complete setup from exportmi"""
@@ -73,11 +117,15 @@ class DiscParse:
                     console.print(f"[bold red]PLAYLIST directory not found for disc {path}")
                     continue
 
+                if meta.get('debug'):
+                    console.print(f"[cyan]Parsing playlists from: {playlists_path}")
+
                 def _load_mpls(mpls_path: str) -> tuple[Any, Any]:
                     with open(mpls_path, "rb") as mpls_file:
-                        header = mpls.load_movie_playlist(mpls_file)
+                        parser = MplsParser(mpls_file)
+                        header = parser.load_movie_playlist()
                         mpls_file.seek(header.playlist_start_address, os.SEEK_SET)
-                        playlist_data = mpls.load_playlist(mpls_file)
+                        playlist_data = parser.load_playlist()
                     return header, playlist_data
 
                 # Parse playlists
@@ -85,6 +133,8 @@ class DiscParse:
                 for file_name in os.listdir(playlists_path):
                     if file_name.endswith(".mpls"):
                         mpls_path = os.path.join(playlists_path, file_name)
+                        if meta.get('debug'):
+                            console.print(f"[cyan]Processing playlist: {file_name}")
                         try:
                             _, playlist_data = await asyncio.to_thread(_load_mpls, mpls_path)
                             duration: float = 0.0
@@ -95,7 +145,12 @@ class DiscParse:
 
                             play_items = getattr(playlist_data, "play_items", None)
                             if not play_items:
+                                if meta.get('debug'):
+                                    console.print(f"[yellow]  No play_items found in {file_name}")
                                 continue
+
+                            if meta.get('debug'):
+                                console.print(f"[cyan]  Found {len(play_items)} play items in {file_name}")
 
                             for item in play_items:
                                 intime = getattr(item, "intime", None)
@@ -115,11 +170,20 @@ class DiscParse:
                                         size = os.path.getsize(m2ts_file)
                                         file_counts[m2ts_file] += 1  # Increment the count
                                         file_sizes[m2ts_file] = size  # Store individual file size
+                                    elif meta.get('debug'):
+                                        console.print(f"[yellow]    Missing m2ts file: {clip_name}.m2ts")
                                 except AttributeError as e:
                                     console.print(f"[bold red]Error accessing clip information for item in {file_name}: {e}")
 
-                            # Process unique playlists with only one instance of each file
-                            if all(count == 1 for count in file_counts.values()):
+                            # Process playlists, allowing small files to be duplicated (common for warnings/credits)
+                            # Only reject if large files (>100MB or >3% of total) appear multiple times
+                            total_size = sum(file_sizes.values())
+                            large_file_duplicates = [
+                                f for f, c in file_counts.items()
+                                if c > 1 and file_sizes[f] > 100 * 1024 * 1024 and file_sizes[f] > total_size * 0.03
+                            ]
+
+                            if not large_file_duplicates:
                                 items = [{"file": file, "size": file_sizes[file]} for file in file_counts]
 
                                 # Save playlists with duration >= 10 minutes
@@ -130,10 +194,25 @@ class DiscParse:
                                         "path": mpls_path,
                                         "items": items
                                     })
+                                    if meta.get('debug'):
+                                        small_duplicates = [f for f, c in file_counts.items() if c > 1]
+                                        if small_duplicates:
+                                            console.print(f"[green]  ✓ Added {file_name}: {duration:.1f}s, {len(file_sizes)} unique files ({len(small_duplicates)} small files repeated), {total_size // (1024 * 1024)} MB total")
+                                        else:
+                                            console.print(f"[green]  ✓ Added {file_name}: {duration:.1f}s, {len(items)} unique files, {total_size // (1024 * 1024)} MB total")
+                                elif meta.get('debug'):
+                                    console.print(f"[yellow]  ✗ Skipped {file_name}: duration {duration:.1f}s < 600s (10 min)")
+                            elif meta.get('debug'):
+                                console.print(f"[yellow]  ✗ Skipped {file_name}: large file duplicates detected ({len(large_file_duplicates)} files >100MB appear multiple times)")
                         except Exception as e:
                             console.print(f"[bold red]Error parsing playlist {mpls_path}: {e}")
 
+                if meta.get('debug'):
+                    console.print(f"[cyan]Finished parsing. Found {len(valid_playlists)} valid playlists (>= 10 min, unique files)")
+
                 if not valid_playlists:
+                    if meta.get('debug'):
+                        console.print("[yellow]No valid playlists found with >= 10 min duration. Checking all playlists...")
                     # Find all playlists regardless of duration
                     all_playlists: list[PlaylistInfo] = []
                     for file_name in os.listdir(playlists_path):
@@ -172,7 +251,14 @@ class DiscParse:
                                     except AttributeError as e:
                                         console.print(f"[bold red]Error accessing clip info for item in {file_name}: {e}")
 
-                                if all(count == 1 for count in file_counts_all.values()):
+                                # Allow small file duplicates in fallback parsing
+                                # Only reject if the same file is repeated more than 5 times
+                                excessive_duplicates = [
+                                    f for f, c in file_counts_all.items()
+                                    if c > 5
+                                ]
+
+                                if not excessive_duplicates:
                                     items_all = [{"file": file, "size": file_sizes_all[file]} for file in file_counts_all]
                                     all_playlists.append({
                                         "file": file_name,
@@ -180,22 +266,85 @@ class DiscParse:
                                         "path": mpls_path,
                                         "items": items_all
                                     })
+                                    if meta.get('debug'):
+                                        max_count = max(file_counts_all.values()) if file_counts_all else 0
+                                        console.print(f"[cyan]  Added to fallback: {file_name}, duration: {duration_all:.1f}s, max file repeat: {max_count}")
+                                elif meta.get('debug'):
+                                    console.print(f"[yellow]  Skipped {file_name}: {len(excessive_duplicates)} files repeated >5 times")
                             except Exception as e:
                                 console.print(f"[bold red]Error parsing playlist {mpls_path}: {e}")
 
                     if all_playlists:
                         console.print("[yellow]Using available playlists with any duration")
-                        # Select the largest playlist by total size
-                        largest_playlist = max(all_playlists, key=lambda p: sum(item['size'] for item in p['items']))
-                        console.print(f"[green]Selected largest playlist {largest_playlist['file']} with duration {largest_playlist['duration']:.2f} seconds")
-                        valid_playlists = [largest_playlist]
+                        # Select the best playlist using weighted scoring
+                        scored_playlists = [(p, self._calculate_playlist_score(p)) for p in all_playlists]
+                        best_playlist, best_score = max(scored_playlists, key=lambda x: x[1])
+                        console.print(f"[green]Selected best playlist {best_playlist['file']} with score {best_score:.2f} (duration: {best_playlist['duration']:.2f}s)")
+                        valid_playlists = [best_playlist]
                     else:
-                        console.print(f"[bold red]No playlists found for disc {path}")
-                        continue
+                        # Final fallback: find playlists >= 5 minutes regardless of file duplicates
+                        if meta.get('debug'):
+                            console.print("[yellow]No playlists passed fallback checks. Using final fallback: any playlist >= 5 min...")
+                        final_fallback_playlists: list[PlaylistInfo] = []
+                        for file_name in os.listdir(playlists_path):
+                            if file_name.endswith(".mpls"):
+                                mpls_path = os.path.join(playlists_path, file_name)
+                                try:
+                                    _, playlist_data = await asyncio.to_thread(_load_mpls, mpls_path)
+                                    duration_final: float = 0.0
+                                    stream_directory = os.path.join(path, "STREAM")
+                                    file_sizes_final: dict[str, int] = {}
+
+                                    play_items = getattr(playlist_data, "play_items", None)
+                                    if not play_items:
+                                        continue
+
+                                    for item in play_items:
+                                        intime = getattr(item, "intime", None)
+                                        outtime = getattr(item, "outtime", None)
+                                        if intime is None or outtime is None:
+                                            continue
+                                        duration_final += (outtime - intime) / 45000.0
+                                        try:
+                                            clip_name = getattr(item, "clip_information_filename", None)
+                                            if isinstance(clip_name, str) and clip_name.strip():
+                                                m2ts_file = os.path.join(stream_directory, clip_name.strip() + ".m2ts")
+                                                if os.path.exists(m2ts_file) and m2ts_file not in file_sizes_final:
+                                                    file_sizes_final[m2ts_file] = os.path.getsize(m2ts_file)
+                                        except AttributeError:
+                                            pass
+
+                                    # Accept any playlist >= 5 minutes
+                                    if duration_final >= 300:
+                                        items_final = [{"file": file, "size": size} for file, size in file_sizes_final.items()]
+                                        final_fallback_playlists.append({
+                                            "file": file_name,
+                                            "duration": duration_final,
+                                            "path": mpls_path,
+                                            "items": items_final
+                                        })
+                                        if meta.get('debug'):
+                                            console.print(f"[cyan]  Final fallback: {file_name}, duration: {duration_final:.1f}s")
+                                except Exception as e:
+                                    if meta.get('debug'):
+                                        console.print(f"[red]Error in final fallback for {file_name}: {e}")
+
+                        if final_fallback_playlists:
+                            console.print("[yellow]Using final fallback: playlists >= 5 minutes (ignoring duplicates)")
+                            scored_playlists = [(p, self._calculate_playlist_score(p)) for p in final_fallback_playlists]
+                            best_playlist, best_score = max(scored_playlists, key=lambda x: x[1])
+                            console.print(f"[green]Selected best playlist {best_playlist['file']} with score {best_score:.2f} (duration: {best_playlist['duration']:.2f}s)")
+                            valid_playlists = [best_playlist]
+                        else:
+                            console.print(f"[bold red]No playlists found for disc {path}")
+                            continue
 
                 if use_largest:
-                    console.print("[yellow]Auto-selecting the largest playlist based on configuration.")
-                    selected_playlists = [max(valid_playlists, key=lambda p: sum(item['size'] for item in p['items']))]
+                    console.print("[yellow]Auto-selecting the best playlist using weighted scoring.")
+                    scored_playlists = [(p, self._calculate_playlist_score(p)) for p in valid_playlists]
+                    best_playlist, best_score = max(scored_playlists, key=lambda x: x[1])
+                    console.print(f"[green]Selected best playlist {best_playlist['file']} with score {best_score:.2f}")
+                    selected_playlists = [best_playlist]
                 else:
                     # Allow user to select playlists
                     if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
@@ -211,7 +360,8 @@ class DiscParse:
                                     console.print(f"[{idx}] {playlist['file']} - {duration_str} - {items_str}")
 
                                 console.print("[bold yellow]Enter playlist numbers separated by commas, 'ALL' to select all, or press Enter to select the biggest playlist:")
-                                user_input = input("Select playlists: ").strip()
+                                user_input_raw = cli_ui.ask_string("Select playlists: ")
+                                user_input = (user_input_raw or "").strip().lower()
 
                                 if user_input.lower() == "all":
                                     selected_playlists = valid_playlists
@@ -341,7 +491,8 @@ class DiscParse:
 
                                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                                     console.print("[bold green]You can create a custom Edition for this playlist.")
-                                    user_input = input(f"Enter a new Edition title for playlist {playlist['file']} (or press Enter to keep the current label): ").strip()
+                                    user_input_raw = cli_ui.ask_string(f"Enter a new Edition title for playlist {playlist['file']} (or press Enter to keep the current label): ")
+                                    user_input = (user_input_raw or "").strip()
                                     if user_input:
                                         bdinfo['edition'] = user_input
                                         selected_playlists[idx]['edition'] = user_input
@@ -755,7 +906,8 @@ class DiscParse:
                             additional_info_str = ", ".join(additional_info)
                             console.print(f"{idx}: Duration: {duration} Playlist: {title_number}" + (f" ({additional_info_str})" if additional_info else ""))
 
-                        user_input = input("Enter the number of the playlist you want to select: ").strip()
+                        user_input_raw = cli_ui.ask_string("Enter the number of the playlist you want to select: ")
+                        user_input = (user_input_raw or "").strip()
 
                         try:
                             selected_indices = [int(x) - 1 for x in user_input.split(",")]

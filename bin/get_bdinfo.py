@@ -25,11 +25,11 @@ except ImportError:
 class BDInfoBinaryManager:
     """Download BDInfoCLI-ng binaries for the host architecture.
 
-    Default version pinned to v1.0.6 (see https://github.com/Audionut/BDInfoCLI-ng/releases/tag/v1.0.6)
+    Default version pinned (see https://github.com/Audionut/BDInfoCLI-ng/releases)
     """
 
     @staticmethod
-    async def ensure_bdinfo_binary(base_dir: Union[str, Path], debug: bool, version: str = "v1.0.6") -> str:
+    async def ensure_bdinfo_binary(base_dir: Union[str, Path], debug: bool, version: str = "v1.0.7") -> str:
         system = platform.system().lower()
         machine = platform.machine().lower()
         if debug:
