@@ -1,6 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # import discord
-from typing import Any, cast
+from typing import Any, Optional, cast
 
 import cli_ui
 
