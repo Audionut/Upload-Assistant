@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import json
 import os
 import platform
@@ -7,7 +8,6 @@ import unicodedata
 from typing import Any, Optional, cast
 
 import aiofiles
-import asyncio
 import cli_ui
 import httpx
 import langcodes
