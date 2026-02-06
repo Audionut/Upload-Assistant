@@ -118,6 +118,10 @@ class DiscParse:
         for i in range(len(discs)):
             bdinfo_text = None
             path = os.path.abspath(discs[i]['path'])
+            if discs[i]["type"] == "BDMV":
+                parent_path = os.path.dirname(path)
+                if not os.path.exists(os.path.join(parent_path, "CERTIFICATE")):
+                    meta.setdefault("discs_missing_certificate", []).append(discs[i]['path'])
             for file in os.listdir(save_dir):
                 if file == f"BD_SUMMARY_{str(i).zfill(2)}.txt":
                     bdinfo_text = save_dir + "/" + file
