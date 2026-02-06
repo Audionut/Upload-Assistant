@@ -295,7 +295,17 @@ class Prep:
                 except Exception:
                     meta['search_year'] = ""
                 if not meta.get('edit', False):
-                    mi = await exportInfo(f"{meta['discs'][0]['path']}/VTS_{meta['discs'][0]['main_set'][0][:2]}_0.IFO", False, meta['uuid'], meta['base_dir'], is_dvd=True, debug=meta.get('debug', False))
+                    disc_info = meta.get('discs', [{}])[0]
+                    mi = await exportInfo(
+                        f"{meta['discs'][0]['path']}/VTS_{meta['discs'][0]['main_set'][0][:2]}_0.IFO",
+                        False,
+                        meta['uuid'],
+                        meta['base_dir'],
+                        is_dvd=True,
+                        debug=meta.get('debug', False),
+                        dvd_mediainfo_text=disc_info.get('ifo_mi'),
+                        dvd_mediainfo_json=disc_info.get('ifo_mi_json'),
+                    )
                     meta['mediainfo'] = mi
                 else:
                     mi = meta['mediainfo']

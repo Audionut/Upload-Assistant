@@ -28,7 +28,7 @@
 - Web UI mode: use -webui/--webui; server code lives under web_ui/.
 
 ## Lint & type-check expectations
-- Follow Ruff and Pyright settings in pyproject.toml when making changes.
+- Follow Ruff and Pyright settings in pyproject.toml when making changes and run them locally before committing. Address any reported issues, especially for touched files.
 
 ## Python version
 - All changes must be python version 3.9+ compatible.
