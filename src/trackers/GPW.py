@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import json
 import os
 import re
@@ -6,6 +7,7 @@ import unicodedata
 from typing import Any, cast
 
 import aiofiles
+import cli_ui
 import httpx
 from bs4 import BeautifulSoup
 
@@ -370,7 +372,8 @@ class GPW:
                         tags = ', '.join(normalized_genres)
 
         if not tags:
-            tags = await self.common.async_input(prompt=f'Enter the genres (in {self.tracker} format): ')
+           tags_raw = await asyncio.to_thread(cli_ui.ask_string, f'Enter the genres (in {self.tracker} format): ')
+           tags = (tags_raw or "").strip()
 
         return tags
 
@@ -763,9 +766,12 @@ class GPW:
             chinese_name = ''
         else:
             console.print(f'{self.tracker}: This movie is not registered in the {self.tracker} database, please enter the details of 1 director')
-            imdb_id = await self.common.async_input(prompt='Enter Director IMDb ID (e.g., nm0000138): ')
-            english_name = await self.common.async_input(prompt='Enter Director English name: ')
-            chinese_name = await self.common.async_input(prompt='Enter Director Chinese name (optional, press Enter to skip): ')
+            imdb_id_raw = await asyncio.to_thread(cli_ui.ask_string, 'Enter Director IMDb ID (e.g., nm0000138): ')
+            imdb_id = (imdb_id_raw or "").strip()
+            english_name_raw = await asyncio.to_thread(cli_ui.ask_string, 'Enter Director English name: ')
+            english_name = (english_name_raw or "").strip()
+            chinese_name_raw = await asyncio.to_thread(cli_ui.ask_string, 'Enter Director Chinese name (optional, press Enter to skip): ')
+            chinese_name = (chinese_name_raw or "").strip()
 
         post_data = {
             'artist_ids[]': imdb_id,

@@ -87,7 +87,8 @@ class TrackerMetaManager:
 
 def prompt_user_for_confirmation(message: str) -> bool:
     try:
-        response = input(f"{message} (Y/n): ").strip().lower()
+        response_raw = cli_ui.ask_string(f"{message} (Y/n): ")
+        response = (response_raw or "").strip().lower()
         return response in ["y", "yes", ""]
     except EOFError:
         sys.exit(1)

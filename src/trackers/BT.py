@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import json
 import os
 import platform
@@ -7,6 +8,7 @@ import unicodedata
 from typing import Any, Optional, cast
 
 import aiofiles
+import cli_ui
 import httpx
 import langcodes
 from bs4 import BeautifulSoup
@@ -461,7 +463,8 @@ class BT:
                     tags = ', '.join(normalized_genres)
 
         if not tags:
-            tags = await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')
+            tags_raw = await asyncio.to_thread(cli_ui.ask_string, f'Digite os gêneros (no formato do {self.tracker}): ')
+            tags = (tags_raw or "").strip()
 
         return tags
 
