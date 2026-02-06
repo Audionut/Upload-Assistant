@@ -1,4 +1,46 @@
-__version__ = "v7.0.0"
+__version__ = "v7.0.1"
+
+"""
+Release Notes for version v7.0.1 (2026-02-01):
+
+# 
+# ## RELEASE NOTES
+#  - Fixed a breaking bug that could validate wrong torrent files.
+#  - wastaken added an option to delay torrent injection, which helps for sites that take a moment to register the torrent hash.
+#  - Better proxy handling for the webui.
+#  - maksii improved the shutdown handling when running the webui.
+#  - UA now ships with a pre-built bdifno in docker (no more mono), and will download the matching binary for bare metal systems.
+# 
+# ## New config options - see example.py
+#  - inject_delay - time in seconds to delay torrent injection. Can be set at an individual tracker level, inside of the tracker config.
+# 
+# ---
+# 
+# ## What's Changed
+# 
+# * fix torrent validation check by @Audionut in cd39ecd
+# * fix(ci): exclude data dir by @Audionut in 4aa9642
+# * Add option to delay torrent injections (#1192) by @wastaken7 in e212b57
+# * refactor(webui): improve proxy handling (#1195) by @Audionut in 7cc329e
+# * feat(upload): implement graceful shutdown handling for script and server (#1190) by @maksii in 940cf96
+# * validate description links by @Audionut in c93cb2b
+# * fix cross-seed key setting by @Audionut in 6c994d0
+# * feat(dp): enhance dual and multi-audio track management for multilingual releases (#1148) by @skler1 in 8621158
+# * Fix argument in screenshot_header method (#1197) by @wastaken7 in 7df4839
+# * Enhance documentation for tracker settings and inject delay (#1196) by @wastaken7 in 1a9a26d
+# * minor docs update by @Audionut in f6cd151
+# * OTW: fix genre check handling by @Audionut in 41dffeb
+# * Update bdinfo to pre-built binaries (#1200) by @Audionut in 83785e0
+# * bump bdinfo version by @Audionut in e661be2
+# * fix(category): Improve category matching by @Audionut in 029a79d
+# * bump bdinfo version by @Audionut in 92aa753
+# * bump bdinfo version by @Audionut in 57e9210
+# * bump bdinfo version by @Audionut in 8d7d5ab
+# * release notes by @Audionut in 8945791
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v7.0.0...v7.0.1
+"""
+
 
 """
 Release Notes for version v7.0.0 (2026-01-28):

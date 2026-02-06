@@ -3016,25 +3016,39 @@ def execute_command():
                     try:
                         orig_ask_yes_no = _cli_ui.ask_yes_no
 
-                        def wrapped_ask_yes_no(question: str, default: bool = False) -> bool:
-                            with contextlib.suppress(Exception):
-                                wrapped_print(question)
-                            # Wait for a response or cancellation
-                            while True:
-                                if cancel_event.is_set():
-                                    raise EOFError()
-                                try:
-                                    resp = input_queue.get(timeout=0.5)
-                                except queue.Empty:
-                                    continue
-                                except Exception:
-                                    raise
-                                resp = (resp or "").strip().lower()
-                                if resp in ("y", "yes"):
-                                    return True
-                                if resp in ("n", "no"):
-                                    return False
-                                return default
+                        def wrapped_ask_yes_no(*args, default: bool = False, **kwargs) -> bool:
+                                # Support both signatures used across the codebase:
+                                #   ask_yes_no(question, default=...)
+                                #   ask_yes_no(color, question, default=...)
+                                # Extract the question and default value from args/kwargs.
+                                if len(args) >= 2:
+                                    question = args[1]
+                                elif len(args) == 1:
+                                    question = args[0]
+                                else:
+                                    question = kwargs.get('question', '')
+
+                                # If default was passed positionally (third arg), use it.
+                                default_val = args[2] if len(args) >= 3 else kwargs.get('default', default)
+
+                                with contextlib.suppress(Exception):
+                                    wrapped_print(str(question))
+                                # Wait for a response or cancellation
+                                while True:
+                                    if cancel_event.is_set():
+                                        raise EOFError()
+                                    try:
+                                        resp = input_queue.get(timeout=0.5)
+                                    except queue.Empty:
+                                        continue
+                                    except Exception:
+                                        raise
+                                    resp = (resp or "").strip().lower()
+                                    if resp in ("y", "yes"):
+                                        return True
+                                    if resp in ("n", "no"):
+                                        return False
+                                    return default_val
 
                         _cli_ui.ask_yes_no = wrapped_ask_yes_no
                         # Save original ask_yes_no so external cleaners (eg. /api/kill)

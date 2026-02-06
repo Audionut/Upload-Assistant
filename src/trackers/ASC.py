@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional, Union, cast
 
 import aiofiles
+import cli_ui
 import httpx
 from bs4 import BeautifulSoup
 from pymediainfo import MediaInfo
@@ -394,7 +395,8 @@ class ASC:
         overview: str = season_tmdb.get("overview", "") or main_tmdb.get("overview", "")
         if not overview:
             console.print(f"{self.tracker}: [bold red]Sinopse não encontrada no TMDb. Por favor, insira manualmente.[/bold red]")
-            user_input = await self.common.async_input(prompt=f"{self.tracker}: [green]Digite a sinopse:[/green]")
+            user_input_raw = await asyncio.to_thread(cli_ui.ask_string, f'"{self.tracker}: [green]Digite a sinopse:[/green]"')
+            user_input = (user_input_raw or "").strip()
             overview = user_input or "Sinopse não encontrada."
         await append_section('BARRINHA_SINOPSE', overview)
 
@@ -542,7 +544,8 @@ class ASC:
         )
 
         if not tags:
-            tags = meta.get('genre') or await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')
+            tags_raw = meta.get('genre') or await asyncio.to_thread(cli_ui.ask_string, f'Digite os gêneros (no formato do {self.tracker}): ')
+            tags = (tags_raw or "").strip()
 
         return tags
 
@@ -573,11 +576,16 @@ class ASC:
         }
 
     async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[dict[str, str]]:
+        found_items: list[dict[str, str]] = []
+        if not meta.get("imdb_id") and not meta.get("anime"):
+            console.print(f"{self.tracker}: [bold red]Ignorando upload devido à ausência de IMDb.[/bold red]")
+            meta["skipping"] = f"{self.tracker}"
+            return found_items
+
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar is not None:
             self.session.cookies = cast(Any, cookie_jar)
 
-        found_items: list[dict[str, str]] = []
         if meta.get('anime'):
             await self.load_localized_data(meta)
             search_name = await self.get_title(meta)

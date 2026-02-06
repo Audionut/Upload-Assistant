@@ -166,6 +166,10 @@ def parse_channel_layout(channels: int, channel_layout: str) -> str:
     elif lfe_count == 1:
         return f"{channels - 1}.1"
     else:
+        if "object" in channel_layout.lower() and channels > 7:
+            channels -= 1
+            # Object-based audio without LFE, assume .1 configuration
+            return f"{channels}.1"
         # No LFE detected
         if channels <= 2:
             return f"{channels}.0"
@@ -305,6 +309,8 @@ async def _get_audio_v2(
             channel_layout = ''
 
         # Enhanced channel count determination based on MediaArea AudioChannelLayout
+        if meta.get('debug'):
+            console.print(f"DEBUG: Channels: {channels}, Channel Layout: {channel_layout}, Additional: {additional}, Format: {format}")
         chan = determine_channel_count(channels, channel_layout, additional, format)
 
         try:

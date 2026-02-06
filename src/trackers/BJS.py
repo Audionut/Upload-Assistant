@@ -11,6 +11,7 @@ from typing import Any, Optional, cast
 from urllib.parse import urlparse
 
 import aiofiles
+import cli_ui
 import httpx
 import langcodes
 import pycountry
@@ -427,7 +428,8 @@ class BJS:
                 )
 
         if not tags:
-            tags = await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')
+             tags_raw = await asyncio.to_thread(cli_ui.ask_string, f'Digite os gêneros (no formato do {self.tracker}): ')
+             tags = (tags_raw or "").strip()
 
         return tags
 
@@ -1106,7 +1108,8 @@ class BJS:
             'Por favor, insira manualmente (separados por vírgula): '
         )
 
-        user_input = await self.common.async_input(prompt=prompt_message)
+        user_input_raw = await asyncio.to_thread(cli_ui.ask_string, f'{prompt_message}')
+        user_input = (user_input_raw or "").strip()
         if user_input:
             return user_input
 
@@ -1388,9 +1391,8 @@ class BJS:
             console.print(
                 f"{self.tracker}: [bold red]Sinopse não encontrada no TMDb. Por favor, insira manualmente.[/bold red]"
             )
-            user_input = await self.common.async_input(
-                prompt=f"{self.tracker}: [green]Digite a sinopse:[/green]"
-            )
+            user_input_raw = await asyncio.to_thread(cli_ui.ask_string, f'"{self.tracker}: [green]Digite a sinopse:[/green]"')
+            user_input = (user_input_raw or "").strip()
             if user_input:
                 return user_input
             return 'N/A'
