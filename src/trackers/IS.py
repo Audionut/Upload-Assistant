@@ -58,7 +58,7 @@ class IS:
             desc_parts.append(f'Overview: {episode_overview}')
 
         # File information
-        mediainfo = builder.get_mediainfo_section(meta)
+        mediainfo = await builder.get_mediainfo_section(meta)
         if mediainfo:
             desc_parts.append(f'{mediainfo}')
 

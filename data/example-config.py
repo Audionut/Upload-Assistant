@@ -131,6 +131,9 @@ config = {
         # The final value will be the minimum, between this value and number of screens being processed
         "process_limit": "4",
 
+        # Limit the number of simultaneous tracker uploads (0 disables the limit)
+        "max_concurrent_uploads": 3,
+
         # Set true to limit the amount of CPU when running ffmpeg.
         # This places an additional limitation on ffmpeg to reduce CPU usage
         "ffmpeg_limit": False,

@@ -299,7 +299,7 @@ class DC:
                     meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id + '/'
                     meta['tracker_status'][self.tracker]['status_message'] = response_data.get('message')
 
-                    await self.common.download_tracker_torrent(
+                    await self.common.download_tracker_torrent_process(
                         meta,
                         self.tracker,
                         headers=dict(self.session.headers),

@@ -257,7 +257,7 @@ class ACM:
                     # adding torrent link to comment of torrent file
                     t_id = response_data['data'].split('.')[1].split('/')[3]
                     meta['tracker_status'][self.tracker]['torrent_id'] = t_id
-                    await self.common.download_tracker_torrent(
+                    await self.common.download_tracker_torrent_process(
                         meta,
                         self.tracker,
                         headers=headers,

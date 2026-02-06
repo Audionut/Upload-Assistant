@@ -788,7 +788,10 @@ class GPW:
         if imdb_info:
             imdbType = imdb_info.get('type', 'movie').lower()
             if imdbType in ("movie", "tv movie", "tvmovie", "video", "short"):
-                runtime = int(imdb_info.get('runtime', '60'))
+                try:
+                    runtime = int(imdb_info.get('runtime', '60'))
+                except (ValueError, TypeError):
+                    runtime = 60
                 movie_type = '1' if runtime >= 45 or runtime == 0 else '2'  # Feature Film/Short Film
 
         return movie_type

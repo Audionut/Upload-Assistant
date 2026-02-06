@@ -15,10 +15,63 @@ from src.bbcode import BBCODE
 from src.console import console
 from src.exceptions import *  # noqa F403
 from src.torrentcreate import TorrentCreator
-from src.trackers.COMMON import COMMON
+from src.trackers.COMMON import COMMON, get_process_executor
 
 Meta = dict[str, Any]
 Config = dict[str, Any]
+
+
+def _download_hdb_torrent_worker(username: str, passkey: str, torrent_id: str, torrent_path: str) -> None:
+    api_url = "https://hdbits.org/api/torrents"
+    data = {
+        "username": username,
+        "passkey": passkey,
+        "id": torrent_id,
+    }
+
+    os.makedirs(os.path.dirname(torrent_path), exist_ok=True)
+
+    with httpx.Client(timeout=30.0) as client:
+        response = client.post(url=api_url, json=data)
+        response.raise_for_status()
+        try:
+            response_json = response.json()
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"Failed to parse JSON response from {api_url}. Response content: {response.text}. Data: {data}. Error: {e}"
+            ) from e
+
+        data_list = response_json.get("data")
+        if not isinstance(data_list, list) or not data_list:
+            raise ValueError(
+                f"Invalid JSON response from {api_url}: 'data' key missing, not a list, or empty. Response: {response_json}. Data: {data}"
+            )
+
+        try:
+            filename = data_list[0]["filename"]
+        except (KeyError, IndexError) as e:
+            raise KeyError(
+                f"Failed to access filename in response from {api_url}. Response: {response_json}. Data: {data}. Error: {e}"
+            ) from e
+
+        download_url = f"https://hdbits.org/download.php/{quote(filename)}"
+        params = {"passkey": passkey, "id": torrent_id}
+        download_response = client.get(url=download_url, params=params)
+        download_response.raise_for_status()
+
+        content_type = download_response.headers.get("content-type", "").lower()
+        if "bittorrent" not in content_type and "octet-stream" not in content_type:
+            raise ValueError(
+                f"Unexpected content-type for torrent download: {content_type}. URL: {download_url}. Params: {params}"
+            )
+
+        if not download_response.content.startswith(b"d"):
+            raise ValueError(
+                f"Downloaded content does not appear to be a valid torrent file (does not start with 'd'). URL: {download_url}. Params: {params}"
+            )
+
+        with open(torrent_path, "wb") as tor:
+            tor.write(download_response.content)
 
 
 class HDB:
@@ -475,55 +528,15 @@ class HDB:
             return False
 
     async def download_new_torrent(self, id: str, torrent_path: str) -> None:
-        # Get HDB .torrent filename
-        api_url = "https://hdbits.org/api/torrents"
-        data = {
-            'username': self.username,
-            'passkey': self.passkey,
-            'id': id
-        }
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            r = await client.post(url=api_url, json=data)
-        r.raise_for_status()
-        try:
-            r_json = r.json()
-        except json.JSONDecodeError as e:
-            raise ValueError(
-                f"Failed to parse JSON response from {api_url}. Response content: {r.text}. Data: {data}. Error: {e}"
-            ) from e
-
-        if 'data' not in r_json or not isinstance(r_json['data'], list) or len(r_json['data']) == 0:
-            raise ValueError(f"Invalid JSON response from {api_url}: 'data' key missing, not a list, or empty. Response: {r_json}. Data: {data}")
-
-        try:
-            filename = r_json['data'][0]['filename']
-        except (KeyError, IndexError) as e:
-            raise KeyError(
-                f"Failed to access filename in response from {api_url}. Response: {r_json}. Data: {data}. Error: {e}"
-            ) from e
-
-        # Download new .torrent
-        download_url = f"https://hdbits.org/download.php/{quote(filename)}"
-        params = {
-            'passkey': self.passkey,
-            'id': id
-        }
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            r = await client.get(url=download_url, params=params)
-        r.raise_for_status()
-
-        # Validate content-type
-        content_type = r.headers.get('content-type', '').lower()
-        if 'bittorrent' not in content_type and 'octet-stream' not in content_type:
-            raise ValueError(f"Unexpected content-type for torrent download: {content_type}. URL: {download_url}. Params: {params}")
-
-        # Basic validation: check if content looks like bencoded data (starts with 'd')
-        if not r.content.startswith(b'd'):
-            raise ValueError(f"Downloaded content does not appear to be a valid torrent file (does not start with 'd'). URL: {download_url}. Params: {params}")
-
-        async with aiofiles.open(torrent_path, "wb") as tor:
-            await tor.write(r.content)
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            get_process_executor(),
+            _download_hdb_torrent_worker,
+            self.username,
+            self.passkey,
+            id,
+            torrent_path,
+        )
 
     async def edit_desc(self, meta: Meta) -> None:
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf-8') as base_file:

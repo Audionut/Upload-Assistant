@@ -15,7 +15,18 @@ from unidecode import unidecode
 from src.console import console
 from src.cookie_auth import CookieValidator
 from src.exceptions import *  # noqa F403
-from src.trackers.COMMON import COMMON
+from src.trackers.COMMON import COMMON, get_process_executor
+
+
+def _download_fl_torrent_worker(cookies: dict[str, str], torrent_id: str, torrent_path: str) -> None:
+    download_url = f"https://filelist.io/download.php?id={torrent_id}"
+    os.makedirs(os.path.dirname(torrent_path), exist_ok=True)
+    with httpx.Client(cookies=cookies, timeout=30.0) as client:
+        response = client.get(url=download_url)
+    if response.status_code != 200:
+        raise ValueError("There was an issue downloading the new .torrent from FL")
+    with open(torrent_path, "wb") as tor:
+        tor.write(response.content)
 
 
 class FL:
@@ -366,15 +377,18 @@ class FL:
                 console.print(response.url)
 
     async def download_new_torrent(self, cookies: dict[str, str], id: str, torrent_path: str) -> None:
-        download_url = f"https://filelist.io/download.php?id={id}"
-        async with httpx.AsyncClient(cookies=cookies, timeout=30.0) as client:
-            r = await client.get(url=download_url)
-        if r.status_code == 200:
-            async with aiofiles.open(torrent_path, "wb") as tor:
-                await tor.write(r.content)
-        else:
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.run_in_executor(
+                get_process_executor(),
+                _download_fl_torrent_worker,
+                cookies,
+                id,
+                torrent_path,
+            )
+        except Exception as e:
             console.print("[red]There was an issue downloading the new .torrent from FL")
-            console.print(r.text)
+            console.print(str(e))
 
     async def edit_desc(self, meta: dict[str, Any]) -> None:
         base_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"

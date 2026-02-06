@@ -1,14 +1,15 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # import discord
+import asyncio
 import os
 import re
-import urllib.request
 from typing import Any, Optional, cast
 from urllib.parse import urlparse
 
 import aiofiles
 import cli_ui
 import click
+import httpx
 
 from src.console import console
 from src.get_desc import DescriptionBuilder
@@ -189,6 +190,25 @@ class TIK(UNIT3D):
         return {'resolution_id': resolution_id}
 
     async def get_description(self, meta: Meta, cached_description: Optional[str] = None) -> dict[str, str]:  # noqa: ARG002
+        async def path_exists(path: str) -> bool:
+            return await asyncio.to_thread(os.path.exists, path)
+
+        async def download_poster(url: str, destination: str) -> bool:
+            try:
+                parsed_url = urlparse(url)
+                if parsed_url.scheme not in ("http", "https"):
+                    raise ValueError(f"Invalid URL scheme: {parsed_url.scheme}")
+                async with httpx.AsyncClient(timeout=20.0) as client:
+                    response = await client.get(url)
+                    response.raise_for_status()
+                    content = await response.aread()
+                async with aiofiles.open(destination, "wb") as poster_file:
+                    await poster_file.write(content)
+                return True
+            except Exception as e:
+                console.print(f"[red]Error downloading poster: {e}[/red]")
+                return False
+
         if meta.get('description_link') or meta.get('description_file'):
             desc = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, comparison=True)
 
@@ -215,26 +235,22 @@ class TIK(UNIT3D):
         poster_png_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/poster.png"
 
         # Check if either poster.jpg or poster.png already exists
-        if os.path.exists(poster_jpg_path):
+        if await path_exists(poster_jpg_path):
             poster_path = poster_jpg_path
             console.print("[green]Poster already exists as poster.jpg, skipping download.[/green]")
-        elif os.path.exists(poster_png_path):
+        elif await path_exists(poster_png_path):
             poster_path = poster_png_path
             console.print("[green]Poster already exists as poster.png, skipping download.[/green]")
         else:
             # No poster file exists, download the poster image
             poster_path = poster_jpg_path  # Default to saving as poster.jpg
-            try:
-                parsed_url = urlparse(poster_url)
-                if parsed_url.scheme not in ('http', 'https'):
-                    raise ValueError(f"Invalid URL scheme: {parsed_url.scheme}")
-                urllib.request.urlretrieve(poster_url, poster_path)  # nosec B310
+            if await download_poster(poster_url, poster_path):
                 console.print(f"[green]Poster downloaded to {poster_path}[/green]")
-            except Exception as e:
-                console.print(f"[red]Error downloading poster: {e}[/red]")
+            else:
+                poster_path = ""
 
         # Upload the downloaded or existing poster image once
-        if os.path.exists(poster_path):
+        if poster_path and await path_exists(poster_path):
             try:
                 console.print("Uploading standard poster to image host....")
                 new_poster_url, _ = await self.uploadscreens_manager.upload_screens(meta, 1, 1, 0, 1, [poster_path], {})

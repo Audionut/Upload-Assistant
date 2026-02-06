@@ -24,6 +24,10 @@ CENTER_OPEN = "[center]"
 CENTER_CLOSE_DOUBLE = "[/center]\n\n"
 
 
+async def _glob_async(pattern: str) -> list[str]:
+    return await asyncio.to_thread(glob.glob, pattern)
+
+
 def html_to_bbcode(text: str) -> str:
     """Convert HTML tags to BBCode format."""
     if not text:
@@ -99,13 +103,13 @@ async def gen_desc(
             console.print(f"specified_dir_path: {specified_dir_path}")
             console.print(f"sourcedir_path: {source_dir_path}")
         if "auto_nfo" in meta and meta["auto_nfo"] is True:
-            nfo_files = glob.glob(specified_dir_path)
+            nfo_files = await _glob_async(specified_dir_path)
             scene_nfo = True
         elif "bhd_nfo" in meta and meta["bhd_nfo"] is True:
-            nfo_files = glob.glob(specified_dir_path)
+            nfo_files = await _glob_async(specified_dir_path)
             bhd_nfo = True
         else:
-            nfo_files = glob.glob(source_dir_path)
+            nfo_files = await _glob_async(source_dir_path)
         if not nfo_files:
             console.print("NFO was set but no nfo file was found")
             if not content_written:
@@ -882,7 +886,7 @@ class DescriptionBuilder:
                             desc_parts.append(CENTER_CLOSE_DOUBLE)
                             meta["retry_count"] += 1
                             meta[new_images_key] = []
-                            new_screens = [os.path.basename(f) for f in glob.glob(
+                            new_screens = [os.path.basename(f) for f in await _glob_async(
                                 os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png")
                             )]
                             if not new_screens:
@@ -902,7 +906,7 @@ class DescriptionBuilder:
                                     )
                                 except Exception as e:
                                     console.print(f"Error during BDMV screenshot capture: {e}", markup=False)
-                                new_screens = [os.path.basename(f) for f in glob.glob(
+                                new_screens = [os.path.basename(f) for f in await _glob_async(
                                     os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"PLAYLIST_{i}-*.png")
                                 )]
                             if new_screens and not meta.get("skip_imghost_upload", False):
@@ -1062,11 +1066,11 @@ class DescriptionBuilder:
                             # Check if new screenshots already exist before running prep.screenshots
                             new_screens: list[str] = []
                             if each["type"] == "BDMV":
-                                new_screens = [os.path.basename(f) for f in glob.glob(
+                                new_screens = [os.path.basename(f) for f in await _glob_async(
                                     os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
                                 )]
                             elif each["type"] == "DVD":
-                                new_screens = [os.path.basename(f) for f in glob.glob(
+                                new_screens = [os.path.basename(f) for f in await _glob_async(
                                     os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png")
                                 )]
                             if not new_screens:
@@ -1092,7 +1096,7 @@ class DescriptionBuilder:
                                         )
                                     except Exception as e:
                                         console.print(f"Error during BDMV screenshot capture: {e}", markup=False)
-                                    new_screens = [os.path.basename(f) for f in glob.glob(
+                                    new_screens = [os.path.basename(f) for f in await _glob_async(
                                         os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png")
                                     )]
                                 if each["type"] == "DVD":
@@ -1100,7 +1104,7 @@ class DescriptionBuilder:
                                         await self.takescreens_manager.dvd_screenshots(meta, i, multi_screens, True)
                                     except Exception as e:
                                         console.print(f"Error during DVD screenshot capture: {e}", markup=False)
-                                    new_screens = [os.path.basename(f) for f in glob.glob(
+                                    new_screens = [os.path.basename(f) for f in await _glob_async(
                                         os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['discs'][i]['name']}-*.png")
                                     )]
 
@@ -1247,7 +1251,7 @@ class DescriptionBuilder:
                     if new_images_key not in meta or not meta[new_images_key]:
                         meta[new_images_key] = []
                         # Proceed with image generation if not already present
-                        new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
+                        new_screens = [os.path.basename(f) for f in await _glob_async(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
 
                         # If no screenshots exist, create them
                         if not new_screens and meta["debug"]:
@@ -1268,7 +1272,7 @@ class DescriptionBuilder:
                         except Exception as e:
                             console.print(f"Error during generic screenshot capture: {e}", markup=False)
 
-                        new_screens = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
+                        new_screens = [os.path.basename(f) for f in await _glob_async(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"FILE_{i}-*.png"))]
 
                         # Upload generated screenshots
                         if new_screens and not meta.get("skip_imghost_upload", False):

@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import glob
 import json
 import os
@@ -15,10 +16,21 @@ from unidecode import unidecode
 from src.console import console
 from src.cookie_auth import CookieValidator
 from src.exceptions import *  # noqa E403
-from src.trackers.COMMON import COMMON
+from src.trackers.COMMON import COMMON, get_process_executor
 
 Meta = dict[str, Any]
 Config = dict[str, Any]
+
+
+def _download_pter_torrent_worker(passkey: str, torrent_id: str, torrent_path: str) -> None:
+    download_url = f"https://pterclub.com/download.php?id={torrent_id}&passkey={passkey}"
+    os.makedirs(os.path.dirname(torrent_path), exist_ok=True)
+    with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+        response = client.get(url=download_url)
+    if response.status_code != 200:
+        raise ValueError("There was an issue downloading the new .torrent from pter")
+    with open(torrent_path, "wb") as tor:
+        tor.write(response.content)
 
 
 class PTER:
@@ -469,12 +481,15 @@ class PTER:
         return False
 
     async def download_new_torrent(self, id: str, torrent_path: str) -> None:
-        download_url = f"https://pterclub.com/download.php?id={id}&passkey={self.passkey}"
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            r = await client.get(url=download_url)
-        if r.status_code == 200:
-            async with aiofiles.open(torrent_path, "wb") as tor:
-                await tor.write(r.content)
-        else:
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.run_in_executor(
+                get_process_executor(),
+                _download_pter_torrent_worker,
+                self.passkey,
+                id,
+                torrent_path,
+            )
+        except Exception as e:
             console.print("[red]There was an issue downloading the new .torrent from pter")
-            console.print(r.text)
+            console.print(str(e))

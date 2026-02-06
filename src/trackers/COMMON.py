@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import sys
+from concurrent.futures import ProcessPoolExecutor
 from typing import Any, Callable, Optional, Union, cast
 
 import aiofiles
@@ -21,6 +22,38 @@ from torf import Torrent
 from src.bbcode import BBCODE
 from src.console import console
 from src.exportmi import exportInfo
+
+_PROCESS_EXECUTOR: Optional[ProcessPoolExecutor] = None
+
+
+def get_process_executor() -> ProcessPoolExecutor:
+    global _PROCESS_EXECUTOR
+    if _PROCESS_EXECUTOR is None:
+        _PROCESS_EXECUTOR = ProcessPoolExecutor()
+    return _PROCESS_EXECUTOR
+
+
+def _download_tracker_torrent_worker(payload: dict[str, Any]) -> tuple[bool, str]:
+    downurl = str(payload.get("downurl", "")).strip()
+    path = str(payload.get("path", "")).strip()
+    headers = payload.get("headers")
+    params = payload.get("params")
+
+    if not downurl or not path:
+        return False, "Missing download URL or output path."
+
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with httpx.Client(headers=headers, params=params, timeout=30.0) as client, client.stream(
+            "GET", downurl
+        ) as response:
+            response.raise_for_status()
+            with open(path, "wb") as f:
+                for chunk in response.iter_bytes():
+                    f.write(chunk)
+        return True, ""
+    except Exception as exc:
+        return False, str(exc)
 
 
 class COMMON:
@@ -121,7 +154,7 @@ class COMMON:
                 try:
                     new_torrent = await loop.run_in_executor(
                         None,
-                        lambda: Torrent.read(cast(Any, io.BytesIO(torrent_bytes))),
+                        lambda: Torrent.read_stream(cast(Any, io.BytesIO(torrent_bytes))),
                     )
                 except Exception:
                     new_torrent = await loop.run_in_executor(None, Torrent.read, path)
@@ -196,6 +229,51 @@ class COMMON:
                 console.print(f"[yellow]Warning: Could not download torrent file: {str(e)}[/yellow]")
                 console.print("[yellow]Download manually from the tracker.[/yellow]")
                 return None
+
+        return None
+
+    async def download_tracker_torrent_process(
+        self,
+        meta: dict[str, Any],
+        tracker: str,
+        headers: Optional[dict[str, str]] = None,
+        params: Optional[dict[str, str]] = None,
+        downurl: str = "",
+        hash_is_id: bool = False,
+        cross: bool = False,
+    ) -> Optional[str]:
+        path = (
+            f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}_cross].torrent"
+            if cross
+            else f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
+        )
+        if not downurl:
+            return None
+
+        loop = asyncio.get_running_loop()
+        payload = {
+            "downurl": downurl,
+            "path": path,
+            "headers": headers,
+            "params": params,
+        }
+        success, error = await loop.run_in_executor(
+            get_process_executor(),
+            _download_tracker_torrent_worker,
+            payload,
+        )
+
+        if not success:
+            console.print(f"[yellow]Warning: Could not download torrent file: {error}[/yellow]")
+            console.print("[yellow]Download manually from the tracker.[/yellow]")
+            return None
+
+        if cross:
+            return None
+
+        if hash_is_id:
+            torrent_hash = await self.get_torrent_hash(meta, tracker)
+            return torrent_hash
 
         return None
 

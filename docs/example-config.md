@@ -118,9 +118,11 @@ Implementation notes:
 - `process_limit` (str): Max number of screenshot optimization processes.
 - `threads` (str): Thread limit per process during image optimization.
 - `ffmpeg_limit` (bool): Limit CPU usage when running ffmpeg.
+- `max_concurrent_uploads` (int): Max number of concurrent tracker uploads (`0` or empty disables the limit).
 
 Implementation notes:
 - These are most visible during screenshot capture/optimization (`src/takescreens.py`). Lower them on shared/limited systems.
+- `max_concurrent_uploads` is used in [src/trackerhandle.py](src/trackerhandle.py) to cap concurrent tracker upload tasks.
 
 ### Packs (season packs / multi-disc)
 - `multiScreens` (str): Screenshots per disc/episode when uploading packs to supported sites.

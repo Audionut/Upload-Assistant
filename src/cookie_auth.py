@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import http.cookiejar
 import importlib
 import json
@@ -534,47 +535,55 @@ class CookieAuthUploader:
         else:
             success = False
             try:
-                async with httpx.AsyncClient(headers=headers, timeout=30.0, cookies=upload_cookies, follow_redirects=True) as session:
-                    response = await session.post(upload_url, data=data, files=files)
+                def post_upload() -> httpx.Response:
+                    with httpx.Client(
+                        headers=headers,
+                        timeout=30.0,
+                        cookies=upload_cookies,
+                        follow_redirects=True,
+                    ) as session:
+                        return session.post(upload_url, data=data, files=files)
 
-                    if success_text and success_text in response.text:
+                response = await asyncio.to_thread(post_upload)
+
+                if success_text and success_text in response.text:
+                    success = True
+
+                elif success_status_code:
+                    valid_codes = {
+                        int(code.strip())
+                        for code in str(success_status_code).split(",")
+                        if code.strip().isdigit()
+                    }
+
+                    if int(response.status_code) in valid_codes:
                         success = True
 
-                    elif success_status_code:
-                        valid_codes = {
-                            int(code.strip())
-                            for code in str(success_status_code).split(",")
-                            if code.strip().isdigit()
-                        }
+                elif error_text and error_text not in response.text:
+                    success = True
 
-                        if int(response.status_code) in valid_codes:
-                            success = True
-
-                    elif error_text and error_text not in response.text:
-                        success = True
-
-                    if success:
-                        await self.handle_successful_upload(
-                            meta,
-                            tracker,
-                            response,
-                            id_pattern,
-                            hash_is_id,
-                            source_flag,
-                            user_announce_url,
-                            torrent_url,
-                        )
-                        return True
-                    else:
-                        await self.handle_failed_upload(
-                            meta,
-                            tracker,
-                            success_status_code,
-                            success_text,
-                            error_text,
-                            response,
-                        )
-                        return False
+                if success:
+                    await self.handle_successful_upload(
+                        meta,
+                        tracker,
+                        response,
+                        id_pattern,
+                        hash_is_id,
+                        source_flag,
+                        user_announce_url,
+                        torrent_url,
+                    )
+                    return True
+                else:
+                    await self.handle_failed_upload(
+                        meta,
+                        tracker,
+                        success_status_code,
+                        success_text,
+                        error_text,
+                        response,
+                    )
+                    return False
 
             except httpx.ConnectTimeout:
                 meta["tracker_status"][tracker]["status_message"] = "Connection timed out"

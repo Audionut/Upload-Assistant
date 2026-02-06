@@ -73,6 +73,17 @@ async def process_trackers(
     manual_packager = ManualPackageManager(config)
     timing_enabled = True
 
+    max_concurrent_uploads_raw = config.get("DEFAULT", {}).get("max_concurrent_uploads")
+    max_concurrent_uploads: Optional[int] = None
+    if max_concurrent_uploads_raw not in (None, ""):
+        try:
+            max_concurrent_uploads = int(max_concurrent_uploads_raw)
+        except (TypeError, ValueError):
+            max_concurrent_uploads = None
+    if max_concurrent_uploads is not None and max_concurrent_uploads < 1:
+        max_concurrent_uploads = None
+    upload_semaphore = asyncio.Semaphore(max_concurrent_uploads) if max_concurrent_uploads else None
+
     unit3d_trackers = {
         "A4K",
         "AITHER",
@@ -630,6 +641,13 @@ async def process_trackers(
             summary_parts.append(f"desc_cache {'hit' if cache_hit else 'miss'}")
         console.print(f"[cyan]{tracker} timing summary: {', '.join(summary_parts)}[/cyan]")
 
+    async def run_tracker_with_limit(tracker: str) -> None:
+        if upload_semaphore is None:
+            await process_single_tracker(tracker)
+            return
+        async with upload_semaphore:
+            await process_single_tracker(tracker)
+
     multi_screens = int(config['DEFAULT'].get('multiScreens', 2))
     discs = cast(list[Any], meta.get('discs') or [])
     one_disc = True
@@ -642,7 +660,7 @@ async def process_trackers(
         # Run all tracker tasks concurrently with individual error handling
         tasks: list[tuple[str, asyncio.Task[None]]] = []
         for tracker in active_trackers:
-            task = asyncio.create_task(process_single_tracker(tracker))
+            task = asyncio.create_task(run_tracker_with_limit(tracker))
             tasks.append((tracker, task))
 
         # Wait for all tasks to complete, but don't let one tracker's failure stop others
@@ -657,6 +675,6 @@ async def process_trackers(
     else:
         # Process each tracker sequentially
         for tracker in active_trackers:
-            await process_single_tracker(tracker)
+            await run_tracker_with_limit(tracker)
 
     console.print("[green]All tracker uploads processed.[/green]")
