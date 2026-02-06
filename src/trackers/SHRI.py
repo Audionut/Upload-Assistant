@@ -142,7 +142,7 @@ class SHRI(UNIT3D):
             if num_langs == 1:
                 # One language (ITA or non-ITA)
                 audio_lang_str = audio_langs[0]
-            
+
             elif num_langs == 2:
                 # Two languages ("ITA - [lang]" if ITA is present, "[lang] - [lang]" if not)
                 if "ITA" in audio_langs:
@@ -150,13 +150,10 @@ class SHRI(UNIT3D):
                     audio_lang_str = f"ITA - {other}"
                 else:
                     audio_lang_str = " - ".join(audio_langs)
-            
+
             elif num_langs >= 3:
                 # Three or more languages, "ITA - MULTI" if ITA is present, "MULTI" only if not)
-                if "ITA" in audio_langs:
-                    audio_lang_str = "ITA - MULTI"
-                else:
-                    audio_lang_str = "MULTI"
+                audio_lang_str = "ITA - MULTI" if "ITA" in audio_langs else "MULTI"
 
         effective_type = self.get_effective_type(meta)
 
