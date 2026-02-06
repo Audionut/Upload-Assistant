@@ -604,14 +604,16 @@ class TVC:
             base = await self.read_file(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt")
         except FileNotFoundError:
             base = ""
+
         # Ensure tmp/<uuid> directory exists
         desc_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
         os.makedirs(desc_dir, exist_ok=True)
         descfile_path = os.path.join(desc_dir, f"[{tracker}]DESCRIPTION.txt")
+
         bbcode = BBCODE()
         desc = ""
 
-        # Discs
+        # DISCS
         if meta.get('discs', []):
             discs = meta['discs']
             if discs[0]['type'] == "DVD":
@@ -626,7 +628,7 @@ class TVC:
                         f"[spoiler={os.path.basename(each['ifo'])}][code]{each['ifo_mi']}[/code][/spoiler]\n\n"
                     )
 
-        # Release info for movies
+        # MOVIE RELEASE INFO
         rd_info = ""
         if meta['category'] == "MOVIE":
             if 'release_dates' in meta:
@@ -640,26 +642,26 @@ class TVC:
                             )
             else:
                 rd_info = meta.get('release_date', '')
+
             if rd_info:
                 desc += f"[center]{rd_info}[/center]\n\n"
 
-        # TV pack layout
+        # TV PACK LAYOUT
         if meta['category'] == "TV" and meta.get('tv_pack') == 1 and 'season_air_first_date' in meta:
+
             channel = meta.get('networks', 'N/A')
             airdate = self.format_date_ddmmyyyy(meta.get('season_air_first_date') or "")
 
-            desc += "[center]\n"
+            desc += "[center]"
             if meta.get("logo"):
                 desc += f"[img={self.config['DEFAULT'].get('logo_size', '300')}]"
-                desc += f"{meta['logo']}[/img]\n\n"
+                desc += f"{meta['logo']}[/img]\n"
 
-            # UK terminology: Series not Season
-            desc += f"[b]Series Title:[/b] {meta.get('season_name', 'Unknown Series')}\n\n"
+            desc += f"[b]Series Title:[/b] {meta.get('season_name', 'Unknown Series')}\n"
             desc += f"[b]This series premiered on:[/b] {channel} on {airdate}\n"
 
-            # Episode list
             if meta.get('episodes'):
-                desc += "\n\n[b]Episode List[/b]\n\n"
+                desc += "\n[b]Episode List[/b]\n"
                 for ep in meta['episodes']:
                     ep_num = ep.get('code', '')
                     ep_title = ep.get('title', '').strip()
@@ -675,88 +677,91 @@ class TVC:
                     desc += "\n"
 
                     if ep_overview:
-                        desc += f"{ep_overview}\n\n"
+                        desc += f"{ep_overview}\n"
 
             desc += self.get_links(meta)
 
             screens_count = int(meta.get('screens', 0) or 0)
             if image_list and screens_count >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
-                desc += "\n\n[b]Screenshots[/b]\n\n"
+                desc += "\n[b]Screenshots[/b]\n"
                 for each in image_list[:self.config['TRACKERS'][self.tracker]['image_count']]:
                     web_url = each['web_url']
                     img_url = each['img_url']
                     desc += f"[url={web_url}][img=350]{img_url}[/img][/url]"
 
-            desc += "[/center]\n\n"
+            desc += "\n[/center]\n\n"
 
-        # Episode layout
+        # EPISODE LAYOUT
         elif meta['category'] == "TV" and meta.get('tv_pack') != 1 and 'episode_overview' in meta:
-            desc += "[center]\n"
+
+            desc += "[center]"
             if meta.get("logo"):
                 desc += f"[img={self.config['DEFAULT'].get('logo_size', '300')}]"
-                desc += f"{meta['logo']}[/img]\n\n"
+                desc += f"{meta['logo']}[/img]\n"
+
             episode_name = str(meta.get('episode_name', '')).strip()
             overview = str(meta.get('episode_overview', '')).strip()
-            # Note: regex may mis-split on abbreviations (e.g. "Dr. Smith") or ellipses ("...").
-            # This is a heuristic; fallback is to treat the whole overview as one block.
+
             sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', overview) if s.strip()]
             if not sentences and overview:
                 sentences = [overview]
 
             if episode_name:
-                desc += f"[b]Episode Title:[/b] {episode_name}\n\n"
+                desc += f"[b]Episode Title:[/b] {episode_name}\n"
+
             for s in sentences:
                 desc += s.rstrip() + "\n"
+
             if 'episode_airdate' in meta:
                 channel = meta.get('networks', 'N/A')
                 formatted_date = self.format_date_ddmmyyyy(meta['episode_airdate'])
-                desc += f"\n[b]Broadcast on:[/b] {channel} on {formatted_date}\n"
+                desc += f"[b]Broadcast on:[/b] {channel} on {formatted_date}\n"
 
             desc += self.get_links(meta)
 
             screens_count = int(meta.get('screens', 0) or 0)
             if image_list and screens_count >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
-                desc += "\n\n[b]Screenshots[/b]\n\n"
+                desc += "\n[b]Screenshots[/b]\n"
                 for each in image_list[:self.config['TRACKERS'][self.tracker]['image_count']]:
                     web_url = each['web_url']
                     img_url = each['img_url']
                     desc += f"[url={web_url}][img=350]{img_url}[/img][/url]"
-            desc += "[/center]\n\n"
 
-        # Movie / fallback overview
+            desc += "\n[/center]\n\n"
+
+        # MOVIE / FALLBACK
         else:
-            # Fallback path: for non‑movie categories with only a generic overview available.
             overview = str(meta.get('overview', '')).strip()
-            desc += "[center]\n"
+            desc += "[center]"
             if meta['category'].upper() == "MOVIE" and meta.get("logo"):
                 desc += f"[img={self.config['DEFAULT'].get('logo_size', '300')}]"
-                desc += f"{meta['logo']}[/img]\n\n"
+                desc += f"{meta['logo']}[/img]\n"
 
             if meta['category'].upper() == "MOVIE":
-                desc += f"[b]Movie Title:[/b] {meta.get('title', 'Unknown Movie')}\n\n"
+                desc += f"[b]Movie Title:[/b] {meta.get('title', 'Unknown Movie')}\n"
                 desc += overview + "\n"
                 if 'release_date' in meta:
                     formatted_date = self.format_date_ddmmyyyy(meta['release_date'])
-                    desc += f"\n[b]Released on:[/b] {formatted_date}\n"
+                    desc += f"[b]Released on:[/b] {formatted_date}\n"
+
                 desc += self.get_links(meta)
 
-                # Screenshots block for movies
                 screens_count = int(meta.get('screens', 0) or 0)
                 if image_list and screens_count >= self.config['TRACKERS'][self.tracker].get('image_count', 2):
-                    desc += "\n\n[b]Screenshots[/b]\n\n"
+                    desc += "\n[b]Screenshots[/b]\n"
                     for each in image_list[:self.config['TRACKERS'][self.tracker]['image_count']]:
                         web_url = each['web_url']
                         img_url = each['img_url']
                         desc += f"[url={web_url}][img=350]{img_url}[/img][/url]"
 
-                desc += "[/center]\n\n"
+                desc += "\n[/center]\n\n"
             else:
                 desc += overview + "\n[/center]\n\n"
 
-        # Notes/Extra Info
+        # NOTES
         notes_content = base.strip()
         if notes_content and notes_content.lower() != "ptp":
-            desc += f"[center][b]Notes / Extra Info[/b]\n\n{notes_content}\n\n[/center]\n\n"
+            desc += f"[center][b]Notes / Extra Info[/b]\n{notes_content}\n[/center]\n\n"
 
         # BBCode conversions
         desc = bbcode.convert_pre_to_code(desc)
@@ -764,11 +769,14 @@ class TVC:
         if not comparison:
             desc = bbcode.convert_comparison_to_collapse(desc, 1000)
 
-        # Ensure fallback content if description is empty
+        # MINIMAL TVC FIX
+        desc = desc.replace("[center]\n", "[center]")
+        desc = desc.replace("\n\n", "\n")
+
+        # Fallback
         if not desc.strip():
             desc = "[center][i]No description available[/i][/center]\n"
 
-        # Append signature if provided
         if signature:
             desc += f"\n{signature}\n"
 
@@ -777,14 +785,9 @@ class TVC:
             with open(descfile_path, "w", encoding="utf-8") as f:
                 f.write(desc)
 
-        try:
-            await asyncio.to_thread(_write)
-            if meta['debug']:
-                console.print(f"[cyan]Wrote DESCRIPTION file to {descfile_path} ({len(desc)} chars)")
-        except Exception as e:
-            console.print(f"[bold red]Failed to write DESCRIPTION file: {e}")
-
+        await asyncio.to_thread(_write)
         return desc
+
 
     def get_links(self, meta: Meta) -> str:
         """
