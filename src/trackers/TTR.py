@@ -1,6 +1,8 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 from typing import Any, Optional, cast
 
+import cli_ui
+
 from src.console import console
 from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
@@ -24,22 +26,21 @@ class TTR(UNIT3D):
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
         self.ttr_name = ''  # Initialize instance variable
-        pass
 
     async def get_name(self, meta: Meta) -> dict[str, str]:
-        name = self.ttr_name or await self.build_name(meta)
+        name = self.ttr_name or self.build_name(meta)
 
         return {'name': name}
 
-    async def build_name(self, meta: Meta) -> str:
+    def build_name(self, meta: Meta) -> str:
         name = str(meta.get('name_notag', ''))
 
-        async def ask_spanish_type(kind: str) -> str:
+        def ask_spanish_type(kind: str) -> str:
             console.print(f"{self.tracker}: [green]Found Spanish {kind} track.[/green] [yellow]Is it Castellano or Latino?[/yellow]")
             console.print("1 = Castellano")
             console.print("2 = Latino")
             console.print("3 = Castellano Latino")
-            return str(await self.common.async_input())
+            return str(cli_ui.ask_string("Enter choice (1-3): "))
 
         def get_spanish_type(lang_code: str) -> Optional[str]:
             if not lang_code:
@@ -61,7 +62,7 @@ class TTR(UNIT3D):
                 if unattended or confirm:
                     suffix = 'Castellano'
                 else:
-                    user_choice = await ask_spanish_type("audio")
+                    user_choice = ask_spanish_type("audio")
                     suffix = {'1': 'Castellano', '2': 'Latino', '3': 'Castellano Latino'}.get(user_choice, 'Castellano')
                 name += f" {suffix}"
 
@@ -69,7 +70,7 @@ class TTR(UNIT3D):
                 if unattended or confirm:
                     suffix = 'Castellano Subs'
                 else:
-                    user_choice = await ask_spanish_type("subtitle")
+                    user_choice = ask_spanish_type("subtitle")
                     suffix = {'1': 'Castellano Subs', '2': 'Latino Subs', '3': 'Castellano Latino Subs'}.get(user_choice, 'Castellano Subs')
 
                 name += f" {suffix}"
@@ -136,9 +137,7 @@ class TTR(UNIT3D):
                         return False
                 else:
                     console.print(f"{self.tracker}: [yellow]No Spanish audio track found, but Spanish subtitles are present.[/yellow]")
-                    console.print(f"{self.tracker}: [yellow]Do you want to upload anyway? y/N[/yellow]")
-                    user_choice = await self.common.async_input()
-                    if user_choice.lower() != 'y':
+                    if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                         return False
 
         return True

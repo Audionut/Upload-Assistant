@@ -15,7 +15,7 @@ This guide explains how to run the Upload Assistant WebUI inside Docker (includi
 ## Recommended environment variables (WebUI)
 
 - `UA_BROWSE_ROOTS` — comma-separated list of allowed container-side browse roots (required). Example: `/data,/Upload-Assistant/tmp`.
-- `SESSION_SECRET` or `SESSION_SECRET_FILE` — stable session secret (preferred to keep WebUI encrypted state stable). Example: `SESSION_SECRET_FILE=/Upload-Assistant/data/session_secret`.
+- `SESSION_SECRET` or `SESSION_SECRET_FILE` — stable session secret. Example: `SESSION_SECRET_FILE=/Upload-Assistant/data/session_secret`. Must have permissions sets correctly. Don't use this unless by default.
 - `IN_DOCKER=1` — force container detection if necessary (the app auto-detects Docker in most cases).
 - `UA_WEBUI_CORS_ORIGINS` — optional CORS origins, comma-separated.
 
@@ -52,7 +52,7 @@ services:
     container_name: upload-assistant
     restart: unless-stopped
     environment:
-      - SESSION_SECRET_FILE=/Upload-Assistant/data/session_secret
+      # - SESSION_SECRET_FILE=/Upload-Assistant/data/session_secret
       - IN_DOCKER=1
       # - UA_BROWSE_ROOTS=/data/torrents,/Upload-Assistant/tmp
     ports:

@@ -10,6 +10,7 @@ from typing import Any, Callable, Optional, Union, cast
 
 import aiofiles
 import bencodepy
+import cli_ui
 import click
 import httpx
 import langcodes
@@ -42,13 +43,6 @@ class COMMON:
         """Async wrapper for os.makedirs"""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda p, e: os.makedirs(p, exist_ok=e), path, exist_ok)
-
-    async def async_input(self, prompt: str = "") -> str:
-        """Gets user input in a non-blocking way using asyncio.to_thread"""
-        if prompt:
-            console.print(prompt)
-        user_input = await asyncio.to_thread(input)
-        return user_input.strip()
 
     async def create_torrent_for_upload(
         self,
@@ -632,13 +626,13 @@ class COMMON:
                         return tmdb, imdb, tvdb, mal, description, category, infohash, imagelist, file_name
                     else:
                         console.print("[cyan]Do you want to edit, discard or keep the description?[/cyan]")
-                        edit_choice = input("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is:")
+                        edit_choice = cli_ui.ask_string("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is:")
 
-                        if edit_choice.lower() == 'e':
+                        if (edit_choice or "").lower() == 'e':
                             edited_description = click.edit(description)
                             if edited_description:
                                 description = edited_description.strip()
-                        elif edit_choice.lower() == 'd':
+                        elif (edit_choice or "").lower() == 'd':
                             description = None
                             console.print("[yellow]Description discarded.[/yellow]")
                         else:

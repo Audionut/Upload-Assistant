@@ -83,6 +83,8 @@ Order matters: `img_host_1` is primary, later hosts are fallbacks.
 Implementation notes:
 - These are primarily consumed by the description builders (for many trackers via `src/get_desc.py`, and for some trackers via tracker-specific modules in `src/trackers/`).
 - `logo_language` influences which TMDb logo is requested; if not available, English is used.
+- `add_logo` is a [per-tracker overridable setting](#tracker-overridable-settings).
+- `episode_overview` is a [per-tracker overridable setting](#tracker-overridable-settings).
 
 ### Screenshots
 - `screens` (str): Number of screenshots to capture.
@@ -110,7 +112,7 @@ Implementation notes:
 Implementation notes:
 - Tonemapping decisions happen in `src/takescreens.py` based on `meta['hdr']` and `tone_map`.
 - `algorithm`/`desat` are used for the non-libplacebo tonemap filter path.
-- `tonemapped_header` is inserted by `src/get_desc.py` (and some tracker-specific description writers also respect it).
+- `tonemapped_header` is inserted by `src/get_desc.py` (and is a [per-tracker overridable setting](#tracker-overridable-settings)).
 
 ### Performance / multiprocessing
 - `process_limit` (str): Max number of screenshot optimization processes.
@@ -132,7 +134,7 @@ Implementation notes:
 - `charLimit` exists because some UNIT3D sites have strict description length limits.
 
 ### Description formatting hooks
-These can be overridden per-tracker by adding the same key inside that tracker’s config block.
+These can be [overridden per-tracker](#tracker-overridable-settings) by adding the same key inside that tracker’s config block.
 
 - `custom_description_header` (str): BBCode header added at top of description section.
 - `screenshot_header` (str): BBCode header added above screenshots.
@@ -203,6 +205,10 @@ Implementation notes:
 - `show_upload_duration` (bool): Print how long each tracker upload took.
 - `print_tracker_messages` (bool): Print tracker API messages returned during upload.
 - `print_tracker_links` (bool): Print direct torrent links after upload.
+- `inject_delay` (int): Delay (in seconds) before injecting the torrent to allow the tracker to register the hash and avoid 'unregistered torrent' errors.
+
+Implementation notes:
+- `inject_delay` is a [per-tracker overridable setting](#tracker-overridable-settings).
 
 ### Emby linking
 - `emby_dir` (str | None): Directory for Emby movie linking (enables linking when set).
@@ -313,6 +319,7 @@ Typical keys:
 - `torrent_storage_dir`, `transmission_label`
 - `local_path` / `remote_path`
 
+
 ### Watch folder
 - `watch_folder` (str): Path to a watch folder where `.torrent` files should be dropped.
 
@@ -330,3 +337,19 @@ Enables an optional Discord bot.
 - `discord_bot_description` (str): Bot description.
 - `command_prefix` (str): Command prefix (example `!`).
 - See https://github.com/Audionut/Upload-Assistant/wiki/Discord-Bot
+
+### Tracker overridable settings
+Tracker overridable settings are settings that you can add inside each tracker config dictionary; these settings override the values inside the DEFAULT config. In order for this to work, you must edit the config file, locate the tracker by name, and add your custom value.
+
+Example:
+```python
+config = {
+    "DEFAULT": {
+        "custom_signature": "This is my signature for ALL trackers",
+    },
+    "TRACKERS": {
+        "AITHER": {
+            "custom_signature": "This is my signature ONLY for AITHER",
+        },
+    },
+}

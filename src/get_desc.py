@@ -152,13 +152,16 @@ async def gen_desc(
                 response = await client.get(raw_url)
             description_link_content = response.text
             cleaned_content = clean_text(description_link_content)
-            if cleaned_content:
+            if cleaned_content and "Not Found" not in cleaned_content:
                 if not content_written:
                     description_lines.append(cleaned_content)
                 meta["description_link_content"] = cleaned_content
                 content_written = True
+            elif cleaned_content and "Not Found" in cleaned_content:
+                raise ValueError("Description link returned 'Not Found'")
         except Exception as e:
             console.print(f"[ERROR] Failed to fetch description from link: {e}")
+            raise e
 
     if description_file and os.path.isfile(description_file):
         async with aiofiles.open(description_file, encoding="utf-8") as f:
@@ -406,7 +409,7 @@ class DescriptionBuilder:
         """Returns the screenshot header if applicable."""
         try:
             screenheader = self.tracker_config.get(
-                "custom_screenshot_header", self.config["DEFAULT"].get("screenshot_header", None)
+                "screenshot_header", self.config["DEFAULT"].get("screenshot_header", None)
             )
             if screenheader:
                 return str(screenheader)

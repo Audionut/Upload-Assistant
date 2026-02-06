@@ -473,6 +473,9 @@ class Prep:
                 meta['valid_mi'] = False
                 await asyncio.sleep(2)
 
+        mediainfo_tracks = meta.get("mediainfo", {}).get("media", {}).get("track") or []
+        meta["has_multiple_default_subtitle_tracks"] = len([track for track in mediainfo_tracks if track["@type"] == "Text" and track["Default"] == "Yes"]) > 1
+
         # Check if there's a language restriction
         if meta['has_languages'] is not None and not meta.get('emby', False):
             try:
@@ -964,7 +967,7 @@ class Prep:
             both_ids_searched = False
             search_year_value = _normalize_search_year(meta.get('search_year'))
             if meta.get('tvmaze_id', 0) == 0 and meta.get('tvdb_id', 0) == 0:
-                tvmaze, tvdb, tvdb_data = await self.metadata_searching_manager.get_tvmaze_tvdb(
+                tvmaze, tvdb, tvdb_data, tvdb_name = await self.metadata_searching_manager.get_tvmaze_tvdb(
                     filename,
                     search_year_value or "",
                     meta.get('imdb_id', 0),
@@ -988,6 +991,10 @@ class Prep:
                     meta['tvdb_search_results'] = tvdb_data
                     if meta['debug']:
                         console.print("[blue]Found TVDB search results from search.[/blue]")
+                if tvdb_name:
+                    meta['tvdb_series_name'] = tvdb_name
+                    if meta['debug']:
+                        console.print(f"[blue]Found TVDB series name from search: {tvdb_name}[/blue]")
             if meta.get('tvmaze_id', 0) == 0 and not both_ids_searched:
                 if meta['debug']:
                     console.print("[yellow]No TVMAZE ID found, attempting to fetch...[/yellow]")
@@ -1115,12 +1122,17 @@ class Prep:
             meta['hdr'] = await video_manager.get_hdr(mi_data, bdinfo)
 
             meta['distributor'] = await get_distributor(meta['distributor'])
+            if meta['distributor'] is None:
+                meta['distributor'] = ""
 
             if meta.get('is_disc', None) == "BDMV":  # Blu-ray Specific
                 meta['region'] = await get_region(bdinfo, meta.get('region', None))
                 meta['video_codec'] = await video_manager.get_video_codec(bdinfo)
             else:
                 meta['video_encode'], meta['video_codec'], meta['has_encode_settings'], meta['bit_depth'] = await video_manager.get_video_encode(mi_data, meta['type'], bdinfo)
+
+            if meta['region'] is None:
+                meta['region'] = ""
 
             if meta.get('no_edition') is False:
                 manual_edition = meta.get('manual_edition') or ""
@@ -1258,7 +1270,7 @@ class Prep:
         filename_patterns = [
             r'(?i)s\d{1,2}e\d{1,2}',
             r'(?i)s\d{1,2}',
-            r'(?i)\d{1,2}x\d{2}',
+            r'(?i)\b\d{1,2}x\d{2}\b',
             r'(?i)(?:season|series)\s*\d+',
             r'(?i)e\d{2,3}\s*\-',
             r'(?i)\d{4}\.\d{1,2}\.\d{1,2}'
@@ -1266,18 +1278,26 @@ class Prep:
 
         path = meta.get('path', '')
         uuid = meta.get('uuid', '')
+        if meta.get('debug', False):
+            console.print(f"[cyan]Checking category for path: {path} and uuid: {uuid}[/cyan]")
 
         for pattern in path_patterns:
             if re.search(pattern, path):
+                if meta.get('debug', False):
+                    console.print(f"[cyan]Matched TV pattern in path: {pattern}[/cyan]")
                 return "TV"
 
         for pattern in filename_patterns:
             if re.search(pattern, uuid) or re.search(pattern, os.path.basename(path)):
+                if meta.get('debug', False):
+                    console.print(f"[cyan]Matched TV pattern in filename: {pattern}[/cyan]")
                 return "TV"
 
         if "subsplease" in path.lower() or "subsplease" in uuid.lower():
             anime_pattern = r'(?:\s-\s)?(\d{1,3})\s*\((?:\d+p|480p|480i|576i|576p|720p|1080i|1080p|2160p)\)'
             if re.search(anime_pattern, path.lower()) or re.search(anime_pattern, uuid.lower()):
+                if meta.get('debug', False):
+                    console.print(f"[cyan]Matched Anime pattern for SubsPlease: {anime_pattern}[/cyan]")
                 return "TV"
 
         return "MOVIE"

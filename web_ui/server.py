@@ -26,7 +26,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.security import safe_join
-from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import web_ui.auth as auth_mod
 from flask_session import Session
@@ -85,7 +85,7 @@ def _sanitize_relpath(rel: str) -> str:
     """Sanitize a relative path coming from user input.
 
     Splits the path into components, rejects empty/parent segments and
-    normalizes each component with Werkzeug's `secure_filename`. Returns a
+    validates each component for unsafe/control characters. Returns a
     path using the OS separator. Raises ValueError for unsafe input.
     """
     if rel == "" or rel == ".":
@@ -100,10 +100,14 @@ def _sanitize_relpath(rel: str) -> str:
     for p in parts:
         if not p or p == "." or p == "..":
             raise ValueError("Invalid path component")
-        safe = secure_filename(p)
-        if not safe:
+        # Reject NUL/control characters which are unsafe in file names.
+        if re.search(r"[\x00-\x1f]", p):
             raise ValueError("Invalid path component")
-        clean_parts.append(safe)
+        # Reject path-separator characters
+        if '/' in p or '\\' in p:
+            raise ValueError("Invalid path component")
+
+        clean_parts.append(p)
 
     return os.sep.join(clean_parts)
 
@@ -147,6 +151,11 @@ CORS_fn = cast(Any, CORS)
 safe_join = cast(Any, safe_join)
 
 app: Any = Flask(__name__)
+# Ensure Flask sees the proxy headers (Host, X-Forwarded-Proto, X-Forwarded-For)
+# so `request.host_url` and related values reflect the external URL when
+# running behind a reverse proxy (eg. Caddy). Adjust the `x_*` values if
+# there are multiple proxies in front of the app.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=2, x_host=1)
 # Load stable session secret (env/file/SECRET_KEY fallback). Use bytes directly.
 
 session_secret = auth_mod.load_session_secret()
@@ -533,13 +542,35 @@ def _verify_same_origin() -> bool:
     Referer prefix. Absence or mismatch results in False.
     """
     try:
-        host_url = (request.host_url or "").rstrip("/") + "/"
+        # Prefer comparing the origin/referer host:port (netloc) to the
+        # request host. This is scheme-insensitive and avoids failures
+        # when proxies/Cloudflare terminate TLS or don't forward the
+        # original scheme.
+        from urllib.parse import urlparse
+
         origin = request.headers.get("Origin")
         if origin:
+            try:
+                parsed = urlparse(origin)
+                if parsed.netloc:
+                    return parsed.netloc == request.host
+            except Exception:
+                pass
+            # Fallback to strict host_url match if parsing fails
+            host_url = (request.host_url or "").rstrip("/") + "/"
             return origin.rstrip("/") + "/" == host_url
+
         referer = request.headers.get("Referer") or request.headers.get("Referrer")
         if referer:
+            try:
+                parsed = urlparse(referer)
+                if parsed.netloc:
+                    return parsed.netloc == request.host
+            except Exception:
+                pass
+            host_url = (request.host_url or "").rstrip("/") + "/"
             return referer.startswith(host_url)
+
         return False
     except Exception:
         return False
@@ -786,7 +817,14 @@ def _parse_cors_origins() -> list[str]:
 
 cors_origins = _parse_cors_origins()
 if cors_origins:
-    CORS_fn(app, resources={r"/api/*": {"origins": cors_origins}}, allow_headers=["Content-Type", "Authorization"])
+    # Allow the CSRF header and support credentials so browser-based
+    # cross-origin requests can send cookies for authenticated sessions.
+    CORS_fn(
+        app,
+        resources={r"/api/*": {"origins": cors_origins}},
+        allow_headers=["Content-Type", "Authorization", "X-CSRF-Token"],
+        supports_credentials=True,
+    )
 
 # ANSI color code regex pattern
 ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
@@ -2009,8 +2047,56 @@ def config_page():
     # the user is authenticated to reduce cross-site information leakage.
     if _is_authenticated() and not _verify_csrf_header():
         referer = request.headers.get("Referer", "")
-        if not referer.startswith(request.host_url):
-            return jsonify({"error": "CSRF token missing or invalid", "success": False}), 403
+        # Compute an "effective" scheme taking into account common proxies
+        # that may not set X-Forwarded-Proto but do set Cloudflare headers.
+        effective_scheme = None
+        try:
+            xf_proto = request.headers.get("X-Forwarded-Proto")
+            if xf_proto:
+                effective_scheme = xf_proto.split(",", 1)[0].strip()
+            else:
+                cf_visitor = request.headers.get("Cf-Visitor") or request.headers.get("Cf-Visitor", None)
+                if cf_visitor:
+                    try:
+                        import json as _json
+
+                        cfv = _json.loads(cf_visitor)
+                        effective_scheme = str(cfv.get("scheme")) if cfv.get("scheme") else None
+                    except Exception:
+                        effective_scheme = None
+        except Exception:
+            effective_scheme = None
+
+        if not effective_scheme:
+            try:
+                effective_scheme = request.scheme
+            except Exception:
+                effective_scheme = "http"
+
+        effective_host_url = f"{effective_scheme}://{request.host}/"
+
+        # Parse the Referer and compare host:port (netloc) with the request host.
+        try:
+            from urllib.parse import urlparse
+
+            parsed = urlparse(referer or "")
+            referer_netloc = parsed.netloc
+        except Exception:
+            referer_netloc = ""
+
+        # Accept same-origin when referer host matches request.host
+        if referer_netloc != request.host:
+            # Log diagnostic info to help debug reverse-proxy header mismatches
+            console.print(f"[yellow]CSRF check failed for /config: host_url={effective_host_url}, Referer={referer}")
+            # Return a helpful error including the observed host_url and referer
+            return (
+                jsonify({
+                    "error": "CSRF token missing or invalid",
+                    "success": False,
+                    "debug": {"host_url": effective_host_url, "referer": referer, "request_host": request.host},
+                }),
+                403,
+            )
 
     try:
         # Ensure a session CSRF token exists and expose it to the template so
@@ -2962,25 +3048,39 @@ def execute_command():
                     try:
                         orig_ask_yes_no = _cli_ui.ask_yes_no
 
-                        def wrapped_ask_yes_no(question: str, default: bool = False) -> bool:
-                            with contextlib.suppress(Exception):
-                                wrapped_print(question)
-                            # Wait for a response or cancellation
-                            while True:
-                                if cancel_event.is_set():
-                                    raise EOFError()
-                                try:
-                                    resp = input_queue.get(timeout=0.5)
-                                except queue.Empty:
-                                    continue
-                                except Exception:
-                                    raise
-                                resp = (resp or "").strip().lower()
-                                if resp in ("y", "yes"):
-                                    return True
-                                if resp in ("n", "no"):
-                                    return False
-                                return default
+                        def wrapped_ask_yes_no(*args, default: bool = False, **kwargs) -> bool:
+                                # Support both signatures used across the codebase:
+                                #   ask_yes_no(question, default=...)
+                                #   ask_yes_no(color, question, default=...)
+                                # Extract the question and default value from args/kwargs.
+                                if len(args) >= 2:
+                                    question = args[1]
+                                elif len(args) == 1:
+                                    question = args[0]
+                                else:
+                                    question = kwargs.get('question', '')
+
+                                # If default was passed positionally (third arg), use it.
+                                default_val = args[2] if len(args) >= 3 else kwargs.get('default', default)
+
+                                with contextlib.suppress(Exception):
+                                    wrapped_print(str(question))
+                                # Wait for a response or cancellation
+                                while True:
+                                    if cancel_event.is_set():
+                                        raise EOFError()
+                                    try:
+                                        resp = input_queue.get(timeout=0.5)
+                                    except queue.Empty:
+                                        continue
+                                    except Exception:
+                                        raise
+                                    resp = (resp or "").strip().lower()
+                                    if resp in ("y", "yes"):
+                                        return True
+                                    if resp in ("n", "no"):
+                                        return False
+                                    return default_val
 
                         _cli_ui.ask_yes_no = wrapped_ask_yes_no
                         # Save original ask_yes_no so external cleaners (eg. /api/kill)

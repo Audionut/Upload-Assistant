@@ -144,6 +144,7 @@ class UTP(UNIT3D):
         three_d = str(meta.get('3D', ''))
         uhd = str(meta.get('uhd', ''))
         edition = str(meta.get('edition', ''))
+        hybrid = 'Hybrid' if meta.get('webdv', "") else ''
         repack = str(meta.get('repack', ''))
         resolution = str(meta.get('resolution', ''))
         hdr = str(meta.get('hdr', ''))
@@ -182,9 +183,9 @@ class UTP(UNIT3D):
 
         # Build name using single template per category
         if category == "MOVIE":
-            name = f"{title} {aka} {year} {repack} {edition} {region} {three_d} {uhd} {source_tag} {type_tag} {resolution} {hdr} {vcodec} {audio}"
+            name = f"{title} {aka} {year} {hybrid} {repack} {edition} {region} {three_d} {uhd} {source_tag} {type_tag} {resolution} {hdr} {vcodec} {audio}"
         elif category == "TV":
-            name = f"{title} {aka} {season}{episode} {year} {edition} {repack} {region} {three_d} {uhd} {source_tag} {type_tag} {resolution} {hdr} {vcodec} {audio}"
+            name = f"{title} {aka} {season}{episode} {year} {hybrid} {edition} {repack} {region} {three_d} {uhd} {source_tag} {type_tag} {resolution} {hdr} {vcodec} {audio}"
         else:
             name = str(meta.get('name', ''))
 

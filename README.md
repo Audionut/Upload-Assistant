@@ -75,7 +75,6 @@ Many thanks to all who have contributed.
 
 ## **Setup:**
    - **REQUIRES AT LEAST PYTHON 3.9 AND PIP3**
-   - Needs [mono](https://www.mono-project.com/) on linux systems for BDInfo
    - Also needs MediaInfo and ffmpeg installed on your system
       - On Windows systems, ffmpeg must be added to PATH (https://windowsloop.com/install-ffmpeg-windows-10/)
       - On linux systems, get it from your favorite package manager
@@ -94,7 +93,8 @@ Many thanks to all who have contributed.
       - Then install the requirements `pip install -r requirements.txt`
    - From the installation directory, run `python3 config-generator.py`
    - OR
-   - Copy and Rename `data/example-config.py` to `data/config.py`
+   - Copy `data/example-config.py` to `data/config.py`, leaving `data/example-config.py` intact.
+   - NOTE: New users who use the webui will have the config file generated automatically.
    - Edit `config.py` to use your information (more detailed information in example config options: [docs/example-config.md](docs/example-config.md))
       - tmdb_api key can be obtained from https://www.themoviedb.org/settings/api
       - image host api keys can be obtained from their respective sites

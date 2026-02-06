@@ -157,8 +157,8 @@ class BHD:
                             details_link = f"https://beyond-hd.me/details/{torrent_id}"
                             meta['tracker_status'][self.tracker]['status_message'] = response_json
                         else:
-                            meta['tracker_status'][self.tracker]['status_message'] = "data error: No valid details link found in status_message."
-                            return False
+                            meta['tracker_status'][self.tracker]['status_message'] = "No valid details link found in status_message."
+                            return True
                     else:
                         meta['tracker_status'][self.tracker]['status_message'] = "data error: No status_message in response."
                         return False
