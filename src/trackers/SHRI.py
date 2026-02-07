@@ -146,7 +146,7 @@ class SHRI(UNIT3D):
             elif num_langs == 2:
                 # Two languages ("ITA - [lang]" if ITA is present, "[lang] - [lang]" if not)
                 if "ITA" in audio_langs:
-                    other = [l for l in audio_langs if l != "ITA"][0]
+                    other = [lang for lang in audio_langs if lang != "ITA"][0]
                     audio_lang_str = f"ITA - {other}"
                 else:
                     audio_lang_str = " - ".join(audio_langs)
