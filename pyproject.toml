@@ -1,3 +1,8 @@
+[project]
+version = "v7.0.1"
+name = "Upload-Assistant"
+requires-python = ">= 3.9"
+
 [tool.ruff]
 line-length = 176
 target-version = "py39"
@@ -31,7 +36,13 @@ ignore = ["E501", "UP045"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["cogs", "data", "src", "web_ui"]
-section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+section-order = [
+  "future",
+  "standard-library",
+  "third-party",
+  "first-party",
+  "local-folder",
+]
 
 [tool.pyright]
 pythonVersion = "3.9"
