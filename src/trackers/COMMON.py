@@ -23,14 +23,48 @@ from src.bbcode import BBCODE
 from src.console import console
 from src.exportmi import exportInfo
 
-_PROCESS_EXECUTOR: Optional[ProcessPoolExecutor] = None
+_UPLOAD_PROCESS_EXECUTOR: Optional[ProcessPoolExecutor] = None
+_DOWNLOAD_PROCESS_EXECUTOR: Optional[ProcessPoolExecutor] = None
+_UPLOAD_PROCESS_PREWARMED = False
 
 
-def get_process_executor() -> ProcessPoolExecutor:
-    global _PROCESS_EXECUTOR
-    if _PROCESS_EXECUTOR is None:
-        _PROCESS_EXECUTOR = ProcessPoolExecutor()
-    return _PROCESS_EXECUTOR
+def _noop_worker() -> None:
+    return None
+
+
+def get_upload_process_executor(max_workers: Optional[int] = None) -> ProcessPoolExecutor:
+    global _UPLOAD_PROCESS_EXECUTOR
+    global _UPLOAD_PROCESS_PREWARMED
+
+    if max_workers is not None and max_workers < 1:
+        max_workers = None
+
+    if _UPLOAD_PROCESS_EXECUTOR is None:
+        _UPLOAD_PROCESS_EXECUTOR = ProcessPoolExecutor(max_workers=max_workers)
+
+    if not _UPLOAD_PROCESS_PREWARMED:
+        try:
+            worker_count = max_workers or (os.cpu_count() or 4)
+            futures = [
+                _UPLOAD_PROCESS_EXECUTOR.submit(_noop_worker)
+                for _ in range(worker_count)
+            ]
+            for future in futures:
+                future.result()
+        except Exception:
+            # Best-effort prewarm; skip if it fails.
+            pass
+        else:
+            _UPLOAD_PROCESS_PREWARMED = True
+
+    return _UPLOAD_PROCESS_EXECUTOR
+
+
+def get_download_process_executor() -> ProcessPoolExecutor:
+    global _DOWNLOAD_PROCESS_EXECUTOR
+    if _DOWNLOAD_PROCESS_EXECUTOR is None:
+        _DOWNLOAD_PROCESS_EXECUTOR = ProcessPoolExecutor()
+    return _DOWNLOAD_PROCESS_EXECUTOR
 
 
 def _download_tracker_torrent_worker(payload: dict[str, Any]) -> tuple[bool, str]:
@@ -258,7 +292,7 @@ class COMMON:
             "params": params,
         }
         success, error = await loop.run_in_executor(
-            get_process_executor(),
+            get_download_process_executor(),
             _download_tracker_torrent_worker,
             payload,
         )

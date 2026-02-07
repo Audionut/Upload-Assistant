@@ -6,6 +6,7 @@ import os
 import platform
 import re
 import time
+from contextlib import ExitStack
 from typing import Any, Optional, Union, cast
 
 import aiofiles
@@ -14,10 +15,56 @@ from typing_extensions import TypeAlias
 
 from src.console import console
 from src.get_desc import DescriptionBuilder
-from src.trackers.COMMON import COMMON
+from src.trackers.COMMON import COMMON, get_upload_process_executor
 
 QueryValue: TypeAlias = Union[str, int, float, bool, None]
 ParamsList: TypeAlias = list[tuple[str, QueryValue]]
+
+
+def _unit3d_upload_worker(payload: dict[str, Any]) -> dict[str, Any]:
+    url = str(payload.get("url", ""))
+    data = payload.get("data")
+    file_specs = cast(list[dict[str, str]], payload.get("file_specs") or [])
+    headers = payload.get("headers")
+    timeout = float(payload.get("timeout", 40.0))
+    max_keepalive_raw = int(payload.get("max_keepalive", 10))
+    max_connections_raw = int(payload.get("max_connections", 20))
+    max_keepalive = max_keepalive_raw if max_keepalive_raw > 0 else None
+    max_connections = max_connections_raw if max_connections_raw > 0 else None
+
+    if not url:
+        return {"error": "request", "message": "Missing upload URL."}
+
+    try:
+        limits = httpx.Limits(
+            max_keepalive_connections=max_keepalive,
+            max_connections=max_connections,
+        )
+        with httpx.Client(timeout=timeout, follow_redirects=True, limits=limits) as client, ExitStack() as stack:
+            files: dict[str, tuple[str, Any, str]] = {}
+            for spec in file_specs:
+                field = spec.get("field", "")
+                path = spec.get("path", "")
+                filename = spec.get("filename", "")
+                content_type = spec.get("content_type", "application/octet-stream")
+                if not field or not path or not filename:
+                    return {"error": "request", "message": "Invalid file spec for upload."}
+                if not os.path.exists(path):
+                    return {"error": "request", "message": f"Missing upload file: {path}"}
+                file_handle = stack.enter_context(open(path, "rb"))
+                files[field] = (filename, file_handle, content_type)
+            response = client.post(url=url, files=files, data=data, headers=headers)
+        return {
+            "status_code": response.status_code,
+            "content": response.content,
+            "text": response.text,
+        }
+    except httpx.TimeoutException as exc:
+        return {"error": "timeout", "message": str(exc)}
+    except httpx.RequestError as exc:
+        return {"error": "request", "message": str(exc)}
+    except Exception as exc:
+        return {"error": "unexpected", "message": str(exc)}
 
 
 class UNIT3D:
@@ -683,21 +730,71 @@ class UNIT3D:
         data_start = time.perf_counter()
         data = await self.get_data(meta)
         log_timing("get_data()", data_start)
-        if torrent_bytes is None:
-            torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
-            torrent_read_start = time.perf_counter()
-            async with aiofiles.open(torrent_file_path, "rb") as f:
-                torrent_bytes = await f.read()
-            log_timing("read BASE.torrent", torrent_read_start)
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
+        if meta.get("debug") is True:
+            if torrent_bytes is None:
+                torrent_read_start = time.perf_counter()
+                async with aiofiles.open(torrent_file_path, "rb") as f:
+                    torrent_bytes = await f.read()
+                log_timing("read BASE.torrent", torrent_read_start)
+            else:
+                log_timing("read BASE.torrent (preloaded)")
         else:
-            log_timing("read BASE.torrent (preloaded)")
-        files = {"torrent": ("torrent.torrent", torrent_bytes, "application/x-bittorrent")}
+            log_timing("read BASE.torrent (path)")
+
         additional_files_start = time.perf_counter()
-        nfo_bytes = cast(Optional[bytes], meta.get("cached_nfo_bytes"))
-        nfo_name = cast(Optional[str], meta.get("cached_nfo_name"))
-        files.update(await self.get_additional_files(meta, nfo_bytes=nfo_bytes, nfo_name=nfo_name))
-        nfo_source = ("cached" if nfo_bytes is not None else "disk") if "nfo" in files else "none"
+        nfo_source = "none"
+        nfo_spec: Optional[dict[str, str]] = None
+        cached_nfo_bytes = cast(Optional[bytes], meta.get("cached_nfo_bytes"))
+        cached_nfo_name = cast(Optional[str], meta.get("cached_nfo_name"))
+        base_dir = meta["base_dir"]
+        uuid = meta["uuid"]
+        tmp_dir = os.path.join(base_dir, "tmp", uuid)
+
+        if cached_nfo_bytes is not None:
+            nfo_filename = os.path.basename(cached_nfo_name or "nfo_file.nfo")
+            cached_nfo_path = os.path.join(tmp_dir, f"CACHED_{nfo_filename}")
+            async with aiofiles.open(cached_nfo_path, "wb") as f:
+                await f.write(cached_nfo_bytes)
+            nfo_source = "cached"
+            nfo_spec = {
+                "field": "nfo",
+                "path": cached_nfo_path,
+                "filename": nfo_filename,
+                "content_type": "text/plain",
+            }
+        elif meta.get("cached_nfo_missing") is not True:
+            nfo_files = await asyncio.to_thread(self._list_nfo_files, tmp_dir)
+            if (
+                not nfo_files
+                and meta.get("keep_nfo", False)
+                and (meta.get("keep_folder", False) or meta.get("isdir", False))
+            ):
+                search_dir = os.path.dirname(meta["path"])
+                nfo_files = await asyncio.to_thread(self._list_nfo_files, search_dir)
+
+            if nfo_files:
+                nfo_path = nfo_files[0]
+                nfo_source = "disk"
+                nfo_spec = {
+                    "field": "nfo",
+                    "path": nfo_path,
+                    "filename": os.path.basename(nfo_path),
+                    "content_type": "text/plain",
+                }
+
         log_timing(f"get_additional_files() [{nfo_source}]", additional_files_start)
+
+        file_specs: list[dict[str, str]] = [
+            {
+                "field": "torrent",
+                "path": torrent_file_path,
+                "filename": "torrent.torrent",
+                "content_type": "application/x-bittorrent",
+            }
+        ]
+        if nfo_spec:
+            file_specs.append(nfo_spec)
 
         request_prep_start = time.perf_counter()
         headers = {
@@ -731,25 +828,44 @@ class UNIT3D:
                         attempt_start = time.perf_counter()
                         try:  # noqa: PERF203
                             phase_state["value"] = "post"
-                            def post_once(request_timeout: float) -> httpx.Response:
-                                with httpx.Client(
-                                    timeout=request_timeout,
-                                    follow_redirects=True,
-                                    limits=limits,
-                                ) as client:
-                                    return client.post(
-                                        url=self.upload_url,
-                                        files=files,
-                                        data=data,
-                                        headers=headers,
-                                    )
-
-                            response = await asyncio.to_thread(post_once, timeout)
-                            response.raise_for_status()
+                            payload = {
+                                "url": self.upload_url,
+                                "data": data,
+                                "file_specs": file_specs,
+                                "headers": headers,
+                                "timeout": timeout,
+                                "max_keepalive": limits.max_keepalive_connections or 0,
+                                "max_connections": limits.max_connections or 0,
+                            }
+                            upload_workers_raw = self.config.get("DEFAULT", {}).get("max_concurrent_uploads")
+                            upload_workers: Optional[int]
+                            if upload_workers_raw in (None, ""):
+                                upload_workers = os.cpu_count() or 4
+                            else:
+                                try:
+                                    upload_workers = int(upload_workers_raw)
+                                except (TypeError, ValueError):
+                                    upload_workers = os.cpu_count() or 4
+                            loop = asyncio.get_running_loop()
+                            result = await loop.run_in_executor(
+                                get_upload_process_executor(upload_workers),
+                                _unit3d_upload_worker,
+                                payload,
+                            )
+                            if result.get("error") == "timeout":
+                                raise httpx.TimeoutException(result.get("message", "timeout"))
+                            if result.get("error"):
+                                raise httpx.RequestError(result.get("message", "request error"))
+                            status_code = int(result.get("status_code", 0) or 0)
+                            response_text = str(result.get("text", ""))
+                            response_body = cast(bytes, result.get("content") or b"")
+                            if status_code < 200 or status_code >= 300:
+                                request = httpx.Request("POST", self.upload_url)
+                                response = httpx.Response(status_code, text=response_text, request=request)
+                                raise httpx.HTTPStatusError("HTTP error", request=request, response=response)
                             log_timing(f"upload attempt {attempt + 1} response", attempt_start)
                             response_read_start = time.perf_counter()
                             phase_state["value"] = "read_body"
-                            response_body = response.content
                             log_timing(f"upload attempt {attempt + 1} read body", response_read_start)
 
                             response_parse_start = time.perf_counter()

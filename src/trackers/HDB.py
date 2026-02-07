@@ -15,7 +15,7 @@ from src.bbcode import BBCODE
 from src.console import console
 from src.exceptions import *  # noqa F403
 from src.torrentcreate import TorrentCreator
-from src.trackers.COMMON import COMMON, get_process_executor
+from src.trackers.COMMON import COMMON, get_download_process_executor
 
 Meta = dict[str, Any]
 Config = dict[str, Any]
@@ -530,7 +530,7 @@ class HDB:
     async def download_new_torrent(self, id: str, torrent_path: str) -> None:
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(
-            get_process_executor(),
+            get_download_process_executor(),
             _download_hdb_torrent_worker,
             self.username,
             self.passkey,

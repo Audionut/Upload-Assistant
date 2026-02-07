@@ -14,7 +14,7 @@ from unidecode import unidecode
 from src.console import console
 from src.cookie_auth import CookieValidator
 from src.exceptions import *  # noqa #F405
-from src.trackers.COMMON import COMMON, get_process_executor
+from src.trackers.COMMON import COMMON, get_download_process_executor
 
 Meta = dict[str, Any]
 Config = dict[str, Any]
@@ -415,7 +415,7 @@ class TTG:
         loop = asyncio.get_running_loop()
         try:
             await loop.run_in_executor(
-                get_process_executor(),
+                get_download_process_executor(),
                 _download_ttg_torrent_worker,
                 self.passkey,
                 id,

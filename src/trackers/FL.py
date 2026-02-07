@@ -15,7 +15,7 @@ from unidecode import unidecode
 from src.console import console
 from src.cookie_auth import CookieValidator
 from src.exceptions import *  # noqa F403
-from src.trackers.COMMON import COMMON, get_process_executor
+from src.trackers.COMMON import COMMON, get_download_process_executor
 
 
 def _download_fl_torrent_worker(cookies: dict[str, str], torrent_id: str, torrent_path: str) -> None:
@@ -380,7 +380,7 @@ class FL:
         loop = asyncio.get_running_loop()
         try:
             await loop.run_in_executor(
-                get_process_executor(),
+                get_download_process_executor(),
                 _download_fl_torrent_worker,
                 cookies,
                 id,

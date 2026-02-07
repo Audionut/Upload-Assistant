@@ -15,6 +15,7 @@ from cogs.redaction import Redaction
 from src.cleanup import cleanup_manager
 from src.get_desc import DescriptionBuilder
 from src.manualpackage import ManualPackageManager
+from src.trackers.COMMON import get_upload_process_executor
 from src.trackers.PTP import PTP
 from src.trackers.THR import THR
 from src.trackersetup import TRACKER_SETUP
@@ -139,6 +140,20 @@ async def process_trackers(
 
     if skipped_trackers:
         console.print(f"[cyan]Skipping tracker tasks (upload disabled): {', '.join(skipped_trackers)}[/cyan]")
+
+    def resolve_upload_workers() -> int:
+        upload_workers_raw = config.get("DEFAULT", {}).get("max_concurrent_uploads")
+        if upload_workers_raw in (None, ""):
+            return os.cpu_count() or 4
+        try:
+            value = int(upload_workers_raw)
+        except (TypeError, ValueError):
+            return os.cpu_count() or 4
+        return value if value > 0 else (os.cpu_count() or 4)
+
+    if any(tracker in unit3d_trackers for tracker in active_trackers):
+        upload_workers = resolve_upload_workers()
+        await asyncio.to_thread(get_upload_process_executor, upload_workers)
 
     def log_timing(tracker: str, label: str, start_time: Optional[float] = None) -> None:
         if not timing_enabled:
