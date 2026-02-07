@@ -12,7 +12,7 @@ class DT(UNIT3D):
         self.upload_url = f'{self.base_url}/api/v1/torrents/upload'
         self.search_url = f'{self.base_url}/api/v1/torrents/filter'
         
-        # Banned Groups from your previous JSON
+        # Banned Groups
         self.banned_groups = [
             "DusIcTv", "DusICTV", "PHDM", "PDHM", "Ranvijay", 
             "BWT", "DDH", "Telly", "YTS", "RARBG", 
@@ -22,7 +22,7 @@ class DT(UNIT3D):
     async def get_category_id(
         self,
         meta: dict[str, Any],
-        category: Optional[str] = None,
+        category: str = "",
         reverse: bool = False,
         mapping_only: bool = False,
     ) -> dict[str, str]:
@@ -39,7 +39,7 @@ class DT(UNIT3D):
             return category_id
         elif reverse:
             return {v: k for k, v in category_id.items()}
-        elif category is not None:
+        elif category:
             return {'category_id': category_id.get(category, '0')}
         else:
             meta_category = meta.get('category', '')
@@ -49,7 +49,7 @@ class DT(UNIT3D):
     async def get_type_id(
         self,
         meta: dict[str, Any],
-        type: Optional[str] = None,
+        type: str = "",
         reverse: bool = False,
         mapping_only: bool = False,
     ) -> dict[str, str]:
@@ -69,7 +69,7 @@ class DT(UNIT3D):
             return type_id_map
         elif reverse:
             return {v: k for k, v in type_id_map.items()}
-        elif type is not None:
+        elif type:
             return {'type_id': type_id_map.get(type, '0')}
         else:
             # Dynamic Logic for DT specific IDs (UHD vs 1080p)
@@ -87,7 +87,7 @@ class DT(UNIT3D):
             elif meta_type == 'ENCODE':
                 resolved_id = '1' if is_uhd else '12'
             elif meta_type in ['WEBDL', 'WEBRIP']:
-                resolved_id = '11' # JSON implies 11 is web
+                resolved_id = '11'
             elif meta_type == 'DVD':
                 resolved_id = '8'
             elif meta_type == 'HDTV':
@@ -98,7 +98,7 @@ class DT(UNIT3D):
     async def get_resolution_id(
         self,
         meta: dict[str, Any],
-        resolution: Optional[str] = None,
+        resolution: str = "",
         reverse: bool = False,
         mapping_only: bool = False,
     ) -> dict[str, str]:
@@ -122,7 +122,7 @@ class DT(UNIT3D):
             return resolution_id
         elif reverse:
             return {v: k for k, v in resolution_id.items()}
-        elif resolution is not None:
+        elif resolution:
             return {'resolution_id': resolution_id.get(resolution, '10')}
         else:
             meta_resolution = meta.get('resolution', '')
