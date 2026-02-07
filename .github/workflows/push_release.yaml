@@ -271,18 +271,25 @@ jobs:
           fi
           mv "$TEMP_FILE" "$VERSION_FILE"
 
+      - name: Update pyproject.toml version
+        run: |
+          PYPROJECT_FILE="pyproject.toml"
+          
+          # Update the version in pyproject.toml using sed
+          sed -i -E 's/^version\s?=\s?".*"$/version = "${{ env.VERSION }}"/' $PYPROJECT_FILE
+
       - name: Commit version update
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/version.py
+          git add data/version.py pyproject.toml
           
           # Check if there are changes to commit
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
             git commit -m "${{ env.VERSION }}"
-            echo "✅ Committed version.py update with message: ${{ env.VERSION }}"
+            echo "✅ Committed version.py and pyproject.toml update with message: ${{ env.VERSION }}"
           fi
 
       - name: Create and push tag
