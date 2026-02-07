@@ -771,7 +771,9 @@ class TVC:
 
         # MINIMAL TVC FIX
         desc = desc.replace("[center]\n", "[center]")
-        desc = desc.replace("\n\n", "\n")
+        
+        # Collapse any run of 2+ newlines into a single newline 
+        desc = re.sub(r"\n{2,}", "\n", desc) 
 
         # Fallback
         if not desc.strip():
