@@ -390,10 +390,10 @@ class tvdb_data:
         tmdb: Optional[Union[int, str]],
         debug: bool = False,
         tv_movie: bool = False,
-    ) -> Optional[int]:
+    ) -> tuple[Optional[int], Optional[str]]:
         client = _get_tvdb_or_warn()
         if client is None:
-            return None
+            return None, None
 
         # Try IMDB first if available
         if imdb:
@@ -421,9 +421,10 @@ class tvdb_data:
                     for result in results:
                         if 'series' in result and isinstance(result.get('series'), dict):
                             series_id = result['series']['id']
+                            series_name = result['series'].get('name')
                             if debug:
                                 console.print(f"[blue]TVDB series ID from IMDB: {series_id}[/blue]")
-                            return _coerce_int(series_id)
+                            return _coerce_int(series_id), series_name
 
                     # If tv_movie is True, check for episode with seriesId first, then movie
                     if tv_movie:
@@ -431,17 +432,19 @@ class tvdb_data:
                         for result in results:
                             if 'episode' in result and isinstance(result.get('episode'), dict) and result['episode'].get('seriesId'):
                                 series_id = result['episode']['seriesId']
+                                series_name = result['episode'].get('seriesName')
                                 if debug:
                                     console.print(f"[blue]TVDB series ID from episode entry (tv_movie): {series_id}[/blue]")
-                                return _coerce_int(series_id)
+                                return _coerce_int(series_id), series_name
 
                         # If no episode with seriesId, accept movie results
                         for result in results:
                             if 'movie' in result and isinstance(result.get('movie'), dict):
                                 movie_id = result['movie']['id']
+                                movie_name = result['movie'].get('name')
                                 if debug:
                                     console.print(f"[blue]TVDB movie ID from IMDB (tv_movie): {movie_id}[/blue]")
-                                return _coerce_int(movie_id)
+                                return _coerce_int(movie_id), movie_name
 
                     if debug:
                         result_types = [list(result.keys())[0] for result in results if result]
@@ -471,9 +474,10 @@ class tvdb_data:
                     for result in results:
                         if 'series' in result and isinstance(result.get('series'), dict):
                             series_id = result['series']['id']
+                            series_name = result['series'].get('name')
                             if debug:
                                 console.print(f"[blue]TVDB series ID from TMDB: {series_id}[/blue]")
-                            return _coerce_int(series_id)
+                            return _coerce_int(series_id), series_name
 
                     # If tv_movie is True, check for episode with seriesId first, then movie
                     if tv_movie:
@@ -481,17 +485,19 @@ class tvdb_data:
                         for result in results:
                             if 'episode' in result and isinstance(result.get('episode'), dict) and result['episode'].get('seriesId'):
                                 series_id = result['episode']['seriesId']
+                                series_name = result['episode'].get('seriesName')
                                 if debug:
                                     console.print(f"[blue]TVDB series ID from episode entry (tv_movie): {series_id}[/blue]")
-                                return _coerce_int(series_id)
+                                return _coerce_int(series_id), series_name
 
                         # If no episode with seriesId, accept movie results
                         for result in results:
                             if 'movie' in result and isinstance(result.get('movie'), dict):
                                 movie_id = result['movie']['id']
+                                movie_name = result['movie'].get('name')
                                 if debug:
                                     console.print(f"[blue]TVDB movie ID from TMDB (tv_movie): {movie_id}[/blue]")
-                                return _coerce_int(movie_id)
+                                return _coerce_int(movie_id), movie_name
 
                     if debug:
                         result_types = [list(result.keys())[0] for result in results if result]
@@ -505,7 +511,7 @@ class tvdb_data:
 
         result_type_str = "series or movie" if tv_movie else "series"
         console.print(f"[yellow]No TVDB {result_type_str} found for any available external ID[/yellow]")
-        return None
+        return None, None
 
     async def get_imdb_id_from_tvdb_episode_id(
         self,

@@ -44,13 +44,6 @@ class COMMON:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda p, e: os.makedirs(p, exist_ok=e), path, exist_ok)
 
-    async def async_input(self, prompt: str = "") -> str:
-        """Gets user input in a non-blocking way using asyncio.to_thread"""
-        if prompt:
-            console.print(prompt)
-        user_input = await asyncio.to_thread(input)
-        return user_input.strip()
-
     async def create_torrent_for_upload(
         self,
         meta: dict[str, Any],

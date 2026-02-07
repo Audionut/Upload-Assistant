@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import json
 import os
 import platform
@@ -7,6 +8,7 @@ import unicodedata
 from typing import Any, Optional, cast
 
 import aiofiles
+import cli_ui
 import httpx
 import langcodes
 from bs4 import BeautifulSoup
@@ -108,7 +110,7 @@ class BT:
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar is None:
             return False
-        self.session.cookies = cookie_jar
+        self.session.cookies = cast(Any, cookie_jar)
         return await self.cookie_validator.cookie_validation(
             meta=meta,
             tracker=self.tracker,
@@ -462,21 +464,28 @@ class BT:
                 )
 
         if not tags:
-            tags = await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')
+            tags_raw = await asyncio.to_thread(cli_ui.ask_string, f'Digite os gêneros (no formato do {self.tracker}): ')
+            tags = (tags_raw or "").strip()
 
         return tags
 
     async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[str]:
-        is_tv_pack = bool(meta.get('tv_pack'))
-
-        search_url = f"{self.base_url}/torrents.php?searchstr={meta['imdb_info']['imdbID']}"
-
         found_items: list[str] = []
+        imdb_info: dict[str, Any] = meta.get("imdb_info", {})
+        if not imdb_info.get("imdbID") and not meta.get("anime"):
+            console.print(f"{self.tracker}: [bold red]Ignorando upload devido à ausência de IMDb.[/bold red]")
+            meta["skipping"] = f"{self.tracker}"
+            return found_items
+
+        is_tv_pack = bool(meta.get("tv_pack"))
+        searchstr = meta["title"] if meta.get("anime") else imdb_info.get("imdbID")
+
+        search_url = f"{self.base_url}/torrents.php?searchstr={searchstr}"
         try:
             cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
             if cookie_jar is None:
                 return []
-            self.session.cookies = cookie_jar
+            self.session.cookies = cast(Any, cookie_jar)
 
             response = await self.session.get(search_url)
             response.raise_for_status()
@@ -779,7 +788,7 @@ class BT:
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar is None:
             return False
-        self.session.cookies = cookie_jar
+        self.session.cookies = cast(Any, cookie_jar)
         data = await self.get_data(meta)
 
         is_uploaded = await self.cookie_auth_uploader.handle_upload(

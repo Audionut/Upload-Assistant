@@ -489,7 +489,8 @@ async def get_bluray_releases(meta: Meta) -> list[Release]:
 
             while True:
                 try:  # noqa: PERF203
-                    selection = input(f"Selection (1-{len(matching_releases)}/a/n): ").strip().lower()
+                    selection_raw = cli_ui.ask_string(f"Selection (1-{len(matching_releases)}/a/n): ")
+                    selection = (selection_raw or "").strip().lower()
                     if selection == 'a':
                         cli_ui.info("All releases selected")
                         detailed_releases = await process_all_releases(matching_releases, meta)
@@ -1502,7 +1503,8 @@ async def process_all_releases(releases: Sequence[Release], meta: Meta) -> list[
                 if (not meta.get('unattended') or (meta.get('unattended') and meta.get('unattended_confirm', False))):
                     cli_ui.info(f"Single match found: {close_matches[0]['title']} ({close_matches[0]['country']}) with score {best_score:.1f}/100")
                     while True:
-                        user_input = input("Do you want to use this release? (y/n): ").strip().lower()
+                        user_input_raw = cli_ui.ask_string("Do you want to use this release? (y/n): ")
+                        user_input = (user_input_raw or "").strip().lower()
                         try:
                             if user_input == 'y':
                                 region_code = map_country_to_region_code(close_matches[0]['country'])
@@ -1555,14 +1557,16 @@ async def process_all_releases(releases: Sequence[Release], meta: Meta) -> list[
 
                     while True:
                         console.print("Enter the number of the release to use, 'p' to print logs for a release, or 'n' to skip:")
-                        user_input = input("Selection: ").strip().lower()
+                        user_input_raw = cli_ui.ask_string("Selection: ")
+                        user_input = (user_input_raw or "").strip().lower()
                         if user_input == 'n':
                             cli_ui.warning("No release selected.")
                             detailed_releases = []
                             break
                         elif user_input == 'p':
                             try:
-                                release_idx = int(input(f"Enter the release number (1-{len(close_matches)}) to print logs: ").strip())
+                                release_idx_raw = cli_ui.ask_string(f"Enter the release number (1-{len(close_matches)}) to print logs: ")
+                                release_idx = int((release_idx_raw or "").strip())
                                 if 1 <= release_idx <= len(close_matches):
                                     selected_release = close_matches[release_idx - 1]
                                     for logged_release, release_logs in logs:
@@ -1624,7 +1628,8 @@ async def process_all_releases(releases: Sequence[Release], meta: Meta) -> list[
                             for log in release_logs:
                                 console.print(log)
                     while True:
-                        user_input = input("Do you want to use this release? (y/n): ").strip().lower()
+                        user_input_raw = cli_ui.ask_string("Do you want to use this release? (y/n): ")
+                        user_input = (user_input_raw or "").strip().lower()
                         try:
                             if user_input == 'y':
                                 region_code = map_country_to_region_code(best_release['country'])

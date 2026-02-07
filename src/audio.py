@@ -8,10 +8,16 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Optional, Union, cast
 
+import cli_ui
 import langcodes
 
 from src.console import console
 from src.trackers.COMMON import COMMON
+
+
+# Specific exception for lossy DTS core duplicate detection
+class LossyDtsDuplicateError(ValueError):
+    pass
 
 Meta = dict[str, Any]
 TrackDict = dict[str, Any]
@@ -160,6 +166,10 @@ def parse_channel_layout(channels: int, channel_layout: str) -> str:
     elif lfe_count == 1:
         return f"{channels - 1}.1"
     else:
+        if "object" in channel_layout.lower() and channels > 7:
+            channels -= 1
+            # Object-based audio without LFE, assume .1 configuration
+            return f"{channels}.1"
         # No LFE detected
         if channels <= 2:
             return f"{channels}.0"
@@ -249,6 +259,10 @@ async def _get_audio_v2(
         mi_map = mi
         tracks = cast(list[TrackDict], cast(Mapping[str, Any], mi_map.get('media', {})).get('track', []))
         audio_tracks = [t for t in tracks if t.get('@type') == "Audio"]
+        meta["has_multiple_default_audio_tracks"] = len(
+            [track for track in audio_tracks if track.get("Default") == "Yes"]) > 1
+        meta["non_disc_has_pcm_audio_tracks"] = meta.get("type") != "DISC" and any(
+            track.get("Format") == "PCM" for track in audio_tracks)
         first_audio_track = None
         if audio_tracks:
             tracks_with_order = [t for t in audio_tracks if t.get('StreamOrder') and not isinstance(t.get('StreamOrder'), dict)]
@@ -297,7 +311,15 @@ async def _get_audio_v2(
             channel_layout = ''
 
         # Enhanced channel count determination based on MediaArea AudioChannelLayout
+        if meta.get('debug'):
+            console.print(f"DEBUG: Channels: {channels}, Channel Layout: {channel_layout}, Additional: {additional}, Format: {format}")
         chan = determine_channel_count(channels, channel_layout, additional, format)
+
+        try:
+            dts_core_additional_check(meta)
+        except LossyDtsDuplicateError:
+            # Propagate specific error so callers can handle it explicitly
+            raise
 
         if meta.get('dual_audio', False):
             dual = "Dual-Audio"
@@ -575,3 +597,69 @@ def bloated_check(meta: Meta, audio_languages: Union[Sequence[str], str], is_eng
         # Early exit if we've printed both messages
         if printed_not_allowed and printed_warning:
             return
+
+def dts_core_additional_check(meta: Meta) -> None:
+    mediainfo_tracks = meta.get("mediainfo", {}).get("media", {}).get("track") or []
+    audio_tracks = [track for track in mediainfo_tracks if track.get("@type") == "Audio"]
+    warned_once = False
+    # Iterate pairs once (i < j) to avoid duplicate comparisons
+    n = len(audio_tracks)
+    for i in range(n):
+        track_one = audio_tracks[i]
+        for j in range(i + 1, n):
+            track_two = audio_tracks[j]
+            track_one_is_dts_hd_ma = track_one.get("Format_Commercial_IfAny") == "DTS-HD Master Audio"
+            track_two_is_dts_hd_ma = track_two.get("Format_Commercial_IfAny") == "DTS-HD Master Audio"
+            track_one_is_lossy_dts = (
+                track_one.get("Format_Commercial_IfAny") != "DTS-HD Master Audio" and track_one.get("Format") == "DTS"
+            )
+            track_two_is_lossy_dts = (
+                track_two.get("Format_Commercial_IfAny") != "DTS-HD Master Audio" and track_two.get("Format") == "DTS"
+            )
+            track_one_properties = (
+                track_one.get("Duration"),
+                track_one.get("FrameRate"),
+                track_one.get("FrameCount"),
+                track_one.get("Language"),
+            )
+            track_two_properties = (
+                track_two.get("Duration"),
+                track_two.get("FrameRate"),
+                track_two.get("FrameCount"),
+                track_two.get("Language"),
+            )
+            # Ensure at least one property across both tracks is non-None to avoid matching on empty metadata
+            has_meaningful_properties = any(p is not None for p in (*track_one_properties, *track_two_properties))
+            # Order-agnostic detection: one track is DTS-HD MA and the other is lossy DTS
+            is_pair_hd_lossy = (
+                (track_one_is_dts_hd_ma and track_two_is_lossy_dts) or (track_two_is_dts_hd_ma and track_one_is_lossy_dts)
+            )
+            if is_pair_hd_lossy and has_meaningful_properties and track_one_properties == track_two_properties:
+                # Determine which index is HD MA and which is the lossy core for messages
+                if track_one_is_dts_hd_ma and track_two_is_lossy_dts:
+                    hd_idx, lossy_idx = i + 1, j + 1
+                    hd_track = track_one
+                else:
+                    hd_idx, lossy_idx = j + 1, i + 1
+                    hd_track = track_two
+
+                if meta.get("debug"):
+                    console.print(
+                        f"[yellow]DEBUG: Detected potential DTS core duplicate between tracks {i+1} and {j+1}, matched on properties: (Duration={hd_track.get('Duration')}, FrameRate={hd_track.get('FrameRate')}, FrameCount={hd_track.get('FrameCount')}, Language={hd_track.get('Language')})[/yellow]"
+                    )
+                if not warned_once:
+                    warned_once = True
+                    console.print(
+                        f"[bold red]DTS audio track #{lossy_idx} appears to be a lossy duplicate of DTS-HD MA track #{hd_idx}.[/bold red]"
+                    )
+                    if not meta.get("unattended", False) or meta.get("unattended_confirm", False):
+                        try:
+                            allow = cli_ui.ask_yes_no("Do you want to upload anyway?", default=False)
+                        except Exception:
+                            allow = False
+                        if allow:
+                            return
+                        else:
+                            raise LossyDtsDuplicateError("Upload cancelled due to lossy DTS core duplicate detected.")
+                    else:
+                        raise LossyDtsDuplicateError("Upload cancelled due to lossy DTS core duplicate detected.")

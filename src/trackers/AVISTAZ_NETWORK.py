@@ -11,6 +11,7 @@ from typing import Any, Callable, Optional, cast
 from urllib.parse import urlparse
 
 import aiofiles
+import cli_ui
 import httpx
 from bs4 import BeautifulSoup
 
@@ -147,9 +148,7 @@ class AZTrackerBase:
 
             if attempt == 0 and not self.media_code:
                 console.print(f"\n{self.tracker}: The media [[yellow]IMDB:{imdb_id}[/yellow]] [[blue]TMDB:{tmdb_id}[/blue]] appears to be missing from the site's database.")
-                user_choice = await self.common.async_input(prompt=f"{self.tracker}: Do you want to add it to the site database? (y/n): \n")
-
-                if user_choice in ['y', 'yes']:
+                if cli_ui.ask_yes_no(f"{self.tracker}: Do you want to add it to the site database?\n"):
                     added_successfully = await self.add_media_to_db(meta, title, category, imdb_id, tmdb_id)
                     if not added_successfully:
                         console.print(f'{self.tracker}: Failed to add media. Aborting.')
@@ -223,8 +222,7 @@ class AZTrackerBase:
             if warnings:
                 console.print(f"{self.tracker}: [red]Rule check returned the following warning(s):[/red]\n\n{warnings}")
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    choice = await self.common.async_input(prompt='Do you want to continue anyway? [y/N]: ')
-                    if choice != 'y':
+                    if not cli_ui.ask_yes_no('Do you want to continue anyway?', default=False):
                         meta['skipping'] = f'{self.tracker}'
                         return duplicates
                 else:
@@ -234,8 +232,7 @@ class AZTrackerBase:
         if meta['type'] not in ['WEBDL'] and self.tracker == "PHD" and meta.get('tag', "") in ['FGT', 'EVO']:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print(f'[bold red]Group {meta["tag"]} is only allowed for web-dl[/bold red]')
-                choice = await self.common.async_input('Do you want to upload anyway? [y/N]: ')
-                if choice != 'y':
+                if not cli_ui.ask_yes_no('Do you want to upload anyway?', default=False):
                     meta['skipping'] = f'{self.tracker}'
                     return duplicates
             else:
@@ -441,8 +438,8 @@ class AZTrackerBase:
                 if missing_audio_languages:
                     console.print('No audio language/s found.')
                     console.print('You must enter (comma-separated) languages for all audio tracks, eg: English, Spanish: ')
-                    user_input = await self.common.async_input(prompt='[bold yellow]Enter languages: [/bold yellow]')
-
+                    user_input_raw = cli_ui.ask_string('[bold yellow]Enter languages: [/bold yellow]')
+                    user_input = (user_input_raw or "").strip()
                     langs = [lang.strip() for lang in user_input.split(',')]
                     for lang in langs:
                         target_id = self.lang_map.get(lang.lower())

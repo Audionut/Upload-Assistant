@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import json
 import os
 import re
@@ -6,6 +7,7 @@ import unicodedata
 from typing import Any, cast
 
 import aiofiles
+import cli_ui
 import httpx
 from bs4 import BeautifulSoup
 
@@ -338,7 +340,8 @@ class GPW:
                 )
 
         if not tags:
-            tags = await self.common.async_input(prompt=f'Enter the genres (in {self.tracker} format): ')
+           tags_raw = await asyncio.to_thread(cli_ui.ask_string, f'Enter the genres (in {self.tracker} format): ')
+           tags = (tags_raw or "").strip()
 
         return tags
 
@@ -703,7 +706,8 @@ class GPW:
     async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         poster_url = ""
         while True:
-            poster_url = await self.common.async_input(prompt=f"{self.tracker}: Enter the poster image URL (must be from one of {', '.join(self.approved_image_hosts)}): \n")
+            poster_url_raw = await asyncio.to_thread(cli_ui.ask_string, f"{self.tracker}: Enter the poster image URL (must be from one of {', '.join(self.approved_image_hosts)}): \n")
+            poster_url = (poster_url_raw or "").strip()
             if any(host in poster_url for host in self.approved_image_hosts):
                 break
             else:
@@ -735,9 +739,12 @@ class GPW:
             chinese_name = ''
         else:
             console.print(f'{self.tracker}: This movie is not registered in the {self.tracker} database, please enter the details of 1 director')
-            imdb_id = await self.common.async_input(prompt='Enter Director IMDb ID (e.g., nm0000138): ')
-            english_name = await self.common.async_input(prompt='Enter Director English name: ')
-            chinese_name = await self.common.async_input(prompt='Enter Director Chinese name (optional, press Enter to skip): ')
+            imdb_id_raw = await asyncio.to_thread(cli_ui.ask_string, 'Enter Director IMDb ID (e.g., nm0000138): ')
+            imdb_id = (imdb_id_raw or "").strip()
+            english_name_raw = await asyncio.to_thread(cli_ui.ask_string, 'Enter Director English name: ')
+            english_name = (english_name_raw or "").strip()
+            chinese_name_raw = await asyncio.to_thread(cli_ui.ask_string, 'Enter Director Chinese name (optional, press Enter to skip): ')
+            chinese_name = (chinese_name_raw or "").strip()
 
         post_data = {
             'artist_ids[]': imdb_id,

@@ -34,7 +34,6 @@ pycountry==24.6.1
 pyimgbox==1.0.7
 pymediainfo==7.0.1
 pyotp==2.9.0
-pyparsebluray==0.1.4
 qbittorrent-api==2025.7.0
 regex==2025.11.3
 requests==2.32.5
