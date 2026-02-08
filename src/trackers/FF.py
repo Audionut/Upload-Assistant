@@ -14,7 +14,6 @@ from src.bbcode import BBCODE
 from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
-from src.languages import languages_manager
 
 
 class FF:
@@ -181,7 +180,7 @@ class FF:
         desc_parts: list[str] = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header())
+        desc_parts.append(builder.get_custom_header())
 
         # Logo
         logo_resize_url = meta.get('tmdb_logo', '')
@@ -189,7 +188,7 @@ class FF:
             desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/center]")
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta)
+        title, episode_image, episode_overview = builder.get_tv_info(meta)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
 
@@ -203,15 +202,15 @@ class FF:
         if mediainfo:
             desc_parts.append(f'[pre]{mediainfo}[/pre]')
 
-        bdinfo = await builder.get_bdinfo_section(meta)
+        bdinfo = builder.get_bdinfo_section(meta)
         if bdinfo:
             desc_parts.append(f'[pre]{bdinfo}[/pre]')
 
         # User description
-        desc_parts.append(await builder.get_user_description(meta))
+        desc_parts.append(builder.get_user_description(meta))
 
         # Disc menus screenshots header
-        desc_parts.append(await builder.menu_screenshot_header(meta))
+        desc_parts.append(builder.menu_screenshot_header(meta))
 
         # Disc menus screenshots
         menu_images = meta.get("menu_images", [])
@@ -230,12 +229,12 @@ class FF:
                 desc_parts.append(f"[center]{menu_screenshots_block}[/center]")
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        desc_parts.append(builder.get_tonemapped_header(meta))
 
         # Screenshot Header
         images = meta.get("image_list", [])
         if isinstance(images, list) and images:
-            desc_parts.append(await builder.screenshot_header())
+            desc_parts.append(builder.screenshot_header())
 
             # Screenshots
             screenshots_block = ""
@@ -473,7 +472,7 @@ class FF:
         else:
             return 'x264'
 
-    async def edit_name(self, meta: dict[str, Any]) -> str:
+    def edit_name(self, meta: dict[str, Any]) -> str:
         if meta.get("scene", False):
             if meta.get("scene_name", ""):
                 ff_name = str(meta.get("scene_name"))
@@ -487,10 +486,7 @@ class FF:
 
         return ff_name
 
-    async def languages(self, meta: dict[str, Any]) -> dict[str, list[str]]:
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
-
+    def languages(self, meta: dict[str, Any]) -> dict[str, list[str]]:
         lang_map = {
             'english': 'en',
             'japanese': 'jp',
@@ -574,7 +570,32 @@ class FF:
 
         return None
 
-    def get_nfo(self, meta: dict[str, Any]) -> dict[str, tuple[str, Any, str]]:
+    def get_nfo(
+        self,
+        meta: dict[str, Any],
+        nfo_bytes: Optional[bytes] = None,
+        nfo_name: Optional[str] = None,
+    ) -> dict[str, tuple[str, Any, str]]:
+        if nfo_bytes is not None:
+            nfo_filename = nfo_name if nfo_name else "nfo_file.nfo"
+            return {
+                'nfo': (
+                    nfo_filename,
+                    nfo_bytes,
+                    "application/octet-stream"
+                )
+            }
+        cached_bytes = meta.get("cached_nfo_bytes")
+        cached_name = meta.get("cached_nfo_name")
+        if cached_bytes:
+            nfo_filename = str(cached_name) if cached_name else "nfo_file.nfo"
+            return {
+                'nfo': (
+                    nfo_filename,
+                    bytes(cached_bytes),
+                    "application/octet-stream"
+                )
+            }
         nfo_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
         nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
 
@@ -591,7 +612,7 @@ class FF:
         return {}
 
     async def get_data(self, meta: dict[str, Any]) -> dict[str, Any]:
-        languages = await self.languages(meta)
+        languages = self.languages(meta)
         self.file_information(meta)
 
         data: dict[str, Any] = {
@@ -636,18 +657,20 @@ class FF:
 
         return data
 
-    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str, _torrent_bytes: Any = None) -> bool:
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar is None:
             return False
         self.session.cookies = cookie_jar
         data = await self.get_data(meta)
-        torrent_name = await self.edit_name(meta)
+        torrent_name = self.edit_name(meta)
         files: dict[str, Any] = {}
         poster = await self.get_poster(meta)
         if poster:
             files['poster'] = poster
-        nfo = self.get_nfo(meta)
+        nfo_bytes = cast(Optional[bytes], meta.get("cached_nfo_bytes"))
+        nfo_name = cast(Optional[str], meta.get("cached_nfo_name"))
+        nfo = self.get_nfo(meta, nfo_bytes=nfo_bytes, nfo_name=nfo_name)
         if nfo:
             files['nfo'] = nfo['nfo']
 

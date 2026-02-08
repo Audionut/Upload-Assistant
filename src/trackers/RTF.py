@@ -30,6 +30,7 @@ class RTF:
             config: Configuration dictionary containing tracker settings and API credentials.
         """
         self.config = config
+        self.common = COMMON(config)
         self.tracker = 'RTF'
         self.source_flag = 'sunshine'
         self.upload_url = 'https://retroflix.club/api/upload'
@@ -37,9 +38,8 @@ class RTF:
         self.torrent_url = 'https://retroflix.club/browse/t/'
         self.forum_link = 'https://retroflix.club/forums.php?action=viewtopic&topicid=3619'
         self.banned_groups: list[str] = []
-        pass
 
-    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str, _torrent_bytes: Any = None) -> bool:
         """Upload a torrent to RetroFlix tracker.
 
         Args:
@@ -50,7 +50,7 @@ class RTF:
             True if upload was successful, False otherwise.
         """
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
         await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, signature=self.forum_link)
         if meta['bdinfo'] is not None:
             mi_dump = None
@@ -183,7 +183,13 @@ class RTF:
                 debug_data['file'] = f"{str(debug_data['file'])[:10]}..."
             console.print(debug_data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
 
     async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[dict[str, Any]]:
@@ -200,10 +206,13 @@ class RTF:
             List of dictionaries containing information about existing torrents (dupes).
             Returns empty list if content is ineligible or search fails.
         """
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            console.print('[bold red]Erotic not allowed at RTF.')
+        if not self.common.prompt_adult_content(
+            meta,
+            tracker_name=self.tracker,
+            block_message='[bold red]Erotic not allowed at RTF.',
+            prompt_text=None,
+            unattended_message=None,
+        ):
             meta['skipping'] = "RTF"
             return []
 

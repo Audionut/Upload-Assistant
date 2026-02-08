@@ -1,7 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
 import glob
-import json
 import os
 import re
 import shutil
@@ -60,9 +59,6 @@ class ManualPackageManager:
                             poster = poster[0]
                             await generic.write(f"TMDB Poster: {poster.get('raw_url', poster.get('img_url'))}\n")
                             meta['rehosted_poster'] = poster.get('raw_url', poster.get('img_url'))
-                        meta_text = json.dumps(meta, indent=4)
-                        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w') as metafile:
-                            await metafile.write(meta_text)
                     else:
                         console.print("[bold yellow]Poster could not be retrieved")
             elif os.path.exists(poster_img) and meta.get('rehosted_poster') is not None:

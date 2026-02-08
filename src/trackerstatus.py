@@ -3,6 +3,7 @@ import asyncio
 import copy
 import os
 import sys
+import time
 from collections.abc import Mapping, MutableMapping
 from typing import Any, Optional, cast
 
@@ -28,11 +29,11 @@ class TrackerStatusManager:
         self.config = config
         self.trackers_config = cast(Mapping[str, Mapping[str, Any]], config.get('TRACKERS', {}))
 
-    async def process_all_trackers(self, meta: Meta) -> int:
+    async def process_all_trackers(self, meta: Meta, http_client: Any = None) -> int:
         tracker_status: dict[str, dict[str, bool]] = {}
         successful_trackers = 0
         client: Any = Clients(config=self.config)
-        tracker_setup: Any = TRACKER_SETUP(config=self.config)
+        tracker_setup: Any = TRACKER_SETUP(config=self.config, http_client=http_client)
         helper: Any = UploadHelper(self.config)
         dupe_checker = DupeChecker(self.config)
         meta_lock = asyncio.Lock()
@@ -48,6 +49,7 @@ class TrackerStatusManager:
             local_tracker_status = {'banned': False, 'skipped': False, 'dupe': False, 'upload': False, 'other': False}
             disctype = local_meta.get('disctype', None)
             we_already_asked = False
+            existing_search_start_time = time.time()
 
             if local_meta['name'].endswith('DUPE?'):
                 local_meta['name'] = local_meta['name'].replace(' DUPE?', '')
@@ -57,7 +59,14 @@ class TrackerStatusManager:
                 successful_trackers += 1
 
             if tracker_name in tracker_class_map:
-                tracker_class: Any = tracker_class_map[tracker_name](config=self.config)
+                # Try to pass http_client to UNIT3D-based trackers, fall back otherwise
+                if tracker_name in ["A4K", "AITHER", "BLU", "CBR", "DP", "EMUW", "FRIKI", "FNP", "HHD", "HUNO", "IHD", "ITT", "LCD", "LDU", "LUME", "LST", "LT", "OE", "OTW", "PT", "PTT", "R4E", "RAS", "RF", "SAM", "SHRI", "SP", "STC", "TIK", "TLZ", "TOS", "TTR", "ULCX", "UTP", "YOINK", "YUS"]:
+                    try:
+                        tracker_class: Any = tracker_class_map[tracker_name](config=self.config, http_client=http_client)
+                    except TypeError:
+                        tracker_class: Any = tracker_class_map[tracker_name](config=self.config)
+                else:
+                    tracker_class: Any = tracker_class_map[tracker_name](config=self.config)
                 if tracker_name in {"THR", "PTP"} and local_meta.get('imdb_id', 0) == 0:
                     while True:
                         if local_meta.get('unattended', False):
@@ -190,10 +199,10 @@ class TrackerStatusManager:
                             or (local_meta['unattended'] and local_meta.get('unattended_confirm', False))
                         ) and not we_already_asked:
                             try:
-                                tracker_rename = await tracker_class.get_name(meta)
+                                tracker_rename = tracker_class.get_name(meta)
                             except Exception:
                                 try:
-                                    tracker_rename = await tracker_class.edit_name(meta)
+                                    tracker_rename = tracker_class.edit_name(meta)
                                 except Exception:
                                     tracker_rename = None
 
@@ -227,6 +236,8 @@ class TrackerStatusManager:
                     local_tracker_status['upload'] = True
                     successful_trackers += 1
 
+            finish_time = time.time() - existing_search_start_time
+            meta[f'{tracker_name}_total_tracker_process_time'] = finish_time
             return tracker_name, local_tracker_status
 
         if meta.get('unattended', False):
@@ -250,12 +261,24 @@ class TrackerStatusManager:
                 elif status['skipped']:
                     skipped_trackers.append(tracker_name)
 
+            def format_tracker_with_time(tracker_name: str) -> str:
+                duration = meta.get(f"{tracker_name}_total_tracker_process_time")
+                if duration and isinstance(duration, (int, float)):
+                    color = "#21ff00" if duration < 5 else "#9fd600" if duration < 10 else "#cfaa00" if duration < 15 else "#f17100" if duration < 20 else "#ff0000"
+                    message = f"[[{color}]{duration:.2f}s[/{color}]]"
+                    if meta.get('debug'):
+                        return f"{tracker_name} {message}"
+                return tracker_name
+
             if skipped_trackers:
-                console.print(f"[red]Skipped due to specific tracker conditions: [bold yellow]{', '.join(skipped_trackers)}[/bold yellow].")
+                skipped_list = ', '.join(format_tracker_with_time(name) for name in skipped_trackers)
+                console.print(f"[red]Skipped due to specific tracker conditions: [bold yellow]{skipped_list}[/bold yellow].")
             if dupe_trackers:
-                console.print(f"[red]Found potential dupes on: [bold yellow]{', '.join(dupe_trackers)}[/bold yellow].")
+                dupe_list = ', '.join(format_tracker_with_time(name) for name in dupe_trackers)
+                console.print(f"[red]Found potential dupes on: [bold yellow]{dupe_list}[/bold yellow].")
             if passed_trackers:
-                console.print(f"[bold green]Trackers passed all checks: [bold yellow]{', '.join(passed_trackers)}")
+                passed_list = ', '.join(format_tracker_with_time(name) for name in passed_trackers)
+                console.print(f"[bold green]Trackers passed all checks: [bold yellow]{passed_list}[/bold yellow][/bold green]")
         else:
             passed_trackers: list[str] = []
             for tracker_name in meta['trackers']:

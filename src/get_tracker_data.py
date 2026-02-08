@@ -22,8 +22,9 @@ from src.trackersetup import tracker_class_map
 
 
 class TrackerDataManager:
-    def __init__(self, config: dict[str, Any]) -> None:
+    def __init__(self, config: dict[str, Any], http_client: Any = None) -> None:
         self.config = config
+        self.http_client = http_client
         trackers_cfg = cast(Mapping[str, Mapping[str, Any]], config.get('TRACKERS', {}))
         if not isinstance(trackers_cfg, dict):
             raise ValueError("'TRACKERS' config section must be a dict")
@@ -32,7 +33,7 @@ class TrackerDataManager:
             raise ValueError("'DEFAULT' config section must be a dict")
         self.trackers_config = trackers_cfg
         self.default_config = default_cfg
-        self.tracker_meta_manager = TrackerMetaManager(config)
+        self.tracker_meta_manager = TrackerMetaManager(config, http_client)
 
     def get_tracker_config(self, tracker_name: str) -> Mapping[str, Any]:
         return self.trackers_config.get(tracker_name, MappingProxyType({}))
@@ -101,6 +102,7 @@ class TrackerDataManager:
         search_file_folder: Optional[str] = None,
         cat: Optional[str] = None,
         only_id: bool = False,
+        http_client: Any = None,
     ) -> dict[str, Any]:
         found_match = False
         base_dir = meta['base_dir']
@@ -203,10 +205,11 @@ class TrackerDataManager:
 
                 # for just searching, remove any specific trackers already in meta['trackers']
                 # since that tracker was found in client, and remove it from meta['trackers']
-                for tracker in list(specific_tracker):
-                    if tracker in meta_trackers and meta.get('site_check', False):
-                        specific_tracker.remove(tracker)
-                        meta_trackers.remove(tracker)
+                if meta.get('site_check', False):
+                    overlap = {t for t in specific_tracker if t in meta_trackers}
+                    if overlap:
+                        specific_tracker = [t for t in specific_tracker if t not in overlap]
+                        meta_trackers = [t for t in meta_trackers if t not in overlap]
 
                 # Update meta['trackers'] preserving list format
                 if meta_trackers:
@@ -230,6 +233,7 @@ class TrackerDataManager:
                             search_term_value,
                             search_file_folder_value,
                             only_id,
+                            http_client or self.http_client,
                         )
                         if match:
                             found_match = True
@@ -396,6 +400,7 @@ class TrackerDataManager:
                             search_term_value,
                             search_file_folder_value,
                             only_id,
+                            http_client or self.http_client,
                         )
                         if match:
                             found_match = True

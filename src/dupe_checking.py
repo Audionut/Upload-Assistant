@@ -187,7 +187,7 @@ class DupeChecker:
             },
         ]
 
-        async def log_exclusion(reason: str, item: str) -> None:
+        def log_exclusion(reason: str, item: str) -> None:
             if meta.get('debug'):
                 console.log(f"[yellow]Excluding result due to {reason}: {item}")
 
@@ -347,11 +347,11 @@ class DupeChecker:
                     )
 
             if meta.get('is_disc') and file_count and file_count < 2:
-                await log_exclusion("file count less than 2 for disc upload", each)
+                log_exclusion("file count less than 2 for disc upload", each)
                 return True
 
             if has_repack_in_uuid and "repack" not in normalized and str(meta.get('tag', '')).lower() in normalized:
-                await log_exclusion('repack release', each)
+                log_exclusion('repack release', each)
                 return True
 
             if tracker_name == "MTV":
@@ -379,7 +379,7 @@ class DupeChecker:
 
             if tracker_name == "HUNO":
                 huno = HUNO(config=self.config)
-                huno_name_result: Any = await huno.get_name(cast(dict[str, Any], meta))
+                huno_name_result: Any = huno.get_name(cast(dict[str, Any], meta))
                 huno_name_map = cast(dict[str, Any], huno_name_result)
                 huno_name = str(huno_name_map.get('name', huno_name_result)) if isinstance(huno_name_result, dict) else str(huno_name_result)
                 if str(entry.get('name')) == huno_name:
@@ -396,14 +396,14 @@ class DupeChecker:
                 return False
 
             if has_is_disc and re.search(r'\.\w{2,4}$', each):
-                await log_exclusion("file extension mismatch (is_disc=True)", each)
+                log_exclusion("file extension mismatch (is_disc=True)", each)
                 return True
 
             if is_sd == 1 and tracker_name in {"BHD", "AITHER"} and any(str(res) in each for res in [1080, 720, 2160]):
                 return False
 
             if target_hdr and '1080p' in target_resolution and '2160p' in each:
-                await log_exclusion("No 1080p HDR when 4K exists", each)
+                log_exclusion("No 1080p HDR when 4K exists", each)
                 return False
 
             if tracker_name in ["AITHER", "LST"] and is_dvd:
@@ -413,35 +413,35 @@ class DupeChecker:
 
             if web_dl:
                 if "hdtv" in normalized and not any(web_term in normalized for web_term in ["web-dl", "web -dl", "webdl", "web dl"]):
-                    await log_exclusion("source mismatch: WEB-DL vs HDTV", each)
+                    log_exclusion("source mismatch: WEB-DL vs HDTV", each)
                     return True
                 if any(term in normalized for term in ['blu-ray', 'blu ray', 'bluray', 'blu -ray']) and not any(
                     web_term in normalized for web_term in ["web-dl", "web -dl", "webdl", "web dl"]
                 ):
-                    await log_exclusion("source mismatch: WEB-DL vs BluRay", each)
+                    log_exclusion("source mismatch: WEB-DL vs BluRay", each)
                     return True
             if not web_dl and any(web_term in normalized for web_term in ["web-dl", "web -dl", "webdl", "web dl"]):
-                await log_exclusion("source mismatch: non-WEB-DL vs WEB-DL", each)
+                log_exclusion("source mismatch: non-WEB-DL vs WEB-DL", each)
                 return True
 
             skip_resolution_check = bool(is_dvd or "DVD" in target_source or is_dvdrip)
 
             if not skip_resolution_check:
                 if target_resolution and target_resolution not in each:
-                    await log_exclusion(f"resolution '{target_resolution}' mismatch", each)
+                    log_exclusion(f"resolution '{target_resolution}' mismatch", each)
                     return True
                 if not await DupeChecker.has_matching_hdr(file_hdr, target_hdr, meta, tracker=tracker_name):
-                    await log_exclusion(f"HDR mismatch: Expected {target_hdr}, got {file_hdr}", each)
+                    log_exclusion(f"HDR mismatch: Expected {target_hdr}, got {file_hdr}", each)
                     return True
 
             if is_dvd and tracker_name != "BHD" and any(str(res) in each for res in [1080, 720, 2160]):
-                await log_exclusion(f"resolution '{target_resolution}' mismatch", each)
+                log_exclusion(f"resolution '{target_resolution}' mismatch", each)
                 return False
 
             for check in attribute_checks:
                 if check["key"] == "repack":
                     if has_repack_in_uuid and "repack" not in normalized and tag and tag in normalized:
-                        await log_exclusion("missing 'repack'", each)
+                        log_exclusion("missing 'repack'", each)
                         return True
                 elif check["key"] == "remux":
                     # Bidirectional check: if your upload is a REMUX, dupe must be REMUX
@@ -453,10 +453,10 @@ class DupeChecker:
                         console.log(f"[debug] Remux check: uuid_has_remux={uuid_has_remux}, dupe_has_remux={dupe_has_remux}")
 
                     if uuid_has_remux and not dupe_has_remux:
-                        await log_exclusion("missing 'remux'", each)
+                        log_exclusion("missing 'remux'", each)
                         return True
                     if not uuid_has_remux and dupe_has_remux:
-                        await log_exclusion("dupe is remux but upload is not", each)
+                        log_exclusion("dupe is remux but upload is not", each)
                         return True
 
             if meta.get('category') == "TV":
@@ -533,7 +533,7 @@ class DupeChecker:
 
                 # Normal season/episode matching
                 if not season_episode_match:
-                    await log_exclusion("season/episode mismatch", each)
+                    log_exclusion("season/episode mismatch", each)
                     return True
 
                 # Check if uploading an episode but a matching season pack exists
@@ -568,13 +568,13 @@ class DupeChecker:
                     if meta.get('debug'):
                         console.print(f"Your size: {target_size}, Dupe size: {dupe_size}, Size difference: {size_difference:.4f}")
                     if size_difference >= 0.20:
-                        await log_exclusion(f"Your file is significantly larger ({size_difference * 100:.2f}%)", each)
+                        log_exclusion(f"Your file is significantly larger ({size_difference * 100:.2f}%)", each)
                         return True
             if len(dupes) == 1 and meta.get('is_disc') != "BDMV" and tracker_name == "RF":
                 if tag.strip() and tag.strip() in normalized:
                     return False
                 if tag.strip() and tag.strip() not in normalized:
-                    await log_exclusion(f"Tag '{tag}' not found in normalized name", each)
+                    log_exclusion(f"Tag '{tag}' not found in normalized name", each)
                     return True
 
             if meta.get('debug'):
@@ -639,7 +639,7 @@ class DupeChecker:
         episode_patterns = [rf"[eE]{ep:02}" for ep in target_episodes] if target_episodes else []
 
         # Determine if filename represents a season pack (no explicit episode pattern)
-        is_season_pack = not re.search(r"[eE]\d{2}", filename, re.IGNORECASE)
+        is_season_pack = not re.search(r"e\d{2}", filename, re.IGNORECASE)
 
         # If `target_episode` is empty, match only season packs
         if not target_episodes:

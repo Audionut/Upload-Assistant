@@ -22,7 +22,6 @@ from src.bbcode import BBCODE
 from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
 from src.get_desc import DescriptionBuilder
-from src.languages import languages_manager
 from src.tmdb import TmdbManager
 from src.trackers.COMMON import COMMON
 
@@ -122,8 +121,6 @@ class BJS:
         self.main_tmdb_data = main_ptbr_data or {}
         self.episode_tmdb_data = episode_ptbr_data or {}
 
-        return
-
     def get_container(self, meta: dict[str, Any]) -> str:
         container: str = meta.get('container', '')
         if container in ['mkv', 'mp4', 'avi', 'vob', 'm2ts', 'ts']:
@@ -174,17 +171,18 @@ class BJS:
         else:
             return 'Outro'
 
-    async def get_audio(self, meta: dict[str, Any]) -> str:
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
-
-        audio_languages = set(meta.get('audio_languages', []))
-
-        portuguese_languages = ['Portuguese', 'Português', 'pt']
-
+    def get_audio(self, meta: dict[str, Any]) -> str:
+        audio_languages_value = meta.get('audio_languages')
+        audio_languages_list = cast(list[Any], audio_languages_value) if isinstance(audio_languages_value, list) else []
+        audio_languages = {
+            self._normalize_language_tag(lang)
+            for lang in audio_languages_list
+            if isinstance(lang, str)
+        }
+        audio_languages.discard('')
+        portuguese_languages = {'portuguese', 'portugues', 'pt', 'por'}
         has_pt_audio = any(lang in portuguese_languages for lang in audio_languages)
-
-        original_lang = str(meta.get('original_language', '')).lower()
+        original_lang = self._normalize_language_tag(str(meta.get('original_language', '')))
         is_original_pt = original_lang in portuguese_languages
 
         if has_pt_audio:
@@ -197,17 +195,34 @@ class BJS:
 
         return 'Legendado'
 
-    async def get_subtitle(self, meta: dict[str, Any]) -> str:
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
-        found_language_strings = meta.get('subtitle_languages', [])
-
+    def get_subtitle(self, meta: dict[str, Any]) -> str:
+        subtitle_languages_value = meta.get('subtitle_languages')
+        subtitle_languages_list = cast(list[Any], subtitle_languages_value) if isinstance(subtitle_languages_value, list) else []
+        found_language_strings = {
+            self._normalize_language_tag(lang)
+            for lang in subtitle_languages_list
+            if isinstance(lang, str)
+        }
+        found_language_strings.discard('')
         subtitle_type = 'Nenhuma'
 
-        if 'Portuguese' in found_language_strings:
+        portuguese_languages = {'portuguese', 'portugues', 'pt', 'por'}
+        if found_language_strings.intersection(portuguese_languages):
             subtitle_type = 'Embutida'
 
         return subtitle_type
+
+    def _normalize_language_tag(self, language: str) -> str:
+        lowered = language.strip().lower()
+        if not lowered:
+            return ''
+        primary = re.split(r'[\s()\-_/]+', lowered, maxsplit=1)[0]
+        normalized = (
+            unicodedata.normalize('NFKD', primary)
+            .encode('ASCII', 'ignore')
+            .decode('utf-8')
+        )
+        return normalized or primary
 
     def get_resolution(self, meta: dict[str, Any]) -> tuple[str, str]:
         width, height = '0', '0'
@@ -323,7 +338,7 @@ class BJS:
         desc_parts: list[str] = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header())
+        desc_parts.append(builder.get_custom_header())
 
         # Logo
         logo_resize_url = str(meta.get("tmdb_logo", ""))
@@ -349,15 +364,15 @@ class BJS:
         if meta.get('is_disc', '') == 'DVD':
             desc_parts.append(f'[hide=DVD MediaInfo][pre]{await builder.get_mediainfo_section(meta)}[/pre][/hide]')
 
-        bd_info = await builder.get_bdinfo_section(meta)
+        bd_info = builder.get_bdinfo_section(meta)
         if bd_info:
             desc_parts.append(f'[hide=BDInfo][pre]{bd_info}[/pre][/hide]')
 
         # User description
-        desc_parts.append(await builder.get_user_description(meta))
+        desc_parts.append(builder.get_user_description(meta))
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        desc_parts.append(builder.get_tonemapped_header(meta))
 
         # Signature
         desc_parts.append(f"[align=center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta['ua_name']} {meta['current_version']}[/url][/align]")
@@ -407,7 +422,7 @@ class BJS:
 
         return br_rating or us_rating or ''
 
-    async def get_tags(self) -> str:
+    async def get_tags(self, _meta: dict[str, Any]) -> str:
         tags = ''
         genres_data: list[dict[str, Any]] = self.main_tmdb_data.get('genres', [])
         genre_names: list[str] = []
@@ -417,15 +432,20 @@ class BJS:
             if name.strip():
                 genre_names.append(name)
 
-            if genre_names:
-                tags = ', '.join(
+        if genre_names:
+            normalized_genres = []
+            for name in genre_names:
+                normalized = (
                     unicodedata.normalize('NFKD', name)
                     .encode('ASCII', 'ignore')
                     .decode('utf-8')
                     .replace(' ', '.')
                     .lower()
-                    for name in genre_names
                 )
+                if normalized:
+                    normalized_genres.append(normalized)
+            if normalized_genres:
+                tags = ', '.join(normalized_genres)
 
         if not tags:
              tags_raw = await asyncio.to_thread(cli_ui.ask_string, f'Digite os gêneros (no formato do {self.tracker}): ')
@@ -1215,7 +1235,7 @@ class BJS:
 
         # These fields are common across all upload types
         data.update({
-            'audio': await self.get_audio(meta),
+            'audio': self.get_audio(meta),
             'auth': BJS.secret_token,
             'codecaudio': self.get_audio_codec(meta),
             'codecvideo': self.get_video_codec(meta),
@@ -1233,8 +1253,8 @@ class BJS:
             'resolucaow': width,
             'sinopse': await self.get_overview(),
             'submit': 'true',
-            'tags': await self.get_tags(),
-            'tipolegenda': await self.get_subtitle(meta),
+            'tags': await self.get_tags(meta),
+            'tipolegenda': self.get_subtitle(meta),
             'title': original_title,
             'titulobrasileiro': brazilian_title,
             'traileryoutube': self.get_trailer(meta),
@@ -1343,19 +1363,20 @@ class BJS:
         - Movies: Classified as adult only if pornographic.
         - Anime TV Shows: Classified as adult only if hentai.
         """
+        combined_genres_value = meta.get('combined_genres', [])
+        # Normalize combined_genres to a list of individual genre strings.
+        if isinstance(combined_genres_value, list):
+            combined_genres = cast(list[str], combined_genres_value)
+        else:
+            # Split comma-separated strings and strip whitespace
+            combined_genres = [g.strip() for g in str(combined_genres_value).split(',') if g.strip()]
         adult_yes = "1"
         adult_no = "2"
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ["xxx", "erotic", "porn", "adult", "orgy"]
-
-        if meta.get("anime", False) and "hentai" in genres.lower():
+        if meta.get("anime", False) and any(genre.lower() == "hentai" for genre in combined_genres):
             return adult_yes
 
-        if any(
-            re.search(rf"(^|,\s*){re.escape(keyword)}(\s*,|$)", genres, re.IGNORECASE)
-            for keyword in adult_keywords
-        ):
+        if self.common.is_adult_content(meta):
             return adult_yes
 
         return adult_no
@@ -1413,7 +1434,7 @@ class BJS:
 
         return ""
 
-    async def upload(self, meta: dict[str, Any], _):
+    async def upload(self, meta: dict[str, Any], _, _torrent_bytes: Any = None):
         data = await self.get_data(meta)
 
         issue = self.check_data(meta, data)

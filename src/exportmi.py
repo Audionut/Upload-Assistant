@@ -81,7 +81,7 @@ def setup_mediainfo_library(base_dir: str, debug: bool = False) -> Optional[dict
     return None
 
 
-async def mi_resolution(
+def mi_resolution(
     res: str,
     guess: dict[str, Any],
     width: Union[str, int],
@@ -158,6 +158,18 @@ async def mi_resolution(
     return resolution
 
 
+def _coerce_mediainfo_text(value: Union[str, MediaInfo]) -> str:
+    if isinstance(value, MediaInfo):
+        return str(value)
+    return value
+
+
+def _coerce_mediainfo_json(value: Union[str, MediaInfo]) -> str:
+    if isinstance(value, MediaInfo):
+        return str(value)
+    return value
+
+
 async def exportInfo(
     video: str,
     isdir: bool,
@@ -165,6 +177,8 @@ async def exportInfo(
     base_dir: str,
     is_dvd: bool = False,
     debug: bool = False,
+    dvd_mediainfo_text: Optional[str] = None,
+    dvd_mediainfo_json: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     def filter_mediainfo(data: dict[str, Any]) -> dict[str, Any]:
         media = data.get("media")
@@ -366,8 +380,12 @@ async def exportInfo(
 
     mediainfo_cmd = None
     mediainfo_config = None
+    did_set_library_file = False
+    use_precomputed_text = is_dvd and bool(dvd_mediainfo_text)
+    use_precomputed_json = is_dvd and isinstance(dvd_mediainfo_json, dict) and bool(dvd_mediainfo_json)
+    needs_mediainfo_setup = is_dvd and (not use_precomputed_text or not use_precomputed_json)
 
-    if is_dvd:
+    if needs_mediainfo_setup:
         if debug:
             console.print("[bold yellow]DVD detected, using specialized MediaInfo...")
 
@@ -384,6 +402,7 @@ async def exportInfo(
                     try:
                         if hasattr(MediaInfo, "_library_file"):
                             cast(Any, MediaInfo)._library_file = mediainfo_config["lib"]
+                            did_set_library_file = True
 
                         test_parse = MediaInfo.can_parse()
                         if debug:
@@ -410,39 +429,53 @@ async def exportInfo(
     if not isdir:
         os.chdir(os.path.dirname(video))
 
-    if mediainfo_cmd and is_dvd:
-        result = None
-        try:
-            # Validate and sanitize the video path
-            safe_video_path = validate_file_path(video)
-            safe_mediainfo_cmd = validate_file_path(mediainfo_cmd)
-            cmd = [safe_mediainfo_cmd, safe_video_path]
-            result = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=30)
-
-            if result.returncode == 0 and result.stdout:
-                media_info = result.stdout
-            else:
-                raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
-
-        except subprocess.TimeoutExpired:
-            console.print("[bold red]Specialized MediaInfo timed out (30s) - falling back to standard MediaInfo[/bold red]")
-            media_info = MediaInfo.parse(video, output="STRING", full=False)
-        except ValueError as e:
-            console.print(f"[bold red]Path validation error: {e}[/bold red]")
-            console.print("[bold yellow]Falling back to standard MediaInfo for text...")
-            media_info = MediaInfo.parse(video, output="STRING", full=False)
-        except (subprocess.CalledProcessError, Exception) as e:
-            console.print(f"[bold red]Error getting text from specialized MediaInfo: {e}")
-            if debug and result is not None:
-                console.print(f"[red]Subprocess stderr: {result.stderr}[/red]")
-                console.print(f"[red]Subprocess returncode: {result.returncode}[/red]")
-            console.print("[bold yellow]Falling back to standard MediaInfo for text...")
-            media_info = MediaInfo.parse(video, output="STRING", full=False)
+    if use_precomputed_text:
+        media_info_text = dvd_mediainfo_text or ""
     else:
-        media_info = MediaInfo.parse(video, output="STRING", full=False)
+        if mediainfo_cmd and is_dvd:
+            result = None
+            try:
+                # Validate and sanitize the video path
+                safe_video_path = validate_file_path(video)
+                safe_mediainfo_cmd = validate_file_path(mediainfo_cmd)
+                cmd = [safe_mediainfo_cmd, safe_video_path]
+                result = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=30)
 
-    # Filter out unwanted lines from media info regardless of type
-    filtered_media_info = "\n".join(line for line in media_info.splitlines() if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by "))
+                if result.returncode == 0 and result.stdout:
+                    media_info = result.stdout
+                else:
+                    raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
+
+            except subprocess.TimeoutExpired:
+                console.print("[bold red]Specialized MediaInfo timed out (30s) - falling back to standard MediaInfo[/bold red]")
+                media_info = MediaInfo.parse(video, output="STRING", full=False)
+            except ValueError as e:
+                console.print(f"[bold red]Path validation error: {e}[/bold red]")
+                console.print("[bold yellow]Falling back to standard MediaInfo for text...")
+                media_info = MediaInfo.parse(video, output="STRING", full=False)
+            except subprocess.CalledProcessError as e:
+                console.print(f"[bold red]Error getting text from specialized MediaInfo: {e}")
+                if debug and result is not None:
+                    console.print(f"[red]Subprocess stderr: {result.stderr}[/red]")
+                    console.print(f"[red]Subprocess returncode: {result.returncode}[/red]")
+                console.print("[bold yellow]Falling back to standard MediaInfo for text...")
+                media_info = MediaInfo.parse(video, output="STRING", full=False)
+            except Exception as e:
+                console.print(f"[bold red]Unexpected error getting text from specialized MediaInfo: {e}")
+                if debug and result is not None:
+                    console.print(f"[red]Subprocess stderr: {result.stderr}[/red]")
+                    console.print(f"[red]Subprocess returncode: {result.returncode}[/red]")
+                console.print("[bold yellow]Falling back to standard MediaInfo for text...")
+                media_info = MediaInfo.parse(video, output="STRING", full=False)
+        else:
+            media_info = MediaInfo.parse(video, output="STRING", full=False)
+
+        # Filter out unwanted lines from media info regardless of type
+        media_info_text = _coerce_mediainfo_text(media_info)
+    filtered_media_info = "\n".join(
+        line for line in media_info_text.splitlines()
+        if not line.strip().startswith("ReportBy") and not line.strip().startswith("Report created by ")
+    )
 
     async with aiofiles.open(f"{base_dir}/tmp/{folder_id}/MEDIAINFO.txt", "w", newline="", encoding="utf-8") as export:
         await export.write(filtered_media_info.replace(video, os.path.basename(video)))
@@ -451,44 +484,67 @@ async def exportInfo(
     if debug:
         console.print("[bold green]MediaInfo Exported.")
 
-    if mediainfo_cmd and is_dvd:
-        result: Optional[subprocess.CompletedProcess[str]] = None
-        try:
-            # Validate and sanitize the video path
-            safe_video_path = validate_file_path(video)
-            safe_mediainfo_cmd = validate_file_path(mediainfo_cmd)
-            cmd = [safe_mediainfo_cmd, "--Output=JSON", safe_video_path]
-            result = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=30)
-
-            if result.returncode == 0 and result.stdout:
-                media_info_json = result.stdout
-                media_info_dict = json.loads(media_info_json)
-            else:
-                raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
-
-        except ValueError as e:
-            console.print(f"[bold red]Path validation error: {e}[/bold red]")
-            console.print("[bold yellow]Falling back to standard MediaInfo for JSON...")
-            media_info_json = MediaInfo.parse(video, output="JSON")
-            media_info_dict = json.loads(media_info_json)
-        except subprocess.TimeoutExpired:
-            console.print("[bold red]Specialized MediaInfo timed out (30s) - falling back to standard MediaInfo[/bold red]")
-            media_info_json = MediaInfo.parse(video, output="JSON")
-            media_info_dict = json.loads(media_info_json)
-        except (subprocess.CalledProcessError, json.JSONDecodeError, Exception) as e:
-            console.print(f"[bold red]Error getting JSON from specialized MediaInfo: {e}")
-            if debug and result is not None:
-                console.print(f"[red]Subprocess stderr: {result.stderr}[/red]")
-                console.print(f"[red]Subprocess returncode: {result.returncode}[/red]")
-                if result.stdout:
-                    console.print(f"[red]Subprocess stdout preview: {result.stdout[:200]}...[/red]")
-            console.print("[bold yellow]Falling back to standard MediaInfo for JSON...[/bold yellow]")
-            media_info_json = MediaInfo.parse(video, output="JSON")
-            media_info_dict = json.loads(media_info_json)
+    if use_precomputed_json:
+        media_info_dict = dvd_mediainfo_json or {}
     else:
-        # Use standard MediaInfo library for non-DVD or when specialized CLI not available
-        media_info_json = MediaInfo.parse(video, output="JSON")
-        media_info_dict = json.loads(media_info_json)
+        if mediainfo_cmd and is_dvd:
+            result: Optional[subprocess.CompletedProcess[str]] = None
+            try:
+                # Validate and sanitize the video path
+                safe_video_path = validate_file_path(video)
+                safe_mediainfo_cmd = validate_file_path(mediainfo_cmd)
+                cmd = [safe_mediainfo_cmd, "--Output=JSON", safe_video_path]
+                result = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=30)
+
+                if result.returncode == 0 and result.stdout:
+                    media_info_json = result.stdout
+                    media_info_dict = json.loads(media_info_json)
+                else:
+                    raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
+
+            except subprocess.TimeoutExpired:
+                console.print("[bold red]Specialized MediaInfo timed out (30s) - falling back to standard MediaInfo[/bold red]")
+                media_info_json = _coerce_mediainfo_json(MediaInfo.parse(video, output="JSON"))
+                media_info_dict = json.loads(media_info_json)
+            except subprocess.CalledProcessError as e:
+                console.print(f"[bold red]Error getting JSON from specialized MediaInfo: {e}")
+                if debug and result is not None:
+                    console.print(f"[red]Subprocess stderr: {result.stderr}[/red]")
+                    console.print(f"[red]Subprocess returncode: {result.returncode}[/red]")
+                    if result.stdout:
+                        console.print(f"[red]Subprocess stdout preview: {result.stdout[:200]}...[/red]")
+                console.print("[bold yellow]Falling back to standard MediaInfo for JSON...[/bold yellow]")
+                media_info_json = _coerce_mediainfo_json(MediaInfo.parse(video, output="JSON"))
+                media_info_dict = json.loads(media_info_json)
+            except json.JSONDecodeError as e:
+                console.print(f"[bold red]Error getting JSON from specialized MediaInfo: {e}")
+                if debug and result is not None:
+                    console.print(f"[red]Subprocess stderr: {result.stderr}[/red]")
+                    console.print(f"[red]Subprocess returncode: {result.returncode}[/red]")
+                    if result.stdout:
+                        console.print(f"[red]Subprocess stdout preview: {result.stdout[:200]}...[/red]")
+                console.print("[bold yellow]Falling back to standard MediaInfo for JSON...[/bold yellow]")
+                media_info_json = _coerce_mediainfo_json(MediaInfo.parse(video, output="JSON"))
+                media_info_dict = json.loads(media_info_json)
+            except ValueError as e:
+                console.print(f"[bold red]Path validation error: {e}[/bold red]")
+                console.print("[bold yellow]Falling back to standard MediaInfo for JSON...")
+                media_info_json = _coerce_mediainfo_json(MediaInfo.parse(video, output="JSON"))
+                media_info_dict = json.loads(media_info_json)
+            except Exception as e:
+                console.print(f"[bold red]Unexpected error getting JSON from specialized MediaInfo: {e}")
+                if debug and result is not None:
+                    console.print(f"[red]Subprocess stderr: {result.stderr}[/red]")
+                    console.print(f"[red]Subprocess returncode: {result.returncode}[/red]")
+                    if result.stdout:
+                        console.print(f"[red]Subprocess stdout preview: {result.stdout[:200]}...[/red]")
+                console.print("[bold yellow]Falling back to standard MediaInfo for JSON...[/bold yellow]")
+                media_info_json = _coerce_mediainfo_json(MediaInfo.parse(video, output="JSON"))
+                media_info_dict = json.loads(media_info_json)
+        else:
+            # Use standard MediaInfo library for non-DVD or when specialized CLI not available
+            media_info_json = _coerce_mediainfo_json(MediaInfo.parse(video, output="JSON"))
+            media_info_dict = json.loads(media_info_json)
 
     filtered_info = filter_mediainfo(media_info_dict)
 
@@ -501,7 +557,7 @@ async def exportInfo(
         mi = cast(dict[str, Any], json.loads(await f.read()))
 
     # Cleanup: Reset library configuration if we modified it
-    if is_dvd and platform.system().lower() in ["linux", "windows"]:
+    if did_set_library_file and platform.system().lower() in ["linux", "windows"]:
         # Reset MediaInfo library file to default (Linux only)
         if hasattr(MediaInfo, "_library_file"):
             cast(Any, MediaInfo)._library_file = None
@@ -530,7 +586,7 @@ def validate_mediainfo(meta: dict[str, Any], debug: bool, settings: bool = False
         has_audio = any(track.get("@type", "") == "Audio" for track in tracks)
 
         if not has_audio:
-            raise Exception("Upload Assistant does not support no audio media.")
+            raise ValueError("Upload Assistant does not support no audio media.")
 
         for track in tracks:
             track_type = track.get("@type", "")
@@ -560,7 +616,7 @@ def validate_mediainfo(meta: dict[str, Any], debug: bool, settings: bool = False
     return bool(valid_settings) if settings else bool(unique_id)
 
 
-async def get_conformance_error(meta: dict[str, Any]) -> bool:
+def get_conformance_error(meta: dict[str, Any]) -> bool:
     if meta.get("is_disc") != "BDMV" and meta.get("mediainfo", {}).get("media", {}).get("track"):
         general_track = next((track for track in meta["mediainfo"]["media"]["track"] if track.get("@type") == "General"), None)
         if general_track and general_track.get("extra", {}).get("ConformanceErrors", {}):

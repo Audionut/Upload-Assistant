@@ -22,9 +22,8 @@ class SN:
         self.forum_link = 'https://swarmazon.club/php/forum.php?forum_page=2-swarmazon-rules'
         self.search_url = 'https://swarmazon.club/api/search.php'
         self.banned_groups = [""]
-        pass
 
-    async def get_type_id(self, type: str) -> str:
+    def get_type_id(self, type: str) -> str:
         type_id = {
             'BluRay': '3',
             'Web': '1',
@@ -34,9 +33,9 @@ class SN:
         }.get(type, '0')
         return type_id
 
-    async def upload(self, meta: Meta, _disctype: str) -> bool:
+    async def upload(self, meta: Meta, _disctype: str, _torrent_bytes: Any = None) -> bool:
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
         # await common.unit3d_edit_desc(meta, self.tracker, self.forum_link)
         await self.edit_desc(meta)
         cat_id = ""
@@ -64,7 +63,7 @@ class SN:
         if category == 'MOVIE':
             cat_id = '1'
             # sub cat is source so using source to get
-            sub_cat_id = await self.get_type_id(str(meta.get('source', '')))
+            sub_cat_id = self.get_type_id(str(meta.get('source', '')))
         elif category == 'TV':
             cat_id = '2'
             sub_cat_id = '6' if bool(meta.get('tv_pack')) else '5'
@@ -160,7 +159,13 @@ class SN:
             tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
             tracker_status.setdefault(self.tracker, {})
             tracker_status[self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
 
     async def edit_desc(self, meta: Meta) -> None:
@@ -189,7 +194,6 @@ class SN:
             encoding='utf-8',
         ) as desc:
             await desc.write("".join(parts))
-        return
 
     async def search_existing(self, meta: Meta, _disctype: str) -> list[str]:
         dupes: list[str] = []

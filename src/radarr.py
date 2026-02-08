@@ -77,7 +77,7 @@ class RadarrManager:
                             console.print(f"[blue]Radarr Response Data:[/blue] {data}")
 
                         # Check if we got valid data by trying to extract movie info
-                        movie_data = await self.extract_movie_data(data, filename)
+                        movie_data = self.extract_movie_data(data, filename)
 
                         if movie_data and (movie_data.get("imdb_id") or movie_data.get("tmdb_id")):
                             console.print(f"[green]Found valid movie data from Radarr instance {instance_index if instance_index > 0 else 'default'}[/green]")
@@ -99,7 +99,7 @@ class RadarrManager:
         console.print("[yellow]No Radarr instance returned valid movie data.[/yellow]")
         return None
 
-    async def extract_movie_data(self, radarr_data: Any, filename: Optional[str] = None) -> Optional[MovieInfo]:
+    def extract_movie_data(self, radarr_data: Any, filename: Optional[str] = None) -> Optional[MovieInfo]:
         if not radarr_data or not isinstance(radarr_data, list):
             return {
                 "imdb_id": None,

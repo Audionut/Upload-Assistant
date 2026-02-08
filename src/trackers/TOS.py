@@ -30,9 +30,8 @@ class TOS(UNIT3D):
             "3T3AM",
             "BARBiE",
         ]
-        pass
 
-    async def get_category_id(
+    def get_category_id(
         self,
         meta: dict[str, Any],
         category: Optional[str] = None,
@@ -47,7 +46,7 @@ class TOS(UNIT3D):
             category_id = "8" if meta["category"] == "TV" and meta.get("tv_pack") else {"MOVIE": "1", "TV": "2"}.get(meta["category"], "0")
         return {"category_id": category_id}
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: dict[str, Any],
         type: Optional[str] = None,
@@ -70,7 +69,7 @@ class TOS(UNIT3D):
             }.get(meta["type"], "0")
         return {"type_id": type_id}
 
-    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         is_scene = meta.get("scene", False)
         base_name: str = str(meta.get("scene_name") if is_scene else meta.get("uuid"))
 
@@ -85,26 +84,12 @@ class TOS(UNIT3D):
             for old, new in replacements.items():
                 base_name = base_name.replace(old, new)
 
-        # Hook into this function for torrent file recreation if needed
-        if meta.get('keep_nfo', False):
-            tracker_config = self.config['TRACKERS'].get(self.tracker, {})
-            tracker_url = str(tracker_config.get('announce_url', "https://fake.tracker")).strip()
-            torrent_create = f"[{self.tracker}]"
-            try:
-                cooldown = int(self.config.get('DEFAULT', {}).get('rehash_cooldown', 0) or 0)
-            except (ValueError, TypeError):
-                cooldown = 0
-            if cooldown > 0:
-                await asyncio.sleep(cooldown)  # Small cooldown before rehashing
-
-            await TorrentCreator.create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url)
-
         return {"name": base_name}
 
-    async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
+    def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         # Check language requirements: must be French audio OR original audio with French subtitles
         french_languages = ["french", "fre", "fra", "fr", "français", "francais"]
-        if not await self.common.check_language_requirements(
+        if not self.common.check_language_requirements(
             meta,
             self.tracker,
             languages_to_check=french_languages,
@@ -126,3 +111,16 @@ class TOS(UNIT3D):
             )
             return False
         return True
+
+    async def tos_rehash(self, meta: dict[str, Any]) -> None:
+        tracker_config = self.config['TRACKERS'].get(self.tracker, {})
+        tracker_url = str(tracker_config.get('announce_url', "https://fake.tracker")).strip()
+        torrent_create = f"[{self.tracker}]"
+        try:
+            cooldown = int(self.config.get('DEFAULT', {}).get('rehash_cooldown', 0) or 0)
+        except (ValueError, TypeError):
+            cooldown = 0
+        if cooldown > 0:
+            await asyncio.sleep(cooldown)  # Small cooldown before rehashing
+
+        await TorrentCreator.create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url)

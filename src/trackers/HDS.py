@@ -50,7 +50,7 @@ class HDS:
         desc_parts: list[str] = []
 
         # Custom Header
-        desc_parts.append(await builder.get_custom_header())
+        desc_parts.append(builder.get_custom_header())
 
         # Logo
         logo_resize_url = str(meta.get('tmdb_logo', ''))
@@ -58,7 +58,7 @@ class HDS:
             desc_parts.append(f"[center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/center]")
 
         # TV
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, resize=True)
+        title, episode_image, episode_overview = builder.get_tv_info(meta, resize=True)
         if episode_overview:
             desc_parts.append(f'[center]{title}[/center]')
 
@@ -72,13 +72,12 @@ class HDS:
         if mediainfo:
             desc_parts.append(f'[pre]{mediainfo}[/pre]')
 
-        bdinfo = await builder.get_bdinfo_section(meta)
+        bdinfo = builder.get_bdinfo_section(meta)
         if bdinfo:
             desc_parts.append(f'[pre]{bdinfo}[/pre]')
 
         # User description
-        desc_parts.append(await builder.get_user_description(meta))
-
+        desc_parts.append(builder.get_user_description(meta))
         # Disc menus screenshots header
         menu_images_value = meta.get("menu_images", [])
         menu_images: list[dict[str, Any]] = []
@@ -92,7 +91,7 @@ class HDS:
                 ]
             )
         if menu_images:
-            desc_parts.append(await builder.menu_screenshot_header(meta))
+            desc_parts.append(builder.menu_screenshot_header(meta))
 
             # Disc menus screenshots
             menu_screenshots_block = ""
@@ -108,7 +107,7 @@ class HDS:
                 desc_parts.append(f"[center]\n{menu_screenshots_block}\n[/center]")
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        desc_parts.append(builder.get_tonemapped_header(meta))
 
         # Screenshot Header
         images_value = meta.get("image_list", [])
@@ -123,7 +122,7 @@ class HDS:
                 ]
             )
         if images:
-            desc_parts.append(await builder.screenshot_header())
+            desc_parts.append(builder.screenshot_header())
 
             # Screenshots
             if images:
@@ -231,7 +230,7 @@ class HDS:
 
         return dupes
 
-    async def get_category_id(self, meta: Meta) -> int:
+    def get_category_id(self, meta: Meta) -> int:
         resolution = str(meta.get('resolution', ''))
         category = str(meta.get('category', ''))
         type_ = str(meta.get('type', ''))
@@ -337,7 +336,7 @@ class HDS:
 
     async def get_data(self, meta: Meta) -> dict[str, Any]:
         data: dict[str, Any] = {
-            'category': await self.get_category_id(meta),
+            'category': self.get_category_id(meta),
             'filename': str(meta.get('name', '')),
             'genre': str(meta.get('genres', '')),
             'imdb': str(meta.get('imdb', '')),
@@ -364,7 +363,20 @@ class HDS:
 
         return data
 
-    async def get_nfo(self, meta: Meta) -> dict[str, tuple[str, bytes, str]]:
+    async def get_nfo(
+        self,
+        meta: Meta,
+        nfo_bytes: Optional[bytes] = None,
+        nfo_name: Optional[str] = None,
+    ) -> dict[str, tuple[str, bytes, str]]:
+        if nfo_bytes is not None:
+            nfo_filename = nfo_name if nfo_name else "nfo_file.nfo"
+            return {'nfo': (nfo_filename, nfo_bytes, "application/octet-stream")}
+        cached_bytes = meta.get("cached_nfo_bytes")
+        cached_name = meta.get("cached_nfo_name")
+        if cached_bytes:
+            nfo_filename = str(cached_name) if cached_name else "nfo_file.nfo"
+            return {'nfo': (nfo_filename, bytes(cached_bytes), "application/octet-stream")}
         nfo_dir = os.path.join(str(meta.get('base_dir', '')), "tmp", str(meta.get('uuid', '')))
         nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
 
@@ -375,13 +387,15 @@ class HDS:
             return {'nfo': (os.path.basename(nfo_path), nfo_bytes, "application/octet-stream")}
         return {}
 
-    async def upload(self, meta: Meta, _disctype: str) -> bool:
+    async def upload(self, meta: Meta, _disctype: str, _torrent_bytes: Any = None) -> bool:
         cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         self.session.cookies.clear()
         if cookies is not None:
             self.session.cookies.update(cookies)
         data = await self.get_data(meta)
-        files = await self.get_nfo(meta)
+        nfo_bytes = cast(Optional[bytes], meta.get("cached_nfo_bytes"))
+        nfo_name = cast(Optional[str], meta.get("cached_nfo_name"))
+        files = await self.get_nfo(meta, nfo_bytes=nfo_bytes, nfo_name=nfo_name)
 
         is_uploaded = await self.cookie_auth_uploader.handle_upload(
             meta=meta,

@@ -20,9 +20,8 @@ class UTP(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
-        pass
 
-    async def get_category_id(
+    def get_category_id(
         self,
         meta: Meta,
         category: Optional[str] = None,
@@ -37,7 +36,7 @@ class UTP(UNIT3D):
         }.get(category_name, '1')  # Default to MOVIE
         return {'category_id': category_id}
 
-    async def get_resolution_id(
+    def get_resolution_id(
         self,
         meta: Meta,
         resolution: Optional[str] = None,
@@ -53,7 +52,7 @@ class UTP(UNIT3D):
         }.get(meta['resolution'], '11')  # Default to Other (11)
         return {'resolution_id': resolution_id}
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,
@@ -123,7 +122,7 @@ class UTP(UNIT3D):
 
         return {"description": description}
 
-    async def get_name(self, meta: Meta) -> dict[str, str]:
+    def get_name(self, meta: Meta) -> dict[str, str]:
         """
         Build UTOPIA-compliant torrent name from meta components.
         https://utp.to/pages/33 - rules used for naming.

@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import contextlib
 import errno
 import os
 import platform
@@ -247,7 +248,10 @@ class RtorrentClientMixin:
             console.print(f"[cyan]Original path: {path}")
             console.print(f"[cyan]Mapped save path: {save_path}")
 
-        rtorrent = xmlrpc.client.Server(client['rtorrent_url'], context=ssl.create_default_context())
+        ssl_context = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
+        with contextlib.suppress(AttributeError):
+            ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
+        rtorrent = xmlrpc.client.Server(client['rtorrent_url'], context=ssl_context)
         metainfo = _bencode_bread(torrent_path)
         if meta.get('debug', False):
             console.print(f"rtorrent: {Redaction.redact_private_info(str(rtorrent))}", markup=False)
@@ -314,7 +318,6 @@ class RtorrentClientMixin:
             os.remove(f"{path_dir}/fr.torrent")
         if meta.get('debug', False):
             console.print(f"[cyan]Path: {path}")
-        return
 
     def add_fast_resume(self, metainfo: dict[str, Any], datapath: str, _torrent: Torrent) -> dict[str, Any]:
         """ Add fast resume data to a metafile dict.

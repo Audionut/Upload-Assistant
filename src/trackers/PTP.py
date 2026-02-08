@@ -74,7 +74,7 @@ class PTP:
             ("German", "ger", "de"): 6,
             ("Greek", "gre", "el"): 26,
             ("Hebrew", "heb", "he"): 40,
-            ("Hindi" "hin", "hi"): 41,
+            ("Hindi", "hin", "hi"): 41,
             ("Hungarian", "hun", "hu"): 24,
             ("Icelandic", "ice", "is"): 28,
             ("Indonesian", "ind", "id"): 47,
@@ -368,23 +368,23 @@ class PTP:
             # title, plot, art, year, tags, Countries, Languages
             tinfo = {key: value for key, value in response[0].items() if value not in (None, "")}
             if tinfo['tags'] == "":
-                tags = await self.get_tags([meta.get("genres", ""), meta.get("keywords", ""), meta['imdb_info']['genres']])
+                tags = self.get_tags([meta.get("genres", ""), meta.get("keywords", ""), meta['imdb_info']['genres']])
                 tinfo['tags'] = ", ".join(tags)
         except Exception:
             pass
         return tinfo
 
-    async def get_torrent_info_tmdb(self, meta: dict[str, Any]) -> dict[str, Any]:
+    def get_torrent_info_tmdb(self, meta: dict[str, Any]) -> dict[str, Any]:
         tinfo = {
             "title": meta.get("title", ""),
             "year": meta.get("year", ""),
             "album_desc": meta.get("overview", ""),
         }
-        tags = await self.get_tags([meta.get("genres", ""), meta.get("keywords", "")])
+        tags = self.get_tags([meta.get("genres", ""), meta.get("keywords", "")])
         tinfo['tags'] = ", ".join(tags)
         return tinfo
 
-    async def get_tags(self, check_against: Any) -> list[str]:
+    def get_tags(self, check_against: Any) -> list[str]:
         tags: list[str] = []
         ptp_tags = [
             "action", "adventure", "animation", "arthouse", "asian", "biography", "camp", "comedy",
@@ -588,7 +588,9 @@ class PTP:
         if meta.get('is_disc', '') != 'BDMV':
             mi = meta['mediainfo']
             if meta.get('is_disc', '') == "DVD":
-                mi = json.loads(MediaInfo.parse(meta['discs'][0]['ifo'], output='JSON'))
+                mi_result = MediaInfo.parse(meta['discs'][0]['ifo'], output='JSON')
+                mi_json = mi_result.to_json() if isinstance(mi_result, MediaInfo) else str(mi_result)
+                mi = json.loads(mi_json)
             for track in mi['media']['track']:
                 if track['@type'] == "Text":
                     language = track.get('Language_String2', track.get('Language'))
@@ -644,10 +646,10 @@ class PTP:
                 hc_sub_langs = (cli_ui.ask_string("Enter language code for HC Subtitle languages") or "").strip()
                 if hc_sub_langs:
                     for lang, subID in self.sub_lang_map.items():
-                        if any(hc_sub_langs == x for x in list(lang)) and subID not in sub_langs:
+                        if any(hc_sub_langs == x for x in lang) and subID not in sub_langs:
                             sub_langs.append(subID)
-        sub_langs_result = list({*sub_langs})
-        trumpable_unique = list({*trumpable_list})
+        sub_langs_result = [*{*sub_langs}]
+        trumpable_unique = [*{*trumpable_list}]
         trumpable_result: Union[list[int], None] = trumpable_unique if trumpable_unique else None
         return trumpable_result, sub_langs_result
 
@@ -748,7 +750,6 @@ class PTP:
             img_host_index=1,
             approved_image_hosts=self.approved_image_hosts,
         )
-        return
 
     async def edit_desc(self, meta: dict[str, Any]) -> None:
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding="utf-8") as base_file:
@@ -944,10 +945,6 @@ class PTP:
                                 raw_url = str(img.get('raw_url', ''))
                                 desc.write(f"[img]{raw_url}[/img]\n")
 
-                        meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                        async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
-                            await f.write(json.dumps(meta, indent=4))
-
         # Handle multiple discs case
         elif len(discs) > 1:
             if 'retry_count' not in meta:
@@ -1023,10 +1020,6 @@ class PTP:
                                     desc.write(f"[img]{raw_url}[/img]\n")
                                 desc.write("\n")
 
-                            meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                            async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
-                                await f.write(json.dumps(meta, indent=4))
-
                 elif each['type'] == "DVD":
                     if i == 0:
                         desc.write(f"[b][size=3]{each['name']}:[/size][/b]\n")
@@ -1091,10 +1084,6 @@ class PTP:
                                     raw_url = img['raw_url']
                                     desc.write(f"[img]{raw_url}[/img]\n")
                                 desc.write("\n")
-
-                        meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                        async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
-                            await f.write(json.dumps(meta, indent=4))
 
         # Handle single file case
         elif len(filelist) == 1:
@@ -1170,7 +1159,8 @@ class PTP:
                         desc.write(f"[img]{raw_url}[/img]\n")
                     desc.write("\n")
                 else:
-                    mi_dump = MediaInfo.parse(file, output="STRING", full=False)
+                    mi_dump_result = MediaInfo.parse(file, output="STRING", full=False)
+                    mi_dump = mi_dump_result if isinstance(mi_dump_result, str) else str(mi_dump_result)
                     temp_mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/TEMP_PTP_MEDIAINFO.txt"
                     async with aiofiles.open(temp_mi_path, "w", newline="", encoding="utf-8") as f:
                         await f.write(mi_dump.replace(file, os.path.basename(file)))
@@ -1221,10 +1211,6 @@ class PTP:
                                 raw_url = img['raw_url']
                                 desc.write(f"[img]{raw_url}[/img]\n")
                             desc.write("\n")
-
-                    meta_filename = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
-                    async with aiofiles.open(meta_filename, 'w', encoding='utf-8') as f:
-                        await f.write(json.dumps(meta, indent=4))
 
         async with aiofiles.open(
             f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt",
@@ -1313,7 +1299,7 @@ class PTP:
             cookies = {name: str(data.get('value', '')) for name, data in raw_cookies.items()}
             async with httpx.AsyncClient(cookies=cookies, timeout=30.0, follow_redirects=True) as client:
                 uploadresponse = await client.get("https://passthepopcorn.me/upload.php")
-                loggedIn = await self.validate_login(uploadresponse)
+                loggedIn = self.validate_login(uploadresponse)
                 if loggedIn is True:
                     token_match = re.search(r'data-AntiCsrfToken="(.*)"', uploadresponse.text)
                     if not token_match:
@@ -1368,7 +1354,7 @@ class PTP:
                 raise LoginException(f"Got exception while loading JSON login response from PTP. Response: {redacted_text}")  # noqa F405
         return AntiCsrfToken
 
-    async def validate_login(self, response: httpx.Response) -> bool:
+    def validate_login(self, response: httpx.Response) -> bool:
         loggedIn = False
         if response.text.find("""<a href="login.php?act=recover">""") != -1:
             console.print("Looks like you are not logged in to PTP. Probably due to the bad user name, password, or expired session.")
@@ -1489,7 +1475,7 @@ class PTP:
         if groupID is None:  # If need to make new group
             url = "https://passthepopcorn.me/upload.php"
             if data["imdb"] == '0':
-                tinfo = await self.get_torrent_info_tmdb(meta)
+                tinfo = self.get_torrent_info_tmdb(meta)
             else:
                 imdb_value = meta.get("imdb") or "0"
                 tinfo = await self.get_torrent_info(imdb_value, meta)
@@ -1538,7 +1524,7 @@ class PTP:
 
         return url, data
 
-    async def upload(self, meta: dict[str, Any], url: str, data: dict[str, Any], _disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], url: str, data: dict[str, Any], _disctype: str, _torrent_bytes: Any = None) -> bool:
         common = COMMON(config=self.config)
         base_piece_mb = int(meta.get('base_torrent_piece_mb', 0) or 0)
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
@@ -1557,9 +1543,15 @@ class PTP:
                 await asyncio.sleep(cooldown)  # Small cooldown before rehashing
 
             await TorrentCreator.create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
-            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
+            await common.create_torrent_for_upload(
+                meta,
+                self.tracker,
+                self.source_flag,
+                torrent_filename=torrent_create,
+                torrent_bytes=_torrent_bytes,
+            )
         else:
-            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
 
         # Proceed with the upload process
         async with aiofiles.open(torrent_file_path, 'rb') as torrentFile:
@@ -1580,7 +1572,13 @@ class PTP:
             console.log(url)
             console.log(Redaction.redact_private_info(debug_data))
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
         else:
             failure_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]PTP_upload_failure.html"

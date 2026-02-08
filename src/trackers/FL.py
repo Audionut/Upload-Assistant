@@ -15,7 +15,18 @@ from unidecode import unidecode
 from src.console import console
 from src.cookie_auth import CookieValidator
 from src.exceptions import *  # noqa F403
-from src.trackers.COMMON import COMMON
+from src.trackers.COMMON import COMMON, get_download_process_executor
+
+
+def _download_fl_torrent_worker(cookies: dict[str, str], torrent_id: str, torrent_path: str) -> None:
+    download_url = f"https://filelist.io/download.php?id={torrent_id}"
+    os.makedirs(os.path.dirname(torrent_path), exist_ok=True)
+    with httpx.Client(cookies=cookies, timeout=30.0) as client:
+        response = client.get(url=download_url)
+    if response.status_code != 200:
+        raise ValueError("There was an issue downloading the new .torrent from FL")
+    with open(torrent_path, "wb") as tor:
+        tor.write(response.content)
 
 
 class FL:
@@ -36,8 +47,8 @@ class FL:
 
         self.cookie_validator = CookieValidator(config)
 
-    async def get_category_id(self, meta: dict[str, Any]) -> int:
-        _has_ro_audio, has_ro_sub = await self.get_ro_tracks(meta)
+    def get_category_id(self, meta: dict[str, Any]) -> int:
+        _has_ro_audio, has_ro_sub = self.get_ro_tracks(meta)
         cat_id = 4
         # 25 = 3D Movie
         if meta['category'] == 'MOVIE':
@@ -81,7 +92,7 @@ class FL:
             cat_id = 24
         return cat_id
 
-    async def edit_name(self, meta: dict[str, Any]) -> str:
+    def edit_name(self, meta: dict[str, Any]) -> str:
         fl_name = str(meta.get('name', ''))
         hdr = str(meta.get('hdr', ''))
         audio = str(meta.get('audio', ''))
@@ -135,13 +146,13 @@ class FL:
 
         return {}
 
-    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str, _torrent_bytes: Any = None) -> bool:
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
         await self.edit_desc(meta)
-        fl_name = await self.edit_name(meta)
-        cat_id = await self.get_category_id(meta)
-        has_ro_audio, _has_ro_sub = await self.get_ro_tracks(meta)
+        fl_name = self.edit_name(meta)
+        cat_id = self.get_category_id(meta)
+        has_ro_audio, _has_ro_sub = self.get_ro_tracks(meta)
 
         # Confirm the correct naming order for FL
         cli_ui.info(f"Filelist name: {fl_name}")
@@ -215,7 +226,13 @@ class FL:
             console.print(url)
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
         else:
             cookiefile_json = os.path.abspath(f"{meta['base_dir']}/data/cookies/FL.json")
@@ -249,13 +266,13 @@ class FL:
         if imdb_id_value.isdigit() and int(imdb_id_value) != 0:
             params = {
                 'search': meta['imdb'],
-                'cat': await self.get_category_id(meta),
+                'cat': self.get_category_id(meta),
                 'searchin': '3'
             }
         else:
             params = {
                 'search': meta['title'],
-                'cat': await self.get_category_id(meta),
+                'cat': self.get_category_id(meta),
                 'searchin': '0'
             }
 
@@ -358,19 +375,20 @@ class FL:
                 console.print('[bold red]Something went wrong while trying to log into FL')
                 await asyncio.sleep(1)
                 console.print(response.url)
-        return
 
     async def download_new_torrent(self, cookies: dict[str, str], id: str, torrent_path: str) -> None:
-        download_url = f"https://filelist.io/download.php?id={id}"
-        async with httpx.AsyncClient(cookies=cookies, timeout=30.0) as client:
-            r = await client.get(url=download_url)
-        if r.status_code == 200:
-            async with aiofiles.open(torrent_path, "wb") as tor:
-                await tor.write(r.content)
-        else:
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.run_in_executor(
+                get_download_process_executor(),
+                _download_fl_torrent_worker,
+                cookies,
+                id,
+                torrent_path,
+            )
+        except Exception as e:
             console.print("[red]There was an issue downloading the new .torrent from FL")
-            console.print(r.text)
-        return
+            console.print(str(e))
 
     async def edit_desc(self, meta: dict[str, Any]) -> None:
         base_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt"
@@ -431,7 +449,7 @@ class FL:
             if self.signature is not None:
                 await descfile.write(self.signature)
 
-    async def get_ro_tracks(self, meta: dict[str, Any]) -> tuple[bool, bool]:
+    def get_ro_tracks(self, meta: dict[str, Any]) -> tuple[bool, bool]:
         has_ro_audio = has_ro_sub = False
         if meta.get('is_disc', '') != 'BDMV':
             mi = meta.get('mediainfo')

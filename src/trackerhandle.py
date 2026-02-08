@@ -1,11 +1,13 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
+import os
 import sys
 import time
 import traceback
 from collections.abc import Mapping, Sequence
 from typing import Any, Optional, cast
 
+import aiofiles
 import cli_ui
 from typing_extensions import TypeAlias
 
@@ -13,6 +15,7 @@ from cogs.redaction import Redaction
 from src.cleanup import cleanup_manager
 from src.get_desc import DescriptionBuilder
 from src.manualpackage import ManualPackageManager
+from src.trackers.COMMON import get_upload_process_executor
 from src.trackers.PTP import PTP
 from src.trackers.THR import THR
 from src.trackersetup import TRACKER_SETUP
@@ -21,7 +24,7 @@ Meta: TypeAlias = dict[str, Any]
 StatusDict: TypeAlias = dict[str, Any]
 
 
-async def check_mod_q_and_draft(
+def check_mod_q_and_draft(
     tracker_class: Any,
     meta: Meta,
 ) -> tuple[Optional[str], Optional[str], dict[str, Any]]:
@@ -38,16 +41,16 @@ async def check_mod_q_and_draft(
     modq, draft = None, None
     tracker_caps = tracker_capabilities.get(tracker_class.tracker, {})
     if tracker_class.tracker == 'BHD' and tracker_caps.get('draft_live'):
-        draft_int = await tracker_class.get_live(meta)
+        draft_int = tracker_class.get_live(meta)
         draft = "Draft" if draft_int == 0 else "Live"
 
     else:
         if tracker_caps.get('mod_q'):
-            modq_flag = await tracker_class.get_flag(meta, 'modq')
+            modq_flag = tracker_class.get_flag(meta, 'modq')
             modq_enabled = str(modq_flag).lower() in ["1", "true", "yes"]
             modq = 'Yes' if modq_enabled else 'No'
         if tracker_caps.get('draft'):
-            draft_flag = await tracker_class.get_flag(meta, 'draft')
+            draft_flag = tracker_class.get_flag(meta, 'draft')
             draft_enabled = str(draft_flag).lower() in ["1", "true", "yes"]
             draft = 'Yes' if draft_enabled else 'No'
 
@@ -63,11 +66,288 @@ async def process_trackers(
     tracker_class_map: Mapping[str, Any],
     http_trackers: Sequence[str],
     other_api_trackers: Sequence[str],
+    http_client: Any = None,
 ) -> None:
-    tracker_setup = TRACKER_SETUP(config=config)
+    tracker_setup = TRACKER_SETUP(config=config, http_client=http_client)
     tracker_setup_any = cast(Any, tracker_setup)
     enabled_trackers = list(cast(Sequence[str], tracker_setup_any.trackers_enabled(meta)))
     manual_packager = ManualPackageManager(config)
+    timing_enabled = True
+
+    max_concurrent_uploads_raw = config.get("DEFAULT", {}).get("max_concurrent_uploads")
+    max_concurrent_uploads: Optional[int] = None
+    if max_concurrent_uploads_raw not in (None, ""):
+        try:
+            max_concurrent_uploads = int(max_concurrent_uploads_raw)
+        except (TypeError, ValueError):
+            max_concurrent_uploads = None
+    if max_concurrent_uploads is not None and max_concurrent_uploads < 1:
+        max_concurrent_uploads = None
+    upload_semaphore = asyncio.Semaphore(max_concurrent_uploads) if max_concurrent_uploads else None
+
+    unit3d_trackers = {
+        "A4K",
+        "AITHER",
+        "BLU",
+        "CBR",
+        "DP",
+        "EMUW",
+        "FRIKI",
+        "FNP",
+        "HHD",
+        "HUNO",
+        "IHD",
+        "ITT",
+        "LCD",
+        "LDU",
+        "LUME",
+        "LST",
+        "LT",
+        "OE",
+        "OTW",
+        "PT",
+        "PTT",
+        "R4E",
+        "RAS",
+        "RF",
+        "SAM",
+        "SHRI",
+        "SP",
+        "STC",
+        "TIK",
+        "TLZ",
+        "TOS",
+        "TTR",
+        "ULCX",
+        "UTP",
+        "YOINK",
+        "YUS",
+    }
+
+
+    tracker_status = cast(StatusDict, meta.get('tracker_status') or {})
+    active_trackers: list[str] = []
+    skipped_trackers: list[str] = []
+    for tracker in enabled_trackers:
+        if tracker == "MANUAL":
+            active_trackers.append(tracker)
+            continue
+        upload_status = cast(Mapping[str, Any], tracker_status.get(tracker, {})).get('upload', False)
+        if upload_status:
+            active_trackers.append(tracker)
+        else:
+            skipped_trackers.append(tracker)
+
+    if skipped_trackers:
+        console.print(f"[cyan]Skipping tracker tasks (upload disabled): {', '.join(skipped_trackers)}[/cyan]")
+
+    def resolve_upload_workers() -> int:
+        upload_workers_raw = config.get("DEFAULT", {}).get("max_concurrent_uploads")
+        if upload_workers_raw in (None, ""):
+            return os.cpu_count() or 4
+        try:
+            value = int(upload_workers_raw)
+        except (TypeError, ValueError):
+            return os.cpu_count() or 4
+        return value if value > 0 else (os.cpu_count() or 4)
+
+    if any(tracker in unit3d_trackers for tracker in active_trackers):
+        upload_workers = resolve_upload_workers()
+        await asyncio.to_thread(get_upload_process_executor, upload_workers)
+
+    def log_timing(tracker: str, label: str, start_time: Optional[float] = None) -> None:
+        if not timing_enabled:
+            return
+        elapsed = None
+        if start_time is not None:
+            elapsed = time.perf_counter() - start_time
+        message = (
+            f"[cyan]{tracker} timing: {label} {elapsed:.2f}s[/cyan]"
+            if elapsed is not None
+            else f"[cyan]{tracker} timing: {label}[/cyan]"
+        )
+
+        if config.get("DEFAULT", {}).get("async_timing_logs", True):
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                console.print(message)
+            else:
+                loop.create_task(asyncio.to_thread(console.print, message))
+        else:
+            console.print(message)
+
+    async def preload_nfo(meta: Meta) -> None:
+        if meta.get("cached_nfo_bytes") is not None or meta.get("cached_nfo_missing") is True:
+            return
+        base_dir = meta.get("base_dir")
+        uuid = meta.get("uuid")
+        if not base_dir or not uuid:
+            return
+
+        def list_nfo_files(directory: str) -> list[str]:
+            files: list[str] = []
+            try:
+                entries = os.listdir(directory)
+            except OSError:
+                return files
+            for entry in entries:
+                if not entry.lower().endswith(".nfo"):
+                    continue
+                absolute_path = os.path.join(directory, entry)
+                if os.path.isfile(absolute_path):
+                    files.append(absolute_path)
+            return files
+
+        tmp_dir = os.path.join(base_dir, "tmp", uuid)
+        nfo_files = await asyncio.to_thread(list_nfo_files, tmp_dir)
+
+        if (
+            not nfo_files
+            and meta.get("keep_nfo", False)
+            and (meta.get("keep_folder", False) or meta.get("isdir", False))
+        ):
+            search_dir = os.path.dirname(cast(str, meta.get("path", "")))
+            if search_dir:
+                nfo_files = await asyncio.to_thread(list_nfo_files, search_dir)
+
+        if nfo_files:
+            async with aiofiles.open(nfo_files[0], "rb") as f:
+                nfo_bytes = await f.read()
+            meta["cached_nfo_bytes"] = nfo_bytes
+            meta["cached_nfo_name"] = os.path.basename(nfo_files[0])
+        else:
+            meta["cached_nfo_missing"] = True
+
+    async def preload_mediainfo(meta: Meta) -> None:
+        if meta.get("cached_mediainfo_text") is not None or meta.get("cached_mediainfo_missing") is True:
+            return
+        base_dir = meta.get("base_dir")
+        uuid = meta.get("uuid")
+        if not base_dir or not uuid:
+            return
+
+        mediainfo_path = os.path.join(base_dir, "tmp", uuid, "MEDIAINFO_CLEANPATH.txt")
+        try:
+            if os.path.isfile(mediainfo_path):
+                async with aiofiles.open(mediainfo_path, encoding="utf-8") as f:
+                    mediainfo_text = await f.read()
+                meta["cached_mediainfo_text"] = mediainfo_text
+            else:
+                meta["cached_mediainfo_missing"] = True
+        except OSError:
+            meta["cached_mediainfo_missing"] = True
+
+    async def preload_bdinfo(meta: Meta) -> None:
+        if meta.get("cached_bdinfo_text") is not None or meta.get("cached_bdinfo_missing") is True:
+            return
+        base_dir = meta.get("base_dir")
+        uuid = meta.get("uuid")
+        if not base_dir or not uuid:
+            return
+
+        bdinfo_path = os.path.join(base_dir, "tmp", uuid, "BD_SUMMARY_00.txt")
+        try:
+            if os.path.isfile(bdinfo_path):
+                async with aiofiles.open(bdinfo_path, encoding="utf-8") as f:
+                    bdinfo_text = await f.read()
+                meta["cached_bdinfo_text"] = bdinfo_text
+            else:
+                meta["cached_bdinfo_missing"] = True
+        except OSError:
+            meta["cached_bdinfo_missing"] = True
+
+    base_torrent_bytes: Optional[bytes] = None
+    if active_trackers:
+        try:
+            preload_start = time.perf_counter()
+            torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
+            async with aiofiles.open(torrent_file_path, "rb") as f:
+                base_torrent_bytes = await f.read()
+            log_timing("TRACKERS", "preload BASE.torrent", preload_start)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Unable to preload BASE.torrent for tracker uploads: {e}[/yellow]")
+            base_torrent_bytes = None
+
+    if any(tracker in unit3d_trackers for tracker in active_trackers):
+        try:
+            nfo_start = time.perf_counter()
+            await preload_nfo(meta)
+            if meta.get("cached_nfo_bytes") is not None:
+                log_timing("UNIT3D", "preload NFO (found)", nfo_start)
+            elif meta.get("cached_nfo_missing") is True:
+                log_timing("UNIT3D", "preload NFO (missing)", nfo_start)
+            else:
+                log_timing("UNIT3D", "preload NFO", nfo_start)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Unable to preload NFO for UNIT3D uploads: {e}[/yellow]")
+
+        try:
+            mediainfo_start = time.perf_counter()
+            await preload_mediainfo(meta)
+            if meta.get("cached_mediainfo_text") is not None or meta.get("cached_mediainfo_bytes") is not None:
+                log_timing("UNIT3D", "preload MEDIAINFO (found)", mediainfo_start)
+            elif meta.get("cached_mediainfo_missing") is True:
+                log_timing("UNIT3D", "preload MEDIAINFO (missing)", mediainfo_start)
+            else:
+                log_timing("UNIT3D", "preload MEDIAINFO", mediainfo_start)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Unable to preload MEDIAINFO for UNIT3D uploads: {e}[/yellow]")
+
+        try:
+            bdinfo_start = time.perf_counter()
+            await preload_bdinfo(meta)
+            if meta.get("cached_bdinfo_text") is not None or meta.get("cached_bdinfo_bytes") is not None:
+                log_timing("UNIT3D", "preload BDINFO (found)", bdinfo_start)
+            elif meta.get("cached_bdinfo_missing") is True:
+                log_timing("UNIT3D", "preload BDINFO (missing)", bdinfo_start)
+            else:
+                log_timing("UNIT3D", "preload BDINFO", bdinfo_start)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Unable to preload BDINFO for UNIT3D uploads: {e}[/yellow]")
+
+        # Get first active UNIT3D tracker for preload
+        active_unit3d_trackers = [t for t in active_trackers if t in unit3d_trackers]
+        tracker_for_preload = active_unit3d_trackers[0] if active_unit3d_trackers else "UNIT3D"
+
+        try:
+            # Preload disc/screenshot section once (skip for single file with no discs)
+            discs_start = time.perf_counter()
+            builder = DescriptionBuilder(tracker_for_preload, config)
+
+            # Call the disc/screenshot handler directly and cache the result
+            discs = meta.get("discs", [])
+            images = meta.get("image_list", [])
+            multi_screens = int(config["DEFAULT"].get("multiScreens", 2)) if not meta.get("sorted_filelist") else 0
+
+            if not meta.get("skip_disc_screenshot_preload"):  # Allow skipping if user prefers
+                cached_discs_and_screenshots = await builder._handle_discs_and_screenshots(
+                    meta,
+                    [],  # approved_image_hosts empty for preload - trackers will filter
+                    images,
+                    multi_screens
+                )
+                meta["cached_discs_and_screenshots"] = cached_discs_and_screenshots
+                log_timing("UNIT3D", "preload disc/screenshot section", discs_start)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Unable to preload disc/screenshot section for UNIT3D uploads: {e}[/yellow]")
+            meta["cached_discs_and_screenshots"] = None
+
+        try:
+            # Preload full description (uses cached disc/screenshot section internally)
+            description_start = time.perf_counter()
+            description = await DescriptionBuilder(tracker_for_preload, config).unit3d_edit_desc(
+                meta, comparison=True
+            )
+            meta["cached_description"] = description
+            meta["cached_description_has_logo"] = bool(meta.get("logo"))
+            meta[f"{tracker_for_preload}_cached_description"] = description
+            meta[f"{tracker_for_preload}_cached_description_has_logo"] = bool(meta.get("logo"))
+            log_timing("UNIT3D", "preload full description", description_start)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Unable to preload description for UNIT3D uploads: {e}[/yellow]")
+            meta["cached_description"] = None
+            meta["cached_description_has_logo"] = False
 
     def print_tracker_result(
         tracker: str,
@@ -116,8 +396,18 @@ async def process_trackers(
 
     async def process_single_tracker(tracker: str) -> None:
         tracker_class: Any = None
+        tracker_timings: dict[str, float] = {}
+        tracker_start_time = time.perf_counter()
+        log_timing(tracker, "tracker task start")
         if tracker not in {"MANUAL", "THR", "PTP"}:
-            tracker_class = tracker_class_map[tracker](config=config)
+            # Try to pass http_client to UNIT3D-based trackers, fall back otherwise
+            if tracker in ["A4K", "AITHER", "BLU", "CBR", "DP", "EMUW", "FRIKI", "FNP", "HHD", "HUNO", "IHD", "ITT", "LCD", "LDU", "LUME", "LST", "LT", "OE", "OTW", "PT", "PTT", "R4E", "RAS", "RF", "SAM", "SHRI", "SP", "STC", "TIK", "TLZ", "TOS", "TTR", "ULCX", "UTP", "YOINK", "YUS"]:
+                try:
+                    tracker_class = tracker_class_map[tracker](config=config, http_client=http_client)
+                except TypeError:
+                    tracker_class = tracker_class_map[tracker](config=config)
+            else:
+                tracker_class = tracker_class_map[tracker](config=config)
         if str(meta.get('name', '')).endswith('DUPE?'):
             meta['name'] = str(meta.get('name', '')).replace(' DUPE?', '')
 
@@ -130,17 +420,23 @@ async def process_trackers(
             upload_status = cast(Mapping[str, Any], tracker_status.get(tracker, {})).get('upload', False)
             if upload_status:
                 try:
-                    modq, draft, tracker_caps = await check_mod_q_and_draft(tracker_class, meta)
+                    modq, draft, tracker_caps = check_mod_q_and_draft(tracker_class, meta)
                     if tracker_caps.get('mod_q') and modq == "Yes":
                         console.print(f"{tracker} (modq: {modq})")
                     if (tracker_caps.get('draft') or tracker_caps.get('draft_live')) and draft in ["Yes", "Draft"]:
                         console.print(f"{tracker} (draft: {draft})")
+                    if tracker == "TOS" and meta.get('keep_nfo', False):
+                        await tracker_class.tos_rehash(meta)
                     is_uploaded = False
                     try:
                         upload_start_time = time.time()
-                        is_uploaded = await tracker_class.upload(meta, disctype_value)
+                        upload_perf_start = time.perf_counter()
+                        log_timing(tracker, "upload() start")
+                        is_uploaded = await tracker_class.upload(meta, disctype_value, base_torrent_bytes)
                         upload_duration = time.time() - upload_start_time
                         meta[f'{tracker}_upload_duration'] = upload_duration
+                        log_timing(tracker, "upload() end", upload_perf_start)
+                        tracker_timings["upload"] = time.perf_counter() - upload_perf_start
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
                         console.print(traceback.format_exc())
@@ -155,8 +451,12 @@ async def process_trackers(
 
                 status = cast(StatusDict, meta.get('tracker_status') or {}).get(tracker_class.tracker, {})
                 if is_uploaded and 'status_message' in status and "data error" not in str(status['status_message']):
-                    await client.add_to_client(meta, tracker_class.tracker)
                     print_tracker_result(tracker, tracker_class, status, True)
+                    add_start = time.perf_counter()
+                    log_timing(tracker, "add_to_client() start")
+                    await client.add_to_client(meta, tracker_class.tracker)
+                    log_timing(tracker, "add_to_client() end", add_start)
+                    tracker_timings["add_to_client"] = time.perf_counter() - add_start
                 else:
                     print_tracker_result(tracker, tracker_class, status, False)
                     console.print(f"[red]{tracker} upload failed or returned data error.[/red]")
@@ -169,9 +469,13 @@ async def process_trackers(
                     is_uploaded = False
                     try:
                         upload_start_time = time.time()
-                        is_uploaded = await tracker_class.upload(meta, disctype_value)
+                        upload_perf_start = time.perf_counter()
+                        log_timing(tracker, "upload() start")
+                        is_uploaded = await tracker_class.upload(meta, disctype_value, base_torrent_bytes)
                         upload_duration = time.time() - upload_start_time
                         meta[f'{tracker}_upload_duration'] = upload_duration
+                        log_timing(tracker, "upload() end", upload_perf_start)
+                        tracker_timings["upload"] = time.perf_counter() - upload_perf_start
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
                         console.print(traceback.format_exc())
@@ -189,8 +493,12 @@ async def process_trackers(
 
                 status = cast(StatusDict, meta.get('tracker_status') or {}).get(tracker_class.tracker, {})
                 if is_uploaded and 'status_message' in status and "data error" not in str(status['status_message']):
-                    await client.add_to_client(meta, tracker_class.tracker)
                     print_tracker_result(tracker, tracker_class, status, True)
+                    add_start = time.perf_counter()
+                    log_timing(tracker, "add_to_client() start")
+                    await client.add_to_client(meta, tracker_class.tracker)
+                    log_timing(tracker, "add_to_client() end", add_start)
+                    tracker_timings["add_to_client"] = time.perf_counter() - add_start
                 else:
                     print_tracker_result(tracker, tracker_class, status, False)
                     console.print(f"[red]{tracker} upload failed or returned data error.[/red]")
@@ -203,9 +511,13 @@ async def process_trackers(
                     is_uploaded = False
                     try:
                         upload_start_time = time.time()
-                        is_uploaded = await tracker_class.upload(meta, disctype_value)
+                        upload_perf_start = time.perf_counter()
+                        log_timing(tracker, "upload() start")
+                        is_uploaded = await tracker_class.upload(meta, disctype_value, base_torrent_bytes)
                         upload_duration = time.time() - upload_start_time
                         meta[f'{tracker}_upload_duration'] = upload_duration
+                        log_timing(tracker, "upload() end", upload_perf_start)
+                        tracker_timings["upload"] = time.perf_counter() - upload_perf_start
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
                         console.print(traceback.format_exc())
@@ -222,8 +534,12 @@ async def process_trackers(
 
                 status = cast(StatusDict, meta.get('tracker_status') or {}).get(tracker_class.tracker, {})
                 if is_uploaded and 'status_message' in status and "data error" not in str(status['status_message']):
-                    await client.add_to_client(meta, tracker_class.tracker)
                     print_tracker_result(tracker, tracker_class, status, True)
+                    add_start = time.perf_counter()
+                    log_timing(tracker, "add_to_client() start")
+                    await client.add_to_client(meta, tracker_class.tracker)
+                    log_timing(tracker, "add_to_client() end", add_start)
+                    tracker_timings["add_to_client"] = time.perf_counter() - add_start
                 else:
                     print_tracker_result(tracker, tracker_class, status, False)
                     console.print(f"[red]{tracker} upload failed or returned data error.[/red]")
@@ -264,17 +580,25 @@ async def process_trackers(
                 is_uploaded = False
                 try:
                     upload_start_time = time.time()
-                    is_uploaded = await thr_any.upload(meta, disctype_value)
+                    upload_perf_start = time.perf_counter()
+                    log_timing(tracker, "upload() start")
+                    is_uploaded = await thr_any.upload(meta, disctype_value, base_torrent_bytes)
                     upload_duration = time.time() - upload_start_time
                     meta[f'{tracker}_upload_duration'] = upload_duration
+                    log_timing(tracker, "upload() end", upload_perf_start)
+                    tracker_timings["upload"] = time.perf_counter() - upload_perf_start
                 except Exception as e:
                     console.print(f"[red]Upload failed: {e}")
                     console.print(traceback.format_exc())
                     return
                 if is_uploaded:
-                    await client.add_to_client(meta, "THR")
                     status = cast(StatusDict, meta.get('tracker_status') or {}).get('THR', {})
                     print_tracker_result(tracker, thr, status, True)
+                    add_start = time.perf_counter()
+                    log_timing(tracker, "add_to_client() start")
+                    await client.add_to_client(meta, "THR")
+                    log_timing(tracker, "add_to_client() end", add_start)
+                    tracker_timings["add_to_client"] = time.perf_counter() - add_start
                 else:
                     status = cast(StatusDict, meta.get('tracker_status') or {}).get('THR', {})
                     print_tracker_result(tracker, thr, status, False)
@@ -291,24 +615,53 @@ async def process_trackers(
                     is_uploaded = False
                     try:
                         upload_start_time = time.time()
-                        is_uploaded = await ptp.upload(meta, ptpUrl, ptpData, disctype_value)
+                        upload_perf_start = time.perf_counter()
+                        log_timing(tracker, "upload() start")
+                        is_uploaded = await ptp.upload(meta, ptpUrl, ptpData, disctype_value, base_torrent_bytes)
                         upload_duration = time.time() - upload_start_time
                         meta[f'{tracker}_upload_duration'] = upload_duration
                         await asyncio.sleep(5)
+                        log_timing(tracker, "upload() end", upload_perf_start)
+                        tracker_timings["upload"] = time.perf_counter() - upload_perf_start
                     except Exception as e:
                         console.print(f"[red]Upload failed: {e}")
                         console.print(traceback.format_exc())
                         return
                     status = cast(StatusDict, meta.get('tracker_status') or {}).get(ptp.tracker, {})
                     if is_uploaded and 'status_message' in status and "data error" not in str(status['status_message']):
-                        await client.add_to_client(meta, "PTP")
                         print_tracker_result(tracker, ptp, status, True)
+                        add_start = time.perf_counter()
+                        log_timing(tracker, "add_to_client() start")
+                        await client.add_to_client(meta, "PTP")
+                        log_timing(tracker, "add_to_client() end", add_start)
+                        tracker_timings["add_to_client"] = time.perf_counter() - add_start
                     else:
                         print_tracker_result(tracker, ptp, status, False)
                         console.print(f"[red]{tracker} upload failed or returned data error.[/red]")
                 except Exception:
                     console.print(traceback.format_exc())
                     return
+
+        tracker_total = time.perf_counter() - tracker_start_time
+        log_timing(tracker, "tracker task end", tracker_start_time)
+        summary_parts = [f"total {tracker_total:.2f}s"]
+        upload_time = tracker_timings.get("upload")
+        if upload_time is not None:
+            summary_parts.append(f"upload {upload_time:.2f}s")
+        add_time = tracker_timings.get("add_to_client")
+        if add_time is not None:
+            summary_parts.append(f"add_to_client {add_time:.2f}s")
+        cache_hit = meta.get(f"{tracker}_description_cache_hit")
+        if isinstance(cache_hit, bool):
+            summary_parts.append(f"desc_cache {'hit' if cache_hit else 'miss'}")
+        console.print(f"[cyan]{tracker} timing summary: {', '.join(summary_parts)}[/cyan]")
+
+    async def run_tracker_with_limit(tracker: str) -> None:
+        if upload_semaphore is None:
+            await process_single_tracker(tracker)
+            return
+        async with upload_semaphore:
+            await process_single_tracker(tracker)
 
     multi_screens = int(config['DEFAULT'].get('multiScreens', 2))
     discs = cast(list[Any], meta.get('discs') or [])
@@ -321,8 +674,8 @@ async def process_trackers(
     if (not meta.get('tv_pack') and one_disc) or multi_screens == 0:
         # Run all tracker tasks concurrently with individual error handling
         tasks: list[tuple[str, asyncio.Task[None]]] = []
-        for tracker in enabled_trackers:
-            task = asyncio.create_task(process_single_tracker(tracker))
+        for tracker in active_trackers:
+            task = asyncio.create_task(run_tracker_with_limit(tracker))
             tasks.append((tracker, task))
 
         # Wait for all tasks to complete, but don't let one tracker's failure stop others
@@ -336,7 +689,7 @@ async def process_trackers(
                     console.print(traceback.format_exception(type(result), result, result.__traceback__))
     else:
         # Process each tracker sequentially
-        for tracker in enabled_trackers:
-            await process_single_tracker(tracker)
+        for tracker in active_trackers:
+            await run_tracker_with_limit(tracker)
 
     console.print("[green]All tracker uploads processed.[/green]")

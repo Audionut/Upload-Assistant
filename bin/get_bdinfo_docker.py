@@ -15,7 +15,8 @@ try:
     from src.console import console
 except ImportError:
     class SimpleConsole:
-        def print(self, message: str, markup: bool = False) -> None:  # noqa: ARG002
+        def print(self, message: str, markup: bool = False) -> None:
+            _ = markup
             print(message)
 
     console = SimpleConsole()
@@ -87,7 +88,7 @@ def download_bdinfo_for_docker(base_dir: Path = Path("/Upload-Assistant"), versi
     console.print(f"System: {system}, Architecture: {machine}", markup=False)
 
     if system != "linux":
-        raise Exception(f"This script is only for Linux containers, got: {system}")
+        raise RuntimeError(f"This script is only for Linux containers, got: {system}")
 
     if machine in ("amd64", "x86_64"):
         file_pattern = "bdinfo-linux-x64.tar.gz"
@@ -99,7 +100,7 @@ def download_bdinfo_for_docker(base_dir: Path = Path("/Upload-Assistant"), versi
         file_pattern = "bdinfo-linux-arm.tar.gz"
         folder = "linux/arm"
     else:
-        raise Exception(f"Unsupported architecture: {machine}")
+        raise ValueError(f"Unsupported architecture: {machine}")
 
     bin_dir = base_dir / "bin" / "bdinfo" / folder
     bin_dir.mkdir(parents=True, exist_ok=True)
@@ -131,7 +132,7 @@ def download_bdinfo_for_docker(base_dir: Path = Path("/Upload-Assistant"), versi
             shutil.move(str(found), str(binary_path))
 
     if not binary_path.exists():
-        raise Exception(f"Failed to extract bdinfo binary to {binary_path}")
+        raise FileNotFoundError(f"Failed to extract bdinfo binary to {binary_path}")
 
     os.chmod(binary_path, 0o700)
 

@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import http.cookiejar
 import importlib
 import json
@@ -33,7 +34,6 @@ class CookieValidator:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.common = COMMON(config)
-        pass
 
     async def load_session_cookies(self, meta: dict[str, Any], tracker: str) -> Optional[http.cookiejar.MozillaCookieJar]:
         cookie_file = os.path.abspath(f"{meta['base_dir']}/data/cookies/{tracker}.txt")
@@ -70,7 +70,7 @@ class CookieValidator:
 
         return cookie_jar
 
-    async def save_session_cookies(self, tracker: str, cookie_jar: Optional[http.cookiejar.MozillaCookieJar]) -> None:
+    def save_session_cookies(self, tracker: str, cookie_jar: Optional[http.cookiejar.MozillaCookieJar]) -> None:
         """Save updated cookies after a successful validation."""
         if not cookie_jar:
             console.print(f"{tracker}: Cookie jar not initialized, cannot save cookies.")
@@ -275,7 +275,7 @@ class CookieValidator:
                     cls.secret_token = str(match.group(1))
 
                 # Save cookies only after a confirmed valid login
-                await self.save_session_cookies(tracker, cookie_jar)
+                self.save_session_cookies(tracker, cookie_jar)
                 return True
 
         except httpx.ConnectTimeout:
@@ -316,9 +316,7 @@ class CookieValidator:
             "You can open this file in a web browser to see what went wrong.\n"
         )
 
-        return
-
-    async def find_html_token(self, tracker: str, token_pattern: str, response: str) -> Optional[str]:
+    def find_html_token(self, tracker: str, token_pattern: str, response: str) -> Optional[str]:
         """Find the auth token in a web page using a regular expression pattern."""
         auth_match = re.search(token_pattern, response)
         if not auth_match:
@@ -464,7 +462,6 @@ class CookieAuthUploader:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.common = COMMON(config)
-        pass
 
     async def handle_upload(
         self,
@@ -538,47 +535,55 @@ class CookieAuthUploader:
         else:
             success = False
             try:
-                async with httpx.AsyncClient(headers=headers, timeout=30.0, cookies=upload_cookies, follow_redirects=True) as session:
-                    response = await session.post(upload_url, data=data, files=files)
+                def post_upload() -> httpx.Response:
+                    with httpx.Client(
+                        headers=headers,
+                        timeout=30.0,
+                        cookies=upload_cookies,
+                        follow_redirects=True,
+                    ) as session:
+                        return session.post(upload_url, data=data, files=files)
 
-                    if success_text and success_text in response.text:
+                response = await asyncio.to_thread(post_upload)
+
+                if success_text and success_text in response.text:
+                    success = True
+
+                elif success_status_code:
+                    valid_codes = {
+                        int(code.strip())
+                        for code in str(success_status_code).split(",")
+                        if code.strip().isdigit()
+                    }
+
+                    if int(response.status_code) in valid_codes:
                         success = True
 
-                    elif success_status_code:
-                        valid_codes = {
-                            int(code.strip())
-                            for code in str(success_status_code).split(",")
-                            if code.strip().isdigit()
-                        }
+                elif error_text and error_text not in response.text:
+                    success = True
 
-                        if int(response.status_code) in valid_codes:
-                            success = True
-
-                    elif error_text and error_text not in response.text:
-                        success = True
-
-                    if success:
-                        await self.handle_successful_upload(
-                            meta,
-                            tracker,
-                            response,
-                            id_pattern,
-                            hash_is_id,
-                            source_flag,
-                            user_announce_url,
-                            torrent_url,
-                        )
-                        return True
-                    else:
-                        await self.handle_failed_upload(
-                            meta,
-                            tracker,
-                            success_status_code,
-                            success_text,
-                            error_text,
-                            response,
-                        )
-                        return False
+                if success:
+                    await self.handle_successful_upload(
+                        meta,
+                        tracker,
+                        response,
+                        id_pattern,
+                        hash_is_id,
+                        source_flag,
+                        user_announce_url,
+                        torrent_url,
+                    )
+                    return True
+                else:
+                    await self.handle_failed_upload(
+                        meta,
+                        tracker,
+                        success_status_code,
+                        success_text,
+                        error_text,
+                        response,
+                    )
+                    return False
 
             except httpx.ConnectTimeout:
                 meta["tracker_status"][tracker]["status_message"] = "Connection timed out"

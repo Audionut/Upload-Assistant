@@ -1,10 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import re
 from typing import Any, Optional
 
-import cli_ui
-
-from src.console import console
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
 
@@ -29,26 +25,22 @@ class YUS(UNIT3D):
             'NorTekst', 'NORViNE', 'PANDEMONiUM', 'PiTBULL', 'RAPiDCOWS', 'RARBG', 'Radarr', 'RCDiVX', 'RDN', 'ROCKETRACCOON',
             'SANTi', 'SHOWTiME', 'SOOSi', 'SUXWIC', 'TOXVIO', 'TWA', 'VXT', 'Will1869', 'x0r', 'XS',
             'YIFY', 'YOLAND', 'YTS', 'ZKBL', 'ZmN', 'ZMNT']
-        pass
 
-    async def get_additional_checks(self, meta: Meta) -> bool:
+    def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy', 'hentai', 'adult animation', 'softcore']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
-                console.print('[bold red]Porn/xxx is not allowed at YUS.')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
-                    return False
-            else:
-                return False
+        if not self.common.prompt_adult_content(
+            meta,
+            tracker_name=self.tracker,
+            block_message=f'[bold red]Porn/xxx is not allowed at {self.tracker}.',
+            prompt_text="Do you want to upload anyway?",
+            default=False,
+        ):
+            return False
 
         return should_continue
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,

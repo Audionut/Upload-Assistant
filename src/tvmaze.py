@@ -113,8 +113,13 @@ class TvmazeManager:
 
             while True:
                 try:
-                    choice_raw = cli_ui.ask_string(f"Enter the number of the correct show (1-{len(unique_results)}) or 0 to skip: ")
-                    choice = int((choice_raw or "").strip())
+                    choice_raw = cli_ui.ask_string(
+                        f"Enter the number of the correct show (1-{len(unique_results)}) or 0 to skip: "
+                    )
+                    if choice_raw is None or not choice_raw.strip():
+                        console.print("Invalid input. Please enter a number.")
+                        continue
+                    choice = int(choice_raw)
                     if choice == 0:
                         console.print("Skipping selection.")
                         break

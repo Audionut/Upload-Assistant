@@ -131,6 +131,9 @@ config = {
         # The final value will be the minimum, between this value and number of screens being processed
         "process_limit": "4",
 
+        # Limit the number of simultaneous tracker uploads (0 disables the limit)
+        "max_concurrent_uploads": 3,
+
         # Set true to limit the amount of CPU when running ffmpeg.
         # This places an additional limitation on ffmpeg to reduce CPU usage
         "ffmpeg_limit": False,
@@ -321,6 +324,9 @@ config = {
         # Whether or not to print how long the upload process took for each tracker
         # Useful for knowing which trackers are slowing down the overall upload process
         "show_upload_duration": True,
+
+        # Set false to keep timing logs synchronous (may slightly increase event loop blocking with many trackers)
+        "async_timing_logs": True,
 
         # Set true to print the tracker api messages from uploads
         "print_tracker_messages": False,

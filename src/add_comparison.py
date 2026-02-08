@@ -66,12 +66,13 @@ class ComparisonManager:
                     found = False
 
                     if isinstance(saved_comparison_data, dict):
-                        if comparison_index_str in saved_comparison_data:
-                            group_data = saved_comparison_data[comparison_index_str]
+                        saved_data_dict = cast(ComparisonData, saved_comparison_data)
+                        if comparison_index_str in saved_data_dict:
+                            group_data = saved_data_dict[comparison_index_str]
                             urls_to_add = cast(list[dict[str, Any]], group_data.get('urls', []))
                             found = True
                         else:
-                            console.print(f"[yellow]Comparison index '{comparison_index_str}' not found in saved data; available keys: {list(saved_comparison_data.keys())}[/yellow]")
+                            console.print(f"[yellow]Comparison index '{comparison_index_str}' not found in saved data; available keys: {list(saved_data_dict.keys())}[/yellow]")
                     else:
                         try:
                             idx = int(comparison_index_str)

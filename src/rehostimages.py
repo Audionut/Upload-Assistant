@@ -31,14 +31,14 @@ def _safe_remove(path: str) -> bool:
     return False
 
 
-async def match_host(hostname: str, approved_hosts: Iterable[str]) -> str:
+def match_host(hostname: str, approved_hosts: Iterable[str]) -> str:
     for approved_host in approved_hosts:
         if hostname == approved_host or hostname.endswith(f".{approved_host}"):
             return approved_host
     return hostname
 
 
-async def sanitize_filename(filename: str) -> str:
+def sanitize_filename(filename: str) -> str:
     # Replace invalid characters like colons with an underscore
     return re.sub(r'[<>:"/\\|?*]', '_', filename)
 
@@ -76,7 +76,6 @@ class RehostImagesManager:
         url_host_mapping: dict[str, str],
         approved_image_hosts: Optional[list[str]] = None,
         img_host_index: int = 1,
-        file: Optional[str] = None,
     ) -> tuple[list[dict[str, str]], bool, bool]:
         return await _handle_image_upload(
             meta,
@@ -84,7 +83,6 @@ class RehostImagesManager:
             url_host_mapping,
             approved_image_hosts=approved_image_hosts,
             img_host_index=img_host_index,
-            file=file,
             default_config=self.default_config,
             takescreens_manager=self.takescreens_manager,
             uploadscreens_manager=self.uploadscreens_manager,
@@ -139,7 +137,7 @@ async def _check_hosts(
 
             parsed_url = urlparse(raw_url)
             hostname = parsed_url.netloc
-            mapped_host = await match_host(hostname, url_host_mapping.keys())
+            mapped_host = match_host(hostname, url_host_mapping.keys())
 
             if mapped_host:
                 mapped_host = url_host_mapping.get(mapped_host, mapped_host)
@@ -194,7 +192,7 @@ async def _check_hosts(
 
         parsed_url = urlparse(raw_url)
         hostname = parsed_url.netloc
-        mapped_host = await match_host(hostname, url_host_mapping.keys())
+        mapped_host = match_host(hostname, url_host_mapping.keys())
 
         if mapped_host:
             mapped_host = url_host_mapping.get(mapped_host, mapped_host)
@@ -219,7 +217,7 @@ async def _check_hosts(
         for image in tracker_images:
             raw_url = _as_str(image.get('raw_url')) or ""
             netloc = urlparse(raw_url).netloc
-            matched_host = await match_host(netloc, url_host_mapping.keys())
+            matched_host = match_host(netloc, url_host_mapping.keys())
             mapped_host = url_host_mapping.get(matched_host, matched_host)
             valid_hosts.append(mapped_host in approved_image_hosts)
 
@@ -276,7 +274,6 @@ async def _handle_image_upload(
     url_host_mapping: dict[str, str],
     approved_image_hosts: Optional[list[str]] = None,
     img_host_index: int = 1,
-    file: Optional[str] = None,
     default_config: Optional[Mapping[str, Any]] = None,
     takescreens_manager: Optional[TakeScreensManager] = None,
     uploadscreens_manager: Optional[UploadScreensManager] = None,
@@ -351,7 +348,7 @@ async def _handle_image_upload(
 
         # Also check for any screenshots that match the title pattern as a fallback
         if filename and len(all_screenshots) < multi_screens:
-            sanitized_title = await sanitize_filename(filename)
+            sanitized_title = sanitize_filename(filename)
             title_pattern_files = [f for f in all_png_files if os.path.basename(f).startswith(sanitized_title)]
             if meta['debug']:
                 console.print(f"[yellow]Searching for screenshots with pattern: {sanitized_title}*.png")
@@ -367,7 +364,7 @@ async def _handle_image_upload(
     # If we haven't found enough screenshots yet, search for files in the normal way
     if len(all_screenshots) < multi_screens:
         for _file in filelist:
-            sanitized_title = await sanitize_filename(filename)
+            sanitized_title = sanitize_filename(filename)
             filename_pattern = f"{sanitized_title}*.png"
             if meta['debug']:
                 console.print(f"[yellow]Searching for screenshots with pattern: {filename_pattern}")
@@ -553,7 +550,6 @@ async def _handle_image_upload(
                 retry_mode = True
                 images_reuploaded = True
                 img_host_index += 1
-                continue
             else:
                 meta['imghost'] = current_img_host
                 if meta['debug']:
@@ -576,7 +572,7 @@ async def _handle_image_upload(
             raw_url = image['raw_url']
             parsed_url = urlparse(raw_url)
             hostname = parsed_url.netloc
-            mapped_host = await match_host(hostname, url_host_mapping.keys())
+            mapped_host = match_host(hostname, url_host_mapping.keys())
             mapped_host = url_host_mapping.get(mapped_host, mapped_host)
 
             if mapped_host not in approved_image_hosts:
@@ -589,7 +585,7 @@ async def _handle_image_upload(
         valid_hosts: list[bool] = []
         for image in cast(list[dict[str, str]], meta.get(new_images_key, [])):
             netloc = urlparse(image['raw_url']).netloc
-            matched_host = await match_host(netloc, url_host_mapping.keys())
+            matched_host = match_host(netloc, url_host_mapping.keys())
             mapped_host = url_host_mapping.get(matched_host, matched_host)
             valid_hosts.append(mapped_host in approved_image_hosts)
         if all(valid_hosts) and new_images_key in meta and isinstance(meta[new_images_key], list):

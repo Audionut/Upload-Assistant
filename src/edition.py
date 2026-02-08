@@ -16,7 +16,7 @@ def guessit_fn(value: str, options: Optional[dict[str, Any]] = None) -> dict[str
     return cast(dict[str, Any], guessit_module.guessit(value, options))
 
 
-async def get_edition(video: str, bdinfo: Optional[dict[str, Any]], filelist: list[str], manual_edition: Union[str, list[str]], meta: dict[str, Any]) -> tuple[str, str, bool]:
+def get_edition(video: str, bdinfo: Optional[dict[str, Any]], filelist: list[str], manual_edition: Union[str, list[str]], meta: dict[str, Any]) -> tuple[str, str, bool]:
     edition = ""
     imdb_info = cast(dict[str, Any], meta.get('imdb_info', {}))
     edition_details = cast(dict[str, dict[str, Any]], imdb_info.get('edition_details', {}))
@@ -357,7 +357,7 @@ async def get_edition(video: str, bdinfo: Optional[dict[str, Any]], filelist: li
 
     # Handle distributor info
     if edition:
-        distributors = await get_distributor(edition)
+        distributors = get_distributor(edition)
 
         bad = ['internal', 'limited', 'retail', 'version', 'remastered']
 

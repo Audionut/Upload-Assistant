@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import os
 import traceback
 from typing import Any, Optional, Union, cast
@@ -30,23 +31,22 @@ class BHDTV:
         self.upload_url = 'https://www.bit-hdtv.com/takeupload.php'
         # self.forum_link = 'https://www.bit-hdtv.com/rules.php'
         self.banned_groups = []
-        pass
 
-    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str, _torrent_bytes: Any = None) -> bool:
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
         await self.edit_desc(meta)
-        cat_id = await self.get_cat_id(meta)
+        cat_id = self.get_cat_id(meta)
         sub_cat_id = ""
         if meta['category'] == 'MOVIE':
-            sub_cat_id = await self.get_type_movie_id(meta)
+            sub_cat_id = self.get_type_movie_id(meta)
         elif meta['category'] == 'TV' and not meta['tv_pack']:
-            sub_cat_id = await self.get_type_tv_id(meta['type'])
+            sub_cat_id = self.get_type_tv_id(meta['type'])
         else:
             # must be TV pack
-            sub_cat_id = await self.get_type_tv_pack_id(meta['type'])
+            sub_cat_id = self.get_type_tv_pack_id(meta['type'])
 
-        resolution_id = await self.get_res_id(meta['resolution'])
+        resolution_id = self.get_res_id(meta['resolution'])
         # region_id = await common.unit3d_region_ids(meta.get('region'))
         # distributor_id = await common.unit3d_distributor_ids(meta.get('distributor'))
 
@@ -122,11 +122,16 @@ class BHDTV:
         console.print("[cyan]BHDTV Request Data:")
         console.print(Redaction.redact_private_info(data))
         meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-        await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+        await common.create_torrent_for_upload(
+            meta,
+            f"{self.tracker}" + "_DEBUG",
+            f"{self.tracker}" + "_DEBUG",
+            announce_url="https://fake.tracker",
+            torrent_bytes=_torrent_bytes,
+        )
         return True
 
-    async def get_cat_id(self, meta: dict[str, Any]) -> str:
-        category_id = '0'
+    def get_cat_id(self, meta: dict[str, Any]) -> str:
         if meta['category'] == 'MOVIE':
             category_id = '7'
         elif meta['tv_pack']:
@@ -136,7 +141,7 @@ class BHDTV:
             category_id = '10'
         return category_id
 
-    async def get_type_movie_id(self, meta: dict[str, Any]) -> str:
+    def get_type_movie_id(self, meta: dict[str, Any]) -> str:
         type_id = '0'
         if meta['type'] == 'DISC':
             type_id = '46' if meta['3D'] else '2'
@@ -161,7 +166,7 @@ class BHDTV:
 
         return type_id
 
-    async def get_type_tv_id(self, type: str) -> str:
+    def get_type_tv_id(self, type: str) -> str:
         type_id = {
             'HDTV': '7',
             'WEBDL': '8',
@@ -174,7 +179,7 @@ class BHDTV:
         }.get(type, '0')
         return type_id
 
-    async def get_type_tv_pack_id(self, type: str) -> str:
+    def get_type_tv_pack_id(self, type: str) -> str:
         type_id = {
             'HDTV': '13',
             'WEBDL': '14',
@@ -187,7 +192,7 @@ class BHDTV:
         }.get(type, '0')
         return type_id
 
-    async def get_res_id(self, resolution: str) -> str:
+    def get_res_id(self, resolution: str) -> str:
         resolution_id = {
             '2160p': '4',
             '1080p': '3',
@@ -211,6 +216,7 @@ class BHDTV:
         return None
 
     async def search_existing(self, _meta: dict[str, Any], _disctype: str) -> list[str]:
+        await asyncio.sleep(0)
         console.print("[red]Dupes must be checked Manually")
         return ['Dupes must be checked Manually']
         # hopefully someone else has the time to implement this.

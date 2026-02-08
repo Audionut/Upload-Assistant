@@ -14,10 +14,21 @@ from unidecode import unidecode
 from src.console import console
 from src.cookie_auth import CookieValidator
 from src.exceptions import *  # noqa #F405
-from src.trackers.COMMON import COMMON
+from src.trackers.COMMON import COMMON, get_download_process_executor
 
 Meta = dict[str, Any]
 Config = dict[str, Any]
+
+
+def _download_ttg_torrent_worker(passkey: str, torrent_id: str, torrent_path: str) -> None:
+    download_url = f"https://totheglory.im/dl/{torrent_id}/{passkey}"
+    os.makedirs(os.path.dirname(torrent_path), exist_ok=True)
+    with httpx.Client(timeout=30.0) as client:
+        response = client.get(url=download_url)
+    if response.status_code != 200:
+        raise ValueError("There was an issue downloading the new .torrent from TTG")
+    with open(torrent_path, "wb") as tor:
+        tor.write(response.content)
 
 
 class TTG:
@@ -37,7 +48,7 @@ class TTG:
 
         self.cookie_validator = CookieValidator(config)
 
-    async def edit_name(self, meta: Meta) -> str:
+    def edit_name(self, meta: Meta) -> str:
         ttg_name = str(meta.get('name', ''))
 
         remove_list = ['Dubbed', 'Dual-Audio']
@@ -47,7 +58,7 @@ class TTG:
         ttg_name = ttg_name.replace('.', '{@}')
         return ttg_name
 
-    async def get_type_id(self, meta: Meta) -> int:
+    def get_type_id(self, meta: Meta) -> int:
         type_id = 0
         lang = str(meta.get('original_language', 'UNKNOWN')).upper()
         category = str(meta.get('category', ''))
@@ -113,11 +124,11 @@ class TTG:
             # 60 = TV Shows
         return type_id
 
-    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
+    async def upload(self, meta: Meta, _disctype: str, _torrent_bytes: Any = None) -> Optional[bool]:  # NOSONAR
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
         await self.edit_desc(meta)
-        ttg_name = await self.edit_name(meta)
+        ttg_name = self.edit_name(meta)
 
         # FORM
         # type = category dropdown
@@ -165,7 +176,7 @@ class TTG:
             'team': '',
             'hr': 'no',
             'name': ttg_name,
-            'type': await self.get_type_id(meta),
+            'type': self.get_type_id(meta),
             'descr': ttg_desc.rstrip(),
 
             'anonymity': anon,
@@ -183,7 +194,13 @@ class TTG:
             tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
             tracker_status.setdefault(self.tracker, {})
             tracker_status[self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
         else:
             cookiefile = os.path.abspath(f"{meta['base_dir']}/data/cookies/TTG.json")
@@ -320,7 +337,6 @@ class TTG:
                 await asyncio.sleep(1)
                 console.print(response.text)
                 console.print(response.url)
-        return
 
     async def edit_desc(self, meta: Meta) -> None:
         async with aiofiles.open(
@@ -396,12 +412,15 @@ class TTG:
             await descfile.write("".join(parts))
 
     async def download_new_torrent(self, id: str, torrent_path: str) -> None:
-        download_url = f"https://totheglory.im/dl/{id}/{self.passkey}"
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            r = await client.get(url=download_url)
-        if r.status_code == 200:
-            async with aiofiles.open(torrent_path, "wb") as tor:
-                await tor.write(r.content)
-        else:
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.run_in_executor(
+                get_download_process_executor(),
+                _download_ttg_torrent_worker,
+                self.passkey,
+                id,
+                torrent_path,
+            )
+        except Exception as e:
             console.print("[red]There was an issue downloading the new .torrent from TTG")
-            console.print(r.text)
+            console.print(str(e))

@@ -1,7 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
 import re
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 import cli_ui
 
@@ -25,9 +25,8 @@ class SP(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
-        pass
 
-    async def get_category_id(
+    def get_category_id(
         self,
         meta: Meta,
         category: Optional[str] = None,
@@ -66,7 +65,7 @@ class SP(UNIT3D):
 
         return any(re.search(pattern, release_title, re.IGNORECASE) for pattern in patterns)
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,
@@ -86,7 +85,7 @@ class SP(UNIT3D):
         }.get(type_value, '0')
         return {'type_id': type_id}
 
-    async def get_name(self, meta: Meta) -> dict[str, str]:
+    def get_name(self, meta: Meta) -> dict[str, str]:
         KNOWN_EXTENSIONS = {".mkv", ".mp4", ".avi", ".ts"}
         if bool(meta.get('scene')):
             scene_name = str(meta.get('scene_name', ''))
@@ -104,7 +103,7 @@ class SP(UNIT3D):
 
         return {'name': name}
 
-    async def get_additional_checks(self, meta: Meta) -> bool:
+    def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
         resolution = str(meta.get('resolution', ''))
         if resolution not in ['8640p', '4320p', '2160p', '1440p', '1080p', '1080i']:
@@ -112,31 +111,18 @@ class SP(UNIT3D):
             if not bool(meta.get('unattended')) or (
                 bool(meta.get('unattended')) and meta.get('unattended_confirm', False)
             ):
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
+                if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     return False
             else:
                 return False
 
-        disallowed_keywords = {'xxx', 'erotic', 'porn'}
-        disallowed_genres = {'adult', 'erotica'}
-        keywords = [str(k) for k in cast(list[Any], meta.get('keywords', []))]
-        combined_genres = [
-            str(g) for g in cast(list[Any], meta.get('combined_genres', []))
-        ]
-        if any(keyword.lower() in disallowed_keywords for keyword in keywords) or any(
-            genre.lower() in disallowed_genres for genre in combined_genres
+        if not self.common.prompt_adult_content(
+            meta,
+            tracker_name=self.tracker,
+            block_message=f'[bold red]Porn/xxx is not allowed at {self.tracker}.',
+            prompt_text="Do you want to upload anyway?",
+            default=False,
         ):
-            if not bool(meta.get('unattended')) or (
-                bool(meta.get('unattended')) and meta.get('unattended_confirm', False)
-            ):
-                console.print(f'[bold red]Porn/xxx is not allowed at {self.tracker}.[/bold red]')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
-                    return False
-            else:
-                return False
+            return False
 
         return should_continue

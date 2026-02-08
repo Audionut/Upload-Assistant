@@ -103,7 +103,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
             console.print("[bold yellow]Add torrent manually to the client")
             return
         if os.path.exists(torrent_path):
-            torrent = Torrent.read(torrent_path)
+            torrent = await asyncio.to_thread(Torrent.read, torrent_path)
         else:
             console.print(f"[bold red]Torrent file {torrent_path} does not exist, cannot add to client")
             return
@@ -172,18 +172,44 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
 
             try:
                 if torrent_client.lower() == "rtorrent":
-                    self.rtorrent(meta['path'], torrent_path, torrent, meta, local_path, remote_path, client, tracker)
+                    await asyncio.to_thread(
+                        self.rtorrent,
+                        meta['path'],
+                        torrent_path,
+                        torrent,
+                        meta,
+                        local_path,
+                        remote_path,
+                        client,
+                        tracker,
+                    )
                 elif torrent_client == "qbit":
                     await self.qbittorrent(meta['path'], torrent, local_path, remote_path, client, meta['is_disc'], meta['filelist'], meta, tracker, cross)
                 elif torrent_client.lower() == "deluge":
-                    self.deluge(meta['path'], torrent_path, torrent, local_path, remote_path, client, meta)
+                    await asyncio.to_thread(
+                        self.deluge,
+                        meta['path'],
+                        torrent_path,
+                        torrent,
+                        local_path,
+                        remote_path,
+                        client,
+                        meta,
+                    )
                 elif torrent_client.lower() == "transmission":
-                    self.transmission(meta['path'], torrent, local_path, remote_path, client, meta)
+                    await asyncio.to_thread(
+                        self.transmission,
+                        meta['path'],
+                        torrent,
+                        local_path,
+                        remote_path,
+                        client,
+                        meta,
+                    )
                 elif torrent_client.lower() == "watch":
-                    shutil.copy(torrent_path, client['watch_folder'])
+                    await asyncio.to_thread(shutil.copy, torrent_path, client['watch_folder'])
             except Exception as e:
                 console.print(f"[bold red]Failed to add torrent to {client_name}: {e}")
-        return
 
     async def inject_delay(self, meta: dict[str, Any], tracker: str, client_name: str) -> None:
         """
@@ -497,7 +523,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                     console.print("[cyan]DEBUG: Skipping validation because found_hash is None[/cyan]")
 
                 if valid:
-                    torrent = Torrent.read(resolved_path)
+                    torrent = await asyncio.to_thread(Torrent.read, resolved_path)
                     piece_size = torrent.piece_size
                     piece_in_mib = int(piece_size) / 1024 / 1024
 
@@ -541,7 +567,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
         # Check if torrent file exists
         if os.path.exists(torrent_path):
             try:
-                torrent = Torrent.read(torrent_path)
+                torrent = await asyncio.to_thread(Torrent.read, torrent_path)
             except Exception as e:
                 console.print(f'[bold red]Error reading torrent file: {e}')
                 return valid, torrent_path
@@ -592,7 +618,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
         if valid:
             if os.path.exists(torrent_path):
                 try:
-                    reuse_torrent = Torrent.read(torrent_path)
+                    reuse_torrent = await asyncio.to_thread(Torrent.read, torrent_path)
                     piece_size = reuse_torrent.piece_size
                     piece_in_mib = int(piece_size) / 1024 / 1024
                     torrent_storage_dir_valid = torrent_path

@@ -1,6 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
-import json
 import os
 import platform
 import re
@@ -24,6 +23,7 @@ class AR:
         self.config = config
         self.cookie_validator = CookieValidator(config)
         self.cookie_uploader = CookieAuthUploader(config)
+        self.common = COMMON(config)
         self.tracker = 'AR'
         self.source_flag = 'AlphaRatio'
         trackers_cfg = cast(dict[str, Any], self.config.get('TRACKERS', {}))
@@ -39,9 +39,7 @@ class AR:
         self.user_agent = f'Upload Assistant/2.3 ({platform.system()} {platform.release()})'
         self.banned_groups = []
 
-    async def get_type(self, meta: dict[str, Any]) -> str:
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
+    def get_type(self, meta: dict[str, Any]) -> str:
         if (meta['type'] == 'DISC' or meta['type'] == 'REMUX') and meta['source'] == 'Blu-ray':
             return "14"
 
@@ -89,7 +87,7 @@ class AR:
         if meta['category'] == "MOVIE":
             if meta['sd']:
                 return '7'
-            elif any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
+            elif self.common.is_adult_content(meta):
                 return '13'
             else:
                 return {
@@ -211,34 +209,7 @@ class AR:
             await descfile.write(description)
         return None
 
-    async def get_language_tag(self, meta: dict[str, Any]) -> str:
-        lang_tag = ""
-        has_eng_audio = False
-        audio_lang = ""
-        if meta['is_disc'] != "BDMV":
-            try:
-                async with aiofiles.open(f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json", encoding='utf-8') as f:
-                    mi_content = await f.read()
-                    mi = json.loads(mi_content)
-                for track in mi['media']['track']:
-                    if track['@type'] == "Audio":
-                        if track.get('Language', 'None').startswith('en'):
-                            has_eng_audio = True
-                        if not has_eng_audio:
-                            audio_lang = mi['media']['track'][2].get('Language_String', "").upper()
-            except Exception as e:
-                console.print(f"[red]Error: {e}")
-        else:
-            for audio in meta['bdinfo']['audio']:
-                if audio['language'] == 'English':
-                    has_eng_audio = True
-                if not has_eng_audio:
-                    audio_lang = meta['bdinfo']['audio'][0]['language'].upper()
-        if audio_lang != "":
-            lang_tag = audio_lang
-        return lang_tag
-
-    async def get_basename(self, meta: dict[str, Any]) -> str:
+    def get_basename(self, meta: dict[str, Any]) -> str:
         filelist = cast(list[str], meta.get('filelist') or [])
         path = filelist[0] if filelist else str(meta.get('path') or "")
         return os.path.basename(path)
@@ -347,13 +318,12 @@ class AR:
 
         return None
 
-    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str, _torrent_bytes: Any = None) -> bool:
         """Upload torrent to AR using centralized cookie_upload."""
         # Prepare the data for the upload
-        common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
         await self.edit_desc(meta)
-        type_id = await self.get_type(meta)
+        type_id = self.get_type(meta)
 
         # Read the description
         desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
@@ -455,10 +425,12 @@ class AR:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
-            lambda: MediaInfo.parse(
-                video_path,
-                output="STRING",
-                full=False,
-                mediainfo_options={"inform": f"file://{template_path}"}
+            lambda: str(
+                MediaInfo.parse(
+                    video_path,
+                    output="STRING",
+                    full=False,
+                    mediainfo_options={"inform": f"file://{template_path}"}
+                )
             )
         )

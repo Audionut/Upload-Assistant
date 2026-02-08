@@ -32,9 +32,9 @@ class AZ(AZTrackerBase):
         if video_encode:
             video_encode = video_encode.strip().lower()
 
-        type = meta.get('type', '')
-        if type:
-            type = type.strip().lower()
+        release_type = meta.get('type', '')
+        if release_type:
+            release_type = release_type.strip().lower()
 
         source = meta.get('source', '')
         if source:
@@ -120,9 +120,7 @@ class AZ(AZTrackerBase):
                 "    VC-1/MPEG2 for Bluray only if that's what is on the disc"
             )
 
-        if is_disc:
-            pass
-        else:
+        if not is_disc:
             allowed_keywords = [
                 'AC3', 'Audio Layer III', 'MP3', 'Dolby Digital', 'Dolby TrueHD',
                 'DTS', 'DTS-HD', 'FLAC', 'AAC', 'Dolby'

@@ -23,16 +23,17 @@ class RF(UNIT3D):
         self.requests_url = f'{self.base_url}/api/requests/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = []
-        pass
 
-    async def get_additional_checks(self, meta: Meta) -> bool:
+    def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            if not meta['unattended']:
-                console.print('[bold red]Erotic not allowed at RF.')
+        if not self.common.prompt_adult_content(
+            meta,
+            tracker_name=self.tracker,
+            block_message='[bold red]Erotic not allowed at RF.',
+            prompt_text=None,
+            unattended_message="",
+        ):
             should_continue = False
         if meta.get('category') == "TV":
             if not meta['unattended']:
@@ -41,7 +42,7 @@ class RF(UNIT3D):
 
         return should_continue
 
-    async def get_name(self, meta: Meta) -> dict[str, str]:
+    def get_name(self, meta: Meta) -> dict[str, str]:
         rf_name = str(meta.get('name', ''))
         tag_value = str(meta.get('tag', ''))
         tag_lower = tag_value.lower()
@@ -54,7 +55,7 @@ class RF(UNIT3D):
 
         return {'name': rf_name}
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: Meta,
         type: Optional[str] = None,
@@ -77,7 +78,7 @@ class RF(UNIT3D):
         type_value = str(type) if type is not None else str(meta.get('type', ''))
         return {'type_id': type_id.get(type_value, '0')}
 
-    async def get_resolution_id(
+    def get_resolution_id(
         self,
         meta: Meta,
         resolution: Optional[str] = None,

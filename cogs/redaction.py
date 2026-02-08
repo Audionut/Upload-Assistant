@@ -139,7 +139,7 @@ class Redaction:
         tracker_status = meta.get('tracker_status')
         if isinstance(tracker_status, dict):
             typed_status = cast(dict[str, dict[str, Any]], tracker_status)
-            for tracker in list(typed_status):  # list() to avoid RuntimeError if deleting keys
+            for tracker in typed_status:  # list() to avoid RuntimeError if deleting keys
                 if 'status_message' in typed_status[tracker]:
                     del typed_status[tracker]['status_message']
 
@@ -150,8 +150,10 @@ class Redaction:
             del meta['matched_episode_ids']
 
         output_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json"
+        # Filter out bytes that can't be JSON serialized (cached preload data)
+        meta_serializable = {k: v for k, v in meta.items() if not isinstance(v, bytes)}
         async with aiofiles.open(output_path, 'w', encoding='utf-8') as f:
-            await f.write(json.dumps(meta, indent=4))
+            await f.write(json.dumps(meta_serializable, indent=4))
 
         return meta
 

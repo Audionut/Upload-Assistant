@@ -14,7 +14,6 @@ from cogs.redaction import Redaction
 from src.bbcode import BBCODE
 from src.console import console
 from src.get_desc import DescriptionBuilder
-from src.languages import languages_manager
 
 from .COMMON import COMMON
 
@@ -39,12 +38,13 @@ class SPD:
             'Authorization': api_key,
         }, timeout=30.0)
 
-    async def get_cat_id(self, meta: Meta) -> Optional[str]:
-        if not meta.get('language_checked', False):
-            await languages_manager.process_desc_language(meta, tracker=self.tracker)
+    def get_cat_id(self, meta: Meta) -> Optional[str]:
+        subtitle_value = meta.get('subtitle_languages')
+        subtitle_langs = cast(list[Any], subtitle_value) if isinstance(subtitle_value, list) else []
 
-        subtitle_langs = cast(list[Any], meta.get('subtitle_languages', []))
-        audio_langs = cast(list[Any], meta.get('audio_languages', []))
+        audio_value = meta.get('audio_languages')
+        audio_langs = cast(list[Any], audio_value) if isinstance(audio_value, list) else []
+
         langs = [str(lang).lower() for lang in subtitle_langs + audio_langs]
         romanian = 'romanian' in langs
 
@@ -107,7 +107,7 @@ class SPD:
                 media_info = await mi_file.read()
             return media_info, None
 
-    async def get_screenshots(self, meta: Meta) -> list[str]:
+    def get_screenshots(self, meta: Meta) -> list[str]:
         images = cast(list[dict[str, Any]], meta.get('menu_images', [])) + cast(
             list[dict[str, Any]], meta.get('image_list', [])
         )
@@ -163,12 +163,8 @@ class SPD:
             return spd_channel
 
         # if user enters id as a string number
-        if isinstance(spd_channel, str):
-            if spd_channel.isdigit():
-                return int(spd_channel)
-            # if user enter tag then it will use API to search
-            else:
-                pass
+        if isinstance(spd_channel, str) and spd_channel.isdigit():
+            return int(spd_channel)
 
         params: dict[str, str] = {
             'search': str(spd_channel)
@@ -191,9 +187,7 @@ class SPD:
                             return int(channel_id)
                     else:
                         console.print(f'[{self.tracker}]: Could not find the channel ID. Please check if you entered it correctly.')
-
-                else:
-                    console.print(f"[bold red]HTTP request failed. Status: {response.status_code}")
+                console.print(f"[{self.tracker}]: Unable to find a matching channel for '{spd_channel}'.")
 
         except Exception as e:
             console.print(f"[bold red]Unexpected error: {e}")
@@ -203,11 +197,11 @@ class SPD:
         builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts: list[str] = []
 
-        user_description = await builder.get_user_description(meta)
-        title, episode_image, episode_overview = await builder.get_tv_info(meta, resize=True)
+        user_description = builder.get_user_description(meta)
+        title, episode_image, episode_overview = builder.get_tv_info(meta, resize=True)
         if user_description or episode_overview:  # Avoid unnecessary descriptions
             # Custom Header
-            desc_parts.append(await builder.get_custom_header())
+            desc_parts.append(builder.get_custom_header())
 
             # Logo
             logo_resize_url = str(meta.get('tmdb_logo', ''))
@@ -227,7 +221,7 @@ class SPD:
             desc_parts.append(user_description)
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        desc_parts.append(builder.get_tonemapped_header(meta))
 
         # Signature
         desc_parts.append(
@@ -246,7 +240,7 @@ class SPD:
 
         return description
 
-    async def edit_name(self, meta: Meta) -> str:
+    def edit_name(self, meta: Meta) -> str:
         torrent_name = str(meta.get('name', ''))
 
         name = torrent_name.replace(':', ' -')
@@ -262,7 +256,12 @@ class SPD:
             base64_encoded_data = base64.b64encode(binary_file_data)
             return base64_encoded_data.decode('utf-8')
 
-    async def get_nfo(self, meta: Meta) -> Optional[str]:
+    async def get_nfo(self, meta: Meta, nfo_bytes: Optional[bytes] = None) -> Optional[str]:
+        if nfo_bytes is not None:
+            return base64.b64encode(nfo_bytes).decode("utf-8")
+        cached_bytes = meta.get("cached_nfo_bytes")
+        if cached_bytes:
+            return base64.b64encode(bytes(cached_bytes)).decode("utf-8")
         nfo_dir = os.path.join(meta['base_dir'], "tmp", meta['uuid'])
         nfo_files = glob.glob(os.path.join(nfo_dir, "*.nfo"))
 
@@ -272,7 +271,12 @@ class SPD:
 
         return None
 
-    async def fetch_data(self, meta: Meta) -> dict[str, Any]:
+    async def fetch_data(
+        self,
+        meta: Meta,
+        torrent_bytes: Optional[bytes] = None,
+        nfo_bytes: Optional[bytes] = None,
+    ) -> dict[str, Any]:
         media_info, bd_info = await self.get_file_info(meta)
 
         data: dict[str, Any] = {
@@ -280,17 +284,20 @@ class SPD:
             'coverPhotoUrl': str(meta.get('backdrop', '')),
             'description': str(meta.get('genres', '')),
             'media_info': media_info,
-            'name': await self.edit_name(meta),
-            'nfo': await self.get_nfo(meta),
+            'name': self.edit_name(meta),
+            'nfo': await self.get_nfo(meta, nfo_bytes=nfo_bytes),
             'plot': str(meta.get('overview_meta', '') or meta.get('overview', '')),
             'poster': str(meta.get('poster', '')),
             'technicalDetails': await self.edit_desc(meta),
-            'screenshots': await self.get_screenshots(meta),
-            'type': await self.get_cat_id(meta),
+            'screenshots': self.get_screenshots(meta),
+            'type': self.get_cat_id(meta),
             'url': str(cast(dict[str, Any], meta.get('imdb_info', {})).get('imdb_url', '')),
         }
 
-        data['file'] = await self.encode_to_base64(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
+        if torrent_bytes is None:
+            data['file'] = await self.encode_to_base64(f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
+        else:
+            data['file'] = base64.b64encode(torrent_bytes).decode('utf-8')
         if meta.get('debug') is True:
             data['file'] = str(data['file'])[:50] + '...[DEBUG MODE]'
             if data.get('nfo'):
@@ -298,8 +305,9 @@ class SPD:
 
         return data
 
-    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
-        data = await self.fetch_data(meta)
+    async def upload(self, meta: Meta, _disctype: str, torrent_bytes: Optional[bytes] = None) -> Optional[bool]:
+        nfo_bytes = cast(Optional[bytes], meta.get("cached_nfo_bytes"))
+        data = await self.fetch_data(meta, torrent_bytes, nfo_bytes=nfo_bytes)
         tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
         tracker_status.setdefault(self.tracker, {})
 
@@ -327,7 +335,7 @@ class SPD:
                             tracker_status[self.tracker]['torrent_id'] = torrent_id
 
                         download_url = f"{self.url}/api/torrent/{torrent_id}/download"
-                        await self.common.download_tracker_torrent(
+                        await self.common.download_tracker_torrent_process(
                             meta,
                             tracker=self.tracker,
                             headers={'Authorization': str(self.config['TRACKERS'][self.tracker]['api_key'])},
@@ -369,5 +377,11 @@ class SPD:
             console.print("[cyan]SPD Request Data:")
             console.print(Redaction.redact_private_info(data))
             tracker_status[self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await self.common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=torrent_bytes,
+            )
             return True  # Debug mode - simulated success

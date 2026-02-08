@@ -36,9 +36,8 @@ class NBL:
                               'SpaceFish', 'SPASM', 'SSA', 'Telly', 'Tenrai-Sensei', 'TM', 'Trix', 'URANiME', 'VipapkStudios', 'ViSiON', 'Wardevil', 'xRed',
                               'XS', 'YakuboEncodes', 'YuiSubs', 'ZKBL', 'ZmN', 'ZMNT']
 
-        pass
 
-    async def get_cat_id(self, meta: Meta) -> int:
+    def get_cat_id(self, meta: Meta) -> int:
         cat_id = 3 if meta.get('tv_pack', 0) == 1 else 1
         return cat_id
 
@@ -46,9 +45,9 @@ class NBL:
         # Leave this in so manual works
         return
 
-    async def upload(self, meta: Meta, _disctype: str) -> bool:
+    async def upload(self, meta: Meta, _disctype: str, _torrent_bytes: Any = None) -> bool:
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
 
         if meta['bdinfo'] is not None:
             async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8') as f:
@@ -66,7 +65,7 @@ class NBL:
             'api_key': self.api_key,
             'tvmazeid': int(meta.get('tvmaze_id', 0)),
             'mediainfo': mi_dump,
-            'category': await self.get_cat_id(meta),
+            'category': self.get_cat_id(meta),
             'ignoredupes': 'on'
         }
 
@@ -93,7 +92,13 @@ class NBL:
                 console.print("[cyan]NBL Request Data:")
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-                await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+                await common.create_torrent_for_upload(
+                    meta,
+                    f"{self.tracker}" + "_DEBUG",
+                    f"{self.tracker}" + "_DEBUG",
+                    announce_url="https://fake.tracker",
+                    torrent_bytes=_torrent_bytes,
+                )
                 return True  # Debug mode - simulated success
         except Exception as e:
             meta['tracker_status'][self.tracker]['status_message'] = f"data error: Upload failed: {e}"
@@ -104,9 +109,7 @@ class NBL:
             if meta['tvmaze_id'] != 0:
                 if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     console.print("[red]Only TV or TV Movies are allowed at NBL, this has a tvmaze ID[/red]")
-                    if cli_ui.ask_yes_no("Do you want to upload it?", default=False):
-                        pass
-                    else:
+                    if not cli_ui.ask_yes_no("Do you want to upload it?", default=False):
                         meta['skipping'] = "NBL"
                         return []
                 else:

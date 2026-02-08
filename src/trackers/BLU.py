@@ -30,9 +30,8 @@ class BLU(UNIT3D):
             'SicFoI', 'SPASM', 'SPDVD', 'STUTTERSHIT', 'Telly', 'TheFarm', 'TM', 'TRiToN', 'UPiNSMOKE', 'URANiME', 'WAF',
             'WKS', 'x0r', 'xRed', 'XS', 'YIFY', 'ZKBL', 'ZmN', 'ZMNT',
         ]
-        pass
 
-    async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
+    def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         should_continue = True
         if (
             meta['type'] in ['ENCODE', 'REMUX']
@@ -50,9 +49,7 @@ class BLU(UNIT3D):
         if meta['type'] not in ['WEBDL'] and not meta['is_disc'] and meta.get('tag', "") in ['CMRG', 'EVO', 'TERMiNAL', 'ViSION']:
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content[/bold red]')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
+                if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                     return False
             else:
                 return False
@@ -63,7 +60,7 @@ class BLU(UNIT3D):
 
         return should_continue
 
-    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
+    def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         blu_name = meta['name']
         if meta['category'] == 'TV' and meta.get('episode_title', "") != "":
             blu_name = blu_name.replace(f"{meta['episode_title']} {meta['resolution']}", f"{meta['resolution']}", 1)
@@ -92,14 +89,14 @@ class BLU(UNIT3D):
 
         return {'name': blu_name}
 
-    async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
+    def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         data = {
-            'modq': await self.get_flag(meta, 'modq'),
+            'modq': self.get_flag(meta, 'modq'),
         }
 
         return data
 
-    async def get_category_id(
+    def get_category_id(
         self,
         meta: dict[str, Any],
         category: Optional[str] = None,
@@ -136,7 +133,7 @@ class BLU(UNIT3D):
             resolved_id = category_id.get(meta_category, '0')
             return {'category_id': resolved_id}
 
-    async def get_type_id(
+    def get_type_id(
         self,
         meta: dict[str, Any],
         type: Optional[str] = None,
@@ -163,7 +160,7 @@ class BLU(UNIT3D):
             resolved_id = type_id.get(meta_type, '0')
             return {'type_id': resolved_id}
 
-    async def get_resolution_id(
+    def get_resolution_id(
         self,
         meta: dict[str, Any],
         resolution: Optional[str] = None,

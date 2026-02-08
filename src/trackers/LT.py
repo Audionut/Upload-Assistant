@@ -21,9 +21,8 @@ class LT(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = ["EVO"]
-        pass
 
-    async def get_category_id(
+    def get_category_id(
         self,
         meta: Meta,
         category: Optional[str] = None,
@@ -61,7 +60,7 @@ class LT(UNIT3D):
 
         return {'category_id': category_id}
 
-    async def get_name(self, meta: Meta) -> dict[str, str]:
+    def get_name(self, meta: Meta) -> dict[str, str]:
         aka_value = str(meta.get('aka', ''))
         lt_name = (
             str(meta.get('name', ''))
@@ -136,20 +135,20 @@ class LT(UNIT3D):
 
         return {"name": re.sub(r"\s{2,}", " ", lt_name)}
 
-    async def get_additional_checks(self, meta: Meta) -> bool:
+    def get_additional_checks(self, meta: Meta) -> bool:
         spanish_languages = ["spanish", "spanish (latin america)"]
-        return await self.common.check_language_requirements(meta, self.tracker, languages_to_check=spanish_languages, check_audio=True, check_subtitle=True)
+        return self.common.check_language_requirements(meta, self.tracker, languages_to_check=spanish_languages, check_audio=True, check_subtitle=True)
 
-    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+    def get_additional_data(self, meta: Meta) -> dict[str, Any]:
         data: dict[str, Any] = {
-            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
+            'mod_queue_opt_in': self.get_flag(meta, 'modq'),
         }
 
         return data
 
-    async def get_distributor_ids(self, _meta: Meta) -> dict[str, str]:
+    def get_distributor_ids(self, _meta: Meta) -> dict[str, str]:
         return {}
 
-    async def get_region_id(self, meta: Meta) -> dict[str, str]:
+    def get_region_id(self, meta: Meta) -> dict[str, str]:
         _ = meta
         return {}

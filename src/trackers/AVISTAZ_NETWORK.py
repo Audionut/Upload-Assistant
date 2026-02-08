@@ -1,7 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
 import importlib
-import json
 import os
 import platform
 import re
@@ -20,7 +19,6 @@ from cogs.redaction import Redaction
 from src.console import console
 from src.cookie_auth import CookieValidator
 from src.get_desc import DescriptionBuilder
-from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 
 Meta = dict[str, Any]
@@ -381,75 +379,28 @@ class AZTrackerBase:
 
         return file_info
 
-    async def get_lang(self, meta: Meta) -> dict[str, list[str]]:
+    def get_lang(self, meta: Meta) -> dict[str, list[str]]:
         self.language_map()
         audio_ids: set[str] = set()
         subtitle_ids: set[str] = set()
 
-        if meta.get('is_disc', False):
-            if not meta.get('language_checked', False):
-                await languages_manager.process_desc_language(meta, tracker=self.tracker)
+        subtitle_languages_value = meta.get('subtitle_languages')
+        found_subs_strings = cast(list[Any], subtitle_languages_value) if isinstance(subtitle_languages_value, list) else []
+        for lang_str in found_subs_strings:
+            if not isinstance(lang_str, str):
+                continue
+            target_id = self.lang_map.get(lang_str.lower())
+            if target_id:
+                subtitle_ids.add(target_id)
 
-            found_subs_strings = meta.get('subtitle_languages', [])
-            for lang_str in found_subs_strings:
-                target_id = self.lang_map.get(lang_str.lower())
-                if target_id:
-                    subtitle_ids.add(target_id)
-
-            found_audio_strings = meta.get('audio_languages', [])
-            for lang_str in found_audio_strings:
-                target_id = self.lang_map.get(lang_str.lower())
-                if target_id:
-                    audio_ids.add(target_id)
-        else:
-            try:
-                media_info_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MediaInfo.json"
-                async with aiofiles.open(media_info_path, encoding='utf-8') as f:
-                    data = json.loads(await f.read())
-
-                tracks = data.get('media', {}).get('track', [])
-
-                missing_audio_languages: list[dict[str, Any]] = []
-
-                for track in tracks:
-                    track_type = track.get('@type')
-                    language_code = track.get('Language')
-
-                    if not language_code:
-                        if track_type == 'Audio':
-                            missing_audio_languages.append(track)
-                        continue
-
-                    target_id = self.lang_map.get(language_code.lower())
-
-                    if not target_id and '-' in language_code:
-                        primary_code = language_code.split('-')[0]
-                        target_id = self.lang_map.get(primary_code.lower())
-
-                    if target_id:
-                        if track_type == 'Audio':
-                            audio_ids.add(target_id)
-                        elif track_type == 'Text':
-                            subtitle_ids.add(target_id)
-                    else:
-                        if track_type == 'Audio':
-                            missing_audio_languages.append(track)
-
-                if missing_audio_languages:
-                    console.print('No audio language/s found.')
-                    console.print('You must enter (comma-separated) languages for all audio tracks, eg: English, Spanish: ')
-                    user_input_raw = cli_ui.ask_string('[bold yellow]Enter languages: [/bold yellow]')
-                    user_input = (user_input_raw or "").strip()
-                    langs = [lang.strip() for lang in user_input.split(',')]
-                    for lang in langs:
-                        target_id = self.lang_map.get(lang.lower())
-                        if target_id:
-                            audio_ids.add(target_id)
-
-            except FileNotFoundError:
-                console.print(f'Warning: MediaInfo.json not found for uuid {meta.get("uuid")}. No languages will be processed.', markup=False)
-            except (json.JSONDecodeError, KeyError, TypeError) as e:
-                console.print(f'Error processing MediaInfo.json for uuid {meta.get("uuid")}: {e}', markup=False)
+        audio_languages_value = meta.get('audio_languages')
+        found_audio_strings = cast(list[Any], audio_languages_value) if isinstance(audio_languages_value, list) else []
+        for lang_str in found_audio_strings:
+            if not isinstance(lang_str, str):
+                continue
+            target_id = self.lang_map.get(lang_str.lower())
+            if target_id:
+                audio_ids.add(target_id)
 
         final_subtitle_ids = sorted(subtitle_ids)
         final_audio_ids = sorted(audio_ids)
@@ -682,16 +633,16 @@ class AZTrackerBase:
         desc_parts: list[str] = []
 
         # TV stuff
-        title, _, episode_overview = await builder.get_tv_info(meta)
+        title, _, episode_overview = builder.get_tv_info(meta)
         if episode_overview:
             desc_parts.append(f'[b]Episode:[/b] {title}')
             desc_parts.append(f'[b]Overview:[/b] {episode_overview}')
 
         # User description
-        desc_parts.append(await builder.get_user_description(meta))
+        desc_parts.append(builder.get_user_description(meta))
 
         # Tonemapped Header
-        desc_parts.append(await builder.get_tonemapped_header(meta))
+        desc_parts.append(builder.get_tonemapped_header(meta))
 
         description = '\n\n'.join(part for part in desc_parts if part.strip())
 
@@ -707,7 +658,7 @@ class AZTrackerBase:
         if amount > 0:
             console.print(f'{self.tracker}: Deleted from description: {amount} NFO section.')
 
-        processed_desc, amount = re.subn(r'http[s]?://\S+|www\.\S+', '', processed_desc)
+        processed_desc, amount = re.subn(r'https?://\S+|www\.\S+', '', processed_desc)
         if amount > 0:
             console.print(f'{self.tracker}: Deleted from description: {amount} link(s).')
 
@@ -729,7 +680,7 @@ class AZTrackerBase:
 
         return final_html_desc
 
-    async def create_task_id(self, meta: Meta) -> dict[str, Any]:
+    async def create_task_id(self, meta: Meta, _torrent_bytes: Any = None) -> dict[str, Any]:
         await self.get_media_code(meta)
         data: dict[str, Any] = {
             "_token": self.az_class.secret_token,
@@ -748,7 +699,13 @@ class AZTrackerBase:
 
         if not meta.get('debug', False):
             try:
-                await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, announce_url=default_announce)
+                await self.common.create_torrent_for_upload(
+                    meta,
+                    self.tracker,
+                    self.source_flag,
+                    announce_url=default_announce,
+                    torrent_bytes=_torrent_bytes,
+                )
                 upload_url_step1 = f"{self.base_url}/upload/{meta['category'].lower()}"
                 torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
 
@@ -942,12 +899,12 @@ class AZTrackerBase:
 
         return available_rip_types.get(html_label, "0")
 
-    async def fetch_data(self, meta: Meta) -> dict[str, Any]:
+    async def fetch_data(self, meta: Meta, _torrent_bytes: Any = None) -> dict[str, Any]:
         cookie_jar = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         if cookie_jar:
             self.session.cookies = cookie_jar
-        task_info = await self.create_task_id(meta)
-        lang_info = await self.get_lang(meta) or {}
+        task_info = await self.create_task_id(meta, _torrent_bytes)
+        lang_info = self.get_lang(meta) or {}
 
         data: dict[str, Any] = {
             "_token": self.az_class.secret_token,
@@ -1017,8 +974,8 @@ class AZTrackerBase:
 
         return False
 
-    async def upload(self, meta: Meta, _) -> bool:
-        data = await self.fetch_data(meta)
+    async def upload(self, meta: Meta, _, _torrent_bytes: Any = None) -> bool:
+        data = await self.fetch_data(meta, _torrent_bytes)
         status_message = ''
 
         issue = self.check_data(meta, data)
@@ -1071,7 +1028,13 @@ class AZTrackerBase:
                 console.print(f"[cyan]{self.tracker} Request Data:")
                 console.print(Redaction.redact_private_info(data))
                 meta['tracker_status'][self.tracker]['status_message'] = 'Debug mode enabled, not uploading.'
-                await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+                await self.common.create_torrent_for_upload(
+                    meta,
+                    f"{self.tracker}" + "_DEBUG",
+                    f"{self.tracker}" + "_DEBUG",
+                    announce_url="https://fake.tracker",
+                    torrent_bytes=_torrent_bytes,
+                )
                 return True
 
     def language_map(self) -> None:

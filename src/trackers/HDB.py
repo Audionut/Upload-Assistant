@@ -5,7 +5,7 @@ import json
 import os
 import re
 from typing import Any, Optional, cast
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 
 import aiofiles
 import httpx
@@ -15,10 +15,63 @@ from src.bbcode import BBCODE
 from src.console import console
 from src.exceptions import *  # noqa F403
 from src.torrentcreate import TorrentCreator
-from src.trackers.COMMON import COMMON
+from src.trackers.COMMON import COMMON, get_download_process_executor
 
 Meta = dict[str, Any]
 Config = dict[str, Any]
+
+
+def _download_hdb_torrent_worker(username: str, passkey: str, torrent_id: str, torrent_path: str) -> None:
+    api_url = "https://hdbits.org/api/torrents"
+    data = {
+        "username": username,
+        "passkey": passkey,
+        "id": torrent_id,
+    }
+
+    os.makedirs(os.path.dirname(torrent_path), exist_ok=True)
+
+    with httpx.Client(timeout=30.0) as client:
+        response = client.post(url=api_url, json=data)
+        response.raise_for_status()
+        try:
+            response_json = response.json()
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"Failed to parse JSON response from {api_url}. Response content: {response.text}. Data: {data}. Error: {e}"
+            ) from e
+
+        data_list = response_json.get("data")
+        if not isinstance(data_list, list) or not data_list:
+            raise ValueError(
+                f"Invalid JSON response from {api_url}: 'data' key missing, not a list, or empty. Response: {response_json}. Data: {data}"
+            )
+
+        try:
+            filename = data_list[0]["filename"]
+        except (KeyError, IndexError) as e:
+            raise KeyError(
+                f"Failed to access filename in response from {api_url}. Response: {response_json}. Data: {data}. Error: {e}"
+            ) from e
+
+        download_url = f"https://hdbits.org/download.php/{quote(filename)}"
+        params = {"passkey": passkey, "id": torrent_id}
+        download_response = client.get(url=download_url, params=params)
+        download_response.raise_for_status()
+
+        content_type = download_response.headers.get("content-type", "").lower()
+        if "bittorrent" not in content_type and "octet-stream" not in content_type:
+            raise ValueError(
+                f"Unexpected content-type for torrent download: {content_type}. URL: {download_url}. Params: {params}"
+            )
+
+        if not download_response.content.startswith(b"d"):
+            raise ValueError(
+                f"Downloaded content does not appear to be a valid torrent file (does not start with 'd'). URL: {download_url}. Params: {params}"
+            )
+
+        with open(torrent_path, "wb") as tor:
+            tor.write(download_response.content)
 
 
 class HDB:
@@ -35,7 +88,7 @@ class HDB:
         self.signature: Optional[str] = None
         self.banned_groups: list[str] = [""]
 
-    async def get_type_category_id(self, meta: Meta) -> int:
+    def get_type_category_id(self, meta: Meta) -> int:
         cat_id = 0
         # 6 = Audio Track
         # 8 = Misc/Demo
@@ -61,7 +114,7 @@ class HDB:
                 cat_id = 4
         return cat_id
 
-    async def get_type_codec_id(self, meta: Meta) -> int:
+    def get_type_codec_id(self, meta: Meta) -> int:
         codecmap = {
             "AVC": 1, "H.264": 1,
             "HEVC": 5, "H.265": 5,
@@ -74,7 +127,7 @@ class HDB:
         codec_id = codecmap.get(searchcodec, 0)
         return codec_id
 
-    async def get_type_medium_id(self, meta: Meta) -> int:
+    def get_type_medium_id(self, meta: Meta) -> int:
         medium_id = 0
         # 1 = Blu-ray / HD DVD
         if meta.get('is_disc', '') in ("BDMV", "HD DVD"):
@@ -95,7 +148,7 @@ class HDB:
             medium_id = 6
         return medium_id
 
-    async def get_res_id(self, resolution: str) -> str:
+    def get_res_id(self, resolution: str) -> str:
         resolution_id = {
             '8640p': '10',
             '4320p': '1',
@@ -111,7 +164,7 @@ class HDB:
         }.get(resolution, '10')
         return resolution_id
 
-    async def get_tags(self, meta: Meta) -> list[int]:
+    def get_tags(self, meta: Meta) -> list[int]:
         tags: list[int] = []
 
         # Web Services:
@@ -190,7 +243,7 @@ class HDB:
 
         return tags
 
-    async def edit_name(self, meta: Meta) -> str:
+    def edit_name(self, meta: Meta) -> str:
         hdb_name = str(meta.get('name', ''))
         audio = str(meta.get('audio', ''))
         hdb_name = hdb_name.replace('H.265', 'HEVC')
@@ -222,14 +275,14 @@ class HDB:
 
         return hdb_name
 
-    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
+    async def upload(self, meta: Meta, _disctype: str, _torrent_bytes: Any = None) -> Optional[bool]:
         common = COMMON(config=self.config)
         await self.edit_desc(meta)
-        hdb_name = await self.edit_name(meta)
-        cat_id = await self.get_type_category_id(meta)
-        codec_id = await self.get_type_codec_id(meta)
-        medium_id = await self.get_type_medium_id(meta)
-        hdb_tags = await self.get_tags(meta)
+        hdb_name = self.edit_name(meta)
+        cat_id = self.get_type_category_id(meta)
+        codec_id = self.get_type_codec_id(meta)
+        medium_id = self.get_type_medium_id(meta)
+        hdb_tags = self.get_tags(meta)
 
         for each in (cat_id, codec_id, medium_id):
             if each == 0:
@@ -261,9 +314,15 @@ class HDB:
                 await asyncio.sleep(cooldown)  # Small cooldown before rehashing
 
             await TorrentCreator.create_torrent(meta, str(meta['path']), torrent_create, tracker_url=tracker_url, piece_size=piece_size)
-            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=torrent_create)
+            await common.create_torrent_for_upload(
+                meta,
+                self.tracker,
+                self.source_flag,
+                torrent_filename=torrent_create,
+                torrent_bytes=_torrent_bytes,
+            )
         else:
-            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
 
         # Proceed with the upload process
         async with aiofiles.open(torrent_file_path, 'rb') as torrent_file:
@@ -316,7 +375,13 @@ class HDB:
             console.print(url)
             console.print(data)
             meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return True  # Debug mode - simulated success
         else:
             cookiefile = f"{meta['base_dir']}/data/cookies/HDB.txt"
@@ -328,9 +393,13 @@ class HDB:
             match = re.match(r".*?hdbits\.org/details\.php\?id=(\d+)&uploaded=(\d+)", str(up.url))
             if match:
                 meta['tracker_status'][self.tracker]['status_message'] = match.group(0)
-                if id_match := re.search(r"(id=)(\d+)", urlparse(str(up.url)).query):
-                    id = id_match.group(2)
-                    await self.download_new_torrent(id, torrent_file_path)
+                torrent_id = None
+                try:
+                    torrent_id = up.url.params.get("id")
+                except Exception:
+                    torrent_id = None
+                if torrent_id:
+                    await self.download_new_torrent(str(torrent_id), torrent_file_path)
                 return True
             else:
                 console.print(data)
@@ -345,9 +414,9 @@ class HDB:
         data: dict[str, Any] = {
             'username': self.username,
             'passkey': self.passkey,
-            'category': await self.get_type_category_id(meta),
-            'codec': await self.get_type_codec_id(meta),
-            'medium': await self.get_type_medium_id(meta)
+            'category': self.get_type_category_id(meta),
+            'codec': self.get_type_codec_id(meta),
+            'medium': self.get_type_medium_id(meta)
         }
 
         if int(meta.get('imdb_id') or 0) != 0:
@@ -459,56 +528,15 @@ class HDB:
             return False
 
     async def download_new_torrent(self, id: str, torrent_path: str) -> None:
-        # Get HDB .torrent filename
-        api_url = "https://hdbits.org/api/torrents"
-        data = {
-            'username': self.username,
-            'passkey': self.passkey,
-            'id': id
-        }
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            r = await client.post(url=api_url, json=data)
-        r.raise_for_status()
-        try:
-            r_json = r.json()
-        except json.JSONDecodeError as e:
-            raise Exception(
-                f"Failed to parse JSON response from {api_url}. Response content: {r.text}. Data: {data}. Error: {e}"
-            ) from e
-
-        if 'data' not in r_json or not isinstance(r_json['data'], list) or len(r_json['data']) == 0:
-            raise Exception(f"Invalid JSON response from {api_url}: 'data' key missing, not a list, or empty. Response: {r_json}. Data: {data}")
-
-        try:
-            filename = r_json['data'][0]['filename']
-        except (KeyError, IndexError) as e:
-            raise Exception(
-                f"Failed to access filename in response from {api_url}. Response: {r_json}. Data: {data}. Error: {e}"
-            ) from e
-
-        # Download new .torrent
-        download_url = f"https://hdbits.org/download.php/{quote(filename)}"
-        params = {
-            'passkey': self.passkey,
-            'id': id
-        }
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            r = await client.get(url=download_url, params=params)
-        r.raise_for_status()
-
-        # Validate content-type
-        content_type = r.headers.get('content-type', '').lower()
-        if 'bittorrent' not in content_type and 'octet-stream' not in content_type:
-            raise Exception(f"Unexpected content-type for torrent download: {content_type}. URL: {download_url}. Params: {params}")
-
-        # Basic validation: check if content looks like bencoded data (starts with 'd')
-        if not r.content.startswith(b'd'):
-            raise Exception(f"Downloaded content does not appear to be a valid torrent file (does not start with 'd'). URL: {download_url}. Params: {params}")
-
-        async with aiofiles.open(torrent_path, "wb") as tor:
-            await tor.write(r.content)
-        return
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            get_download_process_executor(),
+            _download_hdb_torrent_worker,
+            self.username,
+            self.passkey,
+            id,
+            torrent_path,
+        )
 
     async def edit_desc(self, meta: Meta) -> None:
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/DESCRIPTION.txt", encoding='utf-8') as base_file:
@@ -617,8 +645,6 @@ class HDB:
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as descfile:
             await descfile.write("".join(desc_parts))
-
-        return
 
     async def hdbimg_upload(self, meta: Meta) -> Optional[str]:
         bbcode = ""

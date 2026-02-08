@@ -41,9 +41,9 @@ class PHD(AZTrackerBase):
         if video_encode:
             video_encode = video_encode.strip().lower()
 
-        type = str(meta.get('type', ''))
-        if type:
-            type = type.strip().lower()
+        release_type = str(meta.get('type', ''))
+        if release_type:
+            release_type = release_type.strip().lower()
 
         source = str(meta.get('source', ''))
         if source:
@@ -113,11 +113,7 @@ class PHD(AZTrackerBase):
         origin_countries_codes_value = meta.get('origin_country', [])
         origin_countries_codes = cast(list[str], origin_countries_codes_value) if isinstance(origin_countries_codes_value, list) else []
 
-        if any(code in phd_allowed_countries for code in origin_countries_codes):
-            pass
-
-        # CinemaZ
-        elif any(code in cinemaz_countries for code in origin_countries_codes):
+        if any(code in cinemaz_countries for code in origin_countries_codes):
             warnings.append('Upload European (EXCLUDING United Kingdom and Ireland), South American and African content to our sister site CinemaZ.to instead.')
 
         # AvistaZ
@@ -153,23 +149,23 @@ class PHD(AZTrackerBase):
 
         # Video codec
         # 1
-        if type == 'remux' and video_codec not in ('mpeg-2', 'vc-1', 'h.264', 'h.265', 'avc'):
+        if release_type == 'remux' and video_codec not in ('mpeg-2', 'vc-1', 'h.264', 'h.265', 'avc'):
             warnings.append('Allowed Video Codecs for BluRay (Untouched + REMUX): MPEG-2, VC-1, H.264, H.265')
 
         # 2
-        if type == 'encode' and source == 'bluray' and video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
+        if release_type == 'encode' and source == 'bluray' and video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
             warnings.append('Allowed Video Codecs for BluRay (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)')
 
         # 3
-        if type in ('webdl', 'web-dl') and source == 'web' and video_encode not in ('h.264', 'h.265', 'vp9'):
+        if release_type in ('webdl', 'web-dl') and source == 'web' and video_encode not in ('h.264', 'h.265', 'vp9'):
             warnings.append('Allowed Video Codecs for WEB (Untouched): H.264, H.265, VP9')
 
         # 4
-        if type == 'encode' and source == 'web' and video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
+        if release_type == 'encode' and source == 'web' and video_encode not in ('h.264', 'h.265', 'x264', 'x265'):
             warnings.append('Allowed Video Codecs for WEB (Encoded): H.264, H.265 (x264 and x265 respectively are the only permitted encoders)')
 
         # 5
-        if type == 'encode' and video_encode == 'x265' and meta.get('bit_depth', '') != '10':
+        if release_type == 'encode' and video_encode == 'x265' and meta.get('bit_depth', '') != '10':
             warnings.append('Allowed Video Codecs for x265 encodes must be 10-bit')
 
         # 6
@@ -187,9 +183,7 @@ class PHD(AZTrackerBase):
         media_tracks = cast(list[dict[str, Any]], media.get('track', []))
 
         # Audio codec
-        if is_bd_disc:
-            pass
-        else:
+        if not is_bd_disc:
             # 1
             allowed_keywords = ['AC3', 'Dolby Digital', 'Dolby TrueHD', 'DTS', 'DTS-HD', 'FLAC', 'AAC', 'Dolby']
 
@@ -274,7 +268,7 @@ class PHD(AZTrackerBase):
 
         WEB_SOURCES = ('hdtv', 'web', 'hdrip')
 
-        if type == 'encode':
+        if release_type == 'encode':
             bitrate = 0
             for track in media_tracks:
                 if track.get('@type') == 'Video':
@@ -311,7 +305,7 @@ class PHD(AZTrackerBase):
             warnings.append(rule)
 
         # Hybrid
-        if type in ('remux', 'encode') and 'hybrid' in str(meta.get('name', '')).lower():
+        if release_type in ('remux', 'encode') and 'hybrid' in str(meta.get('name', '')).lower():
             warnings.append(
                 'Hybrid Remuxes and Encodes are subject to the following condition:\n\n'
                 'Hybrid user releases are permitted, but are treated similarly to regular '
@@ -320,7 +314,7 @@ class PHD(AZTrackerBase):
             )
 
         # Log
-        if type == 'remux':
+        if release_type == 'remux':
             warnings.append(
                 'Remuxes must have a demux/eac3to log under spoilers in description.\n'
                 'Do you have these logs and will you add them to the description after upload?'

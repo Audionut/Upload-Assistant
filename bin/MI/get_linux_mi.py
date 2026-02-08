@@ -154,8 +154,8 @@ def download_dvd_mediainfo(base_dir: str, debug: bool = False) -> Optional[str]:
             os.chmod(cli_file, 0o700)  # rwx------ (owner only)
 
     if not cli_file.exists():
-        raise Exception(f"Failed to extract CLI binary to {cli_file}")
+        raise FileNotFoundError(f"Failed to extract CLI binary to {cli_file}")
     if not lib_file.exists():
-        raise Exception(f"Failed to extract library to {lib_file}")
+        raise FileNotFoundError(f"Failed to extract library to {lib_file}")
 
     return str(cli_file)

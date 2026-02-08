@@ -21,9 +21,8 @@ class FNP(UNIT3D):
             "4K4U", "BiTOR", "d3g", "FGT", "FRDS", "FTUApps", "GalaxyRG", "LAMA",
             "MeGusta", "NeoNoir", "PSA", "RARBG", "YAWNiX", "YTS", "YIFY", "x0r"
         ]
-        pass
 
-    async def get_resolution_id(
+    def get_resolution_id(
         self,
         meta: dict[str, Any],
         resolution: Optional[str] = None,
@@ -52,9 +51,9 @@ class FNP(UNIT3D):
             resolved_id = resolution_id.get(meta_resolution, '10')
             return {'resolution_id': resolved_id}
 
-    async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
+    def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         data = {
-            'modq': await self.get_flag(meta, 'modq'),
+            'modq': self.get_flag(meta, 'modq'),
         }
 
         return data

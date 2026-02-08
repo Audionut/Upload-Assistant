@@ -88,13 +88,22 @@ Meta = dict[str, Any]
 
 
 class TRACKER_SETUP:
-    def __init__(self, config: dict[str, Any]):
+    def __init__(self, config: dict[str, Any], http_client: Any = None):
         self.config: dict[str, Any] = config
+        self.http_client: Any = http_client
 
-    def _create_tracker_instance(self, tracker: str) -> Optional[Any]:
+    def _create_tracker_instance(self, tracker: str, http_client: Any = None) -> Optional[Any]:
+        resolved_http_client = self.http_client if http_client is None else http_client
         tracker_class = tracker_class_map.get(tracker.upper())
         if tracker_class is None:
             return None
+        # Pass http_client to UNIT3D-based trackers
+        if tracker.upper() in ["A4K", "AITHER", "BLU", "CBR", "DP", "EMUW", "FRIKI", "FNP", "HHD", "HUNO", "IHD", "ITT", "LCD", "LDU", "LUME", "LST", "LT", "OE", "OTW", "PT", "PTT", "R4E", "RAS", "RF", "SAM", "SHRI", "SP", "STC", "TIK", "TLZ", "TOS", "TTR", "ULCX", "UTP", "YOINK", "YUS"]:
+            try:
+                return tracker_class(self.config, http_client=resolved_http_client)
+            except TypeError:
+                # Fallback for subclasses that don't accept http_client
+                return tracker_class(self.config)
         return tracker_class(self.config)
 
     def trackers_enabled(self, meta: Meta) -> list[str]:
@@ -148,12 +157,12 @@ class TRACKER_SETUP:
         all_data: list[JsonDict] = []
         next_cursor: Optional[str] = None
 
-        async with httpx.AsyncClient() as client:
+        if self.http_client:
             while True:
                 try:
                     # Add query parameters for pagination
                     params: JsonDict = {'cursor': next_cursor, 'per_page': 100} if next_cursor else {'per_page': 100}
-                    response = await client.get(url=banned_url, headers=headers, params=params)
+                    response = await self.http_client.get(url=banned_url, headers=headers, params=params)
 
                     if response.status_code == 200:
                         response_json = response.json()
@@ -199,6 +208,58 @@ class TRACKER_SETUP:
                 except Exception as e:
                     console.print(f"[red]An unexpected error occurred: {e}[/red]")
                     return None
+        else:
+            async with httpx.AsyncClient() as client:
+                while True:
+                    try:
+                        # Add query parameters for pagination
+                        params: JsonDict = {'cursor': next_cursor, 'per_page': 100} if next_cursor else {'per_page': 100}
+                        response = await client.get(url=banned_url, headers=headers, params=params)
+
+                        if response.status_code == 200:
+                            response_json = response.json()
+
+                            if isinstance(response_json, list):
+                                # Directly add the list if it's the entire response
+                                all_data.extend(cast(list[JsonDict], response_json))
+                                break  # No pagination in this case
+                            if isinstance(response_json, dict):
+                                response_dict = cast(JsonDict, response_json)
+                                page_data_any = response_dict.get('data', [])
+                                if not isinstance(page_data_any, list):
+                                    console.print(f"[red]Unexpected 'data' format: {type(page_data_any)}[/red]")
+                                    return None
+
+                                page_data = cast(list[JsonDict], page_data_any)
+                                all_data.extend(page_data)
+                                meta_info_any = response_dict.get('meta', {})
+                                if not isinstance(meta_info_any, dict):
+                                    console.print(f"[red]Unexpected 'meta' format: {type(meta_info_any)}[/red]")
+                                    return None
+
+                                meta_info = cast(JsonDict, meta_info_any)
+
+                                # Check if there is a next page
+                                next_cursor_value = cast(Optional[str], meta_info.get('next_cursor'))
+                                next_cursor = next_cursor_value if next_cursor_value else None
+                                if not next_cursor:
+                                    break  # Exit loop if there are no more pages
+                            else:
+                                console.print(f"[red]Unexpected response format: {type(response_json)}[/red]")
+                                return None
+                        elif response.status_code == 404:
+                            console.print(f"Error: Tracker '{tracker}' returned 404 for the banned groups API.")
+                            return None
+                        else:
+                            console.print(f"Error: Received status code {response.status_code} for tracker '{tracker}'.")
+                            return None
+
+                    except httpx.RequestError as e:
+                        console.print(f"[red]HTTP Request failed for tracker '{tracker}': {e}[/red]")
+                        return None
+                    except Exception as e:
+                        console.print(f"[red]An unexpected error occurred: {e}[/red]")
+                        return None
 
         if meta['debug']:
             console.print("Total banned groups retrieved:", len(all_data))
@@ -266,7 +327,8 @@ class TRACKER_SETUP:
                     name = m.group(1)
                 else:
                     # Fallback: strip common regex anchors and escapes
-                    name = re.sub(r"[\\\^\$\\b]", "", val)
+                    name = val.replace("\\b", "")
+                    name = re.sub(r"[\\\^\$]", "", name)
                     name = re.sub(r"[\(\)\[\]\|]", "", name).strip()
 
                 if not name:
@@ -444,12 +506,12 @@ class TRACKER_SETUP:
         all_data: list[JsonDict] = []
         next_cursor: Optional[str] = None
 
-        async with httpx.AsyncClient() as client:
+        if self.http_client:
             while True:
                 try:
                     # Add query parameters for pagination
                     params: JsonDict = {'cursor': next_cursor, 'per_page': 100} if next_cursor else {'per_page': 100}
-                    response = await client.get(url=claims_url, headers=headers, params=params)
+                    response = await self.http_client.get(url=claims_url, headers=headers, params=params)
 
                     if response.status_code == 200:
                         response_json = response.json()
@@ -484,6 +546,47 @@ class TRACKER_SETUP:
                 except Exception as e:
                     console.print(f"[red]An unexpected error occurred: {e}[/red]")
                     return False
+        else:
+            async with httpx.AsyncClient() as client:
+                while True:
+                    try:
+                        # Add query parameters for pagination
+                        params: JsonDict = {'cursor': next_cursor, 'per_page': 100} if next_cursor else {'per_page': 100}
+                        response = await client.get(url=claims_url, headers=headers, params=params)
+
+                        if response.status_code == 200:
+                            response_json = response.json()
+                            if not isinstance(response_json, dict):
+                                console.print(f"[red]Unexpected response format: {type(response_json)}[/red]")
+                                return False
+                            response_dict = cast(JsonDict, response_json)
+                            page_data_any = response_dict.get('data', [])
+                            if not isinstance(page_data_any, list):
+                                console.print(f"[red]Unexpected 'data' format: {type(page_data_any)}[/red]")
+                                return False
+                            page_data = cast(list[JsonDict], page_data_any)
+
+                            all_data.extend(page_data)
+                            meta_info_any = response_dict.get('meta', {})
+                            if not isinstance(meta_info_any, dict):
+                                console.print(f"[red]Unexpected 'meta' format: {type(meta_info_any)}[/red]")
+                                return False
+                            meta_info = cast(JsonDict, meta_info_any)
+
+                            # Check if there is a next page
+                            next_cursor = cast(Optional[str], meta_info.get('next_cursor'))
+                            if not next_cursor:
+                                break  # Exit loop if there are no more pages
+                        else:
+                            console.print(f"[red]Error: Received status code {response.status_code}[/red]")
+                            return False
+
+                    except httpx.RequestError as e:
+                        console.print(f"[red]HTTP Request failed: {e}[/red]")
+                        return False
+                    except Exception as e:
+                        console.print(f"[red]An unexpected error occurred: {e}[/red]")
+                        return False
 
         if meta['debug']:
             console.print("Total claims retrieved:", len(all_data))
@@ -506,13 +609,13 @@ class TRACKER_SETUP:
                     return False
 
                 # Get name-to-ID mappings directly
-                type_mapping = cast(JsonDict, await tracker_instance.get_type_id(meta, mapping_only=True))
+                type_mapping = cast(JsonDict, tracker_instance.get_type_id(meta, mapping_only=True))
                 type_name = meta.get('type', '')
                 type_ids: list[Any] = [type_mapping.get(type_name)] if type_name else []
                 if None in type_ids:
                     console.print("[yellow]Warning: Type in meta not found in tracker type mapping.[/yellow]")
 
-                resolution_mapping = cast(JsonDict, await tracker_instance.get_resolution_id(meta, mapping_only=True))
+                resolution_mapping = cast(JsonDict, tracker_instance.get_resolution_id(meta, mapping_only=True))
                 resolution_name = meta.get('resolution', '')
                 resolution_ids: list[Any] = [resolution_mapping.get(resolution_name)] if resolution_name else []
                 if None in resolution_ids:
@@ -724,26 +827,26 @@ class TRACKER_SETUP:
                 if not url:
                     return False
                 requests = await self.get_tracker_requests(meta, tracker_name, url)
-                type_mapping = cast(JsonDict, await tracker_instance.get_type_id(meta, mapping_only=True))
+                type_mapping = cast(JsonDict, tracker_instance.get_type_id(meta, mapping_only=True))
                 type_name = meta.get('type', '')
                 type_ids: list[Any] = [type_mapping.get(type_name)] if type_name else []
                 if None in type_ids:
                     console.print("[yellow]Warning: Type in meta not found in tracker type mapping.[/yellow]")
 
-                resolution_mapping = cast(JsonDict, await tracker_instance.get_resolution_id(meta, mapping_only=True))
+                resolution_mapping = cast(JsonDict, tracker_instance.get_resolution_id(meta, mapping_only=True))
                 resolution_name = meta.get('resolution', '')
                 resolution_ids: list[Any] = [resolution_mapping.get(resolution_name)] if resolution_name else []
                 if None in resolution_ids:
                     console.print("[yellow]Warning: Resolution in meta not found in tracker resolution mapping.[/yellow]")
 
-                category_mapping = cast(JsonDict, await tracker_instance.get_category_id(meta, mapping_only=True))
+                category_mapping = cast(JsonDict, tracker_instance.get_category_id(meta, mapping_only=True))
                 category_name = meta.get('category', '')
                 category_ids: list[Any] = [category_mapping.get(category_name)] if category_name else []
                 if None in category_ids:
                     console.print("[yellow]Warning: Some categories in meta not found in tracker category mapping.[/yellow]")
 
             # Initialize request log for this tracker
-            common = COMMON(self.config)
+            common = COMMON(self.config, http_client=self.http_client)
             log_path = f"{meta['base_dir']}/tmp/{tracker_name}_request_results.json"
             if not await common.path_exists(log_path):
                 await common.makedirs(os.path.dirname(log_path))
@@ -1127,14 +1230,14 @@ class TRACKER_SETUP:
         next_cursor: Optional[str] = None
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            if self.http_client:
                 while True:
                     try:
                         # Add pagination cursor to params if we have one
                         if next_cursor:
                             params['cursor'] = next_cursor
 
-                        response = await client.get(url=url, headers=headers, params=params)
+                        response = await self.http_client.get(url=url, headers=headers, params=params)
                         status_code = response.status_code
 
                         if response.status_code == 200:
@@ -1176,6 +1279,56 @@ class TRACKER_SETUP:
                     except httpx.RequestError as e:
                         console.print(f"[bold red]HTTP Request failed: {e}[/bold red]")
                         break
+            else:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    while True:
+                        try:
+                            # Add pagination cursor to params if we have one
+                            if next_cursor:
+                                params['cursor'] = next_cursor
+
+                            response = await client.get(url=url, headers=headers, params=params)
+                            status_code = response.status_code
+
+                            if response.status_code == 200:
+                                data = response.json()
+                                if not isinstance(data, dict):
+                                    console.print(f"[bold red]Unexpected response format: {type(data)}[/bold red]")
+                                    return requests, status_code
+                                data_dict = cast(JsonDict, data)
+                                page_data: list[Any] = []
+                                if 'data' in data_dict and isinstance(data_dict['data'], list):
+                                    page_data.extend([item for item in cast(list[Any], data_dict['data']) if isinstance(item, dict)])
+                                elif 'results' in data_dict and isinstance(data_dict['results'], list):
+                                    page_data.extend([item for item in cast(list[Any], data_dict['results']) if isinstance(item, dict)])
+                                else:
+                                    console.print("[bold red]Unexpected response format[/bold red]")
+                                    return requests, status_code
+
+                                all_data.extend(page_data)
+
+                                # Check for pagination
+                                meta_info_any = data_dict.get('meta', {})
+                                if not isinstance(meta_info_any, dict):
+                                    console.print(f"[bold red]Unexpected 'meta' format: {type(meta_info_any)}[/bold red]")
+                                    break
+
+                                meta_info = cast(JsonDict, meta_info_any)
+
+                                next_cursor = cast(Optional[str], meta_info.get('next_cursor'))
+                                if not next_cursor:
+                                    break  # Exit loop if there are no more pages
+                                else:
+                                    # Rest between page fetches
+                                    console.print(f"[cyan]Fetched {len(page_data)} trumping reports, waiting 1 second before next page...[/cyan]")
+                                    await asyncio.sleep(1)
+                            else:
+                                console.print(f"[bold red]Failed to search trumps on {tracker}. HTTP Status: {response.status_code} - {response.text}[/bold red]")
+                                break
+
+                        except httpx.RequestError as e:
+                            console.print(f"[bold red]HTTP Request failed: {e}[/bold red]")
+                            break
 
                 # Process all collected data
                 try:

@@ -13,7 +13,7 @@ import guessit
 import httpx
 
 from src.console import console
-from src.exceptions import *  # noqa: F403
+from src.exceptions import XEMNotFound
 from src.tags import get_tag
 from src.tmdb import TmdbManager
 
@@ -151,7 +151,7 @@ class SeasonEpisodeManager:
                     if meta.get('tmdb_id') == 0:
                         year = str(parsed.get('anime_year', str(seasonYear)))
                         guess_title = _guessit_data(str(parsed.get('anime_title', '')), {"excludes": ["country", "language"]}).get('title', '')
-                        tmdb_id_value, category_value = await self.tmdb_manager.get_tmdb_id(str(guess_title), year, meta, meta['category'])
+                        tmdb_id_value, category_value = await self.tmdb_manager.get_tmdb_id(str(guess_title), year, meta, meta['category'], unattended=meta.get('unattended', False))
                         meta['tmdb_id'] = tmdb_id_value
                         meta['category'] = category_value
                     # meta = await tmdb_other_meta(meta)
@@ -227,7 +227,7 @@ class SeasonEpisodeManager:
                                 async with httpx.AsyncClient(timeout=30.0) as client:
                                     response = (await client.post(url, params=params)).json()
                                 if response['result'] == "failure":
-                                    raise XEMNotFound  # noqa: F405
+                                    raise XEMNotFound
                                 if meta['debug']:
                                     console.log(f"[cyan]TheXEM Absolute -> Standard[/cyan]\n{response}")
                                 season_int = int(response['data']['scene']['season'])  # Convert to integer
@@ -266,7 +266,7 @@ class SeasonEpisodeManager:
                                                         season = f"S{str(season_int).zfill(2)}"
                                                         difference = diff
                                 else:
-                                    raise XEMNotFound  # noqa: F405
+                                    raise XEMNotFound
                         except Exception:
                             if meta['debug']:
                                 console.print_exception()
@@ -320,7 +320,7 @@ class SeasonEpisodeManager:
         return meta
 
     async def check_season_pack_completeness(self, meta: Meta) -> None:
-        completeness = cast(Mapping[str, Any], await self.check_season_pack_detail(meta))
+        completeness = cast(Mapping[str, Any], self.check_season_pack_detail(meta))
         if not completeness['complete']:
             just_go = False
             unattended = meta.get('unattended', False)
@@ -398,7 +398,7 @@ class SeasonEpisodeManager:
                 for file in files:
                     console.print(f"[cyan]  - {file}")
 
-    async def check_season_pack_detail(self, meta: Meta) -> dict[str, Any]:
+    def check_season_pack_detail(self, meta: Meta) -> dict[str, Any]:
         if not meta.get('tv_pack'):
             return {'complete': True, 'missing_episodes': [], 'found_episodes': [], 'consistent_tags': True, 'tags_found': {}}
 
@@ -417,7 +417,7 @@ class SeasonEpisodeManager:
         episode_only_pattern = r'\b[Ee](\d{1,3})(?:[Ee](\d{1,3}))?\b'
 
         # Pattern for anime: " - 43 (1080p)" or "43 (1080p)" or similar
-        anime_pattern = r'(?:\s-\s)?(\d{1,3})\s*\((?:\d+p|480p|480i|576i|576p|720p|1080i|1080p|2160p)\)'
+        anime_pattern = r'(?:\s-\s)?(\d{1,3})\s*\((?:\d{3,4}p|\d{3,4}i)\)'
 
         # Normalize season_int once so all (season, episode) tuples are (int, int)
         raw_season_int = meta.get('season_int', 1)
@@ -430,7 +430,7 @@ class SeasonEpisodeManager:
             filename = os.path.basename(file_path)
 
             # Extract group tag from each file
-            file_tag = await get_tag(file_path, meta, season_pack_check=True)
+            file_tag = get_tag(file_path, meta, season_pack_check=True)
             if file_tag:
                 tag_clean = file_tag.lstrip('-')
                 if tag_clean not in tags_found:

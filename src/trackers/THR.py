@@ -31,12 +31,11 @@ class THR:
         self.username = str(config['TRACKERS']['THR'].get('username', ''))
         self.password = str(config['TRACKERS']['THR'].get('password', ''))
         self.banned_groups = [""]
-        pass
 
-    async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
+    async def upload(self, meta: Meta, _disctype: str, _torrent_bytes: Any = None) -> Optional[bool]:
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
-        cat_id = await self.get_cat_id(meta)
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_bytes=_torrent_bytes)
+        cat_id = self.get_cat_id(meta)
         subs = self.get_subtitles(meta)
         await self.edit_desc(meta)
         thr_name = unidecode(str(meta.get('name', '')).replace('DD+', 'DDP'))
@@ -153,10 +152,16 @@ class THR:
             tracker_status = cast(dict[str, Any], meta.get('tracker_status', {}))
             tracker_status.setdefault(self.tracker, {})
             tracker_status[self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-            await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+            await common.create_torrent_for_upload(
+                meta,
+                f"{self.tracker}" + "_DEBUG",
+                f"{self.tracker}" + "_DEBUG",
+                announce_url="https://fake.tracker",
+                torrent_bytes=_torrent_bytes,
+            )
             return False
 
-    async def get_cat_id(self, meta: Meta) -> str:
+    def get_cat_id(self, meta: Meta) -> str:
         genres = str(meta.get('genres', '')).lower()
         keywords = str(meta.get('keywords', '')).lower()
         category = str(meta.get('category', ''))
@@ -167,7 +172,7 @@ class THR:
         if 'documentary' in genres or 'documentary' in keywords:
             cat = '12'
         elif category == "MOVIE":
-            if is_disc == "BMDV":
+            if is_disc == "BDMV":
                 cat = '40'
             elif is_disc in {"DVD", "HDDVD"}:
                 cat = '14'
@@ -386,7 +391,7 @@ class THR:
                         console.print(f"[dim]Searching page {page_count}...")
                     response = await client.get(page_url)
 
-                    page_dupes, has_next_page, next_page_number = await self._process_search_response(
+                    page_dupes, has_next_page, next_page_number = self._process_search_response(
                         response, meta, current_page)
 
                     for dupe in page_dupes:
@@ -414,7 +419,7 @@ class THR:
 
         return dupes
 
-    async def _process_search_response(
+    def _process_search_response(
         self,
         response: httpx.Response,
         meta: Meta,

@@ -1,11 +1,13 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
 import hashlib
+import io
 import json
 import os
 import re
 import secrets
 import sys
+from concurrent.futures import ProcessPoolExecutor
 from typing import Any, Callable, Optional, Union, cast
 
 import aiofiles
@@ -20,14 +22,81 @@ from torf import Torrent
 from src.bbcode import BBCODE
 from src.console import console
 from src.exportmi import exportInfo
-from src.languages import languages_manager
+
+_UPLOAD_PROCESS_EXECUTOR: Optional[ProcessPoolExecutor] = None
+_DOWNLOAD_PROCESS_EXECUTOR: Optional[ProcessPoolExecutor] = None
+_UPLOAD_PROCESS_PREWARMED = False
+
+
+def _noop_worker() -> None:
+    return None
+
+
+def get_upload_process_executor(max_workers: Optional[int] = None) -> ProcessPoolExecutor:
+    global _UPLOAD_PROCESS_EXECUTOR
+    global _UPLOAD_PROCESS_PREWARMED
+
+    if max_workers is not None and max_workers < 1:
+        max_workers = None
+
+    if _UPLOAD_PROCESS_EXECUTOR is None:
+        _UPLOAD_PROCESS_EXECUTOR = ProcessPoolExecutor(max_workers=max_workers)
+
+    if not _UPLOAD_PROCESS_PREWARMED:
+        try:
+            worker_count = max_workers or (os.cpu_count() or 4)
+            futures = [
+                _UPLOAD_PROCESS_EXECUTOR.submit(_noop_worker)
+                for _ in range(worker_count)
+            ]
+            for future in futures:
+                future.result()
+        except Exception:
+            # Best-effort prewarm; skip if it fails.
+            pass
+        else:
+            _UPLOAD_PROCESS_PREWARMED = True
+
+    return _UPLOAD_PROCESS_EXECUTOR
+
+
+def get_download_process_executor() -> ProcessPoolExecutor:
+    global _DOWNLOAD_PROCESS_EXECUTOR
+    if _DOWNLOAD_PROCESS_EXECUTOR is None:
+        _DOWNLOAD_PROCESS_EXECUTOR = ProcessPoolExecutor()
+    return _DOWNLOAD_PROCESS_EXECUTOR
+
+
+def _download_tracker_torrent_worker(payload: dict[str, Any]) -> tuple[bool, str]:
+    downurl = str(payload.get("downurl", "")).strip()
+    path = str(payload.get("path", "")).strip()
+    headers = payload.get("headers")
+    params = payload.get("params")
+
+    if not downurl or not path:
+        return False, "Missing download URL or output path."
+
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with httpx.Client(headers=headers, params=params, timeout=30.0) as client, client.stream(
+            "GET", downurl
+        ) as response:
+            response.raise_for_status()
+            with open(path, "wb") as f:
+                for chunk in response.iter_bytes():
+                    f.write(chunk)
+        return True, ""
+    except Exception as exc:
+        return False, str(exc)
 
 
 class COMMON:
-    def __init__(self, config: dict[str, Any]) -> None:
+    DEFAULT_ADULT_KEYWORDS = ["xxx", "erotic", "porn", "adult", "orgy", "hentai", "adult animation", "softcore"]
+
+    def __init__(self, config: dict[str, Any], http_client: Any = None) -> None:
         self.config = config
+        self.http_client = http_client
         self.parser = self.MediaInfoParser()
-        pass
 
     async def path_exists(self, path: str) -> bool:
         """Async wrapper for os.path.exists"""
@@ -44,6 +113,64 @@ class COMMON:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda p, e: os.makedirs(p, exist_ok=e), path, exist_ok)
 
+    def is_adult_content(
+        self,
+        meta: dict[str, Any],
+        *,
+        adult_keywords: Optional[list[str]] = None,
+        genres_text: Optional[str] = None,
+    ) -> bool:
+        keywords = adult_keywords or self.DEFAULT_ADULT_KEYWORDS
+        if genres_text is not None:
+            genres = str(genres_text)
+        else:
+            def normalize_genres(value: Any) -> str:
+                if isinstance(value, list):
+                    return ", ".join(str(item).strip() for item in value if str(item).strip())
+                return str(value)
+
+            keywords_text = normalize_genres(meta.get("keywords", ""))
+            combined_genres_text = normalize_genres(meta.get("combined_genres", ""))
+            genres_parts = [part.strip() for part in (keywords_text, combined_genres_text) if str(part).strip()]
+            genres = ", ".join(genres_parts)
+        return any(
+            re.search(rf"(^|,\s*){re.escape(str(keyword))}(\s*,|$)", genres, re.IGNORECASE)
+            for keyword in keywords
+        )
+
+    def prompt_adult_content(
+        self,
+        meta: dict[str, Any],
+        *,
+        tracker_name: str,
+        prompt_text: Optional[str],
+        block_message: Optional[str] = None,
+        unattended_message: Optional[str] = None,
+        adult_keywords: Optional[list[str]] = None,
+        genres_text: Optional[str] = None,
+        default: bool = False,
+    ) -> bool:
+        if block_message is None and unattended_message is None:
+            block_message = f"[bold red]Adult content is not allowed at {tracker_name}."
+        if not self.is_adult_content(meta, adult_keywords=adult_keywords, genres_text=genres_text):
+            return True
+
+        unattended = bool(meta.get("unattended", False))
+        unattended_confirm = bool(meta.get("unattended_confirm", False))
+        if unattended and not unattended_confirm:
+            message = unattended_message if unattended_message is not None else block_message
+            if message:
+                console.print(message)
+            return False
+
+        if block_message:
+            console.print(block_message)
+
+        if prompt_text is None:
+            return False
+
+        return bool(cli_ui.ask_yes_no(prompt_text, default=default))
+
     async def create_torrent_for_upload(
         self,
         meta: dict[str, Any],
@@ -51,12 +178,24 @@ class COMMON:
         source_flag: str,
         torrent_filename: str = "BASE",
         announce_url: str = "",
+        torrent_bytes: Optional[bytes] = None,
     ) -> None:
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"
         if await self.path_exists(path):
             loop = asyncio.get_running_loop()
-            new_torrent = await loop.run_in_executor(None, Torrent.read, path)
-            for each in list(new_torrent.metainfo):
+            new_torrent: Torrent
+            if torrent_bytes is not None and torrent_filename == "BASE":
+                try:
+                    new_torrent = await loop.run_in_executor(
+                        None,
+                        lambda: Torrent.read_stream(cast(Any, io.BytesIO(torrent_bytes))),
+                    )
+                except Exception:
+                    new_torrent = await loop.run_in_executor(None, Torrent.read, path)
+            else:
+                new_torrent = await loop.run_in_executor(None, Torrent.read, path)
+            metainfo_keys = list(new_torrent.metainfo)
+            for each in metainfo_keys:
                 if each not in ('announce', 'comment', 'creation date', 'created by', 'encoding', 'info'):
                     new_torrent.metainfo.pop(each, None)  # type: ignore
             if announce_url:
@@ -98,11 +237,19 @@ class COMMON:
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}_cross].torrent" if cross else f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         if downurl:
             try:
-                async with httpx.AsyncClient(headers=headers, params=params, timeout=30.0) as session, session.stream("GET", downurl) as r:
-                    r.raise_for_status()
-                    async with aiofiles.open(path, "wb") as f:
-                        async for chunk in r.aiter_bytes():
-                            await f.write(chunk)
+                # Use shared client if available, otherwise create temporary one
+                if self.http_client:
+                    async with self.http_client.stream("GET", downurl, headers=headers, params=params, timeout=30.0) as r:
+                        r.raise_for_status()
+                        async with aiofiles.open(path, "wb") as f:
+                            async for chunk in r.aiter_bytes():
+                                await f.write(chunk)
+                else:
+                    async with httpx.AsyncClient(headers=headers, params=params, timeout=30.0) as session, session.stream("GET", downurl) as r:
+                        r.raise_for_status()
+                        async with aiofiles.open(path, "wb") as f:
+                            async for chunk in r.aiter_bytes():
+                                await f.write(chunk)
 
                 if cross:
                     return None
@@ -116,6 +263,51 @@ class COMMON:
                 console.print(f"[yellow]Warning: Could not download torrent file: {str(e)}[/yellow]")
                 console.print("[yellow]Download manually from the tracker.[/yellow]")
                 return None
+
+        return None
+
+    async def download_tracker_torrent_process(
+        self,
+        meta: dict[str, Any],
+        tracker: str,
+        headers: Optional[dict[str, str]] = None,
+        params: Optional[dict[str, str]] = None,
+        downurl: str = "",
+        hash_is_id: bool = False,
+        cross: bool = False,
+    ) -> Optional[str]:
+        path = (
+            f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}_cross].torrent"
+            if cross
+            else f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
+        )
+        if not downurl:
+            return None
+
+        loop = asyncio.get_running_loop()
+        payload = {
+            "downurl": downurl,
+            "path": path,
+            "headers": headers,
+            "params": params,
+        }
+        success, error = await loop.run_in_executor(
+            get_download_process_executor(),
+            _download_tracker_torrent_worker,
+            payload,
+        )
+
+        if not success:
+            console.print(f"[yellow]Warning: Could not download torrent file: {error}[/yellow]")
+            console.print("[yellow]Download manually from the tracker.[/yellow]")
+            return None
+
+        if cross:
+            return None
+
+        if hash_is_id:
+            torrent_hash = await self.get_torrent_hash(meta, tracker)
+            return torrent_hash
 
         return None
 
@@ -275,7 +467,7 @@ class COMMON:
             console.print(f"[bold red]Error saving image links: {e}[/bold red]")
             return None
 
-    async def unit3d_region_ids(self, region: str = "", reverse: bool = False, region_id: int = 0) -> str:
+    def unit3d_region_ids(self, region: str = "", reverse: bool = False, region_id: int = 0) -> str:
         region_map = {
             'AFG': 1, 'AIA': 2, 'ALA': 3, 'ALG': 4, 'AND': 5, 'ANG': 6, 'ARG': 7, 'ARM': 8, 'ARU': 9,
             'ASA': 10, 'ATA': 11, 'ATF': 12, 'ATG': 13, 'AUS': 14, 'AUT': 15, 'AZE': 16, 'BAH': 17,
@@ -326,7 +518,7 @@ class COMMON:
             region_id_value = region_map.get(region)
             return str(region_id_value) if region_id_value else ""
 
-    async def unit3d_distributor_ids(self, distributor: str = "", reverse: bool = False, distributor_id: int = 0) -> str:
+    def unit3d_distributor_ids(self, distributor: str = "", reverse: bool = False, distributor_id: int = 0) -> str:
         distributor_map = {
             '01 DISTRIBUTION': 1, '100 DESTINATIONS TRAVEL FILM': 2, '101 FILMS': 3, '1FILMS': 4, '2 ENTERTAIN VIDEO': 5, '20TH CENTURY FOX': 6, '2L': 7, '3D CONTENT HUB': 8, '3D MEDIA': 9, '3L FILM': 10, '4DIGITAL': 11, '4DVD': 12, '4K ULTRA HD MOVIES': 13, '4K UHD': 13, '8-FILMS': 14, '84 ENTERTAINMENT': 15, '88 FILMS': 16, '@ANIME': 17, 'ANIME': 17, 'A CONTRACORRIENTE': 18, 'A CONTRACORRIENTE FILMS': 19, 'A&E HOME VIDEO': 20, 'A&E': 20, 'A&M RECORDS': 21, 'A+E NETWORKS': 22, 'A+R': 23, 'A-FILM': 24, 'AAA': 25, 'AB VIDÉO': 26, 'AB VIDEO': 26, 'ABC - (AUSTRALIAN BROADCASTING CORPORATION)': 27, 'ABC': 27, 'ABKCO': 28, 'ABSOLUT MEDIEN': 29, 'ABSOLUTE': 30, 'ACCENT FILM ENTERTAINMENT': 31, 'ACCENTUS': 32, 'ACORN MEDIA': 33, 'AD VITAM': 34, 'ADA': 35, 'ADITYA VIDEOS': 36, 'ADSO FILMS': 37, 'AFM RECORDS': 38, 'AGFA': 39, 'AIX RECORDS': 40, 'ALAMODE FILM': 41, 'ALBA RECORDS': 42, 'ALBANY RECORDS': 43, 'ALBATROS': 44, 'ALCHEMY': 45, 'ALIVE': 46, 'ALL ANIME': 47, 'ALL INTERACTIVE ENTERTAINMENT': 48, 'ALLEGRO': 49, 'ALLIANCE': 50, 'ALPHA MUSIC': 51, 'ALTERDYSTRYBUCJA': 52, 'ALTERED INNOCENCE': 53, 'ALTITUDE FILM DISTRIBUTION': 54, 'ALUCARD RECORDS': 55, 'AMAZING D.C.': 56, 'AMAZING DC': 56, 'AMMO CONTENT': 57, 'AMUSE SOFT ENTERTAINMENT': 58, 'ANCONNECT': 59, 'ANEC': 60, 'ANIMATSU': 61, 'ANIME HOUSE': 62, 'ANIME LTD': 63, 'ANIME WORKS': 64, 'ANIMEIGO': 65, 'ANIPLEX': 66, 'ANOLIS ENTERTAINMENT': 67, 'ANOTHER WORLD ENTERTAINMENT': 68, 'AP INTERNATIONAL': 69, 'APPLE': 70, 'ARA MEDIA': 71, 'ARBELOS': 72, 'ARC ENTERTAINMENT': 73, 'ARP SÉLECTION': 74, 'ARP SELECTION': 74, 'ARROW': 75, 'ART SERVICE': 76, 'ART VISION': 77, 'ARTE ÉDITIONS': 78, 'ARTE EDITIONS': 78, 'ARTE VIDÉO': 79, 'ARTE VIDEO': 79, 'ARTHAUS MUSIK': 80, 'ARTIFICIAL EYE': 81, 'ARTSPLOITATION FILMS': 82, 'ARTUS FILMS': 83, 'ASCOT ELITE HOME ENTERTAINMENT': 84, 'ASIA VIDEO': 85, 'ASMIK ACE': 86, 'ASTRO RECORDS & FILMWORKS': 87, 'ASYLUM': 88, 'ATLANTIC FILM': 89, 'ATLANTIC RECORDS': 90, 'ATLAS FILM': 91, 'AUDIO VISUAL ENTERTAINMENT': 92, 'AURO-3D CREATIVE LABEL': 93, 'AURUM': 94, 'AV VISIONEN': 95, 'AV-JET': 96, 'AVALON': 97, 'AVENTI': 98, 'AVEX TRAX': 99, 'AXIOM': 100, 'AXIS RECORDS': 101, 'AYNGARAN': 102, 'BAC FILMS': 103, 'BACH FILMS': 104, 'BANDAI VISUAL': 105, 'BARCLAY': 106, 'BBC': 107, 'BRITISH BROADCASTING CORPORATION': 107, 'BBI FILMS': 108, 'BBI': 108, 'BCI HOME ENTERTAINMENT': 109, 'BEGGARS BANQUET': 110, 'BEL AIR CLASSIQUES': 111, 'BELGA FILMS': 112, 'BELVEDERE': 113, 'BENELUX FILM DISTRIBUTORS': 114, 'BENNETT-WATT MEDIA': 115, 'BERLIN CLASSICS': 116, 'BERLINER PHILHARMONIKER RECORDINGS': 117, 'BEST ENTERTAINMENT': 118, 'BEYOND HOME ENTERTAINMENT': 119, 'BFI VIDEO': 120, 'BFI': 120, 'BRITISH FILM INSTITUTE': 120, 'BFS ENTERTAINMENT': 121, 'BFS': 121, 'BHAVANI': 122, 'BIBER RECORDS': 123, 'BIG HOME VIDEO': 124, 'BILDSTÖRUNG': 125, 'BILDSTORUNG': 125, 'BILL ZEBUB': 126, 'BIRNENBLATT': 127, 'BIT WEL': 128, 'BLACK BOX': 129, 'BLACK HILL PICTURES': 130, 'BLACK HILL': 130, 'BLACK HOLE RECORDINGS': 131, 'BLACK HOLE': 131, 'BLAQOUT': 132, 'BLAUFIELD MUSIC': 133, 'BLAUFIELD': 133, 'BLOCKBUSTER ENTERTAINMENT': 134, 'BLOCKBUSTER': 134, 'BLU PHASE MEDIA': 135, 'BLU-RAY ONLY': 136, 'BLU-RAY': 136, 'BLURAY ONLY': 136, 'BLURAY': 136, 'BLUE GENTIAN RECORDS': 137, 'BLUE KINO': 138, 'BLUE UNDERGROUND': 139, 'BMG/ARISTA': 140, 'BMG': 140, 'BMGARISTA': 140, 'BMG ARISTA': 140, 'ARISTA':
             140, 'ARISTA/BMG': 140, 'ARISTABMG': 140, 'ARISTA BMG': 140, 'BONTON FILM': 141, 'BONTON': 141, 'BOOMERANG PICTURES': 142, 'BOOMERANG': 142, 'BQHL ÉDITIONS': 143, 'BQHL EDITIONS': 143, 'BQHL': 143, 'BREAKING GLASS': 144, 'BRIDGESTONE': 145, 'BRINK': 146, 'BROAD GREEN PICTURES': 147, 'BROAD GREEN': 147, 'BUSCH MEDIA GROUP': 148, 'BUSCH': 148, 'C MAJOR': 149, 'C.B.S.': 150, 'CAICHANG': 151, 'CALIFÓRNIA FILMES': 152, 'CALIFORNIA FILMES': 152, 'CALIFORNIA': 152, 'CAMEO': 153, 'CAMERA OBSCURA': 154, 'CAMERATA': 155, 'CAMP MOTION PICTURES': 156, 'CAMP MOTION': 156, 'CAPELIGHT PICTURES': 157, 'CAPELIGHT': 157, 'CAPITOL': 159, 'CAPITOL RECORDS': 159, 'CAPRICCI': 160, 'CARGO RECORDS': 161, 'CARLOTTA FILMS': 162, 'CARLOTTA': 162, 'CARLOTA': 162, 'CARMEN FILM': 163, 'CASCADE': 164, 'CATCHPLAY': 165, 'CAULDRON FILMS': 166, 'CAULDRON': 166, 'CBS TELEVISION STUDIOS': 167, 'CBS': 167, 'CCTV': 168, 'CCV ENTERTAINMENT': 169, 'CCV': 169, 'CD BABY': 170, 'CD LAND': 171, 'CECCHI GORI': 172, 'CENTURY MEDIA': 173, 'CHUAN XUN SHI DAI MULTIMEDIA': 174, 'CINE-ASIA': 175, 'CINÉART': 176, 'CINEART': 176, 'CINEDIGM': 177, 'CINEFIL IMAGICA': 178, 'CINEMA EPOCH': 179, 'CINEMA GUILD': 180, 'CINEMA LIBRE STUDIOS': 181, 'CINEMA MONDO': 182, 'CINEMATIC VISION': 183, 'CINEPLOIT RECORDS': 184, 'CINESTRANGE EXTREME': 185, 'CITEL VIDEO': 186, 'CITEL': 186, 'CJ ENTERTAINMENT': 187, 'CJ': 187, 'CLASSIC MEDIA': 188, 'CLASSICFLIX': 189, 'CLASSICLINE': 190, 'CLAUDIO RECORDS': 191, 'CLEAR VISION': 192, 'CLEOPATRA': 193, 'CLOSE UP': 194, 'CMS MEDIA LIMITED': 195, 'CMV LASERVISION': 196, 'CN ENTERTAINMENT': 197, 'CODE RED': 198, 'COHEN MEDIA GROUP': 199, 'COHEN': 199, 'COIN DE MIRE CINÉMA': 200, 'COIN DE MIRE CINEMA': 200, 'COLOSSEO FILM': 201, 'COLUMBIA': 203, 'COLUMBIA PICTURES': 203, 'COLUMBIA/TRI-STAR': 204, 'TRI-STAR': 204, 'COMMERCIAL MARKETING': 205, 'CONCORD MUSIC GROUP': 206, 'CONCORDE VIDEO': 207, 'CONDOR': 208, 'CONSTANTIN FILM': 209, 'CONSTANTIN': 209, 'CONSTANTINO FILMES': 210, 'CONSTANTINO': 210, 'CONSTRUCTIVE MEDIA SERVICE': 211, 'CONSTRUCTIVE': 211, 'CONTENT ZONE': 212, 'CONTENTS GATE': 213, 'COQUEIRO VERDE': 214, 'CORNERSTONE MEDIA': 215, 'CORNERSTONE': 215, 'CP DIGITAL': 216, 'CREST MOVIES': 217, 'CRITERION': 218, 'CRITERION COLLECTION':
@@ -365,7 +557,7 @@ class COMMON:
             distributor_id_value = distributor_map.get(distributor)
             return str(distributor_id_value) if distributor_id_value else ""
 
-    async def prompt_user_for_id_selection(
+    def prompt_user_for_id_selection(
         self,
         meta: dict[str, Any],
         tmdb: Optional[Union[str, int]] = None,
@@ -397,17 +589,17 @@ class COMMON:
             console.print(f"Filename: {filename}")  # Ensure filename is printed if available
 
         if not meta['unattended']:
-            selection = input(f"Do you want to use these IDs from {tracker_name}? (Y/n): ").strip().lower()
             try:
-                return bool(selection == '' or selection == 'y' or selection == 'yes')
+                selection_raw = cli_ui.ask_string(
+                    f"Do you want to use these IDs from {tracker_name}? (Y/n)",
+                    default="Y",
+                )
             except (KeyboardInterrupt, EOFError):
                 sys.exit(1)
+            selection = (selection_raw or "").strip().lower()
+            return selection in {"", "y", "yes"}
         else:
             return True
-
-    async def prompt_user_for_confirmation(self, message: str) -> bool:
-        response = input(f"{message} (Y/n): ").strip().lower()
-        return bool(response == '' or response == 'y')
 
     async def unit3d_region_distributor(self, meta: dict[str, Any], tracker: str, torrent_url: str, id: str = "") -> None:
         """Get region and distributor information from API response"""
@@ -416,9 +608,14 @@ class COMMON:
         params: dict[str, str] = {'api_token': api_key}
         url = f"{torrent_url}{id}"
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url=url, params=params)
+            # Use shared client if available, otherwise create temporary one
+            if self.http_client:
+                response = await self.http_client.get(url=url, params=params)
                 json_response = response.json()
+            else:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.get(url=url, params=params)
+                    json_response = response.json()
         except (httpx.RequestError, httpx.TimeoutException) as e:
             console.print(f"[yellow]Request error in unit3d_region_distributor: {e}[/yellow]")
             return
@@ -441,7 +638,7 @@ class COMMON:
 
                 # use reverse to reverse map the id to the name
                 if not meta.get('region') and region_id:
-                    region_name = await self.unit3d_region_ids(reverse=True, region_id=region_id)
+                    region_name = self.unit3d_region_ids(reverse=True, region_id=region_id)
                     if region_name:
                         meta['region'] = region_name
                         if meta['debug']:
@@ -449,7 +646,7 @@ class COMMON:
 
                 # use reverse to reverse map the id to the name
                 if not meta.get('distributor') and distributor_id:
-                    distributor_name = await self.unit3d_distributor_ids(reverse=True, distributor_id=distributor_id)
+                    distributor_name = self.unit3d_distributor_ids(reverse=True, distributor_id=distributor_id)
                     if distributor_name:
                         meta['distributor'] = distributor_name
                         if meta['debug']:
@@ -468,14 +665,14 @@ class COMMON:
                         console.print(f"[blue]Distributor ID: {distributor_id}[/blue]")
 
                     if not meta.get('region') and region_id:
-                        region_name = await self.unit3d_region_ids(reverse=True, region_id=region_id)
+                        region_name = self.unit3d_region_ids(reverse=True, region_id=region_id)
                         if region_name:
                             meta['region'] = region_name
                             if meta['debug']:
                                 console.print(f"[green]Mapped region_id {region_id} to '{region_name}'[/green]")
 
                     if not meta.get('distributor') and distributor_id:
-                        distributor_name = await self.unit3d_distributor_ids(reverse=True, distributor_id=distributor_id)
+                        distributor_name = self.unit3d_distributor_ids(reverse=True, distributor_id=distributor_id)
                         if distributor_name:
                             meta['distributor'] = distributor_name
                             if meta['debug']:
@@ -530,9 +727,14 @@ class COMMON:
 
         # Make the GET request with proper encoding handled by 'params'
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url=url, params=params)
+            # Use shared client if available, otherwise create temporary one
+            if self.http_client:
+                response = await self.http_client.get(url=url, params=params)
                 json_response = response.json()
+            else:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.get(url=url, params=params)
+                    json_response = response.json()
         except (httpx.RequestError, httpx.TimeoutException) as e:
             console.print(f"[yellow]Request error in unit3d_torrent_info: {e}[/yellow]")
             return None, None, None, None, None, None, None, [], None
@@ -563,12 +765,12 @@ class COMMON:
                 imdb = 0 if imdb == 0 else imdb
                 if not meta.get('region') and meta.get('is_disc') == "BDMV":
                     region_id = attributes.get('region_id')
-                    region_name = await self.unit3d_region_ids(reverse=True, region_id=region_id)
+                    region_name = self.unit3d_region_ids(reverse=True, region_id=region_id)
                     if region_name:
                         meta['region'] = region_name
                 if not meta.get('distributor') and meta.get('is_disc') == "BDMV":
                     distributor_id = attributes.get('distributor_id')
-                    distributor_name = await self.unit3d_distributor_ids(reverse=True, distributor_id=distributor_id)
+                    distributor_name = self.unit3d_distributor_ids(reverse=True, distributor_id=distributor_id)
                     if distributor_name:
                         meta['distributor'] = distributor_name
             else:
@@ -590,12 +792,12 @@ class COMMON:
                     imdb = 0 if imdb == 0 else imdb
                     if not meta.get('region') and meta.get('is_disc') == "BDMV":
                         region_id = attributes.get('region_id')
-                        region_name = await self.unit3d_region_ids(reverse=True, region_id=region_id)
+                        region_name = self.unit3d_region_ids(reverse=True, region_id=region_id)
                         if region_name:
                             meta['region'] = region_name
                     if not meta.get('distributor') and meta.get('is_disc') == "BDMV":
                         distributor_id = attributes.get('distributor_id')
-                        distributor_name = await self.unit3d_distributor_ids(reverse=True, distributor_id=distributor_id)
+                        distributor_name = self.unit3d_distributor_ids(reverse=True, distributor_id=distributor_id)
                         if distributor_name:
                             meta['distributor'] = distributor_name
                     # Handle file name extraction
@@ -609,7 +811,7 @@ class COMMON:
             if (tmdb or imdb or tvdb) and not id:
                 # Only prompt the user for ID selection if not searching by ID
                 try:
-                    if not await self.prompt_user_for_id_selection(meta, tmdb, imdb, tvdb, mal, file_name, tracker_name=tracker):
+                    if not self.prompt_user_for_id_selection(meta, tmdb, imdb, tvdb, mal, file_name, tracker_name=tracker):
                         console.print("[yellow]User chose to skip based on IDs.[/yellow]")
                         return None, None, None, None, None, None, None, [], None
                 except (KeyboardInterrupt, EOFError):
@@ -660,7 +862,7 @@ class COMMON:
             content = await fp.read()
             for line in content.splitlines():
                 if line.strip() and not line.startswith(("# ", "#")):
-                    lineFields = re.split(' |\t', line.strip())
+                    lineFields = re.split(r"[ \t]", line.strip())
                     lineFields = [x for x in lineFields if x != ""]
                     if len(lineFields) >= 7:
                         cookies[lineFields[5]] = lineFields[6]
@@ -684,16 +886,17 @@ class COMMON:
                 return None
 
         try:
-            async with httpx.AsyncClient() as client:
+            # Use shared client if available, otherwise create temporary one
+            if self.http_client:
                 # get douban url
                 if int(meta.get('imdb_id', 0)) != 0:
                     data['search'] = f"tt{meta['imdb_id']}"
-                    ptgen_json = await fetch_ptgen(client, url, data)
+                    ptgen_json = await fetch_ptgen(self.http_client, url, data)
 
                     # Check for error and retry if needed
                     if ptgen_json is None or ptgen_json.get("error") is not None:
                         for _retry in range(ptgen_retry):
-                            ptgen_json = await fetch_ptgen(client, url, data)
+                            ptgen_json = await fetch_ptgen(self.http_client, url, data)
                             if ptgen_json is not None and ptgen_json.get("error") is None:
                                 break
 
@@ -711,20 +914,50 @@ class COMMON:
                     params['url'] = console.input("[red]Please enter [yellow]Douban[/yellow] link: ")
 
                 # Fetch with douban URL
-                ptgen_json = await fetch_ptgen(client, url, params)
+                ptgen_json = await fetch_ptgen(self.http_client, url, params)
                 if ptgen_json is None or ptgen_json.get("error") is not None:
                     for _retry in range(ptgen_retry):
-                        ptgen_json = await fetch_ptgen(client, url, params)
+                        ptgen_json = await fetch_ptgen(self.http_client, url, params)
                         if ptgen_json is not None and ptgen_json.get("error") is None:
                             break
+            else:
+                async with httpx.AsyncClient() as client:
+                    # get douban url
+                    if int(meta.get('imdb_id', 0)) != 0:
+                        data['search'] = f"tt{meta['imdb_id']}"
+                        ptgen_json = await fetch_ptgen(client, url, data)
+
+                        # Check for error and retry if needed
+                        if ptgen_json is None or ptgen_json.get("error") is not None:
+                            for _retry in range(ptgen_retry):
+                                ptgen_json = await fetch_ptgen(client, url, data)
+                                if ptgen_json is not None and ptgen_json.get("error") is None:
+                                    break
+
+                        # Try to extract douban link
+                        try:
+                            if ptgen_json and 'data' in ptgen_json and ptgen_json['data']:
+                                params['url'] = ptgen_json['data'][0]['link']
+                            else:
+                                raise KeyError("No data in response")
+                        except (KeyError, IndexError, TypeError):
+                            console.print("[red]Unable to get data from ptgen using IMDb")
+                            params['url'] = console.input("[red]Please enter [yellow]Douban[/yellow] link: ")
+                    else:
+                        console.print("[red]No IMDb id was found.")
+                        params['url'] = console.input("[red]Please enter [yellow]Douban[/yellow] link: ")
+
+                    # Fetch with douban URL
+                    ptgen_json = await fetch_ptgen(client, url, params)
+                    if ptgen_json is None or ptgen_json.get("error") is not None:
+                        for _retry in range(ptgen_retry):
+                            ptgen_json = await fetch_ptgen(client, url, params)
+                            if ptgen_json is not None and ptgen_json.get("error") is None:
+                                break
 
                 if ptgen_json is None:
                     console.print("[bold red]Failed to get valid ptgen response after retries")
                     return ""
-
-                meta['ptgen'] = ptgen_json
-                async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", 'w', encoding='utf-8') as f:
-                    await f.write(json.dumps(meta, indent=4))
 
                 ptgen_text = ptgen_json.get('format', '')
                 if "[/img]" in ptgen_text:
@@ -1062,7 +1295,7 @@ class COMMON:
 
         return mediainfo
 
-    async def check_language_requirements(
+    def check_language_requirements(
         self,
         meta: dict[str, Any],
         tracker: str,
@@ -1099,15 +1332,14 @@ class COMMON:
         :rtype: bool
         """
         try:
-            if not meta.get("language_checked", False):
-                await languages_manager.process_desc_language(meta, tracker=tracker)
-
-            meta_audio_languages: list[str] = meta.get("audio_languages", [])
-            meta_subtitle_languages: list[str] = meta.get("subtitle_languages", [])
+            audio_languages_value = meta.get("audio_languages")
+            meta_audio_languages = cast(list[Any], audio_languages_value) if isinstance(audio_languages_value, list) else []
+            subtitle_languages_value = meta.get("subtitle_languages")
+            meta_subtitle_languages = cast(list[Any], subtitle_languages_value) if isinstance(subtitle_languages_value, list) else []
 
             languages_to_check = [lang.lower() for lang in languages_to_check]
-            audio_languages = [lang.lower() for lang in meta_audio_languages]
-            subtitle_languages = [lang.lower() for lang in meta_subtitle_languages]
+            audio_languages = [lang.lower() for lang in meta_audio_languages if isinstance(lang, str)]
+            subtitle_languages = [lang.lower() for lang in meta_subtitle_languages if isinstance(lang, str)]
             language_display = None
             original_ok = False
             if original_language:

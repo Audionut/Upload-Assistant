@@ -1,7 +1,9 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import asyncio
 import os
 import re
 import sys
+import threading
 from collections.abc import MutableMapping, Sequence
 from typing import Any, Callable, Optional, cast
 
@@ -35,13 +37,13 @@ class NameManager:
         self.config = config
         self.common = COMMON(config=config)
 
-    async def get_name(self, meta: Meta) -> tuple[str, str, str, list[str]]:
+    def get_name_main(self, meta: Meta) -> tuple[str, str, str, list[str]]:
         active_trackers: list[str] = [
             tracker for tracker in TRACKER_DISC_REQUIREMENTS
             if tracker in meta.get('trackers', [])
         ]
         if active_trackers:
-            region, distributor, trackers_to_remove = await self.missing_disc_info(meta, active_trackers)
+            region, distributor, trackers_to_remove = self.missing_disc_info(meta, active_trackers)
             for tracker in trackers_to_remove:
                 if tracker in meta['trackers']:
                     if meta.get('unattended', False):
@@ -52,7 +54,7 @@ class NameManager:
                 meta['distributor'] = distributor
             if region and 'SKIPPED' not in region:
                 meta['region'] = region
-        type = str(meta.get('type', "")).upper()
+        type_value = str(meta.get('type', "")).upper()
         title = str(meta.get('title', ""))
         alt_title = str(meta.get('aka', ""))
         year = str(meta.get('year', ""))
@@ -120,7 +122,7 @@ class NameManager:
         name = ""
         potential_missing: list[str] = []
         if meta['category'] == "MOVIE":  # MOVIE SPECIFIC
-            if type == "DISC":  # Disk
+            if type_value == "DISC":  # Disk
                 if meta['is_disc'] == 'BDMV':
                     name = f"{title} {alt_title} {year} {three_d} {edition} {hybrid} {repack} {resolution} {region} {uhd} {source} {hdr} {video_codec} {audio}"
                     potential_missing = ['edition', 'region', 'distributor']
@@ -130,29 +132,29 @@ class NameManager:
                 elif meta['is_disc'] == 'HDDVD':
                     name = f"{title} {alt_title} {year} {edition} {repack} {resolution} {source} {video_codec} {audio}"
                     potential_missing = ['edition', 'region', 'distributor']
-            elif type == "REMUX" and source in ("BluRay", "HDDVD"):  # BluRay/HDDVD Remux
+            elif type_value == "REMUX" and source in ("BluRay", "HDDVD"):  # BluRay/HDDVD Remux
                 name = f"{title} {alt_title} {year} {three_d} {edition} {hybrid} {repack} {resolution} {uhd} {source} REMUX {hdr} {video_codec} {audio}"
                 potential_missing = ['edition', 'description']
-            elif type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):  # DVD Remux
+            elif type_value == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):  # DVD Remux
                 name = f"{title} {alt_title} {year} {edition} {repack} {source} REMUX  {audio}"
                 potential_missing = ['edition', 'description']
-            elif type == "ENCODE":  # Encode
+            elif type_value == "ENCODE":  # Encode
                 name = f"{title} {alt_title} {year} {edition} {hybrid} {repack} {resolution} {uhd} {source} {audio} {hdr} {video_encode}"
                 potential_missing = ['edition', 'description']
-            elif type == "WEBDL":  # WEB-DL
+            elif type_value == "WEBDL":  # WEB-DL
                 name = f"{title} {alt_title} {year} {edition} {hybrid} {repack} {resolution} {uhd} {service} WEB-DL {audio} {hdr} {video_encode}"
                 potential_missing = ['edition', 'service']
-            elif type == "WEBRIP":  # WEBRip
+            elif type_value == "WEBRIP":  # WEBRip
                 name = f"{title} {alt_title} {year} {edition} {hybrid} {repack} {resolution} {uhd} {service} WEBRip {audio} {hdr} {video_encode}"
                 potential_missing = ['edition', 'service']
-            elif type == "HDTV":  # HDTV
+            elif type_value == "HDTV":  # HDTV
                 name = f"{title} {alt_title} {year} {edition} {repack} {resolution} {source} {audio} {video_encode}"
                 potential_missing = []
-            elif type == "DVDRIP":
+            elif type_value == "DVDRIP":
                 name = f"{title} {alt_title} {year} {source} {video_encode} DVDRip {audio}"
                 potential_missing = []
         elif meta['category'] == "TV":  # TV SPECIFIC
-            if type == "DISC":  # Disk
+            if type_value == "DISC":  # Disk
                 if meta['is_disc'] == 'BDMV':
                     name = f"{title} {year} {alt_title} {season}{episode} {three_d} {edition} {hybrid} {repack} {resolution} {region} {uhd} {source} {hdr} {video_codec} {audio}"
                     potential_missing = ['edition', 'region', 'distributor']
@@ -162,25 +164,25 @@ class NameManager:
                 elif meta['is_disc'] == 'HDDVD':
                     name = f"{title} {alt_title} {year} {edition} {repack} {resolution} {source} {video_codec} {audio}"
                     potential_missing = ['edition', 'region', 'distributor']
-            elif type == "REMUX" and source in ("BluRay", "HDDVD"):  # BluRay Remux
+            elif type_value == "REMUX" and source in ("BluRay", "HDDVD"):  # BluRay Remux
                 name = f"{title} {year} {alt_title} {season}{episode} {episode_title} {part} {three_d} {edition} {hybrid} {repack} {resolution} {uhd} {source} REMUX {hdr} {video_codec} {audio}"  # SOURCE
                 potential_missing = ['edition', 'description']
-            elif type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):  # DVD Remux
+            elif type_value == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):  # DVD Remux
                 name = f"{title} {year} {alt_title} {season}{episode} {episode_title} {part} {edition} {repack} {source} REMUX {audio}"  # SOURCE
                 potential_missing = ['edition', 'description']
-            elif type == "ENCODE":  # Encode
+            elif type_value == "ENCODE":  # Encode
                 name = f"{title} {year} {alt_title} {season}{episode} {episode_title} {part} {edition} {hybrid} {repack} {resolution} {uhd} {source} {audio} {hdr} {video_encode}"  # SOURCE
                 potential_missing = ['edition', 'description']
-            elif type == "WEBDL":  # WEB-DL
+            elif type_value == "WEBDL":  # WEB-DL
                 name = f"{title} {year} {alt_title} {season}{episode} {episode_title} {part} {edition} {hybrid} {repack} {resolution} {uhd} {service} WEB-DL {audio} {hdr} {video_encode}"
                 potential_missing = ['edition', 'service']
-            elif type == "WEBRIP":  # WEBRip
+            elif type_value == "WEBRIP":  # WEBRip
                 name = f"{title} {year} {alt_title} {season}{episode} {episode_title} {part} {edition} {hybrid} {repack} {resolution} {uhd} {service} WEBRip {audio} {hdr} {video_encode}"
                 potential_missing = ['edition', 'service']
-            elif type == "HDTV":  # HDTV
+            elif type_value == "HDTV":  # HDTV
                 name = f"{title} {year} {alt_title} {season}{episode} {episode_title} {part} {edition} {repack} {resolution} {source} {audio} {video_encode}"
                 potential_missing = []
-            elif type == "DVDRIP":
+            elif type_value == "DVDRIP":
                 name = f"{title} {year} {alt_title} {season} {source} DVDRip {audio} {video_encode}"
                 potential_missing = []
 
@@ -196,16 +198,16 @@ class NameManager:
             exit()
         name_notag = name
         name = name_notag + tag
-        clean_name = await self.clean_filename(name)
+        clean_name = self.clean_filename(name)
         return name_notag, name, clean_name, potential_missing
 
-    async def clean_filename(self, name: str) -> str:
+    def clean_filename(self, name: str) -> str:
         invalid = '<>:"/\\|?*'
         for char in invalid:
             name = name.replace(char, '-')
         return name
 
-    async def extract_title_and_year(self, meta: Meta, filename: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    def extract_title_and_year(self, meta: Meta, filename: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
         basename = os.path.basename(filename)
         basename = os.path.splitext(basename)[0]
 
@@ -400,8 +402,8 @@ class NameManager:
             "itunes": '',
         }
         filename = re.sub(r'\s+', ' ', filename)
-        filename = await self.multi_replace(title_part, replacements)
-        processed_secondary = await self.multi_replace(secondary_title or '', replacements)
+        filename = self.multi_replace(title_part, replacements)
+        processed_secondary = self.multi_replace(secondary_title or '', replacements)
         secondary_title = processed_secondary if processed_secondary else None
         if filename:
             # Look for content in parentheses
@@ -410,8 +412,7 @@ class NameManager:
 
             if bracket_match:
                 bracket_content = bracket_match.group(1).strip()
-                bracket_content = await self.multi_replace(bracket_content, replacements)
-
+                bracket_content = self.multi_replace(bracket_content, replacements)
                 # Only add to secondary_title if we don't already have one
                 if not secondary_title and bracket_content:
                     secondary_title = bracket_content
@@ -431,14 +432,14 @@ class NameManager:
 
         return None, None, None
 
-    async def multi_replace(self, text: str, replacements: dict[str, str]) -> str:
+    def multi_replace(self, text: str, replacements: dict[str, str]) -> str:
         for old, new in replacements.items():
             text = re.sub(re.escape(old), new, text, flags=re.IGNORECASE)
         return text
 
-    async def missing_disc_info(self, meta: Meta, active_trackers: Sequence[str]) -> tuple[str, str, list[str]]:
-        distributor_id = await self.common.unit3d_distributor_ids(str(meta.get('distributor', "")))
-        region_id = await self.common.unit3d_region_ids(str(meta.get('region', "")))
+    def missing_disc_info(self, meta: Meta, active_trackers: Sequence[str]) -> tuple[str, str, list[str]]:
+        distributor_id = self.common.unit3d_distributor_ids(str(meta.get('distributor', "")))
+        region_id = self.common.unit3d_region_ids(str(meta.get('region', "")))
         region_name = str(meta.get('region', ""))
         distributor_name = str(meta.get('distributor', ""))
         trackers_to_remove: list[str] = []
@@ -451,15 +452,19 @@ class NameManager:
                     strictest['region'] = 'mandatory'
                 if requirements.get('distributor') == 'mandatory':
                     strictest['distributor'] = 'mandatory'
+
             if not region_id:
-                region_name = await self._prompt_for_field(meta, "Region code", strictest['region'] == 'mandatory')
+                region_name = self._prompt_for_field(meta, "Region code", strictest['region'] == 'mandatory')
                 if region_name and region_name != "SKIPPED":
-                    region_id = await self.common.unit3d_region_ids(region_name)
+                    console.print(f"Looking up region ID for: {region_name}")
+                    region_id = self.common.unit3d_region_ids(region_name)
+                    console.print(f"Found region ID: {region_id}")
+
             if not distributor_id:
-                distributor_name = await self._prompt_for_field(meta, "Distributor", strictest['distributor'] == 'mandatory')
+                distributor_name = self._prompt_for_field(meta, "Distributor", strictest['distributor'] == 'mandatory')
                 if distributor_name and distributor_name != "SKIPPED":
                     console.print(f"Looking up distributor ID for: {distributor_name}")
-                    distributor_id = await self.common.unit3d_distributor_ids(distributor_name)
+                    distributor_id = self.common.unit3d_distributor_ids(distributor_name)
                     console.print(f"Found distributor ID: {distributor_id}")
 
             for tracker in active_trackers:
@@ -470,7 +475,7 @@ class NameManager:
 
         return region_name, distributor_name, trackers_to_remove
 
-    async def _prompt_for_field(self, meta: Meta, field_name: str, is_mandatory: bool) -> str:
+    def _prompt_for_field(self, meta: Meta, field_name: str, is_mandatory: bool) -> str:
         """Prompt user for disc field with appropriate mandatory/optional text."""
         if meta['unattended'] and not meta.get('unattended_confirm', False):
             return "SKIPPED"
@@ -481,6 +486,16 @@ class NameManager:
             return value.upper() if value else "SKIPPED"
         except EOFError:
             console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
-            await cleanup_manager.cleanup()
+            def _run_cleanup() -> None:
+                asyncio.run(cleanup_manager.cleanup())
+
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                _run_cleanup()
+            else:
+                cleanup_thread = threading.Thread(target=_run_cleanup, daemon=True)
+                cleanup_thread.start()
+                cleanup_thread.join()
             cleanup_manager.reset_terminal()
             sys.exit(1)
