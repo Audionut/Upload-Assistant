@@ -1,4 +1,34 @@
-__version__ = "v7.0.1"
+__version__ = "v7.0.2"
+
+"""
+Release Notes for version v7.0.2 (2026-02-07):
+
+# ## What's Changed
+# 
+# * fix(audio): set object based channel layout as LFE when not proper channel layout by @Audionut in f087110
+# * fix(meta): allow override automatic daily show decision by @Audionut in 0bec16e
+# * Add bilibili to services (#1203) by @WOSSFOSS in 5fabd3f
+# * RTF: improve api key update by @Audionut in 989d7ca
+# * fix(audio): bad copy/paste by @Audionut in 15d7ac7
+# * fix(meta): title objects in none by @Audionut in 82b6294
+# * fix(cleanup): handle asyncio cancellation by @Audionut in 1bfa698
+# * DP(feat) - remove -NOGROUP (#1210) by @emb3r-zzz in acd339c
+# * add 'Brasil Paralelo' service (#1209) by @wastaken7 in 1aa1e12
+# * fix(ASC, BT): skip upload if IMDb is missing (#1208) by @wastaken7 in 150acc1
+# * fix(bdmv): refactor playlist handling (#1213) by @Audionut in f826c64
+# * bump bdinfo version by @Audionut in 77aac01
+# * BHD: don't error on missing details id by @Audionut in 219c4f8
+# * fix(tvdb): series name from external id based search by @Audionut in 1599f7f
+# * Webui prompt fixes (#1212) by @Audionut in bdff010
+# * Add additional content quality checks (#1164) by @WOSSFOSS in 8983f4e
+# * feat(webui): Add desclink and descfile webui assistance to select and validate arguments. (#1182) by @maksii in 040f6d0
+# * SHRI: Fixed the audio language tag building following rules (#1207) by @gekiryu in 6c20128
+# * bump bdinfo by @Audionut in bdc14a9
+# * simplify playlist handling by @Audionut in 08f29ec
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v7.0.1...v7.0.2
+"""
+
 
 """
 Release Notes for version v7.0.1 (2026-02-01):
