@@ -13,6 +13,11 @@
     <style>
         /* Rich output area styling (keeps preformatted blocks readable) */
         #rich-output pre { white-space: pre-wrap; font-family: monospace; }
+        /* Smaller text output for mobile */
+        @media (max-width: 767px) {
+            #rich-output pre { font-size: 0.75rem; line-height: 1.25rem; }
+            #rich-output { font-size: 0.75rem; }
+        }
     </style>
 </head>
 <body>
