@@ -409,7 +409,7 @@ class BJS:
 
     async def get_tags(self) -> str:
         tags = ''
-        if self.already_has_the_info:
+        if BJS.already_has_the_info:
             return tags
 
         genres_data: list[dict[str, Any]] = self.main_tmdb_data.get('genres', [])
