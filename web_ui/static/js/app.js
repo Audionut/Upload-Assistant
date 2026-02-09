@@ -689,6 +689,15 @@ function AudionutsUAGUI() {
     loadBrowseRoots();
   }, []);
 
+  // Cleanup file browser search debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (fileBrowserSearchTimer.current) {
+        clearTimeout(fileBrowserSearchTimer.current);
+      }
+    };
+  }, []);
+
   // Focus input when executing
   useEffect(() => {
     if (isExecuting && inputRef.current) {
@@ -752,6 +761,9 @@ function AudionutsUAGUI() {
     fileBrowserSearchTimer.current = setTimeout(async () => {
       try {
         const response = await apiFetch(`${API_BASE}/browse_search?q=${encodeURIComponent(searchQuery)}`);
+        if (!response.ok) {
+          throw new Error(`Search request failed (${response.status})`);
+        }
         const data = await response.json();
         // Early return if the search has changed since this request
         if (fileBrowserSearchQuery.current !== searchQuery) return;
