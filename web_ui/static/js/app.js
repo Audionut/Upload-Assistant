@@ -783,7 +783,7 @@ function AudionutsUAGUI() {
       );
     }
     return results.items.map((item, idx) => {
-      const separatorIdx = item.path.lastIndexOf('/');
+      const separatorIdx = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
       const parentPath = separatorIdx > 0 ? item.path.substring(0, separatorIdx) : '';
       return (
         <div key={idx}>
