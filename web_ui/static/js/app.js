@@ -1229,7 +1229,7 @@ function AudionutsUAGUI() {
           </div>
         </div>
 
-        {/* Mobile Content Area. All panels rendered, visibility toggled to preserve refs */}
+        {/* Mobile Content Area. Main panel always mounted (hidden when inactive) to preserve terminal output ref; Files and Args panels conditionally rendered */}
         <div className="flex-1 overflow-hidden relative">
           {/* Files Panel */}
           {activePanel === 'files' && (
@@ -1331,7 +1331,7 @@ function AudionutsUAGUI() {
                 ) : (
                   <button
                     onClick={() => setActivePanel('files')}
-                    className={`w-full p-3 rounded-lg border-2 border-dashed text-center ${isDarkMode ? 'border-gray-600 text-gray-400 hover:border-purple-500 hover:text-purple-400' : 'border-gray-300 text-gray-500 hover:border-purple-500 hover:text-purple-600'}`}
+                    className={`w-full p-3 rounded-lg border-2 border-dashed text-center inline-flex items-center justify-center ${isDarkMode ? 'border-gray-600 text-gray-400 hover:border-purple-500 hover:text-purple-400' : 'border-gray-300 text-gray-500 hover:border-purple-500 hover:text-purple-600'}`}
                   >
                     <FolderIcon />
                     <span className="text-sm ml-2">Tap to select a file or folder</span>
