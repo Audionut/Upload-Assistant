@@ -491,6 +491,9 @@ SUPPORTED_VIDEO_EXTS = {'.mkv', '.mp4', '.ts'}
 # Supported description file extensions for WebUI description file browser
 SUPPORTED_DESC_EXTS = {'.txt', '.nfo', '.md'}
 
+# Regex for splitting filenames on common separators (dots, dashes, underscores, spaces)
+_BROWSE_SEARCH_SEP_RE = re.compile(r'[\s.\-_]+')
+
 # Lock to prevent concurrent in-process uploads (avoids cross-session interference)
 inproc_lock = threading.Lock()
 
@@ -2814,6 +2817,124 @@ def browse_path():
         console.print(f"Error browsing {path}: {e}", markup=False)
         console.print(traceback.format_exc(), markup=False)
         return jsonify({"error": "Error browsing path", "success": False}), 500
+
+
+@app.route("/api/browse_search")
+def browse_search():
+    """Search filesystem for files/folders matching a query string"""
+    query = (request.args.get("q") or "").strip()
+    file_filter = request.args.get("filter", "video")
+    try:
+        max_results = min(int(request.args.get("max_results", "100")), 500)
+        if max_results < 1:
+            max_results = 100
+    except (ValueError, TypeError):
+        max_results = 100
+
+    if not query:
+        return jsonify({"success": True, "items": [], "query": ""})
+
+    bearer = _get_bearer_from_header()
+    if bearer:
+        if not _token_is_valid(bearer):
+            return jsonify({"success": False, "error": "Forbidden (invalid token)"}), 403
+    else:
+        if not _is_authenticated():
+            return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+        if not _verify_csrf_header() or not _verify_same_origin():
+            return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+
+    roots = _get_browse_roots()
+    if not roots:
+        return jsonify({"success": False, "error": "Browsing is not configured"}), 400
+
+    # Split on common separators
+    query_tokens = [t for t in _BROWSE_SEARCH_SEP_RE.split(query.lower()) if t]
+    if not query_tokens:
+        return jsonify({"success": True, "items": [], "query": query})
+
+    def name_matches(name: str) -> bool:
+        """Check if query tokens appear as whole-word ordered subsequence in the name."""
+        name_tokens = [t for t in _BROWSE_SEARCH_SEP_RE.split(name.lower()) if t]
+        pos = 0
+        for qt in query_tokens:
+            found = False
+            while pos < len(name_tokens):
+                if name_tokens[pos] == qt:
+                    pos += 1
+                    found = True
+                    break
+                pos += 1
+            if not found:
+                return False
+        return True
+
+    allowed_exts = SUPPORTED_DESC_EXTS if file_filter == "desc" else SUPPORTED_VIDEO_EXTS
+    items: list[BrowseItem] = []
+
+    try:
+        for root in roots:
+            root_abs = os.path.abspath(root)
+            if not os.path.isdir(root_abs):
+                continue
+            try:
+                for dirpath, dirnames, filenames in os.walk(root_abs):
+                    # Skip hidden dirs
+                    dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+
+                    # Check dirs
+                    for dirname in dirnames:
+                        if name_matches(dirname):
+                            full_path = os.path.join(dirpath, dirname)
+                            try:
+                                _assert_safe_resolved_path(full_path)
+                            except ValueError:
+                                continue
+                            items.append({"name": dirname, "path": full_path, "type": "folder", "children": []})
+                            if len(items) >= max_results:
+                                break
+
+                    if len(items) >= max_results:
+                        break
+
+                    # Check files
+                    for filename in filenames:
+                        if filename.startswith("."):
+                            continue
+                        if not name_matches(filename):
+                            continue
+                        _, ext = os.path.splitext(filename.lower())
+                        if ext not in allowed_exts:
+                            continue
+                        full_path = os.path.join(dirpath, filename)
+                        try:
+                            _assert_safe_resolved_path(full_path)
+                        except ValueError:
+                            continue
+                        items.append({"name": filename, "path": full_path, "type": "file", "children": None})
+                        if len(items) >= max_results:
+                            break
+
+                    if len(items) >= max_results:
+                        break
+            except PermissionError:
+                continue
+            except Exception as e:
+                console.print(f"Error searching in {root}: {e}", markup=False)
+                continue
+
+            if len(items) >= max_results:
+                break
+
+        # Sort by folders first and then alphabetically
+        items.sort(key=lambda x: (0 if x.get("type") == "folder" else 1, (x.get("name") or "").lower()))
+
+        return jsonify({"success": True, "items": items, "query": query, "count": len(items), "truncated": len(items) >= max_results})
+
+    except Exception as e:
+        console.print(f"Error in browse_search: {e}", markup=False)
+        console.print(traceback.format_exc(), markup=False)
+        return jsonify({"error": "Error searching files", "success": False}), 500
 
 
 @app.route("/api/execute", methods=["POST", "OPTIONS"])
