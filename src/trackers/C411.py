@@ -352,21 +352,6 @@ class C411():
                 console.print(f"https://c411.org/torrents?q={meta['title']}%20{meta['year']}%20{meta['season_int']}&cat=1&subcat=7")
 
         return ['Dupes must be checked Manually']
-    #
-#    curl -X POST "https://c411.org/api/torrents"
-#    -H "Authorization: Bearer VOTRE_CLE_API"
-#    -F torrent@ - Fichier .torrent (max 10MB)
-#    -F nfo@ - Fichier NFO (max 5MB)
-#    -F title - Titre (3-200 caractères)
-#    -F description - Description HTML (min 20 caractères)
-#    -F categoryId - ID de catégorie
-#    -F subcategoryId - ID de sous-catégorie
-#   -F options - options={"1": [2, 4], "2": 25, "7": 121, "6": 96}   #Options en JSON (langue, qualité, etc.)
-# optional
-#   -F isExclusive - "true" pour release exclusive
-#   -F uploaderNote - Note pour les modérateurs
-#   -F tmdbData - Métadonnées TMDB (JSON)
-#   -F rawgData - Métadonnées RAWG pour jeux (JSON)
 
     async def upload(self, meta: Meta, _disctype: str) -> bool:
 
@@ -449,7 +434,6 @@ class C411():
                             "status_message"
                         ] = f"data error: HTTP {e.response.status_code} - {e.response.text}"
                         return False
-                        ] = f"data error: HTTP {e.response.status_code} - {e.response.text}"
                     else:
                         # Retry other HTTP errors
                         if attempt < max_retries - 1:
@@ -522,8 +506,6 @@ class C411():
             "id": torrent_hash,
             "apikey": self.config['TRACKERS'][self.tracker]['api_key'].strip(),
         }
-# https://c411.org/api/?t=get&id=35faeb2c08d7d7448da7c7afd4048f16b02cc4ad&apikey=d95f4844860d1d23d0b3907efe098f561e519fe13af3eaa8fcf8949c0ce56645
-        # https://c411.org/api/?t=get&id={{infoHash}}&apikey={{config.API_KEY}}
         try:
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
                 r = await client.get(self.torrent_url, params=params)
