@@ -466,6 +466,13 @@ config = {
             "announce_url": "https://t.brasiltracker.org/<PASSKEY>/announce",
             "anon": False,
         },
+        "C411": {
+            "link_dir_name": "",
+            "api_key": "",
+            "announce_url": "https://c411.org/announce/<PASSKEY>",
+            "anon": False,
+            "modq": False,
+        },
         "CBR": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
