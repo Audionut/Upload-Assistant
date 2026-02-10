@@ -13,6 +13,7 @@ import asyncio
 import src.trackers.FRENCH as fr
 import unidecode
 from typing import Any, Callable, Optional, Union, cast
+from lxml import etree
 Meta = dict[str, Any]
 Config = dict[str, Any]
 
@@ -26,7 +27,7 @@ class C411():
         self.id_url = f'{self.base_url}/api/torrents'
         self.upload_url = f'{self.base_url}/api/torrents'
         # self.requests_url = f'{self.base_url}/api/requests/filter'
-        # self.search_url = f'{self.base_url}/api/torrents/filter'
+        self.search_url = f'{self.base_url}/api/?t=search'
         self.torrent_url = f'{self.base_url}/api/'
         self.banned_groups: list[str] = []
         pass
@@ -337,21 +338,34 @@ class C411():
 
         return True
 
-    async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[str]:
-        if meta['category'] == 'MOVIE':
-            if meta.get('mal_id'):
-                console.print(f"https://c411.org/torrents?q={meta['title']}%20{meta['year']}&cat=1&subcat=1")
-            else:
-                console.print(f"https://c411.org/torrents?q={meta['title']}%20{meta['year']}&cat=1&subcat=6")
+    async def search_existing(self, meta: dict[str, Any], _) -> list[str]:
+        dupes: list[str] = []
+        params: dict[str, Any] = {
+            'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
+            'q': unidecode.unidecode(acm_name["name"].replace(" ", "."))
+        }
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(url=self.search_url, params=params)
+                if response.status_code == 200:
+                    root = etree.fromstring(response.text)
+                    #data = response.json()
+                    for each in data['data']:
+                        result = each['attributes']['name']
+                        dupes.append(result)
+                else:
+                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
+        except httpx.TimeoutException:
+            console.print("[bold red]Request timed out after 5 seconds")
+        except httpx.RequestError as e:
+            console.print(f"[bold red]Unable to search for existing torrents: {e}")
+        except Exception as e:
+            console.print(f"[bold red]Unexpected error: {e}")
+            await asyncio.sleep(5)
 
-        elif meta['category'] == 'TV':
+        return dupes
 
-            if meta.get('mal_id'):
-                console.print(f"https://c411.org/torrents?q={meta['title']}%20{meta['year']}%20{meta['season_int']}&cat=1&subcat=2")
-            else:
-                console.print(f"https://c411.org/torrents?q={meta['title']}%20{meta['year']}%20{meta['season_int']}&cat=1&subcat=7")
-
-        return ['Dupes must be checked Manually']
+    
 
     async def upload(self, meta: Meta, _disctype: str) -> bool:
 
