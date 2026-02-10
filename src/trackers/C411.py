@@ -55,7 +55,7 @@ class C411():
     # unknow  return type
 
     async def get_option_tag(self, meta: Meta):
-        obj1 = ""
+        obj1 = []
         obj2 = None
         vff = None
         vfq = None
@@ -72,16 +72,16 @@ class C411():
             if item['Language'] == "en" or item['Language'] == "en-us" or item['Language'] == "en-gb":
                 eng = True
 
-        if eng and not vff or vfq:  # vo
-            obj1 = obj1 + "1,"
+        if eng and not vff and not vfq:  # vo
+            obj1.append(1)
 
         # VO VOSTFR
         if vff and vfq:
-            obj1 = obj1 + "4,"
+            obj1.append(4)
         if vfq:
-            obj1 = obj1 + "5,"
+            obj1.append(5)
         if vff:
-            obj1 = obj1 + "2"
+            obj1.append(2)
 
         # set quality
         if meta['is_disc'] == 'BDMV':
@@ -150,7 +150,7 @@ class C411():
         # hdlight 720
         # vcd/vhs
         options_dict = {}
-        options_dict[1] = [obj1]
+        options_dict[1] = obj1
         options_dict[2] = [obj2]
         # Let's see if it's a tv show
         if meta['category'] == 'TV':
@@ -371,7 +371,7 @@ class C411():
     async def upload(self, meta: Meta, _disctype: str) -> bool:
 
         await self.common.create_torrent_for_upload(meta, self.tracker, 'C411')
-        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent"
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         mediainfo_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
 
         headers = {
@@ -447,6 +447,8 @@ class C411():
                     elif e.response.status_code in [401, 404, 422]:
                         meta["tracker_status"][self.tracker][
                             "status_message"
+                        ] = f"data error: HTTP {e.response.status_code} - {e.response.text}"
+                        return False
                         ] = f"data error: HTTP {e.response.status_code} - {e.response.text}"
                     else:
                         # Retry other HTTP errors
