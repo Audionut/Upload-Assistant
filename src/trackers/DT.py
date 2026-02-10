@@ -66,7 +66,7 @@ class DT(UNIT3D):
             'REMUX': '5',   # Defaulting to BD Remux
             'ENCODE': '12', # Defaulting to BD Encode
             'WEBDL': '11',
-            'WEBRIP': '11',
+            'WEBRIP': '12', # Changed to Encode per tracker rules
             'HDTV': '13',
             'DVD': '8'
         }
@@ -92,8 +92,10 @@ class DT(UNIT3D):
                 resolved_id = '2' if is_uhd else '5'
             elif meta_type == 'ENCODE':
                 resolved_id = '1' if is_uhd else '12'
-            elif meta_type in ['WEBDL', 'WEBRIP']:
+            elif meta_type == 'WEBDL':
                 resolved_id = '11'
+            elif meta_type == 'WEBRIP':
+                resolved_id = '12' # Mapped to Encode
             elif meta_type == 'DVD':
                 resolved_id = '8'
             elif meta_type == 'HDTV':
