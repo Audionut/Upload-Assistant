@@ -16,7 +16,7 @@ class DT(UNIT3D):
 
         # Banned Groups
         self.banned_groups = [
-            "DusIcTv", "PHDM", "PDHM", "Ranvijay",
+            "DusIcTv", "PDHM", "Ranvijay",
             "BWT", "DDH", "Telly", "YTS", "RARBG",
             "BonsaiHD", "GalaxyRG", "-=!DrSTAR!=-"
         ]
