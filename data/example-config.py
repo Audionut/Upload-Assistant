@@ -776,6 +776,8 @@ config = {
             "api_key": "",
             "announce_url": "https://rocket-hd.cc/announce/Custom_Announce_URL",
             "anon": False,
+            # Use German title instead of English title, if available
+            "use_german_title": False,
         },
         "RF": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
