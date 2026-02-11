@@ -771,7 +771,7 @@ class TVC:
 
         # MINIMAL TVC FIX
         desc = desc.replace("[center]\n", "[center]")
-        
+
         # Collapse any run of 2+ newlines into a single newline
         desc = re.sub(r"\n{2,}", "\n", desc)
 
@@ -782,12 +782,16 @@ class TVC:
         if signature:
             desc += f"\n{signature}\n"
 
-        # Write description asynchronously
-        def _write():
-            with open(descfile_path, "w", encoding="utf-8") as f:
-                f.write(desc)
+        try:
+            # Write description asynchronously
+            def _write():
+                with open(descfile_path, "w", encoding="utf-8") as f:
+                    f.write(desc)
 
-        await asyncio.to_thread(_write)
+            await asyncio.to_thread(_write)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to write description file: {e}[/yellow]")
+
         return desc
 
 
