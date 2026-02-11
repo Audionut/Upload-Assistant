@@ -340,10 +340,11 @@ class C411():
 
     async def search_existing(self, meta: dict[str, Any], _) -> list[str]:
         dupes: list[str] = []
+        title = str(meta.get('title', '')).strip()
         params: dict[str, Any] = {
-            't': search,
+            't': 'search',
             'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
-            'q': unidecode.unidecode(acm_name["name"].replace(" ", "."))
+            'q': unidecode.unidecode(title.replace(" ", "."))
         }
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
