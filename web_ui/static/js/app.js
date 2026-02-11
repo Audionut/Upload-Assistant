@@ -335,6 +335,10 @@ function AudionutsUAGUI() {
   const [argSearchFilter, setArgSearchFilter] = useState('');
   const [collapsedSections, setCollapsedSections] = useState(new Set());
   
+  // Mobile state
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [activePanel, setActivePanel] = useState('main'); // 'main' | 'files' | 'args'
+  
   // File Browser search states
   const [fileBrowserSearch, setFileBrowserSearch] = useState('');
   const [fileBrowserSearchResults, setFileBrowserSearchResults] = useState(null);
@@ -685,6 +689,24 @@ function AudionutsUAGUI() {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
+  // Mobile resize listener
+  useEffect(() => {
+    let resizeTimer;
+    const handleResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const mobile = window.innerWidth < 768;
+        setIsMobile(mobile);
+        if (!mobile) setActivePanel('main');
+      }, 100);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => {
+      clearTimeout(resizeTimer);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
   useEffect(() => {
     loadBrowseRoots();
   }, []);
@@ -744,6 +766,21 @@ function AudionutsUAGUI() {
     }
   };
 
+  const updateDirectoryTree = (path, items) => {
+    const updateTree = (nodes) => {
+      return nodes.map(node => {
+        if (node.path === path) {
+          return { ...node, children: items };
+        } else if (node.children) {
+          return { ...node, children: updateTree(node.children) };
+        }
+        return node;
+      });
+    };
+    
+    setDirectories((prev) => updateTree(prev));
+  };
+
   // File Browser search
   const handleFileBrowserSearch = (value) => {
     setFileBrowserSearch(value);
@@ -800,7 +837,7 @@ function AudionutsUAGUI() {
       return (
         <div key={idx}>
           <div
-            className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+            className={`flex items-center gap-2 px-3 ${isMobile ? 'py-3' : 'py-2'} cursor-pointer transition-colors ${
               selectedPath === item.path
                 ? isDarkMode
                   ? 'bg-purple-900 border-l-4 border-purple-500'
@@ -813,6 +850,7 @@ function AudionutsUAGUI() {
             onClick={() => {
               setSelectedPath(item.path);
               setSelectedName(item.name);
+              if (isMobile) setActivePanel('main');
             }}
           >
             <span className={`flex-shrink-0 ${item.type === 'folder' ? 'text-yellow-600' : 'text-blue-600'}`}>
@@ -832,28 +870,13 @@ function AudionutsUAGUI() {
     });
   };
 
-  const updateDirectoryTree = (path, items) => {
-    const updateTree = (nodes) => {
-      return nodes.map(node => {
-        if (node.path === path) {
-          return { ...node, children: items };
-        } else if (node.children) {
-          return { ...node, children: updateTree(node.children) };
-        }
-        return node;
-      });
-    };
-    
-    setDirectories((prev) => updateTree(prev));
-  };
-
   const renderFileTree = (items, level = 0) => {
     return items.map((item, idx) => {
       const isLoading = item.type === 'folder' && loadingFolders.has(item.path);
       return (
         <div key={idx}>
           <div
-            className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+            className={`flex items-center gap-2 px-3 ${isMobile ? 'py-3' : 'py-2'} cursor-pointer transition-colors ${
               selectedPath === item.path 
                 ? isDarkMode 
                   ? 'bg-purple-900 border-l-4 border-purple-500' 
@@ -869,6 +892,7 @@ function AudionutsUAGUI() {
               }
               setSelectedPath(item.path);
               setSelectedName(item.name);
+              if (isMobile && item.type !== 'folder') setActivePanel('main');
             }}
           >
             <span className={`flex-shrink-0 ${isLoading ? 'text-purple-500' : 'text-yellow-600'}`}>
@@ -903,7 +927,7 @@ function AudionutsUAGUI() {
       return (
         <div key={idx}>
           <div
-            className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+            className={`flex items-center gap-2 px-3 ${isMobile ? 'py-3' : 'py-2'} cursor-pointer transition-colors ${
               descFilePath === item.path 
                 ? isDarkMode 
                   ? 'bg-green-900 border-l-4 border-green-500' 
@@ -1263,6 +1287,456 @@ function AudionutsUAGUI() {
 
   const filteredCategories = getFilteredCategories();
 
+  // Mobile Layout
+  if (isMobile) {
+    const navButton = (panel, icon, label) => (
+      <button
+        key={panel}
+        onClick={() => setActivePanel(panel)}
+        className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 transition-colors ${
+          activePanel === panel
+            ? 'text-purple-400 border-t-2 border-purple-400'
+            : isDarkMode ? 'text-gray-400' : 'text-gray-500'
+        }`}
+      >
+        {icon}
+        <span className="text-xs font-medium">{label}</span>
+      </button>
+    );
+
+    return (
+      <div className={`flex flex-col h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        {/* Mobile Header */}
+        <div className={`flex items-center justify-between px-4 py-3 border-b flex-shrink-0 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+          <h1 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'} flex items-center gap-2`}>
+            <UploadIcon />
+            Upload Assistant
+          </h1>
+          <div className="flex items-center gap-2">
+            <a
+              href={`${APP_BASE}/config`}
+              className="px-2 py-1 rounded text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700"
+            >
+              Config
+            </a>
+            <button
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isDarkMode ? 'bg-purple-600' : 'bg-gray-300'}`}
+            >
+              <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${isDarkMode ? 'translate-x-5' : 'translate-x-1'}`} />
+            </button>
+            <a
+              href={`${APP_BASE}/logout`}
+              className="px-2 py-1 rounded text-xs font-semibold bg-red-600 text-white hover:bg-red-700"
+            >
+              Logout
+            </a>
+          </div>
+        </div>
+
+        {/* Mobile Content Area. Main panel always mounted (hidden when inactive) to preserve terminal output ref; Files and Args panels conditionally rendered */}
+        <div className="flex-1 overflow-hidden relative">
+          {/* Files Panel */}
+          {activePanel === 'files' && (
+            <div className="flex flex-col h-full">
+              <div className={`p-3 border-b flex-shrink-0 ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gradient-to-r from-purple-50 to-blue-50'}`}>
+                <h2 className={`text-base font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'} flex items-center gap-2`}>
+                  <FolderIcon />
+                  File Browser
+                </h2>
+                <div className="relative mt-2">
+                  <input
+                    type="text"
+                    value={fileBrowserSearch}
+                    onChange={(e) => handleFileBrowserSearch(e.target.value)}
+                    placeholder="Search files and folders..."
+                    className={`w-full pl-8 pr-8 py-1.5 text-sm rounded border ${
+                      isDarkMode
+                        ? 'bg-gray-800 border-gray-600 text-gray-200 placeholder-gray-500 focus:border-purple-500'
+                        : 'bg-white border-gray-300 text-gray-700 placeholder-gray-400 focus:border-blue-500'
+                    } focus:outline-none focus:ring-1 ${isDarkMode ? 'focus:ring-purple-500' : 'focus:ring-blue-500'}`}
+                  />
+                  <svg className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  {fileBrowserSearch && (
+                    <button
+                      onClick={() => handleFileBrowserSearch('')}
+                      className={`absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className={`flex-1 overflow-y-auto ${hasDescFile && !descBrowserCollapsed ? 'max-h-[50%]' : ''}`}>
+                {fileBrowserSearch ? (
+                  fileBrowserSearchLoading ? (
+                    <div className={`p-4 text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      <SpinnerIcon />
+                      <p className="text-sm mt-2">Searching...</p>
+                    </div>
+                  ) : (
+                    <>
+                      {fileBrowserSearchResults && fileBrowserSearchResults.truncated && (
+                        <div className={`px-3 py-1.5 text-xs ${isDarkMode ? 'text-yellow-400 bg-gray-900' : 'text-yellow-700 bg-yellow-50'} border-b ${isDarkMode ? 'border-gray-700' : 'border-yellow-200'}`}>
+                          Results limited to {fileBrowserSearchResults.count} items
+                        </div>
+                      )}
+                      {renderSearchResults(fileBrowserSearchResults)}
+                    </>
+                  )
+                ) : (
+                  renderFileTree(directories)
+                )}
+              </div>
+
+              {/* Description File Browser */}
+              {hasDescFile && (
+                <>
+                  <div
+                    className={`p-3 border-t flex-shrink-0 ${!descBrowserCollapsed ? 'border-b' : ''} ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50'} ${descBrowserCollapsed ? 'cursor-pointer' : ''}`}
+                    onClick={descBrowserCollapsed ? () => setDescBrowserCollapsed(false) : undefined}
+                  >
+                    <div className="flex items-center justify-between">
+                      <h2 className={`text-base font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'} flex items-center gap-2`}>
+                        <FileIcon />
+                        Description File
+                        {descBrowserCollapsed && descFilePath && !descFileError && (
+                          <span className="text-green-500 ml-1">
+                            <svg className="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </span>
+                        )}
+                      </h2>
+                      {descBrowserCollapsed ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDescBrowserCollapsed(false); }}
+                          className={`p-1 rounded ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                        >
+                          <ChevronDownIcon />
+                        </button>
+                      ) : descFilePath && !descFileError && (
+                        <button
+                          onClick={() => setDescBrowserCollapsed(true)}
+                          className={`p-1 rounded ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                        >
+                          <ChevronRightIcon />
+                        </button>
+                      )}
+                    </div>
+                    {descBrowserCollapsed && descFilePath ? (
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className={`text-xs ${descFileError ? (isDarkMode ? 'text-red-400' : 'text-red-600') : (isDarkMode ? 'text-green-400' : 'text-green-700')} break-all font-mono flex-1`}>{descFilePath}</p>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); updateDescFile(''); setDescBrowserCollapsed(false); }}
+                          className={`p-1 rounded ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : !descBrowserCollapsed && (
+                      <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Select a .txt, .nfo, or .md file
+                      </p>
+                    )}
+                  </div>
+                  {!descBrowserCollapsed && (
+                    <div className="flex-1 overflow-y-auto">
+                      {descDirectories.length > 0 ? renderDescFileTree(descDirectories) : (
+                        <div className={`p-4 text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                          <p className="text-sm">Loading description files...</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Main Upload Panel */}
+          <div className={`flex flex-col h-full ${activePanel === 'main' ? '' : 'hidden'}`}>
+              {/* Top controls */}
+              <div className={`p-3 space-y-3 border-b flex-shrink-0 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                {selectedPath ? (
+                  <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-blue-50 border-blue-200'} border`}>
+                    <div className="flex items-center justify-between">
+                      <p className={`text-xs font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Selected:</p>
+                      <button
+                        onClick={() => setActivePanel('files')}
+                        className={`text-xs px-2 py-0.5 rounded ${isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
+                      >
+                        Browse
+                      </button>
+                    </div>
+                    <p className={`text-xs ${isDarkMode ? 'text-white' : 'text-gray-800'} break-all font-mono mt-1`}>{selectedPath}</p>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setActivePanel('files')}
+                    className={`w-full p-3 rounded-lg border-2 border-dashed text-center inline-flex items-center justify-center ${isDarkMode ? 'border-gray-600 text-gray-400 hover:border-purple-500 hover:text-purple-400' : 'border-gray-300 text-gray-500 hover:border-purple-500 hover:text-purple-600'}`}
+                  >
+                    <FolderIcon />
+                    <span className="text-sm ml-2">Tap to select a file or folder</span>
+                  </button>
+                )}
+
+                {/* Args input */}
+                <input
+                  type="text"
+                  value={customArgs}
+                  onChange={(e) => setCustomArgs(e.target.value)}
+                  placeholder="--tmdb movie/12345 --trackers ptp,aither"
+                  className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
+                    isDarkMode
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                  disabled={isExecuting}
+                />
+
+                {/* Desc Link Input */}
+                {hasDescLink && (!descLinkUrl || descLinkFocused || descLinkError) && (
+                  <div className="space-y-1">
+                    <label className={`text-xs font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Description Link URL:</label>
+                    <input
+                      type="url"
+                      value={descLinkUrl}
+                      onChange={(e) => updateDescLink(e.target.value)}
+                      onFocus={() => setDescLinkFocused(true)}
+                      onBlur={() => setDescLinkFocused(false)}
+                      placeholder="https://pastebin.com/abc123"
+                      className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
+                        descLinkError
+                          ? 'border-red-500 focus:ring-red-500'
+                          : isDarkMode
+                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                            : 'bg-white border-gray-300 text-gray-900'
+                      }`}
+                      disabled={isExecuting}
+                    />
+                    {descLinkError && <p className="text-xs text-red-500">{descLinkError}</p>}
+                  </div>
+                )}
+
+                {hasDescFile && (descFileError || !descFilePath) && (
+                  <div className={`p-2 rounded-lg text-xs ${
+                    descFileError
+                      ? isDarkMode ? 'bg-red-900 border border-red-700 text-red-300' : 'bg-red-50 border border-red-200 text-red-700'
+                      : isDarkMode ? 'bg-yellow-900 border border-yellow-700 text-yellow-300' : 'bg-yellow-50 border border-yellow-200 text-yellow-700'
+                  }`}>
+                    {descFileError || 'Select a description file from the Files panel'}
+                  </div>
+                )}
+
+                {/* Execute & Kill buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={executeCommand}
+                    disabled={!selectedPath || isExecuting}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+                  >
+                    <PlayIcon />
+                    {isExecuting ? 'Executing...' : 'Execute Upload'}
+                  </button>
+                  <button
+                    onClick={clearTerminal}
+                    className={`flex items-center gap-1 px-3 py-3 rounded-lg transition-colors ${
+                      isExecuting
+                        ? 'bg-red-600 hover:bg-red-700 text-white'
+                        : 'bg-gray-600 hover:bg-gray-700 text-white'
+                    }`}
+                    title={isExecuting ? 'Kill process and clear terminal' : 'Clear terminal'}
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
+              </div>
+
+              {/* Terminal output */}
+              <div className={`flex-1 p-3 flex flex-col min-h-0 overflow-hidden ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+                <div className="flex items-center gap-2 mb-2 flex-shrink-0">
+                  <span className={isDarkMode ? 'text-white' : 'text-gray-800'}><TerminalIcon /></span>
+                  <h3 className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Output</h3>
+                  {isExecuting && (
+                    <span className="ml-auto text-xs text-green-400 animate-pulse">● Running</span>
+                  )}
+                </div>
+                <div
+                  ref={richOutputRef}
+                  id="rich-output"
+                  className={`flex-1 rounded-lg overflow-auto p-2 border text-sm ${isDarkMode ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-900'}`}
+                ></div>
+                {isExecuting && (
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      ref={inputRef}
+                      value={userInput}
+                      onChange={(e) => setUserInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); sendInput(sessionId, userInput); } }}
+                      placeholder="Type input and press Enter"
+                      className={`flex-1 px-3 py-2 text-sm rounded-lg border focus:ring-2 focus:ring-purple-500 focus:border-transparent ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                    />
+                    <button
+                      onClick={() => sendInput(sessionId, userInput)}
+                      disabled={!sessionId || !userInput}
+                      className="px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 text-sm"
+                    >
+                      Send
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          {/* Args Panel */}
+          {activePanel === 'args' && (
+            <div className="flex flex-col h-full">
+              <div className={`p-3 border-b flex-shrink-0 ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gradient-to-l from-purple-50 to-blue-50'}`}>
+                <h2 className={`text-base font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'} flex items-center gap-2`}>
+                  <TerminalIcon />
+                  Arguments
+                </h2>
+              </div>
+
+              {/* Search and Collapse Controls */}
+              <div className={`p-3 border-b flex-shrink-0 ${isDarkMode ? 'border-gray-700' : 'border-gray-200'} space-y-2`}>
+                <div className="relative">
+                  <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    <SearchIcon />
+                  </div>
+                  <input
+                    type="text"
+                    value={argSearchFilter}
+                    onChange={(e) => setArgSearchFilter(e.target.value)}
+                    placeholder="Search arguments..."
+                    className={`w-full pl-10 pr-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
+                      isDarkMode
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                    }`}
+                  />
+                  {argSearchFilter && (
+                    <button
+                      onClick={() => setArgSearchFilter('')}
+                      className={`absolute inset-y-0 right-0 pr-3 flex items-center ${isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={collapseAllSections}
+                    className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                      isDarkMode
+                        ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
+                        : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <CollapseAllIcon />
+                    Collapse All
+                  </button>
+                  <button
+                    onClick={expandAllSections}
+                    className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                      isDarkMode
+                        ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
+                        : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <ExpandAllIcon />
+                    Expand All
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {filteredCategories.length === 0 ? (
+                  <div className={`text-center py-8 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    <p className="text-sm">No arguments found matching "{argSearchFilter}"</p>
+                  </div>
+                ) : (
+                  filteredCategories.map((cat) => (
+                    <div key={cat.title} className={`rounded-lg border ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                      <button
+                        onClick={() => toggleSectionCollapse(cat.title)}
+                        className={`w-full flex items-center justify-between p-3 text-left transition-colors rounded-t-lg ${
+                          isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
+                        } ${collapsedSections.has(cat.title) ? 'rounded-b-lg' : ''}`}
+                      >
+                        <div className="flex-1">
+                          <div className={`text-sm font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'} flex items-center gap-2`}>
+                            <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>
+                              {collapsedSections.has(cat.title) ? <ChevronRightIcon /> : <ChevronDownIcon />}
+                            </span>
+                            {cat.title}
+                            <span className={`text-xs font-normal px-1.5 py-0.5 rounded ${isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500'}`}>
+                              {cat.args.length}
+                            </span>
+                          </div>
+                          {cat.subtitle && !collapsedSections.has(cat.title) && (
+                            <div className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{cat.subtitle}</div>
+                          )}
+                        </div>
+                      </button>
+                      {!collapsedSections.has(cat.title) && (
+                        <div className={`px-3 pb-3 pt-2 ${isDarkMode ? 'border-t border-gray-700' : 'border-t border-gray-200'}`}>
+                          <div className="grid grid-cols-1 gap-2">
+                            {cat.args.map((a) => (
+                              <div
+                                key={a.label}
+                                className={`w-full p-2 rounded-lg border ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <button
+                                    onClick={() => addArgument(a.label)}
+                                    disabled={isExecuting}
+                                    className={`px-3 py-1.5 text-sm font-mono rounded-md border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white hover:bg-purple-600 hover:text-white' : 'bg-white border-gray-200 text-gray-800 hover:bg-purple-600 hover:text-white'} transition-colors`}
+                                  >
+                                    {a.label}
+                                  </button>
+                                  <div className="flex-1 text-right">
+                                    {a.placeholder && (
+                                      <div className={`text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-500'} font-mono`}>{a.placeholder}</div>
+                                    )}
+                                  </div>
+                                </div>
+                                {a.description && (
+                                  <div className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{a.description}</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom Nav */}
+        <div className={`flex border-t flex-shrink-0 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+          {navButton('files', <FolderIcon />, 'Files')}
+          {navButton('main', <UploadIcon />, 'Upload')}
+          {navButton('args', <TerminalIcon />, 'Arguments')}
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop Layout
   return (
     <div className={`flex h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} overflow-hidden`}>
       {/* Left Sidebar - Resizable */}
