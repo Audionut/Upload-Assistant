@@ -340,7 +340,7 @@ class C411():
 
     async def search_existing(self, meta: dict[str, Any], _) -> list[str]:
         dupes: list[str] = []
-        title = str(meta.get('title', '')).strip()
+        title, descr = await fr.get_translation_fr(meta)
         params: dict[str, Any] = {
             't': 'search',
             'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
@@ -350,7 +350,8 @@ class C411():
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(url=self.search_url, params=params)
                 if response.status_code == 200:
-                    root = etree.fromstring(response.text.encode('utf-8'))
+                    response_text = response.text.encode('utf-8')
+                    root = etree.fromstring(response_text)
                     channel = root[0]
                     for result in channel:
                         if result.tag == 'item':
@@ -365,7 +366,7 @@ class C411():
         except Exception as e:
             console.print(f"[bold red]Unexpected error: {e}")
             await asyncio.sleep(5)
-
+        print(dupes)
         return dupes
 
     
