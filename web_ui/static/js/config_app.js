@@ -47,6 +47,7 @@ const Tooltip = ({ children, content, className = "" }) => {
 
   const showTooltip = () => setIsVisible(true);
   const hideTooltip = () => setIsVisible(false);
+  const toggleTooltip = (e) => { e.preventDefault(); e.stopPropagation(); setIsVisible(v => !v); };
 
   useEffect(() => {
     if (isVisible && triggerRef.current && tooltipRef.current) {
@@ -72,12 +73,25 @@ const Tooltip = ({ children, content, className = "" }) => {
     }
   }, [isVisible]);
 
+  // Dismiss tooltip on outside tap for touch devices
+  useEffect(() => {
+    if (!isVisible) return;
+    const handleOutsideClick = (e) => {
+      if (triggerRef.current && !triggerRef.current.contains(e.target)) {
+        setIsVisible(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleOutsideClick);
+    return () => document.removeEventListener('pointerdown', handleOutsideClick);
+  }, [isVisible]);
+
   return React.createElement('div', { className: 'relative inline-block' },
     React.createElement('div', {
       ref: triggerRef,
       onMouseEnter: showTooltip,
       onMouseLeave: hideTooltip,
-      className: className
+      onClick: toggleTooltip,
+      className: `cursor-help ${className}`
     }, children),
     isVisible && React.createElement('div', {
       ref: tooltipRef,
@@ -552,8 +566,8 @@ function ConfigLeaf({
     const originalValue = Boolean(item.value);
 
     return (
-      <div className="grid grid-cols-12 gap-3 items-start px-4 py-3">
-        <div className={fullWidth ? 'col-span-12' : 'col-span-4'}>
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start px-4 py-3">
+        <div className={fullWidth ? 'col-span-1 md:col-span-12' : 'col-span-1 md:col-span-4'}>
           <div className="flex items-center gap-2">
             <div className={labelClass}>{formatDisplayLabel(item.key)}</div>
             {helpText && (
@@ -563,7 +577,7 @@ function ConfigLeaf({
             )}
           </div>
         </div>
-        <div className={fullWidth ? 'col-span-12' : 'col-span-7'}>
+        <div className={fullWidth ? 'col-span-1 md:col-span-12' : 'col-span-1 md:col-span-7'}>
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
@@ -652,8 +666,8 @@ function ConfigLeaf({
     const limits = getFieldLimits(item.key);
 
     return (
-      <div className="grid grid-cols-12 gap-3 items-start px-4 py-3">
-        <div className={fullWidth ? 'col-span-12' : 'col-span-4'}>
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start px-4 py-3">
+        <div className={fullWidth ? 'col-span-1 md:col-span-12' : 'col-span-1 md:col-span-4'}>
           <div className="flex items-center gap-2">
             <div className={labelClass}>{formatDisplayLabel(item.key)}</div>
             {helpText && (
@@ -663,7 +677,7 @@ function ConfigLeaf({
             )}
           </div>
         </div>
-        <div className={fullWidth ? 'col-span-12' : 'col-span-7'}>
+        <div className={fullWidth ? 'col-span-1 md:col-span-12' : 'col-span-1 md:col-span-7'}>
           <NumberInput
             value={numericValue}
             onChange={(newValue) => {
@@ -699,8 +713,8 @@ function ConfigLeaf({
     const originalValue = String(item.value || '');
 
     return (
-      <div className="grid grid-cols-12 gap-3 items-start px-4 py-3">
-        <div className={fullWidth ? 'col-span-12' : 'col-span-4'}>
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start px-4 py-3">
+        <div className={fullWidth ? 'col-span-1 md:col-span-12' : 'col-span-1 md:col-span-4'}>
           <div className="flex items-center gap-2">
             <div className={labelClass}>{formatDisplayLabel(item.key)}</div>
             {helpText && (
@@ -710,7 +724,7 @@ function ConfigLeaf({
             )}
           </div>
         </div>
-        <div className={fullWidth ? 'col-span-12' : 'col-span-7'}>
+        <div className={fullWidth ? 'col-span-1 md:col-span-12' : 'col-span-1 md:col-span-7'}>
           <SelectDropdown
             value={selectedValue}
             onChange={(newValue) => {
@@ -1199,13 +1213,13 @@ function ItemList({
       {/* TRACKERS tabbed subsections: Default / Configured / Available */}
       {isTrackerConfig && defaultTrackersItem && (
         <div>
-          <div className="flex space-x-1 rounded-lg p-1 bg-gray-700 mb-3">
+          <div className="flex space-x-1 rounded-lg p-1 bg-gray-700 mb-3 overflow-x-auto">
             <button
               type="button"
               onClick={() => setTrackerTab('default')}
               className={trackerTab === 'default'
-                ? 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors bg-gray-600 text-white'
-                : 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-white hover:bg-gray-600'}
+                ? 'md:flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap bg-gray-600 text-white'
+                : 'md:flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap text-gray-400 hover:text-white hover:bg-gray-600'}
             >
               Default trackers
             </button>
@@ -1213,8 +1227,8 @@ function ItemList({
               type="button"
               onClick={() => setTrackerTab('configured')}
               className={trackerTab === 'configured'
-                ? 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors bg-gray-600 text-white'
-                : 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-white hover:bg-gray-600'}
+                ? 'md:flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap bg-gray-600 text-white'
+                : 'md:flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap text-gray-400 hover:text-white hover:bg-gray-600'}
             >
               Configured trackers
             </button>
@@ -1222,8 +1236,8 @@ function ItemList({
               type="button"
               onClick={() => setTrackerTab('available')}
               className={trackerTab === 'available'
-                ? 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors bg-gray-600 text-white'
-                : 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-white hover:bg-gray-600'}
+                ? 'md:flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap bg-gray-600 text-white'
+                : 'md:flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap text-gray-400 hover:text-white hover:bg-gray-600'}
             >
               Available trackers
             </button>
@@ -1946,7 +1960,7 @@ function SecurityTab({ isDarkMode }) {
       
       <div className="space-y-4">
         <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h3 className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                 2FA Status: {twofaStatus === null ? 'Loading...' : twofaStatus ? 'Enabled' : 'Disabled'}
@@ -1955,7 +1969,7 @@ function SecurityTab({ isDarkMode }) {
                 {twofaStatus ? 'Your account is protected with time-based one-time passwords.' : 'Enable 2FA to add an extra layer of security to your account.'}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-shrink-0">
               {!twofaStatus && (
                 <button
                   onClick={handleSetup2FA}
@@ -2095,11 +2109,15 @@ function SecurityTab({ isDarkMode }) {
               ) : (
                 <div className="space-y-2">
                   {tokens.map((t) => (
-                    <div key={t.id} className={`flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                      <div className="text-xs font-mono">{t.id.slice(0, 8)}..</div>
-                      <div className="flex-1 px-3 text-sm">{t.label || '(no label)'} — {t.user}</div>
-                      <div className="text-sm text-gray-500 mr-3">{t.expiry ? new Date(t.expiry * 1000).toLocaleString() : 'no expiry'}</div>
-                      <button onClick={() => handleRevokeToken(t.id)} className="px-2 py-1 bg-red-600 text-white rounded text-sm">Revoke</button>
+                    <div key={t.id} className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2 rounded ${isDarkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="text-xs font-mono flex-shrink-0">{t.id.slice(0, 8)}..</div>
+                        <div className="text-sm truncate">{t.label || '(no label)'} — {t.user}</div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="text-sm text-gray-500">{t.expiry ? new Date(t.expiry * 1000).toLocaleString() : 'no expiry'}</div>
+                        <button onClick={() => handleRevokeToken(t.id)} className="px-2 py-1 bg-red-600 text-white rounded text-sm">Revoke</button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -2400,7 +2418,7 @@ function AccessLogTab({ isDarkMode }) {
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {logEntries.map((entry, index) => (
                 <div key={index} className={`p-2 rounded text-xs ${isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-50 text-gray-800'}`}>
-                  <div className="flex justify-between items-start">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1">
                     <div className="flex-1">
                       <span className={`font-medium ${entry.success ? 'text-green-600' : 'text-red-600'}`}>
                         {entry.method} {entry.endpoint}
@@ -2780,7 +2798,7 @@ function ConfigApp() {
 
   const pageRootClass = isDarkMode ? 'min-h-screen flex flex-col bg-gray-900 text-gray-100' : 'min-h-screen flex flex-col bg-gray-100 text-gray-900';
   const headerClass = isDarkMode ? 'border-b border-gray-700 bg-gray-800' : 'border-b border-gray-200 bg-white';
-  const titleClass = isDarkMode ? 'text-2xl font-bold text-white' : 'text-2xl font-bold text-gray-800';
+  const titleClass = isDarkMode ? 'font-bold text-white' : 'font-bold text-gray-800';
   const statusClass = isDarkMode ? 'text-sm text-gray-300' : 'text-sm text-gray-600';
   const themeToggleClass = isDarkMode ? 'relative inline-flex h-6 w-11 items-center rounded-full transition-colors bg-purple-600' : 'relative inline-flex h-6 w-11 items-center rounded-full transition-colors bg-gray-300';
   const themeKnobClass = isDarkMode ? 'inline-block h-4 w-4 transform rounded-full bg-white transition-transform translate-x-6' : 'inline-block h-4 w-4 transform rounded-full bg-white transition-transform translate-x-1';
@@ -2807,12 +2825,12 @@ function ConfigApp() {
   return (
     <div className={pageRootClass}>
       <header className={headerClass}>
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="flex items-center gap-3">
-            <h1 className={titleClass}>Upload Assistant Config</h1>
+            <h1 className={`${titleClass} text-lg md:text-2xl`}>Upload Assistant Config</h1>
             <button type="button" onClick={handleLogout} className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700">Logout</button>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3 flex-wrap">
             <button
               type="button"
               className={saveButtonClass}
@@ -2844,10 +2862,10 @@ function ConfigApp() {
           {sections.length > 0 && (
             <div className="space-y-6">
               {/* Tab Navigation */}
-              <div className={`flex space-x-1 rounded-lg p-1 ${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'}`}>
+              <div className={`flex space-x-1 rounded-lg p-1 overflow-x-auto ${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'}`}>
                 <button
                   onClick={() => setActiveTab('security')}
-                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
                     activeTab === 'security'
                       ? isDarkMode
                         ? 'bg-gray-700 text-white'
@@ -2861,7 +2879,7 @@ function ConfigApp() {
                 </button>
                 <button
                   onClick={() => setActiveTab('access-log')}
-                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
                     activeTab === 'access-log'
                       ? isDarkMode
                         ? 'bg-gray-700 text-white'
@@ -2886,7 +2904,7 @@ function ConfigApp() {
                           setActiveSubTab(subTabs[0].id);
                         }
                       }}
-                      className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      className={`md:flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
                         isActive
                           ? isDarkMode
                             ? 'bg-gray-700 text-white'
@@ -2917,14 +2935,14 @@ function ConfigApp() {
                     <div key={sectionId} className="space-y-4">
                       {/* Sub-tab Navigation */}
                       {hasSubTabs && (
-                        <div className={`flex space-x-1 rounded-lg p-1 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                        <div className={`flex space-x-1 rounded-lg p-1 overflow-x-auto ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
                           {subTabs.map((subTab) => {
                             const isActive = activeSubTab === subTab.id;
                             return (
                               <button
                                 key={subTab.id}
                                 onClick={() => setActiveSubTab(subTab.id)}
-                                className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                                className={`md:flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
                                   isActive
                                     ? isDarkMode
                                       ? 'bg-gray-600 text-white'
