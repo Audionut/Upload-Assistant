@@ -27,7 +27,7 @@ class C411():
         self.id_url = f'{self.base_url}/api/torrents'
         self.upload_url = f'{self.base_url}/api/torrents'
         # self.requests_url = f'{self.base_url}/api/requests/filter'
-        self.search_url = f'{self.base_url}/api/?t=search'
+        self.search_url = f'{self.base_url}/api/'
         self.torrent_url = f'{self.base_url}/api/'
         self.banned_groups: list[str] = []
         pass
@@ -341,6 +341,7 @@ class C411():
     async def search_existing(self, meta: dict[str, Any], _) -> list[str]:
         dupes: list[str] = []
         params: dict[str, Any] = {
+            't': search,
             'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
             'q': unidecode.unidecode(acm_name["name"].replace(" ", "."))
         }
@@ -348,11 +349,12 @@ class C411():
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(url=self.search_url, params=params)
                 if response.status_code == 200:
-                    root = etree.fromstring(response.text)
-                    #data = response.json()
-                    for each in data['data']:
-                        result = each['attributes']['name']
-                        dupes.append(result)
+                    root = etree.fromstring(response.text.encode('utf-8'))
+                    channel = root[0]
+                    for result in channel:
+                        if result.tag == 'item':
+                            dupe = result[0]
+                            dupes.append(dupe.text)
                 else:
                     console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
         except httpx.TimeoutException:
