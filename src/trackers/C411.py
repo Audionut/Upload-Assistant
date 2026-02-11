@@ -368,11 +368,12 @@ class C411():
             await asyncio.sleep(5)
         if not dupes:
             # Nothing came with the name, we'll look using tmdb_id
+            tmdb_id = meta.get('tmdb_id','')
             title, descr = await fr.get_translation_fr(meta)
             params: dict[str, Any] = {
                 't': 'search',
                 'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
-                'tmdbid': meta.get('tmdb_id','')
+                'tmdbid': tmdb_id
             }
             try:
                 async with httpx.AsyncClient(timeout=5.0) as client:
@@ -396,10 +397,8 @@ class C411():
                 await asyncio.sleep(5)
         return dupes
 
-    
 
     async def upload(self, meta: Meta, _disctype: str) -> bool:
-
         await self.common.create_torrent_for_upload(meta, self.tracker, 'C411')
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         mediainfo_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
@@ -413,6 +412,7 @@ class C411():
             torrent_bytes = await f.read()
         async with aiofiles.open(mediainfo_file_path, 'rb') as f:
             mediainfo_bytes = await f.read()
+        tmdb_data = {"id": meta.get('tmdb_id','')}
         data: dict[str, Any] = {
             "title": str(dot_name),
             "description": await fr.get_desc_full(meta, self.tracker),
@@ -422,7 +422,7 @@ class C411():
             "options": await self.get_option_tag(meta),
             # "isExclusive": "Test Upload-Assistant",
             "uploaderNote": "Upload-Assistant",
-            "tmdbData": {"id": meta.get('tmdb_id','')}
+            "tmdbData": str(tmdb_data)
             # "tmdbData": "Test Upload-Assistant",
             # "rawgData": "Test Upload-Assistant",
         }
