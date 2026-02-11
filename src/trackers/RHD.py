@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import os
 import re
 from typing import Any, Optional, cast
 
@@ -15,7 +16,9 @@ Config = dict[str, Any]
 
 
 class RHD(UNIT3D):
+    INVALID_TAG_PATTERN = re.compile(r"-(nogrp|nogroup|unknown|unk)", re.IGNORECASE)
     WHITESPACE_PATTERN = re.compile(r"\s{2,}")
+    MARKER_PATTERN = re.compile(r"\b(UNTOUCHED|VU1080|VU720|VU)\b", re.IGNORECASE)
 
     def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name='RHD')
@@ -60,6 +63,12 @@ class RHD(UNIT3D):
             '384p': '14',
         }.get(meta['resolution'], '10')
         return {'resolution_id': resolution_id}
+
+    def get_basename(self, meta: dict[str, Any]) -> str:
+        """Extract basename from first file in filelist or path"""
+        path_value = next(iter(meta["filelist"]), meta["path"])
+        path = path_value if isinstance(path_value, str) else ""
+        return os.path.basename(path)
 
     def _get_language_code(self, track_or_string: Any) -> str:
         """Extract and normalize language to ISO alpha-2 code"""
@@ -312,21 +321,63 @@ class RHD(UNIT3D):
         name = self.WHITESPACE_PATTERN.sub(" ", name).strip()
 
         # Extract tag and append if valid
-        tag = meta.get("tag", "").strip() #todo: replace with more robust _extract_clean_release_group function
+        tag = self._extract_clean_release_group(meta)
         if tag:
-            name = f"{name}{tag}"
+            name = f"{name}-{tag}"
 
         return {"name": name}
+
+    def _extract_clean_release_group(self, meta: dict[str, Any]) -> str:
+        """Extract release group - only accepts VU/UNTOUCHED markers from filename"""
+        raw_tag = meta.get("tag", "")
+        tag = raw_tag.strip().lstrip("-") if isinstance(raw_tag, str) else ""
+        if tag and " " not in tag and not self.INVALID_TAG_PATTERN.search(tag):
+            return tag
+
+        basename = self.get_basename(meta)
+        # Get extension from mediainfo and remove it
+        ext = (
+            meta.get("mediainfo", {})
+            .get("media", {})
+            .get("track", [{}])[0]
+            .get("FileExtension", "")
+        )
+        name_no_ext = (
+            basename[: -len(ext) - 1]
+            if ext and basename.endswith(f".{ext}")
+            else basename
+        )
+        parts = re.split(r"[-.]", name_no_ext)
+        if not parts:
+            return "NOGRP"
+
+        potential_tag = parts[-1].strip()
+        # Handle space-separated components
+        if " " in potential_tag:
+            potential_tag = potential_tag.split()[-1]
+
+        if (
+             potential_tag
+            or len(potential_tag) > 30
+            or not potential_tag.replace("_", "").isalnum()
+        ):
+            return "NOGRP"
+
+        # ONLY accept if it's a VU/UNTOUCHED marker
+        if not self.MARKER_PATTERN.search(potential_tag):
+            return "NOGRP"
+
+        return potential_tag
 
     async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True
 
         # Uploading MIC, CAM, TS, LD, as well as upscale releases, is prohibited.
-        raw_uuid = meta.get("uuid", "")
+        prohib_markers = ["MIC", "CAM", "TS", "TELESYNC", "LD", "LINE", "UPSCALE"]
+        basename = self.get_basename(meta)
         # Split on delimiters (dot, hyphen, underscore) or whitespace so tags like "LD" only match as separate tokens
-        dir_up = [tok for tok in re.split(r'[\.\s_-]+', str(raw_uuid).upper()) if tok]
-        print(dir_up)
-        if any(x in dir_up for x in ["MIC", "CAM", "TS", "TELESYNC", "LD", "LINE", "UPSCALE" ]):
+        basename_up = [tok for tok in re.split(r'[\.\s_-]+', str(basename).upper()) if tok]
+        if any(x in basename_up for x in prohib_markers):
             console.print(f"[bold red]Uploading MIC, CAM, TS, LD, as well as upscale releases, is prohibited, skipping {self.tracker} upload.")
             if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                 return False
