@@ -1,5 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
+import contextlib
 import fnmatch
 import glob
 import math
@@ -7,6 +8,7 @@ import os
 import platform
 import random
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -279,7 +281,8 @@ class TorrentCreator:
 
                         # Ensure executable permission for non-Windows systems
                         if not sys.platform.startswith("win"):
-                            os.chmod(mkbrr_binary, 0o700)
+                            with contextlib.suppress(Exception):
+                                os.chmod(mkbrr_binary, 0o700)
 
                         cmd = [mkbrr_binary, "create", os.fspath(path)]
 
@@ -306,7 +309,7 @@ class TorrentCreator:
                             cmd.extend(['-m', '27'])
 
                         if meta.get('mkbrr_threads') != '0':
-                            cmd.extend(["--workers", meta['mkbrr_threads']])
+                            cmd.extend(["--workers", str(meta['mkbrr_threads'])])
 
                         if not meta.get('is_disc', False):
                             exclude_str = cls.build_mkbrr_exclude_string(str(path), meta['filelist'])
@@ -504,6 +507,10 @@ class TorrentCreator:
     @staticmethod
     def get_mkbrr_path(meta: Mapping[str, Any]) -> str:
         """Determine the correct mkbrr binary based on OS and architecture."""
+        system_mkbrr = shutil.which("mkbrr")
+        if system_mkbrr:
+            return system_mkbrr
+
         base_dir = os.path.join(str(meta['base_dir']), "bin", "mkbrr")
 
         # Detect OS & Architecture

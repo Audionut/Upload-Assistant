@@ -335,6 +335,13 @@ function AudionutsUAGUI() {
   const [argSearchFilter, setArgSearchFilter] = useState('');
   const [collapsedSections, setCollapsedSections] = useState(new Set());
   
+  // File Browser search states
+  const [fileBrowserSearch, setFileBrowserSearch] = useState('');
+  const [fileBrowserSearchResults, setFileBrowserSearchResults] = useState(null);
+  const [fileBrowserSearchLoading, setFileBrowserSearchLoading] = useState(false);
+  const fileBrowserSearchTimer = useRef(null);
+  const fileBrowserSearchQuery = useRef('');
+
   // Folder loading states
   const [loadingFolders, setLoadingFolders] = useState(new Set());
   
@@ -682,6 +689,15 @@ function AudionutsUAGUI() {
     loadBrowseRoots();
   }, []);
 
+  // Cleanup file browser search debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (fileBrowserSearchTimer.current) {
+        clearTimeout(fileBrowserSearchTimer.current);
+      }
+    };
+  }, []);
+
   // Focus input when executing
   useEffect(() => {
     if (isExecuting && inputRef.current) {
@@ -726,6 +742,94 @@ function AudionutsUAGUI() {
     } catch (error) {
       console.error('Failed to load folder:', error);
     }
+  };
+
+  // File Browser search
+  const handleFileBrowserSearch = (value) => {
+    setFileBrowserSearch(value);
+    const searchQuery = value.trim();
+    fileBrowserSearchQuery.current = searchQuery;
+    if (fileBrowserSearchTimer.current) {
+      clearTimeout(fileBrowserSearchTimer.current);
+    }
+    if (!searchQuery) {
+      setFileBrowserSearchResults(null);
+      setFileBrowserSearchLoading(false);
+      return;
+    }
+    setFileBrowserSearchLoading(true);
+    fileBrowserSearchTimer.current = setTimeout(async () => {
+      try {
+        const response = await apiFetch(`${API_BASE}/browse_search?q=${encodeURIComponent(searchQuery)}`);
+        if (!response.ok) {
+          throw new Error(`Search request failed (${response.status})`);
+        }
+        const data = await response.json();
+        // Early return if the search has changed since this request
+        if (fileBrowserSearchQuery.current !== searchQuery) return;
+        if (data.success) {
+          setFileBrowserSearchResults(data);
+        } else {
+          setFileBrowserSearchResults({ items: [], query: searchQuery, count: 0 });
+        }
+      } catch (error) {
+        console.error('File browser search failed:', error);
+        if (fileBrowserSearchQuery.current === searchQuery) {
+          setFileBrowserSearchResults({ items: [], query: searchQuery, count: 0 });
+        }
+      } finally {
+        if (fileBrowserSearchQuery.current === searchQuery) {
+          setFileBrowserSearchLoading(false);
+        }
+      }
+    }, 300); //300ms debounce so we dont spam requests for every keystroke
+  };
+
+  const renderSearchResults = (results) => {
+    if (!results || !results.items) return null;
+    if (results.items.length === 0) {
+      return (
+        <div className={`p-4 text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          <p className="text-sm">No results found</p>
+        </div>
+      );
+    }
+    return results.items.map((item, idx) => {
+      const separatorIdx = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
+      const parentPath = separatorIdx > 0 ? item.path.substring(0, separatorIdx) : '';
+      return (
+        <div key={idx}>
+          <div
+            className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+              selectedPath === item.path
+                ? isDarkMode
+                  ? 'bg-purple-900 border-l-4 border-purple-500'
+                  : 'bg-blue-100 border-l-4 border-blue-500'
+                : isDarkMode
+                  ? 'hover:bg-gray-700'
+                  : 'hover:bg-gray-100'
+            }`}
+            style={{ paddingLeft: '12px' }}
+            onClick={() => {
+              setSelectedPath(item.path);
+              setSelectedName(item.name);
+            }}
+          >
+            <span className={`flex-shrink-0 ${item.type === 'folder' ? 'text-yellow-600' : 'text-blue-600'}`}>
+              {item.type === 'folder' ? <FolderIcon /> : <FileIcon />}
+            </span>
+            <div className="flex flex-col min-w-0">
+              <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-700'} truncate`}>
+                {item.name}
+              </span>
+              <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} truncate`} title={parentPath}>
+                {parentPath}
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    });
   };
 
   const updateDirectoryTree = (path, items) => {
@@ -1171,9 +1275,53 @@ function AudionutsUAGUI() {
             <FolderIcon />
             File Browser
           </h2>
+          <div className="relative mt-2">
+            <input
+              type="text"
+              value={fileBrowserSearch}
+              onChange={(e) => handleFileBrowserSearch(e.target.value)}
+              placeholder="Search files and folders..."
+              className={`w-full pl-8 pr-8 py-1.5 text-sm rounded border ${
+                isDarkMode
+                  ? 'bg-gray-800 border-gray-600 text-gray-200 placeholder-gray-500 focus:border-purple-500'
+                  : 'bg-white border-gray-300 text-gray-700 placeholder-gray-400 focus:border-blue-500'
+              } focus:outline-none focus:ring-1 ${isDarkMode ? 'focus:ring-purple-500' : 'focus:ring-blue-500'}`}
+            />
+            <svg className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {fileBrowserSearch && (
+              <button
+                onClick={() => handleFileBrowserSearch('')}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
         <div className={`${hasDescFile && !descBrowserCollapsed ? 'flex-1 max-h-[50%]' : 'flex-1'} overflow-y-auto`}>
-          {renderFileTree(directories)}
+          {fileBrowserSearch ? (
+            fileBrowserSearchLoading ? (
+              <div className={`p-4 text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                <SpinnerIcon />
+                <p className="text-sm mt-2">Searching...</p>
+              </div>
+            ) : (
+              <>
+                {fileBrowserSearchResults && fileBrowserSearchResults.truncated && (
+                  <div className={`px-3 py-1.5 text-xs ${isDarkMode ? 'text-yellow-400 bg-gray-900' : 'text-yellow-700 bg-yellow-50'} border-b ${isDarkMode ? 'border-gray-700' : 'border-yellow-200'}`}>
+                    Results limited to {fileBrowserSearchResults.count} items
+                  </div>
+                )}
+                {renderSearchResults(fileBrowserSearchResults)}
+              </>
+            )
+          ) : (
+            renderFileTree(directories)
+          )}
         </div>
         
         {/* Description File Browser - shown when --descfile is in args */}
