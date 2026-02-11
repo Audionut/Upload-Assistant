@@ -366,6 +366,34 @@ class C411():
         except Exception as e:
             console.print(f"[bold red]Unexpected error: {e}")
             await asyncio.sleep(5)
+        if not dupes:
+            # Nothing came with the name, we'll look using tmdb_id
+            title, descr = await fr.get_translation_fr(meta)
+            params: dict[str, Any] = {
+                't': 'search',
+                'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
+                'tmdbid': meta.get('tmdb_id','')
+            }
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    response = await client.get(url=self.search_url, params=params)
+                    if response.status_code == 200:
+                        response_text = response.text.encode('utf-8')
+                        root = etree.fromstring(response_text)
+                        channel = root[0]
+                        for result in channel:
+                            if result.tag == 'item':
+                                dupe = result[0]
+                                dupes.append(dupe.text)
+                    else:
+                        console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
+            except httpx.TimeoutException:
+                console.print("[bold red]Request timed out after 5 seconds")
+            except httpx.RequestError as e:
+                console.print(f"[bold red]Unable to search for existing torrents: {e}")
+            except Exception as e:
+                console.print(f"[bold red]Unexpected error: {e}")
+                await asyncio.sleep(5)
         return dupes
 
     
@@ -394,6 +422,7 @@ class C411():
             "options": await self.get_option_tag(meta),
             # "isExclusive": "Test Upload-Assistant",
             "uploaderNote": "Upload-Assistant",
+            "tmdbData": {"id": meta.get('tmdb_id','')}
             # "tmdbData": "Test Upload-Assistant",
             # "rawgData": "Test Upload-Assistant",
         }
