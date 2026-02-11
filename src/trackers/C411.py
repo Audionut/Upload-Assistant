@@ -366,7 +366,6 @@ class C411():
         except Exception as e:
             console.print(f"[bold red]Unexpected error: {e}")
             await asyncio.sleep(5)
-        print(dupes)
         return dupes
 
     
