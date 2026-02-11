@@ -97,21 +97,48 @@ def _handle_shutdown_signal(signum: int, _frame: Any) -> None:
         sys.exit(1)
 
 
-# Early check for -webui to create config if needed
-_config_path = os.path.join(base_dir, "data", "config.py")
-_example_config_path = os.path.join(base_dir, "data", "example-config.py")
+# ── Restore built-in data/ files when a Docker volume mount hides them ──
+# The Dockerfile copies the original data/ tree to defaults/data/ so that
+# volume mounts over /Upload-Assistant/data/ don't lose critical files
+# (__init__.py, version.py, example-config.py, templates/).
+_data_dir = os.path.join(base_dir, "data")
+_defaults_data_dir = os.path.join(base_dir, "defaults", "data")
+
+if os.path.isdir(_defaults_data_dir):
+    os.makedirs(_data_dir, exist_ok=True)
+    # Walk the defaults tree and copy anything missing in the live data dir.
+    # Never overwrite user files (config.py, cookies/, tags.json, etc.).
+    for dirpath, dirnames, filenames in os.walk(_defaults_data_dir):
+        rel_dir = os.path.relpath(dirpath, _defaults_data_dir)
+        target_dir = os.path.join(_data_dir, rel_dir) if rel_dir != "." else _data_dir
+        os.makedirs(target_dir, exist_ok=True)
+        for fname in filenames:
+            target_file = os.path.join(target_dir, fname)
+            if not os.path.exists(target_file):
+                src_file = os.path.join(dirpath, fname)
+                try:
+                    shutil.copy2(src_file, target_file)
+                except Exception:
+                    pass  # best-effort; don't block startup
+
+_config_path = os.path.join(_data_dir, "config.py")
+
 # Detect -webui or --webui forms, including --webui=host:port
-if any(
+_is_webui_arg = any(
     (arg == "-webui" or arg == "--webui" or arg.startswith("-webui=") or arg.startswith("--webui="))
     for arg in sys.argv
-) and not os.path.exists(_config_path) and os.path.exists(_example_config_path):
-    console.print("No config.py found. Creating default config from example-config.py...", markup=False)
-    try:
-        shutil.copy2(_example_config_path, _config_path)
-        console.print("Default config created successfully!", markup=False)
-    except Exception as e:
-        console.print(f"Failed to create default config: {e}", markup=False)
-        console.print("Continuing without config file...", markup=False)
+)
+# Auto-create config.py from example on first WebUI start
+if _is_webui_arg and not os.path.exists(_config_path):
+    _example_config_path = os.path.join(_data_dir, "example-config.py")
+    if os.path.exists(_example_config_path):
+        console.print("No config.py found. Creating default config from example-config.py...", markup=False)
+        try:
+            shutil.copy2(_example_config_path, _config_path)
+            console.print("Default config created successfully!", markup=False)
+        except Exception as e:
+            console.print(f"Failed to create default config: {e}", markup=False)
+            console.print("Continuing without config file...", markup=False)
 
 Meta: TypeAlias = dict[str, Any]
 

@@ -1,31 +1,84 @@
+# Upload Assistant — Docker Compose
+# Docs: docs/docker-wiki-full.md & docs/docker-gui-wiki-full.md
+#
+# The image entrypoint is:  python /Upload-Assistant/upload.py
+# Pass arguments via `command:`.  The venv is already on PATH — no
+# shell wrapper or "source activate" is needed.
+#
+# ── WebUI service ────────────────────────────────────────────────────
 services:
-  upload-assistant-cli:
+  upload-assistant:
     image: ghcr.io/audionut/upload-assistant:latest
-    container_name: UA
+    container_name: upload-assistant
     restart: unless-stopped
+
     networks:
-      - yournetwork #change to the network with ur torrent instance
-    ports: 
-      # Change left side to your specific port. Use 0.0.0.0:5000:5000 to expose to ANY device.
-      # 127.0.0.1 means only accessible from the host machine. If you change to 0.0.0.0:5000:5000 it will be accessible from any device on the network
-      # including devices outside your network if your router/reverse proxy allows it.
+      - yournetwork  # change to the network with your torrent client
+
+    ports:
+      # Change host-side port/binding as needed.
+      # 127.0.0.1  → accessible only from the host machine
+      # 0.0.0.0    → accessible from any device on the network
       - "127.0.0.1:5000:5000"
+
+    # ── Pass --webui as the CMD (appended to the ENTRYPOINT) ────────
+    command: ["--webui", "0.0.0.0:5000"]
+
     environment:
-      # Required if not using paths from terminal: allowlisted roots the Web UI is allowed to browse/execute within
+      # Required: container-side roots the WebUI is allowed to browse.
+      # Must match the left side of the container paths in `volumes:`.
       - UA_BROWSE_ROOTS=/data/torrents,/Upload-Assistant/tmp
-      # Optional: set secret key as key, or use file variant to read from a file. (minimum 32 bytes) permissions handling will apply.
-      # - ENV_SESSION_SECRET="SESSION_SECRET"
-      # - ENV_SESSION_SECRET_FILE="SESSION_SECRET_FILE"
-      # Optional: only needed if you serve the UI from a different origin/domain.
+
+      # Optional: explicit Docker detection (auto-detected in most cases).
+      # Accepts: 1, true, yes.  Also recognised as RUNNING_IN_CONTAINER.
+      # - IN_DOCKER=1
+
+      # Optional: stable session secret so encrypted WebUI credentials
+      # survive container recreates.  Provide either the raw value or a
+      # path to a file (minimum 32 bytes).
+      # - SESSION_SECRET=your-secret-here
+      # - SESSION_SECRET_FILE=/Upload-Assistant/data/session_secret
+
+      # Optional: only needed if you serve the UI from a different origin.
       # - UA_WEBUI_CORS_ORIGINS=https://your-ui-host
-    entrypoint: /bin/bash
-    command: -c "source /venv/bin/activate && exec python /Upload-Assistant/upload.py --webui 0.0.0.0:5000"
+
+      # Optional: override the XDG config directory inside the container.
+      # Default is /root/.config/upload-assistant (stores session_secret,
+      # webui_auth.json).  Only change if you mount a different path.
+      # - XDG_CONFIG_HOME=/custom/config/path
+
     volumes:
-      - /path/to/torrents/:/data/torrents/:rw #map this to qbit download location, map exactly as qbittorent template on both sides.
-      - /mnt/user/appdata/Upload-Assistant/data/config.py:/Upload-Assistant/data/config.py:rw # Optional: will be created automatically if missing
-      - /mnt/user/appdata/qBittorrent/data/BT_backup/:/torrent_storage_dir:rw #map this to your qbittorrent bt_backup
-      - /mnt/user/appdata/Upload-Assistant/tmp/:/Upload-Assistant/tmp:rw #map this to your /tmp folder.
-      - /mnt/user/appdata/Upload-Assistant/webui-auth:/root/.config/upload-assistant:rw # persist web UI session auth config
+      # Map your torrent download directory (match qBittorrent paths).
+      - /path/to/torrents:/data/torrents:rw
+
+      # Application config.
+      # Option A (recommended): mount the whole data directory — config.py will
+      #   be created automatically from example-config.py on first WebUI start.
+      #   - /path/to/appdata/Upload-Assistant/data:/Upload-Assistant/data:rw
+      # Option B: mount a single file — the file MUST exist on the host first.
+      #   If missing, Docker creates an empty directory instead and breaks the app.
+      - /path/to/appdata/Upload-Assistant/data:/Upload-Assistant/data:rw
+
+      # qBittorrent BT_backup for torrent reuse.
+      - /path/to/qBittorrent/BT_backup:/torrent_storage_dir:rw
+
+      # Temp directory for screenshots / processing.
+      - /path/to/appdata/Upload-Assistant/tmp:/Upload-Assistant/tmp:rw
+
+      # Persist WebUI session auth config (webui_auth.json, session_secret).
+      # This maps to the XDG config dir used inside the container.
+      - /path/to/appdata/Upload-Assistant/webui-auth:/root/.config/upload-assistant:rw
+
+    # Give the app time to finish any in-flight work on shutdown.
+    stop_grace_period: 15s
+
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
 networks:
-  "yournetwork": #change this to your network 
+  yournetwork:  # change to your network
     external: true
