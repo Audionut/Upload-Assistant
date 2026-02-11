@@ -2,8 +2,10 @@
 import re
 from typing import Any, Optional, cast
 
+import cli_ui
 import pycountry
 
+from src.console import console
 from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -315,3 +317,42 @@ class RHD(UNIT3D):
             name = f"{name}{tag}"
 
         return {"name": name}
+
+    async def get_additional_checks(self, meta: Meta) -> bool:
+        should_continue = True
+
+        # Uploading MIC, CAM, TS, LD, as well as upscale releases, is prohibited.
+        raw_uuid = meta.get("uuid", "")
+        # Split on delimiters (dot, hyphen, underscore) or whitespace so tags like "LD" only match as separate tokens
+        dir_up = [tok for tok in re.split(r'[\.\s_-]+', str(raw_uuid).upper()) if tok]
+        print(dir_up)
+        if any(x in dir_up for x in ["MIC", "CAM", "TS", "TELESYNC", "LD", "LINE", "UPSCALE" ]):
+            console.print(f"[bold red]Uploading MIC, CAM, TS, LD, as well as upscale releases, is prohibited, skipping {self.tracker} upload.")
+            if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                return False
+
+        # Uploading SD content is not allowed. Exception: No HD version exists. Check release databases beforehand to ensure an HD version doesn't exist
+        if meta.get("resolution") in ["384p", "480p", "480i", "540p","576p", "576i"]:
+            console.print(f"[bold red]Uploading SD releases is not allowed on {self.tracker}, unless no HD version exists.")
+            console.print("[bold red]Please check release databases beforehand to be sure.")
+            if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                return False
+
+        # Uploads must contain a German audio track. Exception: The release was requested in its original language.
+        if not self._has_german_audio(meta) and not meta.get("requested_release", False):
+            console.print("[bold red]Uploads must contain a German audio track, unless the release was requested in its original language.")
+            if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                return False
+
+        # check for samples, proofs, and images in the upload directory
+        filelist = meta.get("filelist", [])
+        if any(
+            str(file).lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff", ".pdf"))
+            or "sample" in str(file).lower()
+            or "proof" in str(file).lower()
+            for file in filelist
+        ):
+            console.print("[bold red]Uploads containing samples, proofs, and images are prohibited.[/bold red]")
+            if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                return False
+        return should_continue
