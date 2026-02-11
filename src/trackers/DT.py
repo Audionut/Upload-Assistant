@@ -1,5 +1,7 @@
+from typing import Any
+
 from src.trackers.UNIT3D import UNIT3D
-from typing import Any, Optional
+
 
 class DT(UNIT3D):
     """
@@ -11,11 +13,11 @@ class DT(UNIT3D):
         self.base_url = 'https://torrent.desi'
         self.upload_url = f'{self.base_url}/api/v1/torrents/upload'
         self.search_url = f'{self.base_url}/api/v1/torrents/filter'
-        
+
         # Banned Groups
         self.banned_groups = [
-            "DusIcTv", "PHDM", "PDHM", "Ranvijay", 
-            "BWT", "DDH", "Telly", "YTS", "RARBG", 
+            "DusIcTv", "PHDM", "PDHM", "Ranvijay",
+            "BWT", "DDH", "Telly", "YTS", "RARBG",
             "BonsaiHD", "GalaxyRG", "-=!DrSTAR!=-"
         ]
 
@@ -29,7 +31,7 @@ class DT(UNIT3D):
         """
         Returns the category ID for the release.
         """
-        
+
         # DT Category Map: Movie=1, TV=2, Music=3, Game=4
         category_id = {
             'MOVIE': '1',
@@ -37,7 +39,7 @@ class DT(UNIT3D):
             'MUSIC': '3',
             'GAME': '4'
         }
-        
+
         if mapping_only:
             return category_id
         elif reverse:
@@ -59,7 +61,7 @@ class DT(UNIT3D):
         """
         Returns the type ID (source) for the release.
         """
-        
+
         # Standard Mapping for reverse lookups
         type_id_map = {
             'DISC': '3',    # Defaulting to BD50
@@ -81,9 +83,9 @@ class DT(UNIT3D):
             # Dynamic Logic for DT specific IDs (UHD vs 1080p)
             meta_type = meta.get('type', '')
             is_uhd = meta.get('uhd', False)
-            
+
             resolved_id = '0'
-            
+
             if meta_type == 'DISC':
                 resolved_id = '3' # BD50
                 if meta.get('disctype') == 'BD25':
@@ -100,7 +102,7 @@ class DT(UNIT3D):
                 resolved_id = '8'
             elif meta_type == 'HDTV':
                 resolved_id = '13'
-                
+
             return {'type_id': resolved_id}
 
     async def get_resolution_id(
@@ -113,7 +115,7 @@ class DT(UNIT3D):
         """
         Returns the resolution ID for the release.
         """
-        
+
         # DT Specific Resolutions
         resolution_id = {
             '4320p': '9', # 8k
@@ -128,7 +130,7 @@ class DT(UNIT3D):
             '480p': '2',
             '480i': '1'
         }
-        
+
         if mapping_only:
             return resolution_id
         elif reverse:
