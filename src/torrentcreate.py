@@ -1,5 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
+import contextlib
 import fnmatch
 import glob
 import math
@@ -280,10 +281,8 @@ class TorrentCreator:
 
                         # Ensure executable permission for non-Windows systems
                         if not sys.platform.startswith("win"):
-                            try:
+                            with contextlib.suppress(Exception):
                                 os.chmod(mkbrr_binary, 0o700)
-                            except Exception:
-                                pass
 
                         cmd = [mkbrr_binary, "create", os.fspath(path)]
 
