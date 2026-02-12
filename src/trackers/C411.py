@@ -421,6 +421,9 @@ class C411:
             "tmdbData": json.dumps(tmdb_info)
             # "rawgData": "Test Upload-Assistant",
         }
+        async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/c411_payload.json", 'w', encoding='utf-8') as f:
+            await f.write(json.dumps(data, indent=4))
+
         # Place holder for potential improvement
         # files={"torrent": ("torrent.torrent", torrent_bytes, "application/x-bittorrent"),"nfo": ("MEDIAINFO.txt", mediainfo_bytes, "text/plain"),}
         files = {"torrent": torrent_bytes, "nfo": mediainfo_bytes, }
