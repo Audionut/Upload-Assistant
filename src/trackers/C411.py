@@ -1,24 +1,22 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 # https://github.com/Audionut/Upload-Assistant/tree/master
-# #UA 7.0.0
-# -*- coding: utf-8 -*-
-# import discord
-import json
-from typing import Any
-import httpx
-from src.console import console
-from src.trackers.COMMON import COMMON
+
 import aiofiles
 import asyncio
+import json
+import httpx
 import src.trackers.FRENCH as fr
-import unidecode
-from typing import Any, Callable, Optional, Union, cast
+from typing import Any
+from src.trackers.COMMON import COMMON
+from src.console import console
 from lxml import etree
+import unidecode
+
 Meta = dict[str, Any]
 Config = dict[str, Any]
 
 
-class C411():
+class C411:
     def __init__(self, config: Config) -> None:
         self.config: Config = config
         self.common = COMMON(config)
@@ -40,24 +38,16 @@ class C411():
         sub_cat_id = "0"
 
         if meta['category'] == 'MOVIE':
-            if meta.get('mal_id'):
-                sub_cat_id = '1'
-            else:
-                sub_cat_id = '6'
+            sub_cat_id = '1' if meta.get('mal_id') else '6'
 
         elif meta['category'] == 'TV':
-
-            if meta.get('mal_id'):
-                sub_cat_id = '2'
-            else:
-                sub_cat_id = '7'
+            sub_cat_id = '2' if meta.get('mal_id') else '7'
 
         return sub_cat_id
-    # unknow  return type
 
     async def get_option_tag(self, meta: Meta):
         obj1 = []
-        obj2 = None
+        obj2 = 0
         vff = None
         vfq = None
         eng = None
@@ -66,25 +56,24 @@ class C411():
         type = meta.get('type', "").upper()
 
         for item in audio_track:
-            if item['Language'] == "fr-ca":
+            lang = str(item.get('Language', '')).lower()
+            if lang == "fr-ca":
                 vfq = True
-            if item['Language'] == "fr-FR":
+            if lang == "fr-fr":
                 vff = True
-            if item['Language'] == "en" or item['Language'] == "en-us" or item['Language'] == "en-gb":
+            if lang in ("en", "en-us", "en-gb"):
                 eng = True
 
-        if eng and not vff and not vfq:  # vo
-            obj1.append(1)
-
-        # VO VOSTFR
         if vff and vfq:
             obj1.append(4)
         if vfq:
             obj1.append(5)
         if vff:
             obj1.append(2)
+        if eng and not vff and not vfq:  # vo
+            obj1.append(1)
 
-        # set quality
+
         if meta['is_disc'] == 'BDMV':
             if meta['resolution'] == '2160p':
                 obj2 = 10  # blu 4k full
@@ -99,11 +88,9 @@ class C411():
             else:
                 obj2 = 12  # blu remux
 
-        # source dvd
         elif type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):
             obj2 = 15
 
-        # source bluray
         elif type == "ENCODE" and source in ("BluRay", "HDDVD"):
             if meta['resolution'] == '2160p':
                 obj2 = 17
@@ -146,26 +133,34 @@ class C411():
         elif type == "DVDRIP":
             obj2 = 15  # DVDRIP
 
-        # 4klight
-        # hdlight 1080
-        # hdlight 720
-        # vcd/vhs
+        uuid = meta.get('uuid', "").lower()
+
+        if "4klight" in uuid: # and type == "ENCODE"
+            obj2 = 415
+        elif "hdlight" in uuid: # and type == "ENCODE"
+            if meta['resolution'] == '1080p':
+                obj2 = 413
+            else:
+                obj2 = 414
+
+        # vcd/vhs ID= 23
+
         options_dict = {}
         options_dict[1] = obj1
+        # None check is missing, check for correct data structure.
         options_dict[2] = [obj2]
-        # Let's see if it's a tv show
+
         if meta['category'] == 'TV':
-            # Let's check for season
             if meta.get('no_season', False) is False:
                 season = str(meta.get('season_int', ''))
                 if season:
                     options_dict[7] = 120 + int(season)
             # Episode
             episode = str(meta.get('episode_int', ''))
-            if episode:
+            if episode:  # Episode 0 check is missing
                 options_dict[6] = 96 + int(episode)
             else:
-                # pas d'épisode, on suppose que c'est une saison complete ? 
+                # pas d'épisode, on suppose que c'est une saison complete
                 options_dict[6] = 96
         return json.dumps(options_dict)
 
@@ -173,8 +168,7 @@ class C411():
     async def get_name(self, meta: Meta) -> dict[str, str]:
 
         type = str(meta.get('type', "")).upper()
-        title, descr = await fr.get_translation_fr(meta)
-        alt_title = ""
+        title, _ = await fr.get_translation_fr(meta)
         year = str(meta.get('year', ""))
         manual_year_value = meta.get('manual_year')
         if manual_year_value is not None and int(manual_year_value) > 0:
@@ -198,17 +192,11 @@ class C411():
         uhd = str(meta.get('uhd', ""))
         hdr = str(meta.get('hdr', "")).replace('HDR10+', 'HDR10PLUS')
         hybrid = 'Hybrid' if meta.get('webdv', "") else ""
-        # if meta.get('manual_episode_title'):
-        #    episode_title = str(meta.get('manual_episode_title', ""))
-        # elif meta.get('daily_episode_title'):
-        #    episode_title = str(meta.get('daily_episode_title', ""))
-        # else:
-        #    episode_title = ""
         video_codec = ""
         video_encode = ""
         region = ""
         dvd_size = ""
-        if meta.get('is_disc', "") == "BDMV":  # Disk
+        if meta.get('is_disc', "") == "BDMV":
             video_codec = str(meta.get('video_codec', ""))
             region = str(meta.get('region', "") or "")
         elif meta.get('is_disc', "") == "DVD":
@@ -231,59 +219,53 @@ class C411():
             season = ''
         if meta.get('no_year', False) is True:
             year = ''
-        if meta.get('no_aka', False) is True:
-            alt_title = ''
+        #if meta.get('no_aka', False) is True:
+        #    alt_title = ''
 
         # YAY NAMING FUN
         name = ""
         if meta['category'] == "MOVIE":  # MOVIE SPECIFIC
-            if type == "DISC":  # Disk
+            if type == "DISC":
                 if meta['is_disc'] == 'BDMV':
                     name = f"{title} {year} {three_d} {edition} {hybrid} {repack} {language} {resolution} {uhd} {region} {source} {hdr} {audio} {video_codec}"
                 elif meta['is_disc'] == 'DVD':
                     name = f"{title} {year} {repack} {edition} {region} {source} {dvd_size} {audio}"
                 elif meta['is_disc'] == 'HDDVD':
                     name = f"{title} {year} {edition} {repack} {language} {resolution} {source} {video_codec} {audio}"
-            # BluRay/HDDVD Remux
             elif type == "REMUX" and source in ("BluRay", "HDDVD"):
                 name = f"{title} {year} {three_d} {edition} {hybrid} {repack} {language} {resolution} {uhd} {source} REMUX {hdr} {audio} {video_codec}"
-            # DVD Remux
             elif type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):
                 name = f"{title} {year} {edition} {repack} {source} REMUX  {audio}"
-            elif type == "ENCODE":  # Encode
+            elif type == "ENCODE":
                 name = f"{title} {year} {edition} {hybrid} {repack} {language} {resolution} {uhd} {source} {hdr} {audio} {video_encode}"
-            elif type == "WEBDL":  # WEB-DL
+            elif type == "WEBDL":
                 name = f"{title} {year} {edition} {hybrid} {repack} {language} {resolution} {uhd} {service} WEB {hdr} {audio} {video_encode}"
-            elif type == "WEBRIP":  # WEBRip
+            elif type == "WEBRIP":
                 name = f"{title} {year} {edition} {hybrid} {repack} {language} {resolution} {uhd} {service} WEBRip {hdr} {audio} {video_encode}"
-            elif type == "HDTV":  # HDTV
+            elif type == "HDTV":
                 name = f"{title} {year} {edition} {repack} {language} {resolution} {source} {audio} {video_encode}"
             elif type == "DVDRIP":
                 name = f"{title} {year} {source} {video_encode} DVDRip {audio}"
 
         elif meta['category'] == "TV":  # TV SPECIFIC
-            if type == "DISC":  # Disk
+            if type == "DISC":
                 if meta['is_disc'] == 'BDMV':
                     name = f"{title} {year} {season}{episode} {three_d} {edition} {hybrid} {repack} {language} {resolution} {uhd} {region} {source} {hdr} {audio} {video_codec}"
                 if meta['is_disc'] == 'DVD':
                     name = f"{title} {year} {season}{episode}{three_d} {repack} {edition} {region} {source} {dvd_size} {audio}"
                 elif meta['is_disc'] == 'HDDVD':
                     name = f"{title} {year} {edition} {repack} {language} {resolution} {source} {video_codec} {audio}"
-            # BluRay Remux
             elif type == "REMUX" and source in ("BluRay", "HDDVD"):
-                name = f"{title} {year} {season}{episode} {part} {three_d} {edition} {hybrid} {repack} {language} {resolution} {uhd} {source} REMUX {hdr} {audio} {video_codec}"  # SOURCE
-            # DVD Remux
+                name = f"{title} {year} {season}{episode} {part} {three_d} {edition} {hybrid} {repack} {language} {resolution} {uhd} {source} REMUX {hdr} {audio} {video_codec}"
             elif type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):
-                # SOURCE
                 name = f"{title} {year} {season}{episode} {part} {edition} {repack} {source} REMUX {audio}"
-            elif type == "ENCODE":  # Encode
-                # SOURCE
+            elif type == "ENCODE":
                 name = f"{title} {year} {season}{episode} {part} {edition} {hybrid} {repack} {language} {resolution} {uhd} {source} {hdr} {audio} {video_encode}"
-            elif type == "WEBDL":  # WEB-DL
+            elif type == "WEBDL":
                 name = f"{title} {year} {season}{episode} {part} {edition} {hybrid} {repack} {language} {resolution} {uhd} {service} WEB {hdr} {audio} {video_encode}"
-            elif type == "WEBRIP":  # WEBRip
+            elif type == "WEBRIP":
                 name = f"{title} {year} {season}{episode} {part} {edition} {hybrid} {repack} {language} {resolution} {uhd} {service} WEBRip {hdr} {audio}  {video_encode}"
-            elif type == "HDTV":  # HDTV
+            elif type == "HDTV":
                 name = f"{title} {year} {season}{episode} {part} {edition} {repack} {language} {resolution} {source} {audio} {video_encode}"
             elif type == "DVDRIP":
                 name = f"{title} {year} {season} {source} DVDRip {audio} {video_encode}"
@@ -298,11 +280,11 @@ class C411():
             console.print(f"--source [yellow]{meta['source']}")
             console.print(
                 "[bold green]If you specified type, try also specifying source")
+            raise
 
-            exit()
         name_notag = name
         name = name_notag + tag
-        name = fr.clean_name(name)
+        name = await fr.clean_name(name)
 
         if meta['debug']:
             console.log("[cyan]get_name cat/type")
@@ -339,7 +321,6 @@ class C411():
         return True
 
     async def search_existing(self, meta: dict[str, Any], _) -> list[str]:
-
         dupes: list[str] = []
 
         # Nothing came with the name, we'll look using tmdb_id
@@ -401,11 +382,9 @@ class C411():
         return dupes
 
 
+
     async def upload(self, meta: Meta, _disctype: str) -> bool:
-        await self.common.create_torrent_for_upload(meta, self.tracker, 'C411')
-        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        mediainfo_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
-        # Tmdb infos
+         # Tmdb infos
         tmdb_info = {}
         tmdb_info['id'] = meta.get("tmdb_id","")
         tmdb_info['title'] = meta.get("title","")
@@ -414,29 +393,38 @@ class C411():
         tmdb_info['release_date'] = meta.get("release_date","")
         tmdb_info['runtime'] = meta.get("runtime","")
         tmdb_info['voteAverage'] = meta.get("vote_average","")
-        #
+        if not meta["debug"]:
+            await self.common.create_torrent_for_upload(meta, self.tracker, 'C411')
+        torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        mediainfo_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
+
         headers = {
             "Authorization": f"Bearer {self.config['TRACKERS'][self.tracker]['api_key'].strip()}"}
         acm_name = await self.get_name(meta)
-        dot_name = unidecode.unidecode(acm_name["name"].replace(" ", "."))
+        dot_name = acm_name["name"].replace(" ", ".")
         response = None
+
         async with aiofiles.open(torrent_file_path, 'rb') as f:
             torrent_bytes = await f.read()
         async with aiofiles.open(mediainfo_file_path, 'rb') as f:
             mediainfo_bytes = await f.read()
+
         data: dict[str, Any] = {
             "title": str(dot_name),
             "description": await fr.get_desc_full(meta, self.tracker),
-            "categoryId": str("1"),
+            "categoryId": "1",
             "subcategoryId": str(await self.get_subcat_id(meta)),
             # 1 langue , 2 qualite
             "options": await self.get_option_tag(meta),
             # "isExclusive": "Test Upload-Assistant",
             "uploaderNote": "Upload-Assistant",
             "tmdbData": json.dumps(tmdb_info)
-            # "tmdbData": "Test Upload-Assistant",
             # "rawgData": "Test Upload-Assistant",
         }
+        # Place holder for potential improvement
+        # files={"torrent": ("torrent.torrent", torrent_bytes, "application/x-bittorrent"),"nfo": ("MEDIAINFO.txt", mediainfo_bytes, "text/plain"),}
+        files = {"torrent": torrent_bytes, "nfo": mediainfo_bytes, }
+
         if meta["debug"] is False:
             response_data = {}
             max_retries = 2
@@ -447,8 +435,7 @@ class C411():
                 try:  # noqa: PERF203
                     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
                         response = await client.post(
-                            url=self.upload_url, files={"torrent": torrent_bytes,
-                                                        "nfo": mediainfo_bytes, }, data=data, headers=headers
+                            url=self.upload_url, files=files, data=data, headers=headers
                         )
                         response.raise_for_status()
 
@@ -467,7 +454,6 @@ class C411():
                         meta["tracker_status"][self.tracker]["status_message"] = (
                             await self.process_response_data(response_data)
                         )
-                        # response_data = {'success': True, 'data': {'id': 6216, 'infoHash': '35faeb2c08d7d7448da7c7afd4048f16b02cc4ad', 'status': 'pending'}, 'message': 'Torrent envoyé ! Il sera visible après validation par la Team Pending.'}
 
                         torrent_hash = response_data["data"]["infoHash"]
                         meta["tracker_status"][self.tracker]["torrent_id"] = torrent_hash
@@ -563,6 +549,8 @@ class C411():
             "id": torrent_hash,
             "apikey": self.config['TRACKERS'][self.tracker]['api_key'].strip(),
         }
+
+        # https://c411.org/api/?t=get&id={{infoHash}}&apikey={{config.API_KEY}}
         try:
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
                 r = await client.get(self.torrent_url, params=params)
@@ -580,7 +568,6 @@ class C411():
             console.print(
                 "[yellow]Download manually from the tracker.[/yellow]")
             return None
-        return None
 
     async def process_response_data(self, response_data: dict[str, Any]) -> str:
         """Returns the success message from the response data as a string."""
