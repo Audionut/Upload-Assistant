@@ -1,5 +1,32 @@
 const { useEffect, useMemo, useRef, useState } = React;
 
+// Error boundary to catch render errors and prevent blank screen (e.g. on first run in Docker)
+class ConfigErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return React.createElement('div', {
+        className: 'min-h-screen flex flex-col items-center justify-center bg-gray-900 text-gray-100 p-8'
+      },
+        React.createElement('h2', { className: 'text-xl font-bold mb-4' }, 'Config loading failed'),
+        React.createElement('p', { className: 'text-gray-400 mb-4 max-w-md' }, this.state.error?.message || 'An unexpected error occurred'),
+        React.createElement('button', {
+          type: 'button',
+          onClick: () => window.location.reload(),
+          className: 'px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700'
+        }, 'Reload page')
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Helper to lazily load a QR code library (UMD build) and return the module
 function loadQRCodeLib() {
   return new Promise((resolve, reject) => {
@@ -2534,8 +2561,9 @@ function ConfigApp() {
     });
   };
 
-  const loadConfigOptions = async () => {
+  const loadConfigOptions = async (isRetry = false) => {
     try {
+      setStatus({ text: isRetry ? 'Retrying...' : 'Loading config options...', type: 'info' });
       const response = await apiFetch(`${API_BASE}/config_options`);
       const data = await response.json();
       if (!data.success) {
@@ -2855,8 +2883,27 @@ function ConfigApp() {
 
       <main className="flex-1">
         <div className="max-w-6xl mx-auto px-4 py-6">
-          {status.text && (
-            <div className={`${statusClass} ${statusTypeClass} mb-6`}>{status.text}</div>
+          {/* Always show loading/error area until content loads - prevents empty screen on first run */}
+          {(status.text || sections.length === 0) && (
+            <div className={`min-h-[120px] flex flex-col justify-center ${status.text ? 'mb-6' : ''}`}>
+              {status.text && (
+                <div className={`${statusClass} ${statusTypeClass} mb-3`}>{status.text}</div>
+              )}
+              {status.type === 'error' && (
+                <button
+                  type="button"
+                  onClick={() => loadConfigOptions(true)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700"
+                >
+                  Retry
+                </button>
+              )}
+              {status.type === 'info' && status.text && (
+                <div className={`text-sm mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  If this takes too long, check your connection or try refreshing.
+                </div>
+              )}
+            </div>
           )}
           
           {sections.length > 0 && (
@@ -2997,4 +3044,15 @@ function ConfigApp() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('page-root')).render(<ConfigApp />);
+(function mountConfigApp() {
+  const rootEl = document.getElementById('page-root');
+  if (!rootEl || !window.React || !window.ReactDOM) {
+    return;
+  }
+  const root = ReactDOM.createRoot(rootEl);
+  root.render(
+    React.createElement(ConfigErrorBoundary, null,
+      React.createElement(ConfigApp)
+    )
+  );
+})();
