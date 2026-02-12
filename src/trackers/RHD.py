@@ -16,7 +16,7 @@ Config = dict[str, Any]
 
 
 class RHD(UNIT3D):
-    INVALID_TAG_PATTERN = re.compile(r"-(nogrp|nogroup|unknown|unk)", re.IGNORECASE)
+    INVALID_TAG_PATTERN = re.compile(r"(nogrp|nogroup|unknown|unk)", re.IGNORECASE)
     WHITESPACE_PATTERN = re.compile(r"\s{2,}")
     MARKER_PATTERN = re.compile(r"\b(UNTOUCHED|VU1080|VU720|VU)\b", re.IGNORECASE)
 
