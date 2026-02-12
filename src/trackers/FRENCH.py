@@ -1,18 +1,18 @@
-from typing import Any, Optional, cast
-import aiofiles
-import re
-import httpx
-from data.config import config
-from src.console import console
-from unidecode import unidecode
-# UA 7.0.0
+# Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+# https://github.com/Audionut/Upload-Assistant/tree/master
 
+import aiofiles
+import httpx
+from typing import Any, Optional, cast
+from data.config import config
+from unidecode import unidecode
+#from src.console import console
 
 async def build_audio_string(meta: dict[str, Any]) -> str:
 
     #        Priority Order:
-    #        1. MULYi: Exactly 2 audio tracks
-    #        2. MULTI: 3 audio tracks
+    #        1. MULYi: Exactly 2 audio tracks Dual would be nice
+    #        2. MULTi: 3 audio tracks
     #        3. VOSTFR: Single audio (original lang) + French subs + NO French audio
     #        4. VO: Single audio (original lang) + NO French subs + NO French audio
 
@@ -39,23 +39,18 @@ async def build_audio_string(meta: dict[str, Any]) -> str:
         language = "MULTi"
 
     # VOSTFR - Single audio (original) + French subs + NO French audio
-    if num_audio_tracks == 1 and original_lang and not has_french_audio and has_French_subs:
-        if audio_langs[0] == original_lang:
-            language = "VOSTFR"
+    if num_audio_tracks == 1 and original_lang and not has_french_audio and has_French_subs and audio_langs[0] == original_lang:
+        language = "VOSTFR"
 
     # VO - Single audio (original) + NO French subs + NO French audio
-    if num_audio_tracks == 1 and original_lang and not has_french_audio and not has_French_subs:
-        if audio_langs[0] == original_lang:
-            language = "VO"
+    if num_audio_tracks == 1 and original_lang and not has_french_audio and not has_French_subs and audio_langs[0] == original_lang:
+        language = "VO"
 
     # FRENCH. - Single audio FRENCH
-    if num_audio_tracks == 1 and has_french_audio:
-        if audio_langs[0] == original_lang:
-            language = "FRENCH"
+    if num_audio_tracks == 1 and has_french_audio and audio_langs[0] == original_lang:
+        language = "FRENCH"
 
     return language
-
-# VOF ,VOQ  si le pays dorigine est la meme langue
 
 
 async def get_extra_french_tag(meta: dict[str, Any], check_origin: bool) -> str:
@@ -65,17 +60,14 @@ async def get_extra_french_tag(meta: dict[str, Any], check_origin: bool) -> str:
     vff = ""
     vf = ""
     origincountry = meta.get("origin_country", "")
-    
-    for i, item in enumerate(audio_track):
-        try:
-            title = item.get("Title", "").lower()
-        except:
-            title = ''
+
+    for _, item in enumerate(audio_track):
+        title = (item.get("Title") or "").lower()
         lang = item.get('Language', "").lower()
 
         if lang == "fr-ca" or "vfq" in title:
             vfq = True
-        elif lang == "fr-fr"or "vff" in title:
+        elif lang == "fr-fr" or "vff" in title:
             vff = True
         elif lang == "fr" or "vfi" in title:
             vf = True
@@ -102,7 +94,7 @@ async def get_extra_french_tag(meta: dict[str, Any], check_origin: bool) -> str:
 
 
 async def get_audio_tracks(meta: dict[str, Any], filter: bool) -> list[dict[str, Any]]:
-    """Extract audio tracks from mediainfo"""
+
     if 'mediainfo' not in meta or 'media' not in meta['mediainfo']:
         return []
 
@@ -126,8 +118,8 @@ async def get_audio_tracks(meta: dict[str, Any], filter: bool) -> list[dict[str,
             track_dict = cast(dict[str, Any], track)
             if track_dict.get('@type') == 'Audio':
                 if filter:
-                    #or not "audio description" in str(track_dict.get('Title') or '').lower() #audio description
-                    if not "commentary" in str(track_dict.get('Title') or '').lower():
+                    # or not "audio description" in str(track_dict.get('Title') or '').lower() #audio description, AD, description
+                    if "commentary" not in str(track_dict.get('Title') or '').lower():
                         audio_tracks.append(track_dict)
                 else:
                     audio_tracks.append(track_dict)
@@ -136,7 +128,7 @@ async def get_audio_tracks(meta: dict[str, Any], filter: bool) -> list[dict[str,
 
 
 async def get_subtitle_tracks(meta: dict[str, Any]) -> list[dict[str, Any]]:
-    """Extract audio tracks from mediainfo"""
+
     if 'mediainfo' not in meta or 'media' not in meta['mediainfo']:
         return []
 
@@ -165,7 +157,7 @@ async def get_subtitle_tracks(meta: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 async def get_video_tracks(meta: dict[str, Any]) -> list[dict[str, Any]]:
-    """Extract audio tracks from mediainfo"""
+
     if 'mediainfo' not in meta or 'media' not in meta['mediainfo']:
         return []
 
@@ -194,7 +186,7 @@ async def get_video_tracks(meta: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 async def extract_audio_languages(audio_tracks: list[dict[str, Any]], meta: dict[str, Any]) -> list[str]:
-    """Extract and normalize audio languages"""
+
     audio_langs: list[str] = []
 
     for track in audio_tracks:
@@ -217,7 +209,6 @@ async def extract_audio_languages(audio_tracks: list[dict[str, Any]], meta: dict
 
 
 async def map_language(lang: str) -> str:
-    """Map language codes and names"""
     if not lang:
         return ''
 
@@ -249,7 +240,7 @@ async def map_language(lang: str) -> str:
 
 
 async def get_original_language(meta: dict[str, Any]) -> Optional[str]:
-    """Get the original language from existing metadata"""
+
     original_lang = None
 
     if meta.get('original_language'):
@@ -282,7 +273,7 @@ async def get_original_language(meta: dict[str, Any]) -> Optional[str]:
 
 
 async def has_french_subs(meta: dict[str, Any]) -> bool:
-    """Check if torrent has Spanish subtitles"""
+
     if 'mediainfo' not in meta or 'media' not in meta['mediainfo']:
         return False
     media_info = meta['mediainfo']
@@ -335,7 +326,6 @@ async def map_audio_codec(audio_track: dict[str, Any]) -> str:
 
 
 async def get_audio_channels(audio_track: dict[str, Any]) -> str:
-    """Get audio channel configuration"""
     channels = audio_track.get('Channels', '')
     channel_map = {
         '1': 'Mono', '2': '2.0', '3': '3.0',
@@ -348,10 +338,11 @@ async def get_audio_name(meta: dict[str, Any]) -> str:
     audio_track = await get_audio_tracks(meta, True)
     if not audio_track:
         return ""
-    has_french_audio = "fr" in audio_track or "fr-fr" in audio_track or "fr-ca" in audio_track
+    has_french_audio = any(item.get('Language', '') in (
+        'fr', 'fr-fr', 'fr-ca')for item in audio_track)
     audio_parts: list[str] = []
     if has_french_audio:
-        for i, item in enumerate(audio_track):
+        for _, item in enumerate(audio_track):
             if item['Language'] == "fr" or item['Language'] == "fr-fr" or item['Language'] == "fr-ca":
                 codec = await map_audio_codec(item)
                 channels = await get_audio_channels(item)
@@ -359,8 +350,8 @@ async def get_audio_name(meta: dict[str, Any]) -> str:
                 audio = ' '.join(audio_parts)
                 return audio
     else:
-        for i, item in enumerate(audio_track):
-            if item['Default'] == "Yes":
+        for _, item in enumerate(audio_track):
+            if item.get('Default') == "Yes":
                 codec = await map_audio_codec(item)
                 channels = await get_audio_channels(item)
                 audio_parts.append(f"{codec} {channels}")
@@ -376,7 +367,7 @@ async def translate_genre(text: str) -> str:
         'Fantasy': 'Fantastique',
         'History': 'Histoire',
         'Horror': 'Horreur',
-        'Music ': 'Musique',
+        'Music': 'Musique',
         'Romance': 'Romance',
         'Science Fiction': 'Science-fiction',
         'TV Movie': 'Téléfilm',
@@ -395,6 +386,7 @@ async def translate_genre(text: str) -> str:
         'Reality': 'Réalité',
         'Sci-Fi & Fantasy': 'Science-fiction & fantastique',
         'Soap': 'Feuilletons',
+        'Sport': 'Sport',
         'Talk': 'Débats',
         'War & Politics': 'Guerre & politique',
         'Western': 'Western'
@@ -410,9 +402,9 @@ async def translate_genre(text: str) -> str:
     return ", ".join(result)
 
 
-def clean_name(input_str: str) -> str:
+async def clean_name(input_str: str) -> str:
     ascii_str = unidecode(input_str)
-    invalid_char = set('<>"/\\|?*') #! . , : ; @ # $ % ^ & */ \" '_
+    invalid_char = set('<>"/\\|?*')  # ! . , : ; @ # $ % ^ & */ \" '_
     result = []
     for char in ascii_str:
         if char in invalid_char:
@@ -423,7 +415,7 @@ def clean_name(input_str: str) -> str:
 
 
 async def get_translation_fr(meta: dict[str, Any]) -> tuple[str, str]:
-    """Get Spanish title if available and configured"""
+
     fr_title = meta.get("frtitle")
     fr_overwiew = meta.get("froverview")
     if fr_title and fr_overwiew:
@@ -454,17 +446,17 @@ async def get_translation_fr(meta: dict[str, Any]) -> tuple[str, str]:
     tmdb_id = int(meta["tmdb_id"])
     category = str(meta["category"])
     tmdb_title, tmdb_overview = await get_tmdb_translations(tmdb_id, category, "fr")
-    meta["frtitle"] = tmdb_title or tmdb_title
+    meta["frtitle"] = french_title or tmdb_title
     meta["froverview"] = tmdb_overview
     return french_title if french_title is not None else tmdb_title, tmdb_overview
 
 
 async def get_tmdb_translations(tmdb_id: int, category: str, target_language: str) -> tuple[str, str]:
-    """Get translations from TMDb API"""
+
     endpoint = "movie" if category == "MOVIE" else "tv"
     url = f"https://api.themoviedb.org/3/{endpoint}/{tmdb_id}/translations"
     tmdb_api_key = config['DEFAULT'].get('tmdb_api', False)
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30) as client:
         try:
             response = await client.get(url, params={"api_key": tmdb_api_key})
             response.raise_for_status()
@@ -481,7 +473,7 @@ async def get_tmdb_translations(tmdb_id: int, category: str, target_language: st
                     return translated_title or "", translated_desc or ""
             return "", ""
 
-        except Exception as e:
+        except Exception:
             return "", ""
 
 # unknow return type
@@ -490,15 +482,28 @@ async def get_tmdb_translations(tmdb_id: int, category: str, target_language: st
 async def get_desc_full(meta: dict[str, Any], tracker) -> str:
 
     video_track = await get_video_tracks(meta)
-    mbps = int(video_track[0]['BitRate']) / 1_000_000
+    if not video_track:
+        return ''
+    mbps = 0.0
+    if video_track and video_track[0].get('BitRate'):
+        try:
+            mbps = int(video_track[0]['BitRate']) / 1_000_000
+        except (ValueError, TypeError):
+            pass
     title, description = await get_translation_fr(meta)
     genre = await translate_genre(meta['combined_genres'])
     audio_tracks = await get_audio_tracks(meta, False)
+    if not audio_tracks:
+        return ''
     subtitle_tracks = await get_subtitle_tracks(meta)
+    if not subtitle_tracks:
+        return ''
+    size_bytes = int(meta.get('source_size') or 0)
+    size_gib = size_bytes / (1024 ** 3)
     poster = str(meta.get('poster', ""))
     year = str(meta.get('year', ""))
     original_title = str(meta.get('original_title', ""))
-    Pays = str(meta['imdb_info']['country'])
+    pays = str(meta.get('imdb_info', {}).get('country', ''))
     release_date = str(meta.get('release_date', ""))
     video_duration = str(meta.get('video_duration', ""))
     source = str(meta.get('source', ""))
@@ -507,6 +512,16 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
     container = str(meta.get('container', ""))
     video_codec = str(meta.get('video_codec', ""))
     hdr = str(meta.get('hdr', ""))
+    if "DV" in hdr:
+        if video_track and video_track[0].get('HDR_Format_Profile'):
+            try:
+                dv = str(video_track[0]['HDR_Format_Profile']).replace('dvhe.0', '').replace('/', '').strip()
+                hdr = hdr.replace('DV', '')
+                hdr = f"{hdr} DV{dv}"
+
+            except (ValueError, TypeError):
+                pass
+
     tag = str(meta.get('tag', "")).replace('-', '')
     service_longname = str(meta.get('service_longname', ""))
     season = str(meta.get('season_int', ''))
@@ -520,7 +535,7 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
     desc_parts.append(
         f"[b][font=Verdana][color=#3d85c6][size=29]{title}[/size][/font]")
     desc_parts.append(f"[size=18]{year}[/size][/color][/b]")
-    
+
     if meta['category'] == "TV":
         season = f"S{season}" if season else ""
         episode = f"E{episode}" if episode else ""
@@ -529,7 +544,7 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
     desc_parts.append(
         f"[font=Verdana][size=13][b][color=#3d85c6]Titre original :[/color][/b] [i]{original_title}[/i][/size][/font]")
     desc_parts.append(
-        f"[b][color=#3d85c6]Pays :[/color][/b] [i]{Pays}[/i]")
+        f"[b][color=#3d85c6]Pays :[/color][/b] [i]{pays}[/i]")
     desc_parts.append(f"[b][color=#3d85c6]Genres :[/color][/b] [i]{genre}[/i]")
     desc_parts.append(
         f"[b][color=#3d85c6]Date de sortie :[/color][/b] [i]{release_date}[/i]")
@@ -539,31 +554,35 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
             f"[b][color=#3d85c6]Durée :[/color][/b] [i]{video_duration} Minutes[/i]")
 
     if meta['imdb_id']:
-        desc_parts.append( f"{meta.get('imdb_info', {}).get('imdb_url', '')}")
+        desc_parts.append(f"[url={meta.get('imdb_info', {}).get('imdb_url', '')}]IMDb[/url]")
     if meta['tmdb']:
-        desc_parts.append( f"\nhttps://www.themoviedb.org/{str(meta['category'].lower())}/{str(meta['tmdb'])}")
+        desc_parts.append(
+            f"[url=https://www.themoviedb.org/{str(meta['category'].lower())}/{str(meta['tmdb'])}]TMDB[/url]")
     if meta['tvdb_id']:
-        desc_parts.append( f"\nhttps://www.thetvdb.com/?id={str(meta['tvdb_id'])}&tab=series")
+        desc_parts.append(
+            f"[url=https://www.thetvdb.com/?id={str(meta['tvdb_id'])}&tab=series]TVDB[/url]")
     if meta['tvmaze_id']:
-        desc_parts.append( f"\nhttps://www.tvmaze.com/shows/{str(meta['tvmaze_id'])}")
+        desc_parts.append(
+            f"[url=https://www.tvmaze.com/shows/{str(meta['tvmaze_id'])}]TVmaze[/url]")
     if meta['mal_id']:
-        desc_parts.append( f"\nhttps://myanimelist.net/anime/{str(meta['mal_id'])}")
-    
-    desc_parts.append(f"[img]https://i.imgur.com/W3pvv6q.png[/img]")
+        desc_parts.append(
+            f"[url=https://myanimelist.net/anime/{str(meta['mal_id'])}]MyAnimeList[/url]")
+
+    desc_parts.append("[img]https://i.imgur.com/W3pvv6q.png[/img]")
 
     desc_parts.append(f"{description}")
 
-    desc_parts.append(f"[img]https://i.imgur.com/KMZsqZn.png[/img]")
+    desc_parts.append("[img]https://i.imgur.com/KMZsqZn.png[/img]")
 
-    #if meta.get('is_disc', '') == 'DVD':
+    # if meta.get('is_disc', '') == 'DVD':
     #    desc_parts.append(f'[hide=DVD MediaInfo][pre]{await builder.get_mediainfo_section(meta)}[/pre][/hide]')
 
-    #bd_info = await builder.get_bdinfo_section(meta)
-    #if bd_info:
+    # bd_info = await builder.get_bdinfo_section(meta)
+    # if bd_info:
     #    desc_parts.append(f'[hide=BDInfo][pre]{bd_info}[/pre][/hide]')
 
     # User description
-    #desc_parts.append(await builder.get_user_description(meta))
+    # desc_parts.append(await builder.get_user_description(meta))
 
     desc_parts.append(
         f"[b][color=#3d85c6]Source :[/color][/b] [i]{source}   {service_longname}[/i]")
@@ -580,52 +599,50 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
     desc_parts.append(
         f"[b][color=#3d85c6]Débit vidéo :[/color][/b] [i]{mbps:.2f} MB/s[/i]")
 
-    desc_parts.append(f"[b][color=#3d85c6] Audio(s) :[/color][/b]")
+    desc_parts.append("[b][color=#3d85c6] Audio(s) :[/color][/b]")
     for obj in audio_tracks:
-        kbps = int(obj['BitRate']) / 1_000
+        if isinstance(obj, dict):
+            bitrate = obj.get('BitRate')
+            kbps = int(bitrate) / 1_000 if bitrate else 0
 
-        flags = []
-        if obj.get("Forced") == "Yes":
-            flags.append("Forced")
-        if obj.get("Default") == "Yes":
-            flags.append("Default")
-        if "commentary" in str(obj.get('Title')).lower():
-            flags.append("Commentary")
-        if " ad" in str(obj.get('Title')).lower():
-            flags.append("Audio Description")
+            flags = []
+            if obj.get("Forced") == "Yes":
+                flags.append("Forced")
+            if obj.get("Default") == "Yes":
+                flags.append("Default")
+            if "commentary" in str(obj.get('Title')).lower():
+                flags.append("Commentary")
+            if " ad" in str(obj.get('Title')).lower():
+                flags.append("Audio Description")
 
-        line = f"{obj['Language']} / {obj['Format']} / {obj['Channels']}ch / {kbps:.2f}KB/s"
-        if flags:
-            line += " / " + " / ".join(flags)
-        desc_parts.append(line)
+            line = f"{obj['Language']} / {obj['Format']} / {obj['Channels']}ch / {kbps:.2f}KB/s"
+            if flags:
+                line += " / " + " / ".join(flags)
+            desc_parts.append(line)
+        else:
+            desc_parts.append(f"*{obj}*")
 
-        # desc_parts.append(f"{obj['Language']} / {obj['Format']} / {obj['Channels']}ch / {kbps}KB/s")
-
-    desc_parts.append(f"[b][color=#3d85c6]Sous-titres :[/color][/b]")
+    desc_parts.append("[b][color=#3d85c6]Sous-titres :[/color][/b]")
     for obj in subtitle_tracks:
-
-        flags = []
-        if obj.get("Forced") == "Yes":
-            flags.append("Forced")
-        if obj.get("Default") == "Yes":
-            flags.append("Default")
-        line = f"{obj['Language']} / {obj['Format']}"
-        if flags:
-            line += " / " + " / ".join(flags)
-        desc_parts.append(line)
-
-        # desc_parts.append(f" {obj['Language']} / {obj['Format']} / Forced:{obj['Forced']} / Default:{obj['Default']}")
+        if isinstance(obj, dict):
+            flags = []
+            if obj.get("Forced") == "Yes":
+                flags.append("Forced")
+            if obj.get("Default") == "Yes":
+                flags.append("Default")
+            line = f"{obj['Language']} / {obj['Format']}"
+            if flags:
+                line += " / " + " / ".join(flags)
+            desc_parts.append(line)
+        else:
+            desc_parts.append(f"*{obj}*")
 
     # desc_parts.append(f"[img]https://i.imgur.com/KFsABlN.png[/img]")
-    desc_parts.append(
-        f"[b][color=#3d85c6]Team :[/color][/b] [i]{tag}[/i]  ")
-    # desc_parts.append(f"[b][color=#3d85c6]  Taille totale :[/color][/b] {gb} GB")
-
+    desc_parts.append(f"[b][color=#3d85c6]Team :[/color][/b] [i]{tag}[/i]")
+    desc_parts.append(f"[b][color=#3d85c6]  Taille totale :[/color][/b] {size_gib:.2f} GB")
+    # desc_parts.append(f"[b][color=#3d85c6]  Nombre de fichier :[/color][/b]")
     # Screenshots
-    if f'{tracker}_images_key' in meta:
-        images = meta[f'{tracker}_images_key']
-    else:
-        images = meta['image_list']
+    images = meta[f'{tracker}_images_key'] if f'{tracker}_images_key' in meta else meta['image_list']
     if images:
         screenshots_block = ''
         for image in images:
@@ -642,4 +659,3 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
         await description_file.write(description)
 
     return description
-
