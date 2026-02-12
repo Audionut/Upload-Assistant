@@ -46,7 +46,9 @@ class RHD(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False,
     ) -> dict[str, str]:
+        """map each resolution to the correct id on the tracker"""
         _ = (resolution, reverse, mapping_only)
+        resolution_key = resolution or meta.get("resolution", "")
         resolution_id = {
             '8640p': '10',
             '4320p': '1',
@@ -61,12 +63,12 @@ class RHD(UNIT3D):
             '480p': '11',
             '480i': '18',
             '384p': '14',
-        }.get(meta['resolution'], '10')
+        }.get(resolution_key, '10')
         return {'resolution_id': resolution_id}
 
     def get_basename(self, meta: dict[str, Any]) -> str:
         """Extract basename from first file in filelist or path"""
-        path_value = next(iter(meta["filelist"]), meta["path"])
+        path_value = next(iter(meta.get("filelist", [])), meta.get("path", ""))
         path = path_value if isinstance(path_value, str) else ""
         return os.path.basename(path)
 
@@ -129,7 +131,7 @@ class RHD(UNIT3D):
             track.get("@type") == "Audio"
             and self._get_language_code(track) in {"de"}
             and "commentary" not in str(track.get("Title", "")).lower()
-            for track in tracks[2:]
+            for track in tracks
         )
 
     def _has_german_subtitles(self, meta: dict[str, Any]) -> bool:
@@ -281,14 +283,14 @@ class RHD(UNIT3D):
         if effective_type == "DISC":
             # Inject region from validated session data if available
             region = meta.get("region", "")
-            if meta["is_disc"] == "BDMV":
+            if meta.get("is_disc", "") == "BDMV":
                 # BDMV: Title Year Edition REPACK Resolution 3D Hybrid Region UHD Source Audio HDR VideoCodec
                 name = f"{title} {year} {season}{episode} {edition} {anime} {doku} {repack} {resolution} {three_d} {hybrid} {region} {uhd} {source} {audio} {hdr} {video_codec} {internal}"
-            elif meta["is_disc"] == "DVD":
+            elif meta.get("is_disc", "") == "DVD":
                 dvd_size = meta.get("dvd_size", "")
                 # DVD: Title Year Edition REPACK Resolution 3D Hybrid Region Source DVDSize Audio
                 name = f"{title} {year} {season}{episode} {edition} {anime} {doku} {repack} {resolution} {three_d} {hybrid} {region} {source} {dvd_size} {audio} {internal}"
-            elif meta["is_disc"] == "HDDVD":
+            elif meta.get("is_disc", "") == "HDDVD":
                 # HDDVD: Title Year Edition REPACK Resolution Region Source Audio VideoCodec
                 name = f"{title} {year} {edition} {anime} {doku} {repack} {resolution} {region} {source} {audio} {video_codec} {internal}"
 
@@ -310,11 +312,8 @@ class RHD(UNIT3D):
             type_str = "WEB-DL" if effective_type == "WEBDL" else "WEBRip"
             # WEB: Title Year LANG Edition REPACK Resolution Hybrid UHD Type Audio service HDR VideoCodec
             name = f"{title} {year} {season}{episode} {episode_title} {part} {incomplete} {audio_lang_str} {edition} {anime} {doku} {repack} {resolution} {hybrid} {uhd} {type_str} {audio} {service} {hdr} {video_encode} {internal}"
-
         else:
-            # Fallback: use original name
-            name = str(meta["name"])
-
+            console.print("[bold red]Name enrichment failed. Please manually update the name after Uploading.")
 
         # Ensure name is always a string
         if not name:
@@ -364,7 +363,7 @@ class RHD(UNIT3D):
             potential_tag = potential_tag.split()[-1]
 
         if (
-             potential_tag
+            not potential_tag
             or len(potential_tag) > 30
             or not potential_tag.replace("_", "").isalnum()
         ):
@@ -377,8 +376,7 @@ class RHD(UNIT3D):
         return potential_tag
 
     async def get_additional_checks(self, meta: Meta) -> bool:
-        should_continue = True
-
+        """make sure the upload complies with the RHD rules"""
         # Uploading MIC, CAM, TS, LD, as well as upscale releases, is prohibited.
         prohib_markers = ["MIC", "CAM", "TS", "TELESYNC", "LD", "LINE", "UPSCALE"]
         basename = self.get_basename(meta)
@@ -413,4 +411,4 @@ class RHD(UNIT3D):
             console.print("[bold red]Uploads containing samples, proofs, and images are prohibited.[/bold red]")
             if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                 return False
-        return should_continue
+        return True
