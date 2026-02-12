@@ -45,7 +45,9 @@ COPY . .
 # volume mounts over /Upload-Assistant/data/ don't hide critical files
 # (__init__.py, version.py, example-config.py, templates/).
 # At runtime the app restores any missing files from this copy.
-RUN cp -a data /Upload-Assistant/defaults/data
+RUN rm -rf /Upload-Assistant/defaults \
+    && mkdir -p /Upload-Assistant/defaults \
+    && cp -a data /Upload-Assistant/defaults/
 
 # Download only the required mkbrr binary (requires full repo for src imports)
 RUN python3 -c "from bin.get_mkbrr import MkbrrBinaryManager; MkbrrBinaryManager.download_mkbrr_for_docker()"
