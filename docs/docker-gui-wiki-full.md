@@ -211,5 +211,5 @@ Notes:
 
 ## Security notes
 
-- If exposing the WebUI to your LAN/WAN, run behind a reverse proxy with TLS is recommended.
+- If exposing the WebUI to your LAN/WAN, running behind a reverse proxy with TLS is recommended.
 - Limit `UA_BROWSE_ROOTS` to only the directories the WebUI requires to operate. This gives granular access: you can mount volumes the app needs (e.g. `/torrent_storage_dir`) without exposing them to the file browser.
