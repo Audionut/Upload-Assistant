@@ -113,7 +113,7 @@ class RHD(UNIT3D):
                 title = aka.get("title")
                 if isinstance(title, str):
                     country_match = title
-                break  # Country match takes priority
+                    break  # Country match takes priority
             elif aka.get("language") == "German" and not language_match and not aka.get("attributes"):
                 title = aka.get("title")
                 if isinstance(title, str):
