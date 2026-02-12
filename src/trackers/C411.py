@@ -339,12 +339,16 @@ class C411():
         return True
 
     async def search_existing(self, meta: dict[str, Any], _) -> list[str]:
+
         dupes: list[str] = []
+
+        # Nothing came with the name, we'll look using tmdb_id
+        tmdb_id = meta.get('tmdb_id','')
         title, descr = await fr.get_translation_fr(meta)
         params: dict[str, Any] = {
             't': 'search',
             'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
-            'q': unidecode.unidecode(title.replace(" ", "."))
+            'tmdbid': tmdb_id
         }
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
@@ -367,13 +371,12 @@ class C411():
             console.print(f"[bold red]Unexpected error: {e}")
             await asyncio.sleep(5)
         if not dupes:
-            # Nothing came with the name, we'll look using tmdb_id
-            tmdb_id = meta.get('tmdb_id','')
+            # Nothing came with tmdn id, we'll check using names just in case
             title, descr = await fr.get_translation_fr(meta)
             params: dict[str, Any] = {
                 't': 'search',
                 'apikey': self.config['TRACKERS'][self.tracker]['api_key'].strip(),
-                'tmdbid': tmdb_id
+                'q': unidecode.unidecode(title.replace(" ", "."))
             }
             try:
                 async with httpx.AsyncClient(timeout=5.0) as client:
@@ -402,7 +405,16 @@ class C411():
         await self.common.create_torrent_for_upload(meta, self.tracker, 'C411')
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         mediainfo_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt"
-
+        # Tmdb infos
+        tmdb_info = {}
+        tmdb_info['id'] = meta.get("tmdb_id","")
+        tmdb_info['title'] = meta.get("title","")
+        tmdb_info['originalTitle'] = meta.get("origial_title","")
+        tmdb_info['overview'] = meta.get("overview","")
+        tmdb_info['release_date'] = meta.get("release_date","")
+        tmdb_info['runtime'] = meta.get("runtime","")
+        tmdb_info['voteAverage'] = meta.get("vote_average","")
+        #
         headers = {
             "Authorization": f"Bearer {self.config['TRACKERS'][self.tracker]['api_key'].strip()}"}
         acm_name = await self.get_name(meta)
@@ -412,7 +424,6 @@ class C411():
             torrent_bytes = await f.read()
         async with aiofiles.open(mediainfo_file_path, 'rb') as f:
             mediainfo_bytes = await f.read()
-        tmdb_data = {"id": meta.get('tmdb_id','')}
         data: dict[str, Any] = {
             "title": str(dot_name),
             "description": await fr.get_desc_full(meta, self.tracker),
@@ -422,7 +433,7 @@ class C411():
             "options": await self.get_option_tag(meta),
             # "isExclusive": "Test Upload-Assistant",
             "uploaderNote": "Upload-Assistant",
-            "tmdbData": str(tmdb_data)
+            "tmdbData": json.dumps(tmdb_info)
             # "tmdbData": "Test Upload-Assistant",
             # "rawgData": "Test Upload-Assistant",
         }
