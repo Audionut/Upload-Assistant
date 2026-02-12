@@ -93,30 +93,36 @@ class TVC:
         return os.path.join(desc_dir, f"[{tracker}]DESCRIPTION.txt")
 
     def _build_disc_info(self, discs: list[dict[str, Any]]) -> str:
-        """Build disc information section."""
+        """
+        Build disc information section.
+
+        Note: TVC does not currently accept BDMV/Blu-ray disc releases (only HDTV and WEB-DL).
+        This method exists for code compatibility/future use and will not be called during
+        normal TVC uploads due to the disc blocking in search_existing().
+        """
         parts = []
 
-        # First disc (DVD VOB)
-        if discs[0]['type'] == "DVD":
-            parts.append(
-                f"[spoiler=VOB MediaInfo][code]{discs[0]['vob_mi']}[/code][/spoiler]\n\n"
-            )
-
-        # Additional discs
-        for disc in discs[1:]:
+        # Process all discs uniformly
+        for disc in discs:
             if disc['type'] == "BDMV":
                 name = disc.get('name', 'BDINFO')
                 parts.append(
                     f"[spoiler={name}][code]{disc['summary']}[/code][/spoiler]\n\n"
                 )
             elif disc['type'] == "DVD":
-                parts.append(f"{disc['name']}:\n")
-                vob_name = os.path.basename(disc['vob'])
-                ifo_name = os.path.basename(disc['ifo'])
-                parts.append(
-                    f"[spoiler={vob_name}][code]{disc['vob_mi']}[/code][/spoiler] "
-                    f"[spoiler={ifo_name}][code]{disc['ifo_mi']}[/code][/spoiler]\n\n"
-                )
+                # For first DVD disc, use VOB MediaInfo label
+                if not parts:  # First disc
+                    parts.append(
+                        f"[spoiler=VOB MediaInfo][code]{disc['vob_mi']}[/code][/spoiler]\n\n"
+                    )
+                else:  # Subsequent DVD discs
+                    parts.append(f"{disc['name']}:\n")
+                    vob_name = os.path.basename(disc['vob'])
+                    ifo_name = os.path.basename(disc['ifo'])
+                    parts.append(
+                        f"[spoiler={vob_name}][code]{disc['vob_mi']}[/code][/spoiler] "
+                        f"[spoiler={ifo_name}][code]{disc['ifo_mi']}[/code][/spoiler]\n\n"
+                    )
 
         return "".join(parts)
 
