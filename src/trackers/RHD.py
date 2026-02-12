@@ -47,8 +47,6 @@ class RHD(UNIT3D):
         mapping_only: bool = False,
     ) -> dict[str, str]:
         """map each resolution to the correct id on the tracker"""
-        _ = (resolution, reverse, mapping_only)
-        resolution_key = resolution or meta.get("resolution", "")
         resolution_id = {
             '8640p': '10',
             '4320p': '1',
@@ -63,8 +61,18 @@ class RHD(UNIT3D):
             '480p': '11',
             '480i': '18',
             '384p': '14',
-        }.get(resolution_key, '10')
-        return {'resolution_id': resolution_id}
+        }
+        if mapping_only:
+            return resolution_id
+        elif reverse:
+            return {v: k for k, v in resolution_id.items()}
+        elif resolution is not None:
+            return {'resolution_id': resolution_id.get(resolution, '10')}
+        else:
+            meta_resolution = meta.get('resolution', '')
+            resolved_id = resolution_id.get(meta_resolution, '10')
+            return {'resolution_id': resolved_id}
+
 
     def get_basename(self, meta: dict[str, Any]) -> str:
         """Extract basename from first file in filelist or path"""
