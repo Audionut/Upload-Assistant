@@ -367,7 +367,6 @@ class TVC:
 
             await asyncio.to_thread(_write)
         except Exception as e:
-            from src.console import console
             console.print(f"[yellow]Warning: Failed to write description file: {e}[/yellow]")
 
     async def get_cat_id(self, genres: str) -> str:
