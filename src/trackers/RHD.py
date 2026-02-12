@@ -275,19 +275,19 @@ class RHD(UNIT3D):
             # Inject region from validated session data if available
             region = meta.get("region", "")
             if meta["is_disc"] == "BDMV":
-                # BDMV: Title Year 3D Edition Hybrid REPACK Resolution Region UHD Source HDR VideoCodec Audio
-                name = f"{title} {year} {season}{episode} {three_d} {edition} {hybrid} {repack} {resolution} {region} {uhd} {source} {audio} {hdr} {video_codec}"
+                # BDMV: Title Year Edition Hybrid REPACK Resolution 3D Region UHD Source Audio HDR VideoCodec
+                name = f"{title} {year} {season}{episode} {edition} {hybrid} {repack} {resolution} {three_d} {region} {uhd} {source} {audio} {hdr} {video_codec}"
             elif meta["is_disc"] == "DVD":
                 dvd_size = meta.get("dvd_size", "")
-                # DVD: Title Year 3D Edition REPACK Resolution Region Source DVDSize Audio
-                name = f"{title} {year} {season}{episode} {three_d} {edition} {repack} {resolution} {region} {source} {dvd_size} {audio}"
+                # DVD: Title Year Edition REPACK Resolution 3D Region Source DVDSize Audio
+                name = f"{title} {year} {season}{episode} {edition} {repack} {resolution} {three_d} {region} {source} {dvd_size} {audio}"
             elif meta["is_disc"] == "HDDVD":
-                # HDDVD: Title Year Edition REPACK Resolution Region Source VideoCodec Audio
-                name = f"{title} {year} {edition} {repack} {resolution} {region} {source} {video_codec} {audio}"
+                # HDDVD: Title Year Edition REPACK Resolution Region Source Audio VideoCodec
+                name = f"{title} {year} {edition} {repack} {resolution} {region} {source} {audio} {video_codec} "
 
         elif effective_type == "REMUX":
-            # REMUX: Title Year 3D LANG Edition Hybrid REPACK Resolution UHD Source REMUX HDR VideoCodec Audio
-            name = f"{title} {year} {season}{episode} {episode_title} {part} {three_d} {audio_lang_str} {edition} {hybrid} {repack} {resolution} {uhd} {source} REMUX {audio} {hdr} {video_codec}"
+            # REMUX: Title Year LANG Edition Hybrid REPACK Resolution 3D UHD Source REMUX Audio HDR VideoCodec
+            name = f"{title} {year} {season}{episode} {episode_title} {part} {audio_lang_str} {edition} {hybrid} {repack} {resolution} {three_d} {uhd} {source} REMUX {audio} {hdr} {video_codec}"
 
         elif effective_type in ("DVDRIP", "BRRIP"):
             type_str = "DVDRip" if effective_type == "DVDRIP" else "BRRip"
@@ -301,8 +301,8 @@ class RHD(UNIT3D):
         elif effective_type in ("WEBDL", "WEBRIP"):
             service = meta.get("service", "")
             type_str = "WEB-DL" if effective_type == "WEBDL" else "WEBRip"
-            # WEB: Title Year LANG Edition Hybrid REPACK Resolution UHD Service Type Audio HDR VideoCodec
-            name = f"{title} {year} {season}{episode} {episode_title} {part} {audio_lang_str} {edition} {hybrid} {repack} {resolution} {uhd} {service} {type_str} {audio} {hdr} {video_encode}"
+            # WEB: Title Year LANG Edition Hybrid REPACK Resolution UHD Type Audio service HDR VideoCodec
+            name = f"{title} {year} {season}{episode} {episode_title} {part} {audio_lang_str} {edition} {hybrid} {repack} {resolution} {uhd} {type_str} {audio} {service} {hdr} {video_encode}"
 
         else:
             # Fallback: use original name
