@@ -29,7 +29,7 @@ class BDInfoBinaryManager:
     """
 
     @staticmethod
-    async def ensure_bdinfo_binary(base_dir: Union[str, Path], debug: bool, version: str = "v1.0.7") -> str:
+    async def ensure_bdinfo_binary(base_dir: Union[str, Path], debug: bool, version: str = "v1.0.8") -> str:
         system = platform.system().lower()
         machine = platform.machine().lower()
         if debug:
@@ -80,7 +80,22 @@ class BDInfoBinaryManager:
         binary_exists = binary_path.exists() and binary_path.is_file()
         binary_executable = system == "windows" or os.access(binary_path, os.X_OK)
         binary_valid = binary_exists and binary_executable
+
+        def cleanup_old_version_files() -> None:
+            for candidate in bin_dir.iterdir():
+                if not candidate.is_file():
+                    continue
+                if candidate.name == version or candidate.name == binary_name:
+                    continue
+                if candidate.name.startswith("v"):
+                    if system != "windows":
+                        os.chmod(candidate, 0o644)
+                    candidate.unlink()
+                    if debug:
+                        console.print(f"[blue]Removed old version file at: {candidate}[/blue]")
+
         if version_path.exists() and version_path.is_file() and binary_valid:
+            cleanup_old_version_files()
             if debug:
                 console.print("[blue]bdinfo version is up to date[/blue]")
             return str(binary_path)
@@ -99,6 +114,8 @@ class BDInfoBinaryManager:
             os.remove(version_path)
             if debug:
                 console.print(f"[blue]Removed existing version file at: {version_path}[/blue]")
+
+        cleanup_old_version_files()
 
         # Construct download URL using release asset filename
         download_url = f"https://github.com/Audionut/BDInfoCLI-ng/releases/download/{version}/{file_pattern}"

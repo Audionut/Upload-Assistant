@@ -64,7 +64,7 @@ class DiscInfoManager:
                 raise RuntimeError("BDMV disc checking is not supported in site_check mode.")
             # Ensure bdinfo binary is present for BDMV processing
             try:
-                await BDInfoBinaryManager.ensure_bdinfo_binary(meta['base_dir'], meta.get('debug', False), "v1.0.7")
+                await BDInfoBinaryManager.ensure_bdinfo_binary(meta['base_dir'], meta.get('debug', False), "v1.0.8")
             except Exception as e:
                 console.print(f"[red]Failed to ensure bdinfo binary: {e}[/red]", markup=False)
                 raise

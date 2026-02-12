@@ -408,7 +408,8 @@ class BJS:
         return br_rating or us_rating or ''
 
     async def get_tags(self) -> str:
-        tags = ''
+        tags = ""
+
         genres_data: list[dict[str, Any]] = self.main_tmdb_data.get('genres', [])
         genre_names: list[str] = []
 
@@ -1367,7 +1368,7 @@ class BJS:
 
         Accepted formats:
             IMDb: tt12345
-            TMDb: movie12345 or tv12345
+            TMDb: movie/12345 or tv/12345
         """
         imdb_info = dict(meta.get("imdb_info", {}))
         imdbid = str(imdb_info.get("imdbID", ""))
@@ -1378,7 +1379,7 @@ class BJS:
         tmdb_id = meta.get("tmdb_id")
 
         if category in ["MOVIE", "TV"] and tmdb_id:
-            return f"{category}{tmdb_id}".lower()
+            return f"{category}/{tmdb_id}".lower()
 
         return ""
 
