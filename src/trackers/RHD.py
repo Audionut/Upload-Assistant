@@ -215,6 +215,13 @@ class RHD(UNIT3D):
         uhd = str(meta.get("uhd") or "")
         three_d = str(meta.get("3D") or "")
 
+        # extract tags from basename for potential later use
+        basename_up = self.get_basename(meta).upper()
+        anime = "ANiME" if "ANIME" in basename_up else ""
+        doku = "DOKU" if "DOKU" in basename_up else ""
+        internal = "iNTERNAL" if "INTERNAL" in basename_up else ""
+        incomplete = "INCOMPLETE" if "INCOMPLETE" in basename_up else  ""
+
         # Clean audio: remove Dual-Audio and trailing language codes
         audio = meta.get("audio", "") #TODO: replace with get_best_german_audio function that handles Dual-Audio and other cases more robustly
         if "DD+" in audio:
@@ -275,34 +282,34 @@ class RHD(UNIT3D):
             # Inject region from validated session data if available
             region = meta.get("region", "")
             if meta["is_disc"] == "BDMV":
-                # BDMV: Title Year Edition Hybrid REPACK Resolution 3D Region UHD Source Audio HDR VideoCodec
-                name = f"{title} {year} {season}{episode} {edition} {hybrid} {repack} {resolution} {three_d} {region} {uhd} {source} {audio} {hdr} {video_codec}"
+                # BDMV: Title Year Edition REPACK Resolution 3D Hybrid Region UHD Source Audio HDR VideoCodec
+                name = f"{title} {year} {season}{episode} {edition} {anime} {doku} {repack} {resolution} {three_d} {hybrid} {region} {uhd} {source} {audio} {hdr} {video_codec} {internal}"
             elif meta["is_disc"] == "DVD":
                 dvd_size = meta.get("dvd_size", "")
-                # DVD: Title Year Edition REPACK Resolution 3D Region Source DVDSize Audio
-                name = f"{title} {year} {season}{episode} {edition} {repack} {resolution} {three_d} {region} {source} {dvd_size} {audio}"
+                # DVD: Title Year Edition REPACK Resolution 3D Hybrid Region Source DVDSize Audio
+                name = f"{title} {year} {season}{episode} {edition} {anime} {doku} {repack} {resolution} {three_d} {hybrid} {region} {source} {dvd_size} {audio} {internal}"
             elif meta["is_disc"] == "HDDVD":
                 # HDDVD: Title Year Edition REPACK Resolution Region Source Audio VideoCodec
-                name = f"{title} {year} {edition} {repack} {resolution} {region} {source} {audio} {video_codec} "
+                name = f"{title} {year} {edition} {anime} {doku} {repack} {resolution} {region} {source} {audio} {video_codec} {internal}"
 
         elif effective_type == "REMUX":
-            # REMUX: Title Year LANG Edition Hybrid REPACK Resolution 3D UHD Source REMUX Audio HDR VideoCodec
-            name = f"{title} {year} {season}{episode} {episode_title} {part} {audio_lang_str} {edition} {hybrid} {repack} {resolution} {three_d} {uhd} {source} REMUX {audio} {hdr} {video_codec}"
+            # REMUX: Title Year LANG Edition REPACK Resolution 3D Hybrid UHD Source REMUX Audio HDR VideoCodec
+            name = f"{title} {year} {season}{episode} {episode_title} {part} {incomplete} {audio_lang_str} {edition} {anime} {doku} {repack} {resolution} {three_d} {hybrid} {uhd} {source} REMUX {audio} {hdr} {video_codec} {internal}"
 
         elif effective_type in ("DVDRIP", "BRRIP"):
             type_str = "DVDRip" if effective_type == "DVDRIP" else "BRRip"
-            # DVDRip/BRRip: Title Year LANG Edition Hybrid REPACK Resolution Type Audio HDR VideoCodec
-            name = f"{title} {year} {season} {audio_lang_str} {edition} {hybrid} {repack} {resolution} {type_str} {audio} {hdr} {video_encode}"
+            # DVDRip/BRRip: Title Year LANG Edition REPACK Resolution Hybrid Type Audio HDR VideoCodec
+            name = f"{title} {year} {season} {incomplete} {audio_lang_str} {edition} {anime} {doku} {repack} {resolution} {hybrid} {type_str} {audio} {hdr} {video_encode} {internal}"
 
         elif effective_type in ("ENCODE", "HDTV"):
-            # Encode/HDTV: Title Year LANG Edition Hybrid REPACK Resolution UHD Source Audio HDR VideoCodec
-            name = f"{title} {year} {season}{episode} {episode_title} {part} {audio_lang_str} {edition} {hybrid} {repack} {resolution} {uhd} {source} {audio} {hdr} {video_encode}"
+            # Encode/HDTV: Title Year LANG Edition REPACK Resolution Hybrid UHD Source Audio HDR VideoCodec
+            name = f"{title} {year} {season}{episode} {episode_title} {part} {incomplete} {audio_lang_str} {edition} {anime} {doku} {repack} {resolution} {hybrid} {uhd} {source} {audio} {hdr} {video_encode} {internal}"
 
         elif effective_type in ("WEBDL", "WEBRIP"):
             service = meta.get("service", "")
             type_str = "WEB-DL" if effective_type == "WEBDL" else "WEBRip"
-            # WEB: Title Year LANG Edition Hybrid REPACK Resolution UHD Type Audio service HDR VideoCodec
-            name = f"{title} {year} {season}{episode} {episode_title} {part} {audio_lang_str} {edition} {hybrid} {repack} {resolution} {uhd} {type_str} {audio} {service} {hdr} {video_encode}"
+            # WEB: Title Year LANG Edition REPACK Resolution Hybrid UHD Type Audio service HDR VideoCodec
+            name = f"{title} {year} {season}{episode} {episode_title} {part} {incomplete} {audio_lang_str} {edition} {anime} {doku} {repack} {resolution} {hybrid} {uhd} {type_str} {audio} {service} {hdr} {video_encode} {internal}"
 
         else:
             # Fallback: use original name
