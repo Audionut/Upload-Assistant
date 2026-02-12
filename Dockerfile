@@ -11,7 +11,8 @@ RUN apt-get update && \
     rustc \
     nano \
     ca-certificates \
-    curl && \
+    curl \
+    gosu && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
     update-ca-certificates
@@ -47,7 +48,8 @@ COPY . .
 # At runtime the app restores any missing files from this copy.
 RUN rm -rf /Upload-Assistant/defaults \
     && mkdir -p /Upload-Assistant/defaults \
-    && cp -a data /Upload-Assistant/defaults/
+    && cp -a data /Upload-Assistant/defaults/ \
+    && find /Upload-Assistant/defaults/ -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
 # Download only the required mkbrr binary (requires full repo for src imports)
 RUN python3 -c "from bin.get_mkbrr import MkbrrBinaryManager; MkbrrBinaryManager.download_mkbrr_for_docker()"
@@ -85,11 +87,15 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -sf http://localhost:5000/api/health || exit 1
 
 # ── Entrypoint ───────────────────────────────────────────────────────
-# The venv is already on PATH, so "python" resolves to /venv/bin/python.
+# The entrypoint script handles directory permissions and optional
+# privilege-drop via PUID/PGID environment variables.
 # Pass arguments via CMD or `docker run ... <args>`.
 #   WebUI : docker run ... image --webui 0.0.0.0:5000
 #   CLI   : docker run ... image /data/content --trackers BHD
-ENTRYPOINT ["python", "/Upload-Assistant/upload.py"]
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # Default: show help when no arguments are provided
 CMD ["-h"]

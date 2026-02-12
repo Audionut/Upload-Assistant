@@ -104,22 +104,48 @@ def _handle_shutdown_signal(signum: int, _frame: Any) -> None:
 _data_dir = os.path.join(base_dir, "data")
 _defaults_data_dir = os.path.join(base_dir, "defaults", "data")
 
+# Directories that should never be copied into user-facing data/
+_SKIP_DIRS = {"__pycache__", ".mypy_cache", ".ruff_cache"}
+
 if os.path.isdir(_defaults_data_dir):
     os.makedirs(_data_dir, exist_ok=True)
+    _restored_count = 0
+    _restore_errors: list[str] = []
     # Walk the defaults tree and copy anything missing in the live data dir.
     # Never overwrite user files (config.py, cookies/, tags.json, etc.).
     for dirpath, dirnames, filenames in os.walk(_defaults_data_dir):
+        # Prune unwanted directories in-place so os.walk skips them entirely
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+
         rel_dir = os.path.relpath(dirpath, _defaults_data_dir)
         target_dir = os.path.join(_data_dir, rel_dir) if rel_dir != "." else _data_dir
-        os.makedirs(target_dir, exist_ok=True)
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+        except OSError as exc:
+            _restore_errors.append(f"mkdir {rel_dir}: {exc}")
+            continue  # skip this subtree if we can't create the directory
         for fname in filenames:
+            # Skip bytecode and cache files
+            if fname.endswith((".pyc", ".pyo")):
+                continue
             target_file = os.path.join(target_dir, fname)
             if not os.path.exists(target_file):
                 src_file = os.path.join(dirpath, fname)
                 try:
                     shutil.copy2(src_file, target_file)
-                except Exception:
-                    pass  # best-effort; don't block startup
+                    _restored_count += 1
+                except OSError as exc:
+                    _restore_errors.append(f"{os.path.join(rel_dir, fname)}: {exc}")
+    if _restored_count:
+        console.print(f"Restored {_restored_count} built-in file(s) into data/ from defaults.", markup=False)
+    if _restore_errors:
+        console.print(f"[red]Warning: failed to restore {len(_restore_errors)} file(s) into data/:[/red]")
+        for _err in _restore_errors[:5]:
+            console.print(f"[red]  {_err}[/red]")
+        if len(_restore_errors) > 5:
+            console.print(f"[red]  ... and {len(_restore_errors) - 5} more[/red]")
+        console.print("[yellow]Hint: ensure the mounted data/ directory is writable by the container user.[/yellow]")
+        console.print("[yellow]  e.g. on the host: chown -R 1000:1000 /path/to/data[/yellow]")
 
 _config_path = os.path.join(_data_dir, "config.py")
 

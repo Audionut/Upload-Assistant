@@ -1,9 +1,8 @@
 # Upload Assistant — Docker Compose
 # Docs: docs/docker-wiki-full.md & docs/docker-gui-wiki-full.md
 #
-# The image entrypoint is:  python /Upload-Assistant/upload.py
-# Pass arguments via `command:`.  The venv is already on PATH — no
-# shell wrapper or "source activate" is needed.
+# The entrypoint handles directory permissions and privilege-drop.
+# Pass arguments via `command:`.
 #
 # ── WebUI service ────────────────────────────────────────────────────
 services:
@@ -25,6 +24,13 @@ services:
     command: ["--webui", "0.0.0.0:5000"]
 
     environment:
+      # Optional: run the app as a specific user/group (recommended).
+      # The entrypoint starts as root, fixes directory ownership, then
+      # drops to this UID/GID before running the app.
+      # If omitted the app runs as root inside the container.
+      - PUID=1000
+      - PGID=1000
+
       # Required: container-side roots the WebUI is allowed to browse.
       # Must match the left side of the container paths in `volumes:`.
       - UA_BROWSE_ROOTS=/data/torrents,/Upload-Assistant/tmp
@@ -51,12 +57,10 @@ services:
       # Map your torrent download directory (match qBittorrent paths).
       - /path/to/torrents:/data/torrents:rw
 
-      # Application config.
-      # Option A (recommended): mount the whole data directory — config.py will
-      #   be created automatically from example-config.py on first WebUI start.
-      #   - /path/to/appdata/Upload-Assistant/data:/Upload-Assistant/data:rw
-      # Option B: mount a single file — the file MUST exist on the host first.
-      #   If missing, Docker creates an empty directory instead and breaks the app.
+      # Application data — config.py is created automatically from
+      # example-config.py on first WebUI start.  The directory does NOT
+      # need to exist on the host; Docker + the entrypoint create it
+      # with the correct ownership.
       - /path/to/appdata/Upload-Assistant/data:/Upload-Assistant/data:rw
 
       # qBittorrent BT_backup for torrent reuse.

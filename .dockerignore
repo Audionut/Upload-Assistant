@@ -4,9 +4,9 @@
 .github
 
 # Python bytecode & caches
-__pycache__
-*.pyc
-*.pyo
+**/__pycache__
+**/*.pyc
+**/*.pyo
 *.egg-info
 .mypy_cache
 .ruff_cache

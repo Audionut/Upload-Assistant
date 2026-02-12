@@ -16,6 +16,8 @@ This guide explains how to run the Upload Assistant WebUI inside Docker (includi
 
 | Variable | Required | Description |
 |----------|----------|-------------|
+| `PUID` | No | UID to run the app as (e.g. `1000`). The entrypoint starts as root, fixes directory ownership, then drops to this UID. If omitted the app runs as root. |
+| `PGID` | No | GID to run the app as (e.g. `1000`). Used together with `PUID`. |
 | `UA_BROWSE_ROOTS` | **Yes** | Comma-separated list of allowed container-side browse roots. Example: `/data/torrents,/Upload-Assistant/tmp`. Must match the container-side paths in your `volumes:` mounts. |
 | `SESSION_SECRET` | No | Raw session secret string (minimum 32 bytes). Keeps encrypted WebUI credentials valid across container recreates. |
 | `SESSION_SECRET_FILE` | No | Path to a file containing the session secret (minimum 32 bytes, hex-encoded or plain text). Example: `/Upload-Assistant/data/session_secret`. The file must be readable by the container. |
@@ -25,6 +27,7 @@ This guide explains how to run the Upload Assistant WebUI inside Docker (includi
 | `UA_WEBUI_USE_SUBPROCESS` | No | When set (any non-empty value), forces the WebUI to run upload jobs as subprocesses instead of in-process. |
 
 Notes:
+- **PUID/PGID** are the recommended way to run as non-root. Do **not** use Docker's `user:` directive — it starts the process directly as that UID without root access, so the entrypoint cannot fix ownership of freshly-created mount directories.
 - Provide **either** `SESSION_SECRET` or `SESSION_SECRET_FILE`, not both. If neither is set the app auto-generates a secret on first run and persists it to the config directory.
 - When running inside a container the WebUI prefers the per-user XDG config directory for storing `session_secret` and `webui_auth.json`. By default that will be `/root/.config/upload-assistant` inside the container. If you prefer the repository `data/` path, set `SESSION_SECRET_FILE` to a path you mount into the container (for example `/Upload-Assistant/data/session_secret`).
 
@@ -32,7 +35,7 @@ Notes:
 
 ## Recommended volume mounts
 
-Mount a host directory for the app `data` (recommended). On the first WebUI start, the app will automatically create a default `config.py` from the built-in example if one is not already present:
+Mount a host directory for the app `data` (recommended). On the first WebUI start, the app will automatically create a default `config.py` from the built-in example if one is not already present. The directory does **not** need to exist on the host — Docker creates it and the entrypoint fixes ownership automatically:
 
 - `/host/path/Upload-Assistant/data:/Upload-Assistant/data:rw`
 
@@ -51,7 +54,7 @@ Note: container-side paths are important — `UA_BROWSE_ROOTS` must reference th
 
 Include the following in your `docker-compose.yml` as a starting point (adjust host paths and network).
 
-> **Note:** The image entrypoint is `python /Upload-Assistant/upload.py`. The venv is already on `PATH` — no shell wrapper or `source activate` is needed. Just pass arguments via `command:`.
+> **Note:** The image entrypoint handles directory permissions and drops privileges to the UID/GID specified by `PUID`/`PGID`. No manual `chown` on the host is needed.
 
 ```yaml
 services:
@@ -61,6 +64,8 @@ services:
     restart: unless-stopped
     command: ["--webui", "0.0.0.0:5000"]
     environment:
+      - PUID=1000
+      - PGID=1000
       - UA_BROWSE_ROOTS=/data/torrents,/Upload-Assistant/tmp
       # - SESSION_SECRET_FILE=/Upload-Assistant/data/session_secret
       # - IN_DOCKER=1
@@ -73,8 +78,7 @@ services:
     volumes:
       - /path/to/torrents:/data/torrents:rw
       # Mount the whole data directory — config.py is auto-created on first
-      # WebUI start.  You can also mount a single config.py file, but it MUST
-      # exist on the host first (Docker creates an empty dir if missing).
+      # WebUI start.  The directory doesn't need to exist on the host.
       - /path/to/appdata/Upload-Assistant/data:/Upload-Assistant/data:rw
       - /path/to/qBittorrent/BT_backup:/torrent_storage_dir:rw
       - /path/to/appdata/Upload-Assistant/tmp:/Upload-Assistant/tmp:rw
@@ -118,9 +122,10 @@ services:
     image: ghcr.io/audionut/upload-assistant:latest
     container_name: upload-assistant
     restart: unless-stopped
-    user: "99:100"  # optionally run as Unraid nobody:users
     command: ["--webui", "0.0.0.0:5000"]
     environment:
+      - PUID=99
+      - PGID=100
       - UA_BROWSE_ROOTS=/data/torrents,/Upload-Assistant/tmp
       - SESSION_SECRET_FILE=/Upload-Assistant/data/session_secret
       # - IN_DOCKER=1
@@ -141,17 +146,17 @@ networks:
 
 ## File ownership & permissions
 
-- If you run the container as non-root (recommended), ensure mounted directories are owned by the container's UID:GID or readable/writable by it. Example commands on host:
+The entrypoint script automatically fixes ownership of `data/` and `tmp/` directories at startup (when `PUID`/`PGID` are set). No manual `chown` is needed for typical setups.
+
+If you need to adjust permissions manually (e.g. for bind mounts with special requirements):
 
 ```bash
 # For standard systems (UID 1000)
 sudo chown -R 1000:1000 /host/path/Upload-Assistant/data
 sudo chown -R 1000:1000 /host/path/Upload-Assistant/tmp
-sudo chmod 700 /host/path/Upload-Assistant/tmp
 
 # For Unraid (UID 99:100)
 chown -R 99:100 /mnt/user/appdata/Upload-Assistant
-chmod 700 /mnt/user/appdata/Upload-Assistant/tmp
 ```
 
 - The WebUI will try to tighten `webui_auth.json` and `session_secret` permissions to `0600` after writing when the platform supports chmod.
@@ -199,7 +204,7 @@ Notes:
 
 - "Browse roots not configured": ensure `UA_BROWSE_ROOTS` is defined and includes container-side mount paths.
 - Session/auth lost after restart: make sure `SESSION_SECRET` or `SESSION_SECRET_FILE` is persistent and mounted inside the container.
-- Permission errors: check UID/GID ownership of mounted directories and adjust with `chown` and `chmod` as above.
+- Permission errors on mounted directories: ensure `PUID`/`PGID` are set in your environment. If you see permission warnings in the logs, the entrypoint could not fix ownership — check that the container starts as root (do **not** use Docker's `user:` directive).
 
 --
 
