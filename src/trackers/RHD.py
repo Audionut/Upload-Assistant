@@ -276,7 +276,7 @@ class RHD(UNIT3D):
             region = meta.get("region", "")
             if meta["is_disc"] == "BDMV":
                 # BDMV: Title Year 3D Edition Hybrid REPACK Resolution Region UHD Source HDR VideoCodec Audio
-                name = f"{title} {year} {season}{episode} {three_d} {edition} {hybrid} {repack} {resolution} {region} {uhd} {source} {hdr} {video_codec} {audio}"
+                name = f"{title} {year} {season}{episode} {three_d} {edition} {hybrid} {repack} {resolution} {region} {uhd} {source} {audio} {hdr} {video_codec}"
             elif meta["is_disc"] == "DVD":
                 dvd_size = meta.get("dvd_size", "")
                 # DVD: Title Year 3D Edition REPACK Resolution Region Source DVDSize Audio
@@ -287,7 +287,7 @@ class RHD(UNIT3D):
 
         elif effective_type == "REMUX":
             # REMUX: Title Year 3D LANG Edition Hybrid REPACK Resolution UHD Source REMUX HDR VideoCodec Audio
-            name = f"{title} {year} {season}{episode} {episode_title} {part} {three_d} {audio_lang_str} {edition} {hybrid} {repack} {resolution} {uhd} {source} REMUX {hdr} {video_codec} {audio}"
+            name = f"{title} {year} {season}{episode} {episode_title} {part} {three_d} {audio_lang_str} {edition} {hybrid} {repack} {resolution} {uhd} {source} REMUX {audio} {hdr} {video_codec}"
 
         elif effective_type in ("DVDRIP", "BRRIP"):
             type_str = "DVDRip" if effective_type == "DVDRIP" else "BRRip"
