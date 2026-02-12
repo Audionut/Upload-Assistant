@@ -51,10 +51,10 @@ services:
       #
       # NOTE: If you mount a volume to SESSION_SECRET_FILE and the host
       # path does not already exist as a *file*, Docker will create it as
-      # a directory.  The app handles this gracefully by creating a
-      # session_secret file inside that directory, but the recommended
-      # approach is to simply mount the webui-auth volume (see below)
-      # and let the app auto-generate the secret there.
+      # a directory.  The entrypoint fixes ownership of /Upload-Assistant/
+      # session_secret when PUID/PGID are set, so the app can create the
+      # file inside.  The recommended approach is to mount the webui-auth
+      # volume (see below) and let the app auto-generate the secret there.
 
       # Optional: only needed if you serve the UI from a different origin.
       # - UA_WEBUI_CORS_ORIGINS=https://your-ui-host

@@ -18,12 +18,24 @@ TARGET_GID="${PGID:-}"
 # ── Fix directory ownership (only possible when running as root) ──────
 if [ "$(id -u)" = "0" ]; then
     # Directories the app needs write access to
-    for dir in /Upload-Assistant/data /Upload-Assistant/tmp; do
+    # - data, tmp: config, temp files
+    # - session_secret: when SESSION_SECRET_FILE points to a path that Docker
+    #   created as a directory (host path didn't exist), the app creates a
+    #   session_secret file inside it; the runtime user must be able to write
+    # - /root/.config/upload-assistant: webui-auth mount; when PUID is set,
+    #   the runtime user must traverse /root and write there
+    for dir in /Upload-Assistant/data /Upload-Assistant/tmp /Upload-Assistant/session_secret /root/.config/upload-assistant; do
         mkdir -p "$dir"
         if [ -n "$TARGET_UID" ]; then
             chown "$TARGET_UID:${TARGET_GID:-$TARGET_UID}" "$dir" 2>/dev/null || true
         fi
     done
+
+    # When dropping to non-root, the runtime user must traverse /root to reach
+    # /root/.config/upload-assistant (webui-auth mount). Make /root traversable.
+    if [ -n "$TARGET_UID" ] && [ "$TARGET_UID" != "0" ]; then
+        chmod 711 /root 2>/dev/null || true
+    fi
 
     # Drop privileges if PUID was set
     if [ -n "$TARGET_UID" ] && [ "$TARGET_UID" != "0" ]; then

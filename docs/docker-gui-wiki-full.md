@@ -30,7 +30,7 @@ Notes:
 - **PUID/PGID** are the recommended way to run as non-root. Do **not** use Docker's `user:` directive — it starts the process directly as that UID without root access, so the entrypoint cannot fix ownership of freshly-created mount directories.
 - Provide **either** `SESSION_SECRET` or `SESSION_SECRET_FILE`, not both. If neither is set the app auto-generates a secret on first run and persists it to the config directory.
 - When running inside a container the WebUI prefers the per-user XDG config directory for storing `session_secret` and `webui_auth.json`. By default that will be `/root/.config/upload-assistant` inside the container. If you prefer the repository `data/` path, set `SESSION_SECRET_FILE` to a path you mount into the container (for example `/Upload-Assistant/data/session_secret`).
-- **Docker bind-mount pitfall:** If you set `SESSION_SECRET_FILE` and mount a volume to that path, but the host path does not already exist as a **file**, Docker will create it as a **directory**. The app detects this and will auto-generate a `session_secret` file inside that directory, but the recommended approach for fresh installs is to simply mount the `webui-auth` volume to the XDG config directory (see below) and let the app manage the secret automatically.
+- **Docker bind-mount pitfall:** If you set `SESSION_SECRET_FILE` and mount a volume to that path, but the host path does not already exist as a **file**, Docker will create it as a **directory**. The app detects this and will auto-generate a `session_secret` file inside that directory. When `PUID`/`PGID` are set, the entrypoint fixes ownership of the `session_secret` directory so the runtime user can write there. The recommended approach for fresh installs is to mount the `webui-auth` volume to the XDG config directory (see below) and let the app manage the secret automatically.
 
 --
 
@@ -147,7 +147,7 @@ networks:
 
 ## File ownership & permissions
 
-The entrypoint script automatically fixes ownership of `data/` and `tmp/` directories at startup (when `PUID`/`PGID` are set). No manual `chown` is needed for typical setups.
+The entrypoint script automatically fixes ownership of `data/`, `tmp/`, `session_secret` (when `SESSION_SECRET_FILE` points to a directory), and `/root/.config/upload-assistant` (webui-auth mount) at startup when `PUID`/`PGID` are set. No manual `chown` is needed for typical setups.
 
 If you need to adjust permissions manually (e.g. for bind mounts with special requirements):
 
