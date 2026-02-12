@@ -28,6 +28,7 @@ from flask_limiter.util import get_remote_address
 from werkzeug.security import safe_join
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+
 import web_ui.auth as auth_mod
 from flask_session import Session
 
@@ -1124,6 +1125,13 @@ def set_runtime_browse_roots(browse_roots: str) -> None:
 
 
 def _load_config_from_file(path: Path) -> dict[str, Any]:
+    """Load and return the ``config`` dict from a Python config file.
+
+    Only files inside the repository ``data/`` directory with a ``.py``
+    extension are accepted.  No ownership or permission checks are
+    performed — the file lives in a user-controlled directory and the app
+    already writes to it freely via ``config_update``.
+    """
     if not path.exists():
         return {}
 
@@ -1132,32 +1140,6 @@ def _load_config_from_file(path: Path) -> dict[str, Any]:
     try:
         if not path.resolve().is_relative_to(repo_data_dir.resolve()) or path.suffix != ".py":
             return {}
-    except Exception:
-        return {}
-
-    # Basic permissions check: ensure file is readable and not world-writable (on Unix-like; on Windows, minimal check)
-    try:
-        stat_info = path.stat()
-        # On Windows, check if file is not hidden and readable
-        if os.name == 'nt':
-            # Windows: check if not hidden (FILE_ATTRIBUTE_HIDDEN = 2)
-            if getattr(stat_info, 'st_file_attributes', 0) & 2:  # Hidden
-                return {}
-        else:
-            # Unix-like: check ownership and permissions. Only call os.getuid()
-            # on platforms that expose it (non-Windows). This avoids raising
-            # AttributeError on Windows.
-            if hasattr(os, 'getuid'):
-                try:
-                    if stat_info.st_uid != os.getuid() or (stat_info.st_mode & 0o022):
-                        return {}
-                except Exception:
-                    return {}
-            else:
-                # If getuid is not available, fall back to a conservative
-                # permissions check using the mode bits only.
-                if (stat_info.st_mode & 0o022):
-                    return {}
     except Exception:
         return {}
 
@@ -1172,8 +1154,14 @@ def _load_config_from_file(path: Path) -> dict[str, Any]:
                         config_value = ast.literal_eval(node.value)
                         if isinstance(config_value, dict):
                             return config_value
+        console.print(
+            f"[yellow]Config file {path.name} does not contain a valid 'config' dict assignment.[/yellow]"
+        )
         return {}
-    except Exception:
+    except Exception as exc:
+        console.print(
+            f"[yellow]Failed to parse config file {path.name}: {exc}[/yellow]"
+        )
         return {}
 
 
@@ -2448,6 +2436,22 @@ def config_options():
     user_config = _load_config_from_file(config_path)
     comments_map, subsection_map = _extract_example_metadata(example_path)
 
+    # Determine config load status so the UI can warn the user
+    # instead of silently showing defaults.
+    config_warning: Optional[str] = None
+    if not config_path.exists():
+        config_warning = (
+            "No config.py found — showing example defaults. "
+            "Configure your settings and save, or place your config.py "
+            "into the mounted data/ directory."
+        )
+    elif not user_config:
+        config_warning = (
+            "config.py exists but could not be loaded — showing example defaults. "
+            "Check the container logs for details. The file may have a syntax error "
+            "or may not contain a valid 'config' dict."
+        )
+
     sections: list[ConfigSection] = []
 
     for section_name, example_section in example_config.items():
@@ -2503,7 +2507,10 @@ def config_options():
                         client_types.add(client_type_item.get("value", "unknown"))
             sections[-1]["client_types"] = sorted(client_types, key=lambda x: (x != "qbit", x))
 
-    return jsonify({"success": True, "sections": sections})
+    result: dict[str, Any] = {"success": True, "sections": sections}
+    if config_warning:
+        result["config_warning"] = config_warning
+    return jsonify(result)
 
 
 @app.route("/api/torrent_clients")

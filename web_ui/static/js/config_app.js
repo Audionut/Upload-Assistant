@@ -2490,6 +2490,7 @@ function ConfigApp() {
   const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [pendingChanges, setPendingChanges] = useState(new Map());
   const [isSaving, setIsSaving] = useState(false);
+  const [configWarning, setConfigWarning] = useState('');
   const [activeTab, setActiveTab] = useState(() => {
     try {
       return sessionStorage.getItem('ua_active_tab') || 'general';
@@ -2572,6 +2573,7 @@ function ConfigApp() {
       const newSections = data.sections || [];
       setSections(newSections);
       setPendingChanges(new Map());
+      setConfigWarning(data.config_warning || '');
       setStatus({ text: '', type: 'info' });
 
       // Restore tab state after operations (preserve which section/tab the user was on)
@@ -2908,6 +2910,16 @@ function ConfigApp() {
           
           {sections.length > 0 && (
             <div className="space-y-6">
+              {/* Config load warning banner */}
+              {configWarning && (
+                <div className={`rounded-lg border px-4 py-3 text-sm ${
+                  isDarkMode
+                    ? 'bg-yellow-900/40 border-yellow-700 text-yellow-200'
+                    : 'bg-yellow-50 border-yellow-300 text-yellow-800'
+                }`}>
+                  <span className="font-semibold">Warning: </span>{configWarning}
+                </div>
+              )}
               {/* Tab Navigation */}
               <div className={`flex space-x-1 rounded-lg p-1 overflow-x-auto ${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'}`}>
                 <button

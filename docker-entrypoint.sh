@@ -35,8 +35,16 @@ if [ "$(id -u)" = "0" ]; then
         fi
         mkdir -p "$dir"
         if [ -n "$TARGET_UID" ]; then
-            chown "$TARGET_UID:${TARGET_GID:-$TARGET_UID}" "$dir" 2>/dev/null || true
+            # Recursively fix ownership so that user-placed files (e.g. config.py
+            # copied onto the host while the container was stopped) are owned by
+            # the runtime user.
+            chown -R "$TARGET_UID:${TARGET_GID:-$TARGET_UID}" "$dir" 2>/dev/null || true
         fi
+        # Ensure sane permissions: directories traversable, files readable/writable
+        # by the owner.  Bind mounts from Unraid / NAS hosts can arrive with any
+        # mode bits; normalise them so the app can always read and write.
+        find "$dir" -type d ! -perm -u=rwx -exec chmod u+rwx {} + 2>/dev/null || true
+        find "$dir" -type f ! -perm -u=rw  -exec chmod u+rw  {} + 2>/dev/null || true
     done
 
     # When dropping to non-root, the runtime user must traverse /root to reach
