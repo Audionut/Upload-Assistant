@@ -1283,6 +1283,21 @@ async def update_notification(base_dir: str) -> Optional[str]:
 
 
 async def do_the_thing(base_dir: str) -> None:
+    # Reload config from disk so that changes made via the WebUI config
+    # editor (or manual file edits between runs) are picked up.  The
+    # module-level ``config`` dict is imported once at startup and would
+    # otherwise remain stale for the lifetime of the process.  Updating
+    # in-place (clear + update) keeps all existing references (Args,
+    # Clients, managers, etc.) pointing at the same dict object.
+    try:
+        import importlib
+        import data.config as _cfg_mod  # may already be cached
+        importlib.reload(_cfg_mod)
+        config.clear()
+        config.update(_cfg_mod.config)
+    except Exception as exc:
+        console.print(f"[yellow]Warning: could not reload config from disk: {exc}[/yellow]")
+
     await asyncio.sleep(0.1)  # Ensure it's not racing
 
     tmp_dir = os.path.join(base_dir, "tmp")
