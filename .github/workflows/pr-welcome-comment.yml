@@ -1,0 +1,61 @@
+name: PR Welcome Comment
+
+on:
+  pull_request_target:
+    types:
+      - opened
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  pr-comment:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Post welcome comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = context.payload.pull_request.number;
+            const marker = '<!-- upload-assistant-pr-welcome -->';
+
+            const existingComments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              per_page: 100
+            });
+
+            const alreadyCommented = existingComments.some(comment =>
+              comment.body && comment.body.includes(marker)
+            );
+
+            if (alreadyCommented) {
+              console.log('Welcome comment already exists; skipping.');
+              return;
+            }
+
+            const body = [
+              marker,
+              'Thanks for taking the time to contribute to this project. Upload Assistant is currently in a complete rewrite, and no new development is being conducted on this python source at this time.',
+              '',
+              'If you have come this far, please feel free to leave open, any pull requests regarding new sites being added to the source, as these can serve as the baseline for later conversion.',
+              '',
+              'If your pull request relates to a critical bug, this will be addressed in this code base, and a new release published as needed.',
+              '',
+              'If your pull request only addresses a quite minor bug, it is not likely to be addressed in this code base.',
+              '',
+              'Details for the new code base will follow at a later date.'
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body
+            });
+
+            console.log('Posted welcome comment on PR.');
