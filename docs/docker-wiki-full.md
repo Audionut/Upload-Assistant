@@ -55,6 +55,19 @@ docker run --rm -it --network=host \
 ghcr.io/audionut/upload-assistant:latest /downloads/path/to/content --help
 ```
 
+## Run as non root
+mount `tmp` and `banned` directories to run as a non root user
+
+```
+docker run --rm -it --network=host \
+-u 1000:1000 \
+-v /full/path/to/config.py:/Upload-Assistant/data/config.py \
+-v /full/path/to/downloads:/downloads \
+-v /full/path/to/tmp:/Upload-Assistant/tmp \
+-v /full/path/to/banned:/Upload-Assistant/data/banned \
+ghcr.io/audionut/upload-assistant:latest /downloads/path/to/content --help
+```
+
 ## What is docker?
 Google is your friend
 
