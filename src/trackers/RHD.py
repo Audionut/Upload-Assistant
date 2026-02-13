@@ -319,7 +319,7 @@ class RHD(UNIT3D):
             service = meta.get("service", "")
             type_str = "WEB-DL" if effective_type == "WEBDL" else "WEBRip"
             # WEB: Title Year LANG Edition REPACK Resolution Hybrid UHD Type Audio service HDR VideoCodec
-            name = f"{title} {year} {season}{episode} {episode_title} {part} {incomplete} {audio_lang_str} {edition} {anime} {doku} {repack} {resolution} {hybrid} {uhd} {type_str} {audio} {service} {hdr} {video_encode} {internal}"
+            name = f"{title} {year} {season}{episode} {episode_title} {part} {incomplete} {audio_lang_str} {edition} {anime} {doku} {repack} {resolution} {hybrid} {uhd} {service} {type_str} {audio} {hdr} {video_encode} {internal}"
         else:
             console.print("[bold red]Name enrichment failed. Please manually update the name after Uploading.")
 
