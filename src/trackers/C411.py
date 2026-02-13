@@ -36,10 +36,11 @@ class C411:
 
     async def get_subcat_id(self, meta: Meta) -> str:
         sub_cat_id = "0"
-
+        genres = meta.get("genres","").lower().replace(' ', '').replace('-', '')
         if meta['category'] == 'MOVIE':
             sub_cat_id = '1' if meta.get('mal_id') else '6'
-
+            if 'animation' in genres:
+                sub_cat_id = '6'
         elif meta['category'] == 'TV':
             sub_cat_id = '2' if meta.get('mal_id') else '7'
 
