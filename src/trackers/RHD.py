@@ -385,13 +385,19 @@ class RHD(UNIT3D):
 
     async def get_additional_checks(self, meta: Meta) -> bool:
         """make sure the upload complies with the RHD rules"""
-        # Uploading MIC, CAM, TS, LD, as well as upscale releases, is prohibited.
-        prohib_markers = ["MIC", "CAM", "TS", "TELESYNC", "LD", "LINE", "UPSCALE"]
+        # Uploading MIC, CAM, TS, or LD releases, is prohibited.
+        prohib_markers = ["MIC", "CAM", "TS", "TELESYNC", "LD", "LINE"]
         basename = self.get_basename(meta)
         # Split on delimiters (dot, hyphen, underscore) or whitespace so tags like "LD" only match as separate tokens
         basename_up = [tok for tok in re.split(r'[\.\s_-]+', str(basename).upper()) if tok]
         if any(x in basename_up for x in prohib_markers):
-            console.print(f"[bold red]Uploading MIC, CAM, TS, LD, as well as upscale releases, is prohibited, skipping {self.tracker} upload.")
+            console.print(f"[bold red]Uploading MIC, CAM, TS or LD releases, is prohibited")
+            if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                return False
+
+        # Uploading upscaled releases is prohibited. Exception: The release is from a group on the upscale whitelist
+        if "UPSCALE" in basename_up:
+            console.print(f"[bold red]Uploading upscaled releases is prohibited, unless the group is is whitelisted {self.baseurl}/wikis/17")
             if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                 return False
 
