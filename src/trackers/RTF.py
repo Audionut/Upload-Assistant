@@ -415,29 +415,36 @@ class RTF:
             if response.status_code == 201:
                 token = response.json().get("token")
                 if token:
-                    console.print('[bold green]Saving and using New API key generated for this upload')
-                    console.print(f'[bold yellow]{token[:10]}...[/bold yellow]')
+                    try:
+                        # Update the in-memory config dictionary
+                        self.config['TRACKERS'][self.tracker]['api_key'] = token
 
-                    # Update the in-memory config dictionary
-                    self.config['TRACKERS'][self.tracker]['api_key'] = token
+                        # Now we update the config file on disk using utf-8 encoding
+                        async with aiofiles.open(config_path, encoding='utf-8') as file:
+                            config_data = await file.read()
 
-                    # Now we update the config file on disk using utf-8 encoding
-                    async with aiofiles.open(config_path, encoding='utf-8') as file:
-                        config_data = await file.read()
+                        # Find the RTF tracker and replace the api_key value (supports single/double quotes and multiline blocks)
+                        pattern = r"(['\"]RTF['\"]\s*:\s*{.*?['\"]api_key['\"]\s*:\s*)(['\"])[^'\"]*(['\"])"
+                        new_config_data, replacements = re.subn(
+                            pattern,
+                            rf"\1\2{token}\3",
+                            config_data,
+                            count=1,
+                            flags=re.DOTALL,
+                        )
+                        if replacements == 0:
+                            console.print("[bold red]Failed to update RTF api_key in config file.")
+                            return None
 
-                    # Find the RTF tracker and replace the api_key value
-                    new_config_data = re.sub(
-                        r'("RTF":\s*{[^}]*"api_key":\s*)([\'"])[^\'"]*([\'"])([^\}]*})',
-                        rf'\1\2{token}\3\4',
-                        config_data
-                    )
+                        # Write the updated config back to the file
+                        async with aiofiles.open(config_path, 'w', encoding='utf-8') as file:
+                            await file.write(new_config_data)
 
-                    # Write the updated config back to the file
-                    async with aiofiles.open(config_path, 'w', encoding='utf-8') as file:
-                        await file.write(new_config_data)
-
-                    console.print(f'[bold green]API Key successfully saved to {config_path}')
-                    return True
+                        console.print(f'[bold green]API Key successfully saved to {config_path}')
+                        return True
+                    except Exception as e:
+                        console.print(f'[bold red]Failed to update config file: {str(e)}')
+                        return None
                 else:
                     console.print('[bold red]API response does not contain a token.')
                     return None

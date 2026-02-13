@@ -127,44 +127,33 @@ class SHRI(UNIT3D):
         # Clean audio: remove Dual-Audio and trailing language codes
         audio = await self._get_best_italian_audio_format(meta)
 
-        # Build audio language tag: original -> ITA -> ENG -> others/Multi (4+)
+        # Build audio language tag
         audio_lang_str = ""
         if meta.get("audio_languages"):
             # Normalize all to abbreviated ISO 639-3 codes
             audio_langs_value = meta.get("audio_languages", [])
             audio_langs_raw = cast(list[Any], audio_langs_value) if isinstance(audio_langs_value, list) else []
-            audio_langs = [self._get_language_name(str(lang).upper()) for lang in audio_langs_raw]
+            audio_langs = [self._get_language_name(str(lang)) for lang in audio_langs_raw]
             audio_langs = [lang for lang in audio_langs if lang]  # Remove empty
             audio_langs = list(dict.fromkeys(audio_langs))  # Dedupe preserving order
 
-            orig_lang_iso = meta.get("original_language", "").upper()
-            orig_lang_abbrev = self._get_language_name(orig_lang_iso)
+            num_langs = len(audio_langs)
 
-            result: list[str] = []
-            remaining: list[str] = audio_langs.copy()
+            if num_langs == 1:
+                # One language (ITA or non-ITA)
+                audio_lang_str = audio_langs[0]
 
-            # Priority 1: Original language
-            if orig_lang_abbrev and orig_lang_abbrev in remaining:
-                result.append(orig_lang_abbrev)
-                remaining.remove(orig_lang_abbrev)
+            elif num_langs == 2:
+                # Two languages ("ITA - [lang]" if ITA is present, "[lang] - [lang]" if not)
+                if "ITA" in audio_langs:
+                    other = [lang for lang in audio_langs if lang != "ITA"][0]
+                    audio_lang_str = f"ITA - {other}"
+                else:
+                    audio_lang_str = " - ".join(audio_langs)
 
-            # Priority 2: Italian (if not already added)
-            if "ITA" in remaining:
-                result.append("ITA")
-                remaining.remove("ITA")
-
-            # Priority 3: English (if not already added)
-            if "ENG" in remaining:
-                result.append("ENG")
-                remaining.remove("ENG")
-
-            # Handle remaining: show individually if <=3 total, else add Multi
-            if len(result) + len(remaining) > 3:
-                result.append("Multi")
-            else:
-                result.extend(remaining)
-
-            audio_lang_str = " - ".join(result)
+            elif num_langs >= 3:
+                # Three or more languages, "ITA - MULTI" if ITA is present, "MULTI" only if not)
+                audio_lang_str = "ITA - MULTI" if "ITA" in audio_langs else "MULTI"
 
         effective_type = self.get_effective_type(meta)
 

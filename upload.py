@@ -2036,8 +2036,8 @@ if __name__ == "__main__":
                 async def _cleanup_with_timeout() -> None:
                     try:
                         await asyncio.wait_for(cleanup_manager.cleanup(), timeout=10.0)
-                    except asyncio.TimeoutError:
-                        console.print("[yellow]Cleanup timed out, forcing exit...[/yellow]")
+                    except (asyncio.TimeoutError, asyncio.CancelledError):
+                        console.print("[yellow]Cleanup timed out or was cancelled, forcing exit...[/yellow]")
 
                 asyncio.run(_cleanup_with_timeout())
             except Exception:

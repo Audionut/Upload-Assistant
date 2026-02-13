@@ -71,6 +71,27 @@ class ULCX(UNIT3D):
             console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
             return False
 
+        if meta.get('personalrelease', False):
+            if meta.get('has_multiple_default_audio_tracks', False):
+                console.print(
+                    f"[bold red]Multiple default audio tracks detected, skipping {self.tracker} upload.[/bold red]")
+                return False
+
+            if meta.get('has_multiple_default_subtitle_tracks', False):
+                console.print(
+                    f"[bold red]Multiple default subtitle tracks detected, skipping {self.tracker} upload.[/bold red]")
+                return False
+
+        if meta.get('non_disc_has_pcm_audio_tracks', False):
+            console.print(
+                f"[bold red]Non-disc source with PCM audio tracks detected, skipping {self.tracker} upload.[/bold red]")
+            return False
+
+        if meta.get('discs_missing_certificate', []):
+            console.print(
+                f"[bold red]Disc source(s) missing BD certificate, skipping {self.tracker} upload.[/bold red]")
+            return False
+
         return should_continue
 
     async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
@@ -113,7 +134,7 @@ class ULCX(UNIT3D):
             ulcx_name = ulcx_name.replace(f"{meta['title']}", imdb_name, 1)
             if imdb_aka and imdb_aka.strip() and imdb_aka != imdb_name and not meta.get('no_aka', False) and not meta.get('anime', False):
                 ulcx_name = ulcx_name.replace(f"{imdb_name}", f"{imdb_name} AKA {imdb_aka}", 1)
-        if "Hybrid" in ulcx_name:
+        if "Hybrid" in ulcx_name and meta.get('type') == "WEBDL":
             ulcx_name = ulcx_name.replace("Hybrid ", "", 1)
         if meta.get('category') != "TV" and imdb_year and imdb_year.strip() and year and year.strip() and imdb_year != year:
             ulcx_name = ulcx_name.replace(f"{year}", imdb_year, 1)

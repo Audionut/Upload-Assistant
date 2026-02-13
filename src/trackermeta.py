@@ -84,7 +84,8 @@ class TrackerMetaManager:
 
 async def prompt_user_for_confirmation(message: str) -> bool:
     try:
-        response = input(f"{message} (Y/n): ").strip().lower()
+        response_raw = cli_ui.ask_string(f"{message} (Y/n): ")
+        response = (response_raw or "").strip().lower()
         return response in ["y", "yes", ""]
     except EOFError:
         sys.exit(1)
@@ -697,7 +698,8 @@ async def update_metadata_from_tracker(
                             console.print("[bold green]Successfully grabbed description from HDB")
                             console.print(f"HDB Description content:\n{description[:1000]}.....", markup=False)
                             console.print("[cyan]Do you want to edit, discard or keep the description?[/cyan]")
-                            edit_choice = input("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is: ")
+                            edit_choice_raw = cli_ui.ask_string("Enter 'e' to edit, 'd' to discard, or press Enter to keep it as is: ")
+                            edit_choice = (edit_choice_raw or "").strip().lower()
 
                             if edit_choice.lower() == 'e':
                                 edited_description = click.edit(description)

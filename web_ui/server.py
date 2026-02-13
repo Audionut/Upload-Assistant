@@ -488,6 +488,12 @@ def _cleanup_duplicate_sessions(username: str) -> None:
 # Supported video file extensions for WebUI file browser
 SUPPORTED_VIDEO_EXTS = {'.mkv', '.mp4', '.ts'}
 
+# Supported description file extensions for WebUI description file browser
+SUPPORTED_DESC_EXTS = {'.txt', '.nfo', '.md'}
+
+# Regex for splitting filenames on common separators (dots, dashes, underscores, spaces)
+_BROWSE_SEARCH_SEP_RE = re.compile(r'[\s.\-_]+')
+
 # Lock to prevent concurrent in-process uploads (avoids cross-session interference)
 inproc_lock = threading.Lock()
 
@@ -862,13 +868,14 @@ def _debug_process_snapshot(session_id: Optional[str] = None) -> dict[str, Any]:
         return {"error": "failed to build snapshot"}
 
 
-class BrowseItem(TypedDict):
+class BrowseItem(TypedDict, total=False):
     """Serialized representation of an entry returned by the browse API."""
 
     name: str
     path: str
     type: Literal["folder", "file"]
     children: Union[list["BrowseItem"], None]
+    subtitle: str  # Optional hint  (eg, when parent path when names collide)
 
 
 class ConfigItem(TypedDict, total=False):
@@ -2387,10 +2394,32 @@ def browse_roots():
     if not roots:
         return jsonify({"error": "Browsing is not configured", "success": False}), 400
 
+    # First pass: collect all display names to detect duplicates
+    name_to_roots: dict[str, list[str]] = {}
+    for root in roots:
+        display_name = os.path.basename(root.rstrip(os.sep)) or root
+        if display_name not in name_to_roots:
+            name_to_roots[display_name] = []
+        name_to_roots[display_name].append(root)
+
+    # Second pass: build items with subtitles when needed
     items: list[BrowseItem] = []
     for root in roots:
         display_name = os.path.basename(root.rstrip(os.sep)) or root
-        items.append({"name": display_name, "path": root, "type": "folder", "children": []})
+        item: BrowseItem = {"name": display_name, "path": root, "type": "folder", "children": []}
+
+        # Add subtitle if multiple roots share the same folder name
+        if len(name_to_roots.get(display_name, [])) > 1:
+            # Show parent path or drive letter
+            parent = os.path.dirname(root.rstrip(os.sep))
+            if parent:
+                # On Windows, show drive letter + parent; on Unix, show parent path
+                item["subtitle"] = parent
+            else:
+                # Fallback to full path if no parent (e.g., drive root)
+                item["subtitle"] = root
+
+        items.append(item)
 
     # If caller used a bearer token, require it to be valid.
     bearer = _get_bearer_from_header()
@@ -2685,6 +2714,7 @@ def api_tokens():
 def browse_path():
     """Browse filesystem paths"""
     requested = request.args.get("path", "")
+    file_filter = request.args.get("filter", "video")  # 'video' or 'desc'
     try:
         path = _resolve_browse_path(requested)
     except ValueError as e:
@@ -2746,11 +2776,16 @@ def browse_path():
                 try:
                     is_dir = os.path.isdir(full_path)
 
-                    # Skip files that are not supported video formats
+                    # Skip files based on filter type
                     if not is_dir:
                         _, ext = os.path.splitext(item.lower())
-                        if ext not in SUPPORTED_VIDEO_EXTS:
-                            continue
+                        if file_filter == "desc":
+                            if ext not in SUPPORTED_DESC_EXTS:
+                                continue
+                        else:
+                            # Default to video filter
+                            if ext not in SUPPORTED_VIDEO_EXTS:
+                                continue
 
                     items.append({"name": item, "path": full_path, "type": "folder" if is_dir else "file", "children": [] if is_dir else None})
                 except (PermissionError, OSError):
@@ -2782,6 +2817,124 @@ def browse_path():
         console.print(f"Error browsing {path}: {e}", markup=False)
         console.print(traceback.format_exc(), markup=False)
         return jsonify({"error": "Error browsing path", "success": False}), 500
+
+
+@app.route("/api/browse_search")
+def browse_search():
+    """Search filesystem for files/folders matching a query string"""
+    query = (request.args.get("q") or "").strip()
+    file_filter = request.args.get("filter", "video")
+    try:
+        max_results = min(int(request.args.get("max_results", "100")), 500)
+        if max_results < 1:
+            max_results = 100
+    except (ValueError, TypeError):
+        max_results = 100
+
+    if not query:
+        return jsonify({"success": True, "items": [], "query": ""})
+
+    bearer = _get_bearer_from_header()
+    if bearer:
+        if not _token_is_valid(bearer):
+            return jsonify({"success": False, "error": "Forbidden (invalid token)"}), 403
+    else:
+        if not _is_authenticated():
+            return jsonify({"success": False, "error": "Authentication required (web session)"}), 401
+        if not _verify_csrf_header() or not _verify_same_origin():
+            return jsonify({"success": False, "error": "CSRF/Origin validation failed"}), 403
+
+    roots = _get_browse_roots()
+    if not roots:
+        return jsonify({"success": False, "error": "Browsing is not configured"}), 400
+
+    # Split on common separators
+    query_tokens = [t for t in _BROWSE_SEARCH_SEP_RE.split(query.lower()) if t]
+    if not query_tokens:
+        return jsonify({"success": True, "items": [], "query": query})
+
+    def name_matches(name: str) -> bool:
+        """Check if query tokens appear as whole-word ordered subsequence in the name."""
+        name_tokens = [t for t in _BROWSE_SEARCH_SEP_RE.split(name.lower()) if t]
+        pos = 0
+        for qt in query_tokens:
+            found = False
+            while pos < len(name_tokens):
+                if name_tokens[pos] == qt:
+                    pos += 1
+                    found = True
+                    break
+                pos += 1
+            if not found:
+                return False
+        return True
+
+    allowed_exts = SUPPORTED_DESC_EXTS if file_filter == "desc" else SUPPORTED_VIDEO_EXTS
+    items: list[BrowseItem] = []
+
+    try:
+        for root in roots:
+            root_abs = os.path.abspath(root)
+            if not os.path.isdir(root_abs):
+                continue
+            try:
+                for dirpath, dirnames, filenames in os.walk(root_abs):
+                    # Skip hidden dirs
+                    dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+
+                    # Check dirs
+                    for dirname in dirnames:
+                        if name_matches(dirname):
+                            full_path = os.path.join(dirpath, dirname)
+                            try:
+                                _assert_safe_resolved_path(full_path)
+                            except ValueError:
+                                continue
+                            items.append({"name": dirname, "path": full_path, "type": "folder", "children": []})
+                            if len(items) >= max_results:
+                                break
+
+                    if len(items) >= max_results:
+                        break
+
+                    # Check files
+                    for filename in filenames:
+                        if filename.startswith("."):
+                            continue
+                        if not name_matches(filename):
+                            continue
+                        _, ext = os.path.splitext(filename.lower())
+                        if ext not in allowed_exts:
+                            continue
+                        full_path = os.path.join(dirpath, filename)
+                        try:
+                            _assert_safe_resolved_path(full_path)
+                        except ValueError:
+                            continue
+                        items.append({"name": filename, "path": full_path, "type": "file", "children": None})
+                        if len(items) >= max_results:
+                            break
+
+                    if len(items) >= max_results:
+                        break
+            except PermissionError:
+                continue
+            except Exception as e:
+                console.print(f"Error searching in {root}: {e}", markup=False)
+                continue
+
+            if len(items) >= max_results:
+                break
+
+        # Sort by folders first and then alphabetically
+        items.sort(key=lambda x: (0 if x.get("type") == "folder" else 1, (x.get("name") or "").lower()))
+
+        return jsonify({"success": True, "items": items, "query": query, "count": len(items), "truncated": len(items) >= max_results})
+
+    except Exception as e:
+        console.print(f"Error in browse_search: {e}", markup=False)
+        console.print(traceback.format_exc(), markup=False)
+        return jsonify({"error": "Error searching files", "success": False}), 500
 
 
 @app.route("/api/execute", methods=["POST", "OPTIONS"])
@@ -3016,25 +3169,39 @@ def execute_command():
                     try:
                         orig_ask_yes_no = _cli_ui.ask_yes_no
 
-                        def wrapped_ask_yes_no(question: str, default: bool = False) -> bool:
-                            with contextlib.suppress(Exception):
-                                wrapped_print(question)
-                            # Wait for a response or cancellation
-                            while True:
-                                if cancel_event.is_set():
-                                    raise EOFError()
-                                try:
-                                    resp = input_queue.get(timeout=0.5)
-                                except queue.Empty:
-                                    continue
-                                except Exception:
-                                    raise
-                                resp = (resp or "").strip().lower()
-                                if resp in ("y", "yes"):
-                                    return True
-                                if resp in ("n", "no"):
-                                    return False
-                                return default
+                        def wrapped_ask_yes_no(*args, default: bool = False, **kwargs) -> bool:
+                                # Support both signatures used across the codebase:
+                                #   ask_yes_no(question, default=...)
+                                #   ask_yes_no(color, question, default=...)
+                                # Extract the question and default value from args/kwargs.
+                                if len(args) >= 2:
+                                    question = args[1]
+                                elif len(args) == 1:
+                                    question = args[0]
+                                else:
+                                    question = kwargs.get('question', '')
+
+                                # If default was passed positionally (third arg), use it.
+                                default_val = args[2] if len(args) >= 3 else kwargs.get('default', default)
+
+                                with contextlib.suppress(Exception):
+                                    wrapped_print(str(question))
+                                # Wait for a response or cancellation
+                                while True:
+                                    if cancel_event.is_set():
+                                        raise EOFError()
+                                    try:
+                                        resp = input_queue.get(timeout=0.5)
+                                    except queue.Empty:
+                                        continue
+                                    except Exception:
+                                        raise
+                                    resp = (resp or "").strip().lower()
+                                    if resp in ("y", "yes"):
+                                        return True
+                                    if resp in ("n", "no"):
+                                        return False
+                                    return default_val
 
                         _cli_ui.ask_yes_no = wrapped_ask_yes_no
                         # Save original ask_yes_no so external cleaners (eg. /api/kill)

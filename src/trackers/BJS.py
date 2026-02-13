@@ -11,6 +11,7 @@ from typing import Any, Optional, cast
 from urllib.parse import urlparse
 
 import aiofiles
+import cli_ui
 import httpx
 import langcodes
 import pycountry
@@ -407,7 +408,8 @@ class BJS:
         return br_rating or us_rating or ''
 
     async def get_tags(self) -> str:
-        tags = ''
+        tags = ""
+
         genres_data: list[dict[str, Any]] = self.main_tmdb_data.get('genres', [])
         genre_names: list[str] = []
 
@@ -427,7 +429,8 @@ class BJS:
                 )
 
         if not tags:
-            tags = await self.common.async_input(prompt=f'Digite os gêneros (no formato do {self.tracker}): ')
+             tags_raw = await asyncio.to_thread(cli_ui.ask_string, f'Digite os gêneros (no formato do {self.tracker}): ')
+             tags = (tags_raw or "").strip()
 
         return tags
 
@@ -1106,7 +1109,8 @@ class BJS:
             'Por favor, insira manualmente (separados por vírgula): '
         )
 
-        user_input = await self.common.async_input(prompt=prompt_message)
+        user_input_raw = await asyncio.to_thread(cli_ui.ask_string, f'{prompt_message}')
+        user_input = (user_input_raw or "").strip()
         if user_input:
             return user_input
 
@@ -1364,7 +1368,7 @@ class BJS:
 
         Accepted formats:
             IMDb: tt12345
-            TMDb: movie12345 or tv12345
+            TMDb: movie/12345 or tv/12345
         """
         imdb_info = dict(meta.get("imdb_info", {}))
         imdbid = str(imdb_info.get("imdbID", ""))
@@ -1375,7 +1379,7 @@ class BJS:
         tmdb_id = meta.get("tmdb_id")
 
         if category in ["MOVIE", "TV"] and tmdb_id:
-            return f"{category}{tmdb_id}".lower()
+            return f"{category}/{tmdb_id}".lower()
 
         return ""
 
@@ -1388,9 +1392,8 @@ class BJS:
             console.print(
                 f"{self.tracker}: [bold red]Sinopse não encontrada no TMDb. Por favor, insira manualmente.[/bold red]"
             )
-            user_input = await self.common.async_input(
-                prompt=f"{self.tracker}: [green]Digite a sinopse:[/green]"
-            )
+            user_input_raw = await asyncio.to_thread(cli_ui.ask_string, f'"{self.tracker}: [green]Digite a sinopse:[/green]"')
+            user_input = (user_input_raw or "").strip()
             if user_input:
                 return user_input
             return 'N/A'
