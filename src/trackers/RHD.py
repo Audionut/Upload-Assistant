@@ -391,13 +391,13 @@ class RHD(UNIT3D):
         # Split on delimiters (dot, hyphen, underscore) or whitespace so tags like "LD" only match as separate tokens
         basename_up = [tok for tok in re.split(r'[\.\s_-]+', str(basename).upper()) if tok]
         if any(x in basename_up for x in prohib_markers):
-            console.print(f"[bold red]Uploading MIC, CAM, TS or LD releases, is prohibited")
+            console.print("[bold red]Uploading MIC, CAM, TS or LD releases, is prohibited")
             if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                 return False
 
         # Uploading upscaled releases is prohibited. Exception: The release is from a group on the upscale whitelist
         if "UPSCALE" in basename_up:
-            console.print(f"[bold red]Uploading upscaled releases is prohibited, unless the group is is whitelisted {self.baseurl}/wikis/17")
+            console.print(f"[bold red]Uploading upscaled releases is prohibited, unless the group is is whitelisted {self.base_url}/wikis/17")
             if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                 return False
 
