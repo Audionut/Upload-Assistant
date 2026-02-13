@@ -16,7 +16,7 @@ Config = dict[str, Any]
 
 
 class RHD(UNIT3D):
-    INVALID_TAG_PATTERN = re.compile(r"(nogrp|nogroup|unknown|unk)", re.IGNORECASE)
+    INVALID_TAG_PATTERN = re.compile(r"^(nogrp|nogroup|unknown|unk)$", re.IGNORECASE)
     WHITESPACE_PATTERN = re.compile(r"\s{2,}")
     MARKER_PATTERN = re.compile(r"\b(UNTOUCHED|VU1080|VU720|VU)\b", re.IGNORECASE)
 
@@ -392,26 +392,26 @@ class RHD(UNIT3D):
         basename_up = [tok for tok in re.split(r'[\.\s_-]+', str(basename).upper()) if tok]
         if any(x in basename_up for x in prohib_markers):
             console.print("[bold red]Uploading MIC, CAM, TS or LD releases, is prohibited")
-            if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+            if meta.get("unattended") or not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                 return False
 
         # Uploading upscaled releases is prohibited. Exception: The release is from a group on the upscale whitelist
         if "UPSCALE" in basename_up:
             console.print(f"[bold red]Uploading upscaled releases is prohibited, unless the group is is whitelisted {self.base_url}/wikis/17")
-            if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+            if meta.get("unattended") or not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                 return False
 
         # Uploading SD content is not allowed. Exception: No HD version exists. Check release databases beforehand to ensure an HD version doesn't exist
         if meta.get("resolution") in ["384p", "480p", "480i", "540p","576p", "576i"]:
             console.print(f"[bold red]Uploading SD releases is not allowed on {self.tracker}, unless no HD version exists.")
             console.print("[bold red]Please check release databases beforehand to be sure.")
-            if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+            if meta.get("unattended") or not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                 return False
 
         # Uploads must contain a German audio track. Exception: The release was requested in its original language.
         if not self._has_german_audio(meta) and not meta.get("requested_release", False):
             console.print("[bold red]Uploads must contain a German audio track, unless the release was requested in its original language.")
-            if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+            if meta.get("unattended") or not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                 return False
 
         # check for samples, proofs, and images in the upload directory
@@ -423,6 +423,6 @@ class RHD(UNIT3D):
             for file in filelist
         ):
             console.print("[bold red]Uploads containing samples, proofs, and images are prohibited.[/bold red]")
-            if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+            if meta.get("unattended") or not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
                 return False
         return True
