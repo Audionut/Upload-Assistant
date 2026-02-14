@@ -1293,8 +1293,11 @@ async def do_the_thing(base_dir: str) -> None:
         import importlib
         import data.config as _cfg_mod  # may already be cached
         importlib.reload(_cfg_mod)
+        _reloaded = _cfg_mod.config  # may raise AttributeError
+        if not isinstance(_reloaded, dict):
+            raise TypeError(f"Expected dict, got {type(_reloaded).__name__}")
         config.clear()
-        config.update(_cfg_mod.config)
+        config.update(_reloaded)
     except Exception as exc:
         console.print(f"[yellow]Warning: could not reload config from disk: {exc}[/yellow]")
 
