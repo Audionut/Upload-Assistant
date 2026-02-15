@@ -145,12 +145,12 @@ class TVC:
             parts.append(f"[center][img={logo_size}]{meta['logo']}[/img][/center]\n\n")
 
         # Title in pre tags
-        parts.append(f"[center][pre][b]Movie Title:[/b] {meta.get('title', 'Unknown Movie')}[/pre][/center]\n\n")
+        parts.append(f"[center][b]Movie Title:[/b] {meta.get('title', 'Unknown Movie')}[/center]\n\n")
 
         # Overview in pre tags
         overview = meta.get('overview', '').strip()
         if overview:
-            parts.append(f"[center][pre]{overview}[/pre][/center]\n\n")
+            parts.append(f"[center]{overview}[/center]\n\n")
 
         # Release date
         if 'release_date' in meta:
@@ -190,13 +190,13 @@ class TVC:
         airdate = self.format_date_ddmmyyyy(meta.get('season_air_first_date') or "")
         series_name = meta.get('season_name', 'Unknown Series')
 
-        parts.append(f"[center][pre][b]Series Title:[/b] {series_name}[/pre][/center]\n\n")
+        parts.append(f"[center][b]Series Title:[/b] {series_name}[/center]\n\n")
         parts.append(f"[center][b]This series premiered on:[/b] {channel} on {airdate}[/center]\n\n")
 
         # Episode list
         if meta.get('episodes'):
             episode_list = self._build_episode_list(meta['episodes'])
-            parts.append(f"[center][pre][b]Episode List[/b]\n{episode_list}[/pre][/center]\n\n")
+            parts.append(f"[center][b]Episode List[/b]\n{episode_list}[/center]\n\n")
 
         # External links
         links = self.get_links(meta).strip()
@@ -229,12 +229,12 @@ class TVC:
         # Episode title in pre tags with its own center block
         episode_name = meta.get('episode_name', '').strip()
         if episode_name:
-            parts.append(f"[center][pre]{episode_name}[/pre][/center]\n\n")
+            parts.append(f"[center]{episode_name}[/center]\n\n")
 
         # Overview in pre tags with its own center block
         overview = meta.get('episode_overview', '').strip()
         if overview:
-            parts.append(f"[center][pre]{overview}[/pre][/center]\n\n")
+            parts.append(f"[center]{overview}[/center]\n\n")
 
         # Broadcast info (without pre tags)
         if 'episode_airdate' in meta:
@@ -258,7 +258,7 @@ class TVC:
         """Build fallback description for other categories."""
         overview = meta.get('overview', '').strip()
         if overview:
-            return f"[center][pre]{overview}[/pre][/center]\n\n"
+            return f"[center]{overview}[/center]\n\n"
         return ""
 
     def _get_movie_release_info(self, meta: Meta) -> str:
@@ -347,7 +347,7 @@ class TVC:
 
     def _build_notes_section(self, base: str) -> str:
         """Build notes/extra info section."""
-        return f"[center][b]Notes / Extra Info[/b]\n[pre]{base.strip()}[/pre][/center]\n\n"
+        return f"[center][b]Notes / Extra Info[/b]\n{base.strip()}[/center]\n\n"
 
     def _apply_bbcode_transforms(self, desc: str, comparison: bool) -> str:
         """Apply BBCode transformations."""
@@ -897,7 +897,7 @@ class TVC:
         Build and write the tracker-specific DESCRIPTION.txt file (FNP multi-block style).
 
         Constructs BBCode-formatted description text for discs, TV packs,
-        episodes, or movies using multiple separate [center] blocks with [pre] tags.
+        episodes, or movies using multiple separate [center] blocks.
         Always writes a non-empty description file to tmp/<uuid>/[TVC]DESCRIPTION.txt.
 
         Args:
