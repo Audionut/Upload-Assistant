@@ -107,21 +107,21 @@ class TVC:
             if disc['type'] == "BDMV":
                 name = disc.get('name', 'BDINFO')
                 parts.append(
-                    f"[spoiler={name}][code]{disc['summary']}[/code][/spoiler]\n\n"
+                    f"[center][spoiler={name}][code]{disc['summary']}[/code][/spoiler][/center]\n\n"
                 )
             elif disc['type'] == "DVD":
                 # For first DVD disc, use VOB MediaInfo label
                 if not parts:  # First disc
                     parts.append(
-                        f"[spoiler=VOB MediaInfo][code]{disc['vob_mi']}[/code][/spoiler]\n\n"
+                        f"[center][spoiler=VOB MediaInfo][code]{disc['vob_mi']}[/code][/spoiler][/center]\n\n"
                     )
                 else:  # Subsequent DVD discs
-                    parts.append(f"{disc['name']}:\n")
                     vob_name = os.path.basename(disc['vob'])
                     ifo_name = os.path.basename(disc['ifo'])
                     parts.append(
+                        f"[center]{disc['name']}:\n"
                         f"[spoiler={vob_name}][code]{disc['vob_mi']}[/code][/spoiler] "
-                        f"[spoiler={ifo_name}][code]{disc['ifo_mi']}[/code][/spoiler]\n\n"
+                        f"[spoiler={ifo_name}][code]{disc['ifo_mi']}[/code][/spoiler][/center]\n\n"
                     )
 
         return "".join(parts)
@@ -131,37 +131,42 @@ class TVC:
         meta: Meta,
         image_list: list[dict[str, Any]]
     ) -> str:
-        """Build description for movie releases."""
+        """Build description for movie releases (multi-block style)."""
         parts = []
 
-        # Release date info (before center tag)
+        # Release date info in its own center block
         rd_info = self._get_movie_release_info(meta)
         if rd_info:
             parts.append(f"[center]{rd_info}[/center]\n\n")
 
-        parts.append("[center]")
-
-        # Logo
+        # Logo in its own center block
         if meta.get("logo"):
             logo_size = self.config['DEFAULT'].get('logo_size', self.DEFAULT_LOGO_SIZE)
-            parts.append(f"[img={logo_size}]{meta['logo']}[/img]\n")
+            parts.append(f"[center][img={logo_size}]{meta['logo']}[/img][/center]\n\n")
 
-        # Title and overview
-        parts.append(f"[b]Movie Title:[/b] {meta.get('title', 'Unknown Movie')}\n")
-        parts.append(f"{meta.get('overview', '').strip()}\n")
+        # Title in pre tags
+        parts.append(f"[center][pre][b]Movie Title:[/b] {meta.get('title', 'Unknown Movie')}[/pre][/center]\n\n")
+
+        # Overview in pre tags
+        overview = meta.get('overview', '').strip()
+        if overview:
+            parts.append(f"[center][pre]{overview}[/pre][/center]\n\n")
 
         # Release date
         if 'release_date' in meta:
             formatted_date = self.format_date_ddmmyyyy(meta['release_date'])
-            parts.append(f"[b]Released on:[/b] {formatted_date}\n")
+            parts.append(f"[center][b]Released on:[/b] {formatted_date}[/center]\n\n")
 
         # External links
-        parts.append(self.get_links(meta))
+        links = self.get_links(meta).strip()
+        if links:
+            parts.append(f"[center]{links}[/center]\n\n")
 
         # Screenshots
-        parts.append(self._add_screenshots(meta, image_list))
+        screenshots = self._add_screenshots(meta, image_list).strip()
+        if screenshots:
+            parts.append(f"[center]{screenshots}[/center]\n\n")
 
-        parts.append("[/center]\n\n")
         return "".join(parts)
 
     def _build_tv_pack_desc(
@@ -169,36 +174,40 @@ class TVC:
         meta: Meta,
         image_list: list[dict[str, Any]]
     ) -> str:
-        """Build description for TV pack releases."""
+        """Build description for TV pack releases (multi-block style)."""
         if 'season_air_first_date' not in meta:
             return ""
 
-        parts = ["[center]"]
+        parts = []
 
-        # Logo
+        # Logo in its own center block
         if meta.get("logo"):
             logo_size = self.config['DEFAULT'].get('logo_size', self.DEFAULT_LOGO_SIZE)
-            parts.append(f"[img={logo_size}]{meta['logo']}[/img]\n")
+            parts.append(f"[center][img={logo_size}]{meta['logo']}[/img][/center]\n\n")
 
-        # Series info
+        # Series info in pre tags
         channel = meta.get('networks', 'N/A')
         airdate = self.format_date_ddmmyyyy(meta.get('season_air_first_date') or "")
+        series_name = meta.get('season_name', 'Unknown Series')
 
-        parts.append(f"[b]Series Title:[/b] {meta.get('season_name', 'Unknown Series')}\n")
-        parts.append(f"[b]This series premiered on:[/b] {channel} on {airdate}\n")
+        parts.append(f"[center][pre][b]Series Title:[/b] {series_name}[/pre][/center]\n\n")
+        parts.append(f"[center][b]This series premiered on:[/b] {channel} on {airdate}[/center]\n\n")
 
         # Episode list
         if meta.get('episodes'):
-            parts.append("\n[b]Episode List[/b]\n")
-            parts.append(self._build_episode_list(meta['episodes']))
+            episode_list = self._build_episode_list(meta['episodes'])
+            parts.append(f"[center][pre][b]Episode List[/b]\n{episode_list}[/pre][/center]\n\n")
 
         # External links
-        parts.append(self.get_links(meta))
+        links = self.get_links(meta).strip()
+        if links:
+            parts.append(f"[center]{links}[/center]\n\n")
 
         # Screenshots
-        parts.append(self._add_screenshots(meta, image_list))
+        screenshots = self._add_screenshots(meta, image_list).strip()
+        if screenshots:
+            parts.append(f"[center]{screenshots}[/center]\n\n")
 
-        parts.append("[/center]\n\n")
         return "".join(parts)
 
     def _build_episode_desc(
@@ -206,45 +215,51 @@ class TVC:
         meta: Meta,
         image_list: list[dict[str, Any]]
     ) -> str:
-        """Build description for single episode releases."""
+        """Build description for single episode releases (FNP-style multi-block)."""
         if 'episode_overview' not in meta:
             return ""
 
-        parts = ["[center]"]
+        parts = []
 
-        # Logo
+        # Logo in its own center block
         if meta.get("logo"):
             logo_size = self.config['DEFAULT'].get('logo_size', self.DEFAULT_LOGO_SIZE)
-            parts.append(f"[img={logo_size}]{meta['logo']}[/img]\n\n")
+            parts.append(f"[center][img={logo_size}]{meta['logo']}[/img][/center]\n\n")
 
-        # Episode title
+        # Episode title in pre tags with its own center block
         episode_name = meta.get('episode_name', '').strip()
         if episode_name:
-            parts.append(f"[b]Episode Title:[/b] {episode_name}\n\n")
+            parts.append(f"[center][pre]{episode_name}[/pre][/center]\n\n")
 
-        # Overview (sentence by sentence)
+        # Overview in pre tags with its own center block
         overview = meta.get('episode_overview', '').strip()
-        parts.append(self._format_overview(overview))
+        if overview:
+            parts.append(f"[center][pre]{overview}[/pre][/center]\n\n")
 
-        # Airdate
+        # Broadcast info (without pre tags)
         if 'episode_airdate' in meta:
             channel = meta.get('networks', 'N/A')
             formatted_date = self.format_date_ddmmyyyy(meta['episode_airdate'])
-            parts.append(f"[b]Broadcast on:[/b] {channel} on {formatted_date}\n")
+            parts.append(f"[center][b]Broadcast on:[/b] {channel} on {formatted_date}[/center]\n\n")
 
         # External links
-        parts.append(self.get_links(meta))
+        links = self.get_links(meta).strip()
+        if links:
+            parts.append(f"[center]{links}[/center]\n\n")
 
         # Screenshots
-        parts.append(self._add_screenshots(meta, image_list))
+        screenshots = self._add_screenshots(meta, image_list).strip()
+        if screenshots:
+            parts.append(f"[center]{screenshots}[/center]\n\n")
 
-        parts.append("[/center]\n\n")
         return "".join(parts)
 
     def _build_fallback_desc(self, meta: Meta) -> str:
         """Build fallback description for other categories."""
         overview = meta.get('overview', '').strip()
-        return f"[center]{overview}[/center]\n\n"
+        if overview:
+            return f"[center][pre]{overview}[/pre][/center]\n\n"
+        return ""
 
     def _get_movie_release_info(self, meta: Meta) -> str:
         """Extract movie release date information."""
@@ -302,7 +317,7 @@ class TVC:
         if not sentences:
             sentences = [overview]
 
-        return "".join(s.rstrip() + "\n" for s in sentences) + "\n"
+        return "".join(s.rstrip() + "\n" for s in sentences)
 
     def _add_screenshots(
         self,
@@ -319,25 +334,25 @@ class TVC:
         if not image_list or screens_count < required_count:
             return ""
 
-        parts = ["\n[b]Screenshots[/b]\n"]
+        parts = ["[b]Screenshots[/b]\n"]
 
         for img in image_list[:required_count]:
             web_url = img['web_url']
             img_url = img['img_url']
             parts.append(
-                f"[url={web_url}][img={self.SCREENSHOT_THUMB_SIZE}]{img_url}[/img][/url]"
+                f"[url={web_url}][img={self.SCREENSHOT_THUMB_SIZE}]{img_url}[/img][/url] "
             )
 
         return "".join(parts)
 
     def _build_notes_section(self, base: str) -> str:
         """Build notes/extra info section."""
-        return f"[center][b]Notes / Extra Info[/b]\n{base.strip()}\n[/center]\n\n"
+        return f"[center][b]Notes / Extra Info[/b]\n[pre]{base.strip()}[/pre][/center]\n\n"
 
     def _apply_bbcode_transforms(self, desc: str, comparison: bool) -> str:
         """Apply BBCode transformations."""
         bbcode = BBCODE()
-        desc = bbcode.convert_pre_to_code(desc)
+#        desc = bbcode.convert_pre_to_code(desc)
         desc = bbcode.convert_hide_to_spoiler(desc)
 
         if not comparison:
@@ -349,12 +364,9 @@ class TVC:
         return desc
 
     def _normalize_tvc_formatting(self, desc: str) -> str:
-        """Normalize whitespace and formatting for TVC."""
-        # TVC-specific: remove newline immediately after [center]
-        desc = desc.replace("[center]\n", "[center]")
-
-        # Collapse any run of 2+ newlines into a single newline
-        desc = re.sub(r"\n{2,}", "\n", desc)
+        """Normalize whitespace for TVC (multi-block style)."""
+        # Collapse any run of 3+ newlines into exactly 2 (preserve spacing between blocks)
+        desc = re.sub(r"\n{3,}", "\n\n", desc)
 
         return desc
 
@@ -882,11 +894,11 @@ class TVC:
         comparison: bool = False,
     ) -> str:
         """
-        Build and write the tracker-specific DESCRIPTION.txt file.
+        Build and write the tracker-specific DESCRIPTION.txt file (FNP multi-block style).
 
         Constructs BBCode-formatted description text for discs, TV packs,
-        episodes, or movies, including screenshots and notes. Always writes
-        a non-empty description file to tmp/<uuid>/[TVC]DESCRIPTION.txt.
+        episodes, or movies using multiple separate [center] blocks with [pre] tags.
+        Always writes a non-empty description file to tmp/<uuid>/[TVC]DESCRIPTION.txt.
 
         Args:
             meta: Metadata dictionary for the release.
@@ -949,10 +961,10 @@ class TVC:
 
     def get_links(self, meta: Meta) -> str:
         """
-        Returns a BBCode string with an 'External Info Sources' heading and icon links.
-        No [center] tags are included; callers control layout.
+        Returns a BBCode string with icon links (for multi-block layout).
+        No [center] tags or extra newlines - caller handles layout.
         """
-        parts = ["\n[b]External Info Sources:[/b]\n\n"]
+        parts = ["[b]External Info Sources:[/b]\n\n"]
 
         # Configuration for each link type: (meta_key, url_builder, config_image_key)
         link_configs = [
@@ -985,11 +997,17 @@ class TVC:
 
         for id_key, url_func, img_key in link_configs:
             if meta.get(id_key, 0):
-                url = url_func(meta)
-                img = self.config['IMAGES'][img_key]
-                parts.append(f"[URL={url}][img]{img}[/img][/URL]")
+                # Safe config access with fallback
+                if 'IMAGES' in self.config and img_key in self.config['IMAGES']:
+                    url = url_func(meta)
+                    img = self.config['IMAGES'][img_key]
+                    parts.append(f"[URL={url}][img]{img}[/img][/URL] ")
+                else:
+                    # Fallback: just include the URL without an image icon
+                    url = url_func(meta)
+                    parts.append(f"[URL={url}]{id_key.replace('_id', '').upper()}[/URL] ")
 
-        return " ".join(parts) + "\n"
+        return "".join(parts)
 
     # get subs function
     # used in naming conventions
