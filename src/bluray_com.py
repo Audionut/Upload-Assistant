@@ -850,7 +850,7 @@ def extract_cover_images(html_content: str) -> dict[str, str]:
             elif 'slipimage' in lid:
                 cover_images['slip'] = cleaned_url
             else:
-                cover_images[img_id or url] = cleaned_url
+                cover_images[img_id] = cleaned_url
 
     if not cover_images:
         overlay_divs = soup.find_all('div', class_='simple_overlay')
