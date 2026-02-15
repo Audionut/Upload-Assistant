@@ -131,7 +131,7 @@ class TVC:
         meta: Meta,
         image_list: list[dict[str, Any]]
     ) -> str:
-        """Build description for movie releases (multi-block style)."""
+        """Build description for movie releases (multi-block, no pre tags)."""
         parts = []
 
         # Release date info in its own center block
@@ -144,10 +144,10 @@ class TVC:
             logo_size = self.config['DEFAULT'].get('logo_size', self.DEFAULT_LOGO_SIZE)
             parts.append(f"[center][img={logo_size}]{meta['logo']}[/img][/center]\n\n")
 
-        # Title in pre tags
+        # Title - plain text
         parts.append(f"[center][b]Movie Title:[/b] {meta.get('title', 'Unknown Movie')}[/center]\n\n")
 
-        # Overview in pre tags
+        # Overview - plain text
         overview = meta.get('overview', '').strip()
         if overview:
             parts.append(f"[center]{overview}[/center]\n\n")
@@ -174,10 +174,7 @@ class TVC:
         meta: Meta,
         image_list: list[dict[str, Any]]
     ) -> str:
-        """Build description for TV pack releases (multi-block style)."""
-        if 'season_air_first_date' not in meta:
-            return ""
-
+        """Build description for TV pack releases (multi-block, no pre tags)."""
         parts = []
 
         # Logo in its own center block
@@ -185,25 +182,26 @@ class TVC:
             logo_size = self.config['DEFAULT'].get('logo_size', self.DEFAULT_LOGO_SIZE)
             parts.append(f"[center][img={logo_size}]{meta['logo']}[/img][/center]\n\n")
 
-        # Series info in pre tags
-        channel = meta.get('networks', 'N/A')
-        airdate = self.format_date_ddmmyyyy(meta.get('season_air_first_date') or "")
-        series_name = meta.get('season_name', 'Unknown Series')
+        # Series info (optional - only if season data exists)
+        if 'season_air_first_date' in meta:
+            channel = meta.get('networks', 'N/A')
+            airdate = self.format_date_ddmmyyyy(meta.get('season_air_first_date') or "")
+            series_name = meta.get('season_name', 'Unknown Series')
 
-        parts.append(f"[center][b]Series Title:[/b] {series_name}[/center]\n\n")
-        parts.append(f"[center][b]This series premiered on:[/b] {channel} on {airdate}[/center]\n\n")
+            parts.append(f"[center][b]Series Title:[/b] {series_name}[/center]\n\n")
+            parts.append(f"[center][b]This series premiered on:[/b] {channel} on {airdate}[/center]\n\n")
 
-        # Episode list
+        # Episode list (optional)
         if meta.get('episodes'):
             episode_list = self._build_episode_list(meta['episodes'])
             parts.append(f"[center][b]Episode List[/b]\n{episode_list}[/center]\n\n")
 
-        # External links
+        # External links (always attempt to add)
         links = self.get_links(meta).strip()
         if links:
             parts.append(f"[center]{links}[/center]\n\n")
 
-        # Screenshots
+        # Screenshots (always attempt to add)
         screenshots = self._add_screenshots(meta, image_list).strip()
         if screenshots:
             parts.append(f"[center]{screenshots}[/center]\n\n")
@@ -215,10 +213,7 @@ class TVC:
         meta: Meta,
         image_list: list[dict[str, Any]]
     ) -> str:
-        """Build description for single episode releases (FNP-style multi-block)."""
-        if 'episode_overview' not in meta:
-            return ""
-
+        """Build description for single episode releases (multi-block, no pre tags)."""
         parts = []
 
         # Logo in its own center block
@@ -226,28 +221,28 @@ class TVC:
             logo_size = self.config['DEFAULT'].get('logo_size', self.DEFAULT_LOGO_SIZE)
             parts.append(f"[center][img={logo_size}]{meta['logo']}[/img][/center]\n\n")
 
-        # Episode title in pre tags with its own center block
+        # Episode title - plain text in center block (optional)
         episode_name = meta.get('episode_name', '').strip()
         if episode_name:
             parts.append(f"[center]{episode_name}[/center]\n\n")
 
-        # Overview in pre tags with its own center block
+        # Overview - plain text in center block (optional)
         overview = meta.get('episode_overview', '').strip()
         if overview:
             parts.append(f"[center]{overview}[/center]\n\n")
 
-        # Broadcast info (without pre tags)
+        # Broadcast info (optional)
         if 'episode_airdate' in meta:
             channel = meta.get('networks', 'N/A')
             formatted_date = self.format_date_ddmmyyyy(meta['episode_airdate'])
             parts.append(f"[center][b]Broadcast on:[/b] {channel} on {formatted_date}[/center]\n\n")
 
-        # External links
+        # External links (always attempt to add)
         links = self.get_links(meta).strip()
         if links:
             parts.append(f"[center]{links}[/center]\n\n")
 
-        # Screenshots
+        # Screenshots (always attempt to add)
         screenshots = self._add_screenshots(meta, image_list).strip()
         if screenshots:
             parts.append(f"[center]{screenshots}[/center]\n\n")
@@ -303,22 +298,6 @@ class TVC:
 
         return "".join(parts)
 
-    def _format_overview(self, overview: str) -> str:
-        """Format overview text sentence by sentence."""
-        if not overview:
-            return ""
-
-        sentences = [
-            s.strip()
-            for s in re.split(r'(?<=[.!?])\s+', overview)
-            if s.strip()
-        ]
-
-        if not sentences:
-            sentences = [overview]
-
-        return "".join(s.rstrip() + "\n" for s in sentences)
-
     def _add_screenshots(
         self,
         meta: Meta,
@@ -352,7 +331,7 @@ class TVC:
     def _apply_bbcode_transforms(self, desc: str, comparison: bool) -> str:
         """Apply BBCode transformations."""
         bbcode = BBCODE()
-#        desc = bbcode.convert_pre_to_code(desc)
+        desc = bbcode.convert_pre_to_code(desc)
         desc = bbcode.convert_hide_to_spoiler(desc)
 
         if not comparison:
@@ -897,7 +876,7 @@ class TVC:
         Build and write the tracker-specific DESCRIPTION.txt file (FNP multi-block style).
 
         Constructs BBCode-formatted description text for discs, TV packs,
-        episodes, or movies using multiple separate [center] blocks.
+        episodes, or movies using multiple separate [center] blocks with [pre] tags.
         Always writes a non-empty description file to tmp/<uuid>/[TVC]DESCRIPTION.txt.
 
         Args:
