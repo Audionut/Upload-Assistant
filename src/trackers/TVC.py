@@ -107,13 +107,13 @@ class TVC:
             if disc['type'] == "BDMV":
                 name = disc.get('name', 'BDINFO')
                 parts.append(
-                    f"[center][spoiler={name}][code]{disc['summary']}[/code][/spoiler][/center]\n\n"
+                    f"[center][spoiler={name}][code]{disc['summary']}[/code][/spoiler][/center]\n"
                 )
             elif disc['type'] == "DVD":
                 # For first DVD disc, use VOB MediaInfo label
                 if not parts:  # First disc
                     parts.append(
-                        f"[center][spoiler=VOB MediaInfo][code]{disc['vob_mi']}[/code][/spoiler][/center]\n\n"
+                        f"[center][spoiler=VOB MediaInfo][code]{disc['vob_mi']}[/code][/spoiler][/center]\n"
                     )
                 else:  # Subsequent DVD discs
                     vob_name = os.path.basename(disc['vob'])
@@ -121,7 +121,7 @@ class TVC:
                     parts.append(
                         f"[center]{disc['name']}:\n"
                         f"[spoiler={vob_name}][code]{disc['vob_mi']}[/code][/spoiler] "
-                        f"[spoiler={ifo_name}][code]{disc['ifo_mi']}[/code][/spoiler][/center]\n\n"
+                        f"[spoiler={ifo_name}][code]{disc['ifo_mi']}[/code][/spoiler][/center]\n"
                     )
 
         return "".join(parts)
@@ -137,35 +137,35 @@ class TVC:
         # Release date info in its own center block
         rd_info = self._get_movie_release_info(meta)
         if rd_info:
-            parts.append(f"[center]{rd_info}[/center]\n\n")
+            parts.append(f"[center]{rd_info}[/center]\n")
 
         # Logo in its own center block
         if meta.get("logo"):
             logo_size = self.config['DEFAULT'].get('logo_size', self.DEFAULT_LOGO_SIZE)
-            parts.append(f"[center][img={logo_size}]{meta['logo']}[/img][/center]\n\n")
+            parts.append(f"[center][img={logo_size}]{meta['logo']}[/img][/center]\n")
 
         # Title - plain text
-        parts.append(f"[center][b]Movie Title:[/b] {meta.get('title', 'Unknown Movie')}[/center]\n\n")
+        parts.append(f"[center][b]Movie Title:[/b] {meta.get('title', 'Unknown Movie')}[/center]\n")
 
         # Overview - plain text
         overview = meta.get('overview', '').strip()
         if overview:
-            parts.append(f"[center]{overview}[/center]\n\n")
+            parts.append(f"[center]{overview}[/center]\n")
 
         # Release date
         if 'release_date' in meta:
             formatted_date = self.format_date_ddmmyyyy(meta['release_date'])
-            parts.append(f"[center][b]Released on:[/b] {formatted_date}[/center]\n\n")
+            parts.append(f"[center][b]Released on:[/b] {formatted_date}[/center]\n")
 
         # External links
         links = self.get_links(meta).strip()
         if links:
-            parts.append(f"[center]{links}[/center]\n\n")
+            parts.append(f"[center]{links}[/center]\n")
 
         # Screenshots
         screenshots = self._add_screenshots(meta, image_list).strip()
         if screenshots:
-            parts.append(f"[center]{screenshots}[/center]\n\n")
+            parts.append(f"[center]{screenshots}[/center]\n")
 
         return "".join(parts)
 
@@ -180,31 +180,31 @@ class TVC:
         # Logo in its own center block
         if meta.get("logo"):
             logo_size = self.config['DEFAULT'].get('logo_size', self.DEFAULT_LOGO_SIZE)
-            parts.append(f"[center][img={logo_size}]{meta['logo']}[/img][/center]\n\n")
+            parts.append(f"[center][img={logo_size}]{meta['logo']}[/img][/center]\n")
 
         # Series info (optional - only if season data exists)
         if 'season_air_first_date' in meta:
             channel = meta.get('networks', 'N/A')
             airdate = self.format_date_ddmmyyyy(meta.get('season_air_first_date') or "")
             series_name = meta.get('season_name', 'Unknown Series')
-
-            parts.append(f"[center][b]Series Title:[/b] {series_name}[/center]\n\n")
-            parts.append(f"[center][b]This series premiered on:[/b] {channel} on {airdate}[/center]\n\n")
+            
+            parts.append(f"[center][b]Series Title:[/b] {series_name}[/center]\n")
+            parts.append(f"[center][b]This series premiered on:[/b] {channel} on {airdate}[/center]\n")
 
         # Episode list (optional)
         if meta.get('episodes'):
             episode_list = self._build_episode_list(meta['episodes'])
-            parts.append(f"[center][b]Episode List[/b]\n{episode_list}[/center]\n\n")
+            parts.append(f"[center][b]Episode List[/b]\n{episode_list}[/center]\n")
 
         # External links (always attempt to add)
         links = self.get_links(meta).strip()
         if links:
-            parts.append(f"[center]{links}[/center]\n\n")
+            parts.append(f"[center]{links}[/center]\n")
 
         # Screenshots (always attempt to add)
         screenshots = self._add_screenshots(meta, image_list).strip()
         if screenshots:
-            parts.append(f"[center]{screenshots}[/center]\n\n")
+            parts.append(f"[center]{screenshots}[/center]\n")
 
         return "".join(parts)
 
@@ -219,33 +219,33 @@ class TVC:
         # Logo in its own center block
         if meta.get("logo"):
             logo_size = self.config['DEFAULT'].get('logo_size', self.DEFAULT_LOGO_SIZE)
-            parts.append(f"[center][img={logo_size}]{meta['logo']}[/img][/center]\n\n")
+            parts.append(f"[center][img={logo_size}]{meta['logo']}[/img][/center]\n")
 
         # Episode title - plain text in center block (optional)
         episode_name = meta.get('episode_name', '').strip()
         if episode_name:
-            parts.append(f"[center]{episode_name}[/center]\n\n")
+            parts.append(f"[center][b]Episode Title:[/b] {episode_name}[/center]\n")
 
         # Overview - plain text in center block (optional)
         overview = meta.get('episode_overview', '').strip()
         if overview:
-            parts.append(f"[center]{overview}[/center]\n\n")
+            parts.append(f"[center]{overview}[/center]\n")
 
         # Broadcast info (optional)
         if 'episode_airdate' in meta:
             channel = meta.get('networks', 'N/A')
             formatted_date = self.format_date_ddmmyyyy(meta['episode_airdate'])
-            parts.append(f"[center][b]Broadcast on:[/b] {channel} on {formatted_date}[/center]\n\n")
+            parts.append(f"[center][b]Broadcast on:[/b] {channel} on {formatted_date}[/center]\n")
 
         # External links (always attempt to add)
         links = self.get_links(meta).strip()
         if links:
-            parts.append(f"[center]{links}[/center]\n\n")
+            parts.append(f"[center]{links}[/center]\n")
 
         # Screenshots (always attempt to add)
         screenshots = self._add_screenshots(meta, image_list).strip()
         if screenshots:
-            parts.append(f"[center]{screenshots}[/center]\n\n")
+            parts.append(f"[center]{screenshots}[/center]\n")
 
         return "".join(parts)
 
@@ -253,7 +253,7 @@ class TVC:
         """Build fallback description for other categories."""
         overview = meta.get('overview', '').strip()
         if overview:
-            return f"[center]{overview}[/center]\n\n"
+            return f"[center]{overview}[/center]\n"
         return ""
 
     def _get_movie_release_info(self, meta: Meta) -> str:
@@ -326,7 +326,7 @@ class TVC:
 
     def _build_notes_section(self, base: str) -> str:
         """Build notes/extra info section."""
-        return f"[center][b]Notes / Extra Info[/b]\n{base.strip()}[/center]\n\n"
+        return f"[center][b]Notes / Extra Info[/b]\n{base.strip()}[/center]\n"
 
     def _apply_bbcode_transforms(self, desc: str, comparison: bool) -> str:
         """Apply BBCode transformations."""
@@ -346,7 +346,7 @@ class TVC:
         """Normalize whitespace for TVC (multi-block style)."""
         # Collapse any run of 3+ newlines into exactly 2 (preserve spacing between blocks)
         desc = re.sub(r"\n{3,}", "\n\n", desc)
-
+        
         return desc
 
     async def _write_description_file(self, filepath: str, content: str) -> None:
