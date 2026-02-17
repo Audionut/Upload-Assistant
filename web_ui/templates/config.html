@@ -10,7 +10,16 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body>
-    <div id="page-root"></div>
+    <div id="page-root">
+        <noscript>JavaScript is required for the config page.</noscript>
+        <!-- Fallback shown until React mounts; prevents empty screen on slow CDN/first load -->
+        <div id="page-root-loading" style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #111827; color: #f3f4f6; font-family: system-ui, sans-serif;">
+            <div class="text-center p-8">
+                <div class="text-lg mb-2">Loading config...</div>
+                <div class="text-sm text-gray-400">If this persists, check your connection to unpkg.com and cdn.tailwindcss.com.</div>
+            </div>
+        </div>
+    </div>
     <script type="text/javascript" src="{{ url_for('static', filename='js/shared_utils.js') }}"></script>
     <script type="text/babel" src="{{ url_for('static', filename='js/config_app.js') }}"></script>
 </body>
