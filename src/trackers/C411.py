@@ -410,8 +410,7 @@ class C411:
             torrent_bytes = await f.read()
         async with aiofiles.open(mediainfo_file_path, 'rb') as f:
             mediainfo_bytes = await f.read()
-
-        data: dict[str, Any] = {
+        data = {
             "title": str(dot_name),
             "description": await fr.get_desc_full(meta, self.tracker),
             "categoryId": "1",
@@ -420,7 +419,7 @@ class C411:
             "options": await self.get_option_tag(meta),
             # "isExclusive": "Test Upload-Assistant",
             "uploaderNote": "Upload-Assistant",
-            "tmdbData": json.dumps(tmdb_info)
+            "tmdbData": str(tmdb_info),
             # "rawgData": "Test Upload-Assistant",
         }
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/c411_payload.json", 'w', encoding='utf-8') as f:
