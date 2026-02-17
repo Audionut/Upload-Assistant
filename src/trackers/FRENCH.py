@@ -448,7 +448,11 @@ async def get_translation_fr(meta: dict[str, Any]) -> tuple[str, str]:
     tmdb_title, tmdb_overview = await get_tmdb_translations(tmdb_id, category, "fr")
     meta["frtitle"] = french_title or tmdb_title
     meta["froverview"] = tmdb_overview
-    return french_title if french_title is not None else tmdb_title, tmdb_overview
+
+    if french_title is not None:
+        return french_title, tmdb_overview
+    else:    
+        return tmdb_title, tmdb_overview
 
 
 async def get_tmdb_translations(tmdb_id: int, category: str, target_language: str) -> tuple[str, str]:
@@ -480,7 +484,6 @@ async def get_tmdb_translations(tmdb_id: int, category: str, target_language: st
 
 
 async def get_desc_full(meta: dict[str, Any], tracker) -> str:
-
     video_track = await get_video_tracks(meta)
     if not video_track:
         return ''
@@ -496,8 +499,8 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
     if not audio_tracks:
         return ''
     subtitle_tracks = await get_subtitle_tracks(meta)
-    if not subtitle_tracks:
-        return ''
+    #if not subtitle_tracks:
+    #    return ''
     size_bytes = int(meta.get('source_size') or 0)
     size_gib = size_bytes / (1024 ** 3)
     poster = str(meta.get('poster', ""))
@@ -526,7 +529,6 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
     service_longname = str(meta.get('service_longname', ""))
     season = str(meta.get('season_int', ''))
     episode = str(meta.get('episode_int', ''))
-
     desc_parts = []
     # if meta['logo']:
     #    desc_parts.append(f"[img]{meta['logo']}[/img]")
@@ -598,7 +600,6 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
         f"[b][color=#3d85c6]Codec vidéo :[/color][/b] [i]{video_codec}   {hdr}[/i]")
     desc_parts.append(
         f"[b][color=#3d85c6]Débit vidéo :[/color][/b] [i]{mbps:.2f} MB/s[/i]")
-
     desc_parts.append("[b][color=#3d85c6] Audio(s) :[/color][/b]")
     for obj in audio_tracks:
         if isinstance(obj, dict):
@@ -622,20 +623,22 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
         else:
             desc_parts.append(f"*{obj}*")
 
-    desc_parts.append("[b][color=#3d85c6]Sous-titres :[/color][/b]")
-    for obj in subtitle_tracks:
-        if isinstance(obj, dict):
-            flags = []
-            if obj.get("Forced") == "Yes":
-                flags.append("Forced")
-            if obj.get("Default") == "Yes":
-                flags.append("Default")
-            line = f"{obj['Language']} / {obj['Format']}"
-            if flags:
-                line += " / " + " / ".join(flags)
-            desc_parts.append(line)
-        else:
-            desc_parts.append(f"*{obj}*")
+    
+    if subtitle_tracks:
+        desc_parts.append("[b][color=#3d85c6]Sous-titres :[/color][/b]")
+        for obj in subtitle_tracks:
+            if isinstance(obj, dict):
+                flags = []
+                if obj.get("Forced") == "Yes":
+                    flags.append("Forced")
+                if obj.get("Default") == "Yes":
+                    flags.append("Default")
+                line = f"{obj['Language']} / {obj['Format']}"
+                if flags:
+                    line += " / " + " / ".join(flags)
+                desc_parts.append(line)
+            else:
+                desc_parts.append(f"*{obj}*")
 
     # desc_parts.append(f"[img]https://i.imgur.com/KFsABlN.png[/img]")
     desc_parts.append(f"[b][color=#3d85c6]Team :[/color][/b] [i]{tag}[/i]")
@@ -648,14 +651,14 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
         for image in images:
             screenshots_block += f"[img]{image['raw_url']}[/img]\n"
         desc_parts.append(screenshots_block)
-
+    
     # Signature
     desc_parts.append(
         f"[url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url]")
-
     description = '\n'.join(part for part in desc_parts if part.strip())
 
     async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.json", 'w', encoding='utf-8') as description_file:
         await description_file.write(description)
+    
 
     return description

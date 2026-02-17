@@ -385,11 +385,12 @@ class C411:
 
 
     async def upload(self, meta: Meta, _disctype: str) -> bool:
+        description = await fr.get_desc_full(meta, self.tracker)
          # Tmdb infos
         tmdb_info = {}
         tmdb_info['id'] = meta.get("tmdb_id","")
         tmdb_info['title'] = meta.get("title","")
-        tmdb_info['originalTitle'] = meta.get("origial_title","")
+        tmdb_info['originalTitle'] = meta.get("original_title","")
         tmdb_info['overview'] = meta.get("overview","")
         tmdb_info['release_date'] = meta.get("release_date","")
         tmdb_info['runtime'] = meta.get("runtime","")
@@ -401,8 +402,8 @@ class C411:
 
         headers = {
             "Authorization": f"Bearer {self.config['TRACKERS'][self.tracker]['api_key'].strip()}"}
-        acm_name = await self.get_name(meta)
-        dot_name = acm_name["name"].replace(" ", ".")
+        c411_name = await self.get_name(meta)
+        dot_name = c411_name["name"].replace(" ", ".")
         response = None
 
         async with aiofiles.open(torrent_file_path, 'rb') as f:
