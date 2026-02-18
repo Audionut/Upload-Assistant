@@ -62,6 +62,10 @@ class C411:
                 vfq = True
             if lang == "fr-fr":
                 vff = True
+            if lang == 'french':
+                vff = True
+            if lang == 'fr':
+                vff = True
             if lang in ("en", "en-us", "en-gb"):
                 eng = True
 
@@ -163,7 +167,7 @@ class C411:
             else:
                 # pas d'épisode, on suppose que c'est une saison complete
                 options_dict[6] = 96
-        return str(options_dict)
+        return json.dumps(options_dict)
 
     # https://c411.org/wiki/nommage
     async def get_name(self, meta: Meta) -> dict[str, str]:
