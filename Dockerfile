@@ -11,6 +11,7 @@ RUN apt-get update && \
     ca-certificates \
     curl \
     ffmpeg \
+    libicu76 \
     mediainfo \
     mktorrent \
     mono-complete \
