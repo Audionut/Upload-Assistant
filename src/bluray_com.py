@@ -811,28 +811,44 @@ async def download_cover_images(meta: Meta) -> bool:
 def extract_cover_images(html_content: str) -> dict[str, str]:
     cover_images: dict[str, str] = {}
     soup: Any = BeautifulSoup(html_content, 'lxml')
-    scripts: list[Any] = list(soup.find_all('script', string=re.compile(r'\$\(document\)\.ready.*append\(\'<img id="')))
+    scripts: list[Any] = soup.find_all('script')
 
     for script in scripts:
-        script_text = script.string
+        # script.string may be None for some script tags; fall back to get_text
+        script_text = script.string if script.string is not None else script.get_text()
         if not script_text:
             continue
-        img_id_match = re.search(r"'<img id=\"(\w+)\"", script_text)
-        url_match = re.search(r"src=\"([^\"]+)\"", script_text)
 
-        if img_id_match and url_match:
-            img_id = img_id_match.group(1)
-            url = url_match.group(1)
+        # low-cost filter to ignore script tags that will not match what we are looking for
+        if 'append' not in script_text or '<img' not in script_text:
+            continue
+
+        # capture append('<img ...>') or append("<img ...>"), .S allows new lines in the fragment
+        # allowing indentation/new lines should be more resistent to future bluray.com html changes
+        for m in re.finditer(r'append\(\s*([\'"])(?P<html><img\b.*?>)\1\s*\)', script_text, re.S | re.I):
+            img_fragment = m.group('html')
+
+            frag_soup = BeautifulSoup(img_fragment, 'lxml')
+            img_tag = frag_soup.find('img')
+            if not img_tag:
+                continue
+
+            img_id = (img_tag.get('id') or '').strip()
+            url = (img_tag.get('src') or '').strip()
+            if not url:
+                continue
+
             cleaned_url = clean_image_url(url)
             if not cleaned_url:
                 continue
 
-            if "front" in img_id.lower():
-                cover_images["front"] = cleaned_url
-            elif "back" in img_id.lower():
-                cover_images["back"] = cleaned_url
-            elif "slip" in img_id.lower():
-                cover_images["slip"] = cleaned_url
+            lid = img_id.lower()
+            if 'front' in lid:
+                cover_images['front'] = cleaned_url
+            elif 'back' in lid:
+                cover_images['back'] = cleaned_url
+            elif 'slipimage' in lid:
+                cover_images['slip'] = cleaned_url
             else:
                 cover_images[img_id] = cleaned_url
 
