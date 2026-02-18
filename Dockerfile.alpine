@@ -8,6 +8,8 @@ RUN apk add --no-cache \
     ca-certificates \
     curl \
     ffmpeg \
+    gcompat \
+    icu-libs \
     libgdiplus \
     mediainfo \
     mktorrent \
@@ -59,6 +61,9 @@ RUN python3 bin/get_dvd_mediainfo_docker.py
 # Download only the required mkbrr binary (requires full repo for src imports)
 RUN python3 -c "from bin.get_mkbrr import MkbrrBinaryManager; MkbrrBinaryManager.download_mkbrr_for_docker()"
 
+# Download bdinfo binary for the container architecture using the docker helper
+RUN python3 bin/get_bdinfo_docker.py
+
 # START BUILDING SLIM IMAGE
 FROM base
 
@@ -73,7 +78,8 @@ COPY --from=builder-app /Upload-Assistant /Upload-Assistant
 WORKDIR /Upload-Assistant
 
 # Ensure mkbrr is executable
-RUN find bin/mkbrr -type f -name "mkbrr" -exec chmod +x {} \;
+RUN find bin/mkbrr -name "mkbrr" -exec chmod +x {} \; && \
+    find bin/bdinfo -name "bdinfo" -exec chmod +x {} \;
 
 # Enable non-root access while still letting Upload-Assistant tighten mkbrr permissions at runtime
 RUN chown -R 1000:1000 /Upload-Assistant/bin/mkbrr
