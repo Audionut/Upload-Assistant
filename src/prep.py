@@ -828,6 +828,10 @@ class Prep:
             meta['original_language'] = original_language
             meta['no_ids'] = filename_search
 
+        no_original_language = False
+        if meta.get('original_language', None) is None:
+            no_original_language = True
+
         # if we have all of the ids, search everything all at once
         if int(meta.get('imdb_id') or 0) != 0 and int(meta.get('tvdb_id') or 0) != 0 and int(meta.get('tmdb_id') or 0) != 0 and int(meta.get('tvmaze_id') or 0) != 0:
             meta = await self.metadata_searching_manager.all_ids(meta)
@@ -847,6 +851,11 @@ class Prep:
         # we should have tmdb id one way or another, so lets get data if needed
         if int(meta.get('tmdb_id') or 0) != 0:
             await self.tmdb_manager.set_tmdb_metadata(meta, filename)
+
+        # If there was no original language set before the combined metadata searching, tvdb changes mean we might have set a bad tvdb series name
+        # Now that we have original language, we can safely kill the tvdb series name if it was en original to account for the change
+        if meta.get('tvdb_series_name', None) and meta.get('original_language', 'en') == 'en' and meta.get('tmdb_id', 0) != 0 and no_original_language:
+            meta['tvdb_series_name'] = None
 
         # If there's a mismatch between IMDb and TMDb IDs, try to resolve it
         if meta.get('imdb_mismatch', False) and "subsplease" not in meta.get('uuid', '').lower():
