@@ -33,7 +33,7 @@
 [b][color=#3d85c6]Résolution vidéo :[/color][/b][i]{{ resolution }}[/i]
 [b][color=#3d85c6]Format vidéo :[/color][/b] [i]{{ container }}[/i]
 [b][color=#3d85c6]Codec vidéo :[/color][/b] [i]{{ video_codec }}   {{ hdr }}[/i]
-[b][color=#3d85c6]Débit vidéo :[/color][/b] [i]{{ mbps|round(2)  }} MB/s[/i]
+[b][color=#3d85c6]Débit vidéo :[/color][/b] [i]{{ mbps|round(2) }} MB/s[/i]
 
 [b][color=#3d85c6] Audio(s) :[/color][/b]
 {% for line in audio_lines %}
