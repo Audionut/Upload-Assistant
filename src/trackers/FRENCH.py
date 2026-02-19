@@ -484,23 +484,41 @@ async def get_tmdb_translations(tmdb_id: int, category: str, target_language: st
 
 
 async def get_desc_full(meta: dict[str, Any], tracker) -> str:
+    """Return a full tracker description.
+
+    The function used to build the description piece by piece, but now we prefer
+    to render a Jinja2 template.  A few points:
+
+    * If ``meta['description_template']`` is set it will be used first.
+    * Otherwise a default template named after the tracker (e.g. ``C411``) is
+      looked up under ``data/templates``.  A generic ``FRENCH`` template is also
+      provided for shared structure.
+    * If no template is found we fall back to the original hard‑coded logic so
+      existing behaviour remains unchanged.
+    """
+    import os
+    from jinja2 import Template
+
+    # gather information that will be useful to both the template and the
+    # legacy builder
     video_track = await get_video_tracks(meta)
     if not video_track:
         return ''
+
     mbps = 0.0
     if video_track and video_track[0].get('BitRate'):
         try:
             mbps = int(video_track[0]['BitRate']) / 1_000_000
         except (ValueError, TypeError):
             pass
+
     title, description = await get_translation_fr(meta)
     genre = await translate_genre(meta['combined_genres'])
     audio_tracks = await get_audio_tracks(meta, False)
     if not audio_tracks:
         return ''
+
     subtitle_tracks = await get_subtitle_tracks(meta)
-    #if not subtitle_tracks:
-    #    return ''
     size_bytes = int(meta.get('source_size') or 0)
     size_gib = size_bytes / (1024 ** 3)
     poster = str(meta.get('poster', ""))
@@ -521,7 +539,6 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
                 dv = str(video_track[0]['HDR_Format_Profile']).replace('dvhe.0', '').replace('/', '').strip()
                 hdr = hdr.replace('DV', '')
                 hdr = f"{hdr} DV{dv}"
-
             except (ValueError, TypeError):
                 pass
 
@@ -529,84 +546,15 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
     service_longname = str(meta.get('service_longname', ""))
     season = str(meta.get('season_int', ''))
     episode = str(meta.get('episode_int', ''))
-    desc_parts = []
-    # if meta['logo']:
-    #    desc_parts.append(f"[img]{meta['logo']}[/img]")
-    desc_parts.append(f"[img]{poster}[/img]")
 
-    desc_parts.append(
-        f"[b][font=Verdana][color=#3d85c6][size=29]{title}[/size][/font]")
-    desc_parts.append(f"[size=18]{year}[/size][/color][/b]")
-
-    if meta['category'] == "TV":
-        season = f"S{season}" if season else ""
-        episode = f"E{episode}" if episode else ""
-        desc_parts.append(f"[b][size=18]{season}{episode}[/size][/b]")
-
-    desc_parts.append(
-        f"[font=Verdana][size=13][b][color=#3d85c6]Titre original :[/color][/b] [i]{original_title}[/i][/size][/font]")
-    desc_parts.append(
-        f"[b][color=#3d85c6]Pays :[/color][/b] [i]{pays}[/i]")
-    desc_parts.append(f"[b][color=#3d85c6]Genres :[/color][/b] [i]{genre}[/i]")
-    desc_parts.append(
-        f"[b][color=#3d85c6]Date de sortie :[/color][/b] [i]{release_date}[/i]")
-
-    if meta['category'] == 'MOVIE':
-        desc_parts.append(
-            f"[b][color=#3d85c6]Durée :[/color][/b] [i]{video_duration} Minutes[/i]")
-
-    if meta['imdb_id']:
-        desc_parts.append(f"[url={meta.get('imdb_info', {}).get('imdb_url', '')}]IMDb[/url]")
-    if meta['tmdb']:
-        desc_parts.append(
-            f"[url=https://www.themoviedb.org/{str(meta['category'].lower())}/{str(meta['tmdb'])}]TMDB[/url]")
-    if meta['tvdb_id']:
-        desc_parts.append(
-            f"[url=https://www.thetvdb.com/?id={str(meta['tvdb_id'])}&tab=series]TVDB[/url]")
-    if meta['tvmaze_id']:
-        desc_parts.append(
-            f"[url=https://www.tvmaze.com/shows/{str(meta['tvmaze_id'])}]TVmaze[/url]")
-    if meta['mal_id']:
-        desc_parts.append(
-            f"[url=https://myanimelist.net/anime/{str(meta['mal_id'])}]MyAnimeList[/url]")
-
-    desc_parts.append("[img]https://i.imgur.com/W3pvv6q.png[/img]")
-
-    desc_parts.append(f"{description}")
-
-    desc_parts.append("[img]https://i.imgur.com/KMZsqZn.png[/img]")
-
-    # if meta.get('is_disc', '') == 'DVD':
-    #    desc_parts.append(f'[hide=DVD MediaInfo][pre]{await builder.get_mediainfo_section(meta)}[/pre][/hide]')
-
-    # bd_info = await builder.get_bdinfo_section(meta)
-    # if bd_info:
-    #    desc_parts.append(f'[hide=BDInfo][pre]{bd_info}[/pre][/hide]')
-
-    # User description
-    # desc_parts.append(await builder.get_user_description(meta))
-
-    desc_parts.append(
-        f"[b][color=#3d85c6]Source :[/color][/b] [i]{source}   {service_longname}[/i]")
-
-    desc_parts.append(
-        f"[b][color=#3d85c6]Type :[/color][/b] [i]{type}[/i]")
-    desc_parts.append(
-        f"[b][color=#3d85c6]Résolution vidéo :[/color][/b][i]{resolution}[/i]")
-    desc_parts.append(
-        f"[b][color=#3d85c6]Format vidéo :[/color][/b] [i]{container}[/i]")
-
-    desc_parts.append(
-        f"[b][color=#3d85c6]Codec vidéo :[/color][/b] [i]{video_codec}   {hdr}[/i]")
-    desc_parts.append(
-        f"[b][color=#3d85c6]Débit vidéo :[/color][/b] [i]{mbps:.2f} MB/s[/i]")
-    desc_parts.append("[b][color=#3d85c6] Audio(s) :[/color][/b]")
+    # pre‑compute the lines that were previously appended to ``desc_parts``
+    audio_lines: list[str] = []
     for obj in audio_tracks:
         if isinstance(obj, dict):
             bitrate = obj.get('BitRate')
             kbps = int(bitrate) / 1_000 if bitrate else 0
 
-            flags = []
+            flags: list[str] = []
             if obj.get("Forced") == "Yes":
                 flags.append("Forced")
             if obj.get("Default") == "Yes":
@@ -619,16 +567,15 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
             line = f"{obj['Language']} / {obj['Format']} / {obj['Channels']}ch / {kbps:.2f}KB/s"
             if flags:
                 line += " / " + " / ".join(flags)
-            desc_parts.append(line)
+            audio_lines.append(line)
         else:
-            desc_parts.append(f"*{obj}*")
+            audio_lines.append(f"*{obj}*")
 
-    
+    subtitle_lines: list[str] = []
     if subtitle_tracks:
-        desc_parts.append("[b][color=#3d85c6]Sous-titres :[/color][/b]")
         for obj in subtitle_tracks:
             if isinstance(obj, dict):
-                flags = []
+                flags: list[str] = []
                 if obj.get("Forced") == "Yes":
                     flags.append("Forced")
                 if obj.get("Default") == "Yes":
@@ -636,29 +583,139 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
                 line = f"{obj['Language']} / {obj['Format']}"
                 if flags:
                     line += " / " + " / ".join(flags)
-                desc_parts.append(line)
+                subtitle_lines.append(line)
             else:
-                desc_parts.append(f"*{obj}*")
+                subtitle_lines.append(f"*{obj}*")
 
-    # desc_parts.append(f"[img]https://i.imgur.com/KFsABlN.png[/img]")
-    desc_parts.append(f"[b][color=#3d85c6]Team :[/color][/b] [i]{tag}[/i]")
-    desc_parts.append(f"[b][color=#3d85c6]  Taille totale :[/color][/b] {size_gib:.2f} GB")
-    # desc_parts.append(f"[b][color=#3d85c6]  Nombre de fichier :[/color][/b]")
-    # Screenshots
     images = meta[f'{tracker}_images_key'] if f'{tracker}_images_key' in meta else meta['image_list']
-    if images:
-        screenshots_block = ''
-        for image in images:
-            screenshots_block += f"[img]{image['raw_url']}[/img]\n"
-        desc_parts.append(screenshots_block)
-    
-    # Signature
-    desc_parts.append(
-        f"[url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url]")
-    description = '\n'.join(part for part in desc_parts if part.strip())
 
+    context = {
+        'poster': poster,
+        'title': title,
+        'year': year,
+        'season': season,
+        'episode': episode,
+        'original_title': original_title,
+        'pays': pays,
+        'genre': genre,
+        'release_date': release_date,
+        'video_duration': video_duration,
+        'imdb_url': meta.get('imdb_info', {}).get('imdb_url', ''),
+        'tmdb': meta.get('tmdb', ''),
+        'category': meta.get('category', ''),
+        'tvdb_id': meta.get('tvdb_id', ''),
+        'tvmaze_id': meta.get('tvmaze_id', ''),
+        'mal_id': meta.get('mal_id', ''),
+        'description': description,
+        'audio_lines': audio_lines,
+        'subtitle_lines': subtitle_lines,
+        'source': source,
+        'service_longname': service_longname,
+        'type': type,
+        'resolution': resolution,
+        'container': container,
+        'video_codec': video_codec,
+        'hdr': hdr,
+        'mbps': mbps,
+        'tag': tag,
+        'size_gib': size_gib,
+        'images': images,
+        'signature': meta.get('ua_signature', ''),
+    }
+
+    # try to render a template if one exists
+    # determine which template to use; prefer explicit setting, then
+    # tracker-specific file, then fall back to a generic "FRENCH" template.
+    description_text = ''
+    primary = meta.get('description_template') or tracker
+    template_path = os.path.abspath(f"{meta['base_dir']}/data/templates/{primary}.txt")
+
+    if not os.path.exists(template_path):
+        # try the shared french template
+        template_path = os.path.abspath(f"{meta['base_dir']}/data/templates/FRENCH.txt")
+
+    if os.path.exists(template_path):
+        async with aiofiles.open(template_path, 'r', encoding='utf-8') as description_file:
+            template_content = await description_file.read()
+        try:
+            description_text = Template(template_content).render(**context)
+        except Exception:
+            # if rendering fails fall back to the old builder below
+            description_text = ''
+
+    if not description_text:
+        # fallback to the original behaviour (preserve before change)
+        desc_parts: list[str] = []
+        desc_parts.append(f"[img]{poster}[/img]")
+        desc_parts.append(
+            f"[b][font=Verdana][color=#3d85c6][size=29]{title}[/size][/font]")
+        desc_parts.append(f"[size=18]{year}[/size][/color][/b]")
+
+        if meta['category'] == "TV":
+            season = f"S{season}" if season else ""
+            episode = f"E{episode}" if episode else ""
+            desc_parts.append(f"[b][size=18]{season}{episode}[/size][/b]")
+
+        desc_parts.append(
+            f"[font=Verdana][size=13][b][color=#3d85c6]Titre original :[/color][/b] [i]{original_title}[/i][/size][/font]")
+        desc_parts.append(
+            f"[b][color=#3d85c6]Pays :[/color][/b] [i]{pays}[/i]")
+        desc_parts.append(f"[b][color=#3d85c6]Genres :[/color][/b] [i]{genre}[/i]")
+        desc_parts.append(
+            f"[b][color=#3d85c6]Date de sortie :[/color][/b] [i]{release_date}[/i]")
+
+        if meta['category'] == 'MOVIE':
+            desc_parts.append(
+                f"[b][color=#3d85c6]Durée :[/color][/b] [i]{video_duration} Minutes[/i]")
+
+        if meta['imdb_id']:
+            desc_parts.append(f"[url={meta.get('imdb_info', {}).get('imdb_url', '')}]IMDb[/url]")
+        if meta['tmdb']:
+            desc_parts.append(
+                f"[url=https://www.themoviedb.org/{str(meta['category'].lower())}/{str(meta['tmdb'])}]TMDB[/url]")
+        if meta['tvdb_id']:
+            desc_parts.append(
+                f"[url=https://www.thetvdb.com/?id={str(meta['tvdb_id'])}&tab=series]TVDB[/url]")
+        if meta['tvmaze_id']:
+            desc_parts.append(
+                f"[url=https://www.tvmaze.com/shows/{str(meta['tvmaze_id'])}]TVmaze[/url]")
+        if meta['mal_id']:
+            desc_parts.append(
+                f"[url=https://myanimelist.net/anime/{str(meta['mal_id'])}]MyAnimeList[/url]")
+
+        desc_parts.append("[img]https://i.imgur.com/W3pvv6q.png[/img]")
+        desc_parts.append(f"{description}")
+        desc_parts.append("[img]https://i.imgur.com/KMZsqZn.png[/img]")
+        desc_parts.append(
+            f"[b][color=#3d85c6]Source :[/color][/b] [i]{source}   {service_longname}[/i]")
+        desc_parts.append(
+            f"[b][color=#3d85c6]Type :[/color][/b] [i]{type}[/i]")
+        desc_parts.append(
+            f"[b][color=#3d85c6]Résolution vidéo :[/color][/b][i]{resolution}[/i]")
+        desc_parts.append(
+            f"[b][color=#3d85c6]Format vidéo :[/color][/b] [i]{container}[/i]")
+        desc_parts.append(
+            f"[b][color=#3d85c6]Codec vidéo :[/color][/b] [i]{video_codec}   {hdr}[/i]")
+        desc_parts.append(
+            f"[b][color=#3d85c6]Débit vidéo :[/color][/b] [i]{mbps:.2f} MB/s[/i]")
+        desc_parts.append("[b][color=#3d85c6] Audio(s) :[/color][/b]")
+        desc_parts.extend(audio_lines)
+        if subtitle_lines:
+            desc_parts.append("[b][color=#3d85c6]Sous-titres :[/color][/b]")
+            desc_parts.extend(subtitle_lines)
+        desc_parts.append(f"[b][color=#3d85c6]Team :[/color][/b] [i]{tag}[/i]")
+        desc_parts.append(f"[b][color=#3d85c6]  Taille totale :[/color][/b] {size_gib:.2f} GB")
+        if images:
+            screenshots_block = ''
+            for image in images:
+                screenshots_block += f"[img]{image['raw_url']}[/img]\n"
+            desc_parts.append(screenshots_block)
+        desc_parts.append(
+            f"[url=https://github.com/Audionut/Upload-Assistant]{meta['ua_signature']}[/url]")
+        description_text = '\n'.join(part for part in desc_parts if part.strip())
+
+    # persist to disk for debugging/inspection
     async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}]DESCRIPTION.json", 'w', encoding='utf-8') as description_file:
-        await description_file.write(description)
-    
+        await description_file.write(description_text)
 
-    return description
+    return description_text
