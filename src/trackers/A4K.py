@@ -8,6 +8,7 @@ from src.console import console
 from src.rehostimages import RehostImagesManager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
+from src.languages import languages_manager
 
 Meta = dict[str, Any]
 Config = dict[str, Any]
@@ -146,3 +147,16 @@ class A4K(UNIT3D):
             approved_image_hosts=self.approved_image_hosts,
         )
         return
+
+    async def get_name(self, meta: dict[str, Any]):
+        a4k_name: str = meta["name"]
+
+        if not meta.get('language_checked', False):
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
+        audio_languages: list[str] = meta['audio_languages']
+        if audio_languages and not await languages_manager.has_english_language(audio_languages):
+            foreign_lang = audio_languages[0].upper()
+            if meta.get('is_disc') != "BDMV":
+                a4k_name = a4k_name.replace(meta['resolution'], f"{foreign_lang} {meta['resolution']}", 1)
+
+        return {'name': a4k_name}
