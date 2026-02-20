@@ -678,6 +678,7 @@ class GPW:
         return remaster_title_show
 
     async def get_groupid(self, meta: dict[str, Any]) -> bool:
+        GPW.group_id = ""
         search_url = f"{self.base_url}/api.php?api_key={self.api_key}&action=torrent&req=group&imdbID={meta.get('imdb_info', {}).get('imdbID')}"
 
         try:
@@ -713,9 +714,21 @@ class GPW:
             else:
                 console.print("[red]Invalid host. Please use a URL from the allowed hosts.[/red]")
 
+        imdb_identifier = str(meta.get('imdb_info', {}).get('imdbID') or meta.get('imdb') or "").strip()
+        tmdb_identifier = str(meta.get('tmdb_id') or "").strip()
+        if imdb_identifier:
+            data_source = "imdb"
+            identifier = imdb_identifier
+        elif tmdb_identifier:
+            data_source = "tmdb"
+            identifier = tmdb_identifier
+        else:
+            data_source = "manual"
+            identifier = ""
+
         data = {
-            "data_source": "tmdb",
-            "identifier": meta["tmdb_id"],
+            "data_source": data_source,
+            "identifier": identifier,
             "desc": self.tmdb_data.get("overview", ""),
             "image": poster_url,
             "maindesc": meta.get("overview", ""),
@@ -725,35 +738,228 @@ class GPW:
             "tags": await self.get_tags(meta),
             "year": meta.get("year"),
         }
+
+        # Keep backward-compatible identifiers for sites/APIs that still parse legacy field names.
+        if imdb_identifier:
+            data["imdb"] = imdb_identifier
+        if tmdb_identifier:
+            data["tmdb"] = tmdb_identifier
+
+        # GPW API still requires explicit main-artist fields for new group creation.
         data.update(await self._get_artist_data(meta))
+        data['main_artist_number'] = '1'
 
         return data
 
-    async def _get_artist_data(self, meta: dict[str, Any]) -> dict[str, str]:
-        directors = meta.get('imdb_info', {}).get('directors', [])
-        directors_id = meta.get('imdb_info', {}).get('directors_id', [])
+    async def _get_artist_data(self, meta: dict[str, Any]) -> dict[str, Any]:
+        directors: list[str] = []
+        directors_id: list[str] = []
+        writers: list[str] = []
+        writers_id: list[str] = []
+        stars: list[str] = []
+        stars_id: list[str] = []
+        cast_character_map: dict[str, str] = {}
+        full_credits: list[dict[str, Any]] = []
 
-        if directors and directors_id:
-            imdb_id = directors_id[0]
-            english_name = directors[0]
+        imdb_identifier = str(meta.get('imdb_info', {}).get('imdbID') or meta.get('imdb') or '').strip()
+        full_credits_success = False
+        if imdb_identifier:
+            movie_info_raw = await self._fetch_gpw_movie_info(meta, "imdb", imdb_identifier)
+            movie_info = movie_info_raw
+            if isinstance(movie_info_raw, dict) and isinstance(movie_info_raw.get("response"), dict):
+                movie_info = cast(dict[str, Any], movie_info_raw.get("response"))
+            if isinstance(movie_info, dict):
+                full_credits_value = movie_info.get("FullCredits") or movie_info.get("fullCredits")
+                if isinstance(full_credits_value, list):
+                    full_credits = [item for item in full_credits_value if isinstance(item, dict)]
+                    seen_director_ids: set[str] = set()
+                    seen_writer_ids: set[str] = set()
+                    seen_star_ids: set[str] = set()
+                    for credit in full_credits:
+                        role = str(credit.get('role') or '').strip().lower()
+                        person_id = str(credit.get('imdbId') or credit.get('imdbID') or '').strip()
+                        person_name = str(credit.get('name') or '').strip()
+                        character = str(credit.get('character') or '').strip()
+                        if not person_name or person_name.lower() == 'n/a':
+                            continue
+                        if not re.match(r'^nm\d+$', person_id):
+                            continue
+                        if role == 'director':
+                            if person_id in seen_director_ids:
+                                continue
+                            directors.append(person_name)
+                            directors_id.append(person_id)
+                            seen_director_ids.add(person_id)
+                        elif role == 'writer':
+                            if person_id in seen_writer_ids:
+                                continue
+                            writers.append(person_name)
+                            writers_id.append(person_id)
+                            seen_writer_ids.add(person_id)
+                        elif role == 'cast':
+                            if person_id in seen_star_ids:
+                                continue
+                            stars.append(person_name)
+                            stars_id.append(person_id)
+                            if character:
+                                cast_character_map[person_id] = character
+                            seen_star_ids.add(person_id)
+                    full_credits_success = bool(directors and directors_id)
+
+        # Fallback: if FullCredits is unavailable/invalid, use existing imdb_info fields.
+        if not full_credits_success:
+            imdb_info = meta.get('imdb_info', {})
+            raw_directors = imdb_info.get('directors', [])
+            raw_directors_id = imdb_info.get('directors_id', [])
+            raw_writers = imdb_info.get('writers', [])
+            raw_writers_id = imdb_info.get('writers_id', [])
+            raw_stars = imdb_info.get('stars', [])
+            raw_stars_id = imdb_info.get('stars_id', [])
+
+            directors = [str(x).strip() for x in raw_directors if isinstance(x, str) and str(x).strip()]
+            directors_id = [str(x).strip() for x in raw_directors_id if isinstance(x, str) and re.match(r'^nm\d+$', str(x).strip())]
+            writers = [str(x).strip() for x in raw_writers if isinstance(x, str) and str(x).strip()]
+            writers_id = [str(x).strip() for x in raw_writers_id if isinstance(x, str) and re.match(r'^nm\d+$', str(x).strip())]
+            stars = [str(x).strip() for x in raw_stars if isinstance(x, str) and str(x).strip()]
+            stars_id = [str(x).strip() for x in raw_stars_id if isinstance(x, str) and re.match(r'^nm\d+$', str(x).strip())]
+
+        first_director_id = str(directors_id[0]).strip() if isinstance(directors_id, list) and directors_id else ''
+        first_director_name = str(directors[0]).strip() if isinstance(directors, list) and directors else ''
+        has_valid_director = bool(re.match(r'^nm\d+$', first_director_id)) and bool(first_director_name) and first_director_name.lower() != 'n/a'
+
+        if has_valid_director:
+            imdb_id = first_director_id
+            english_name = first_director_name
             chinese_name = ''
         else:
             console.print(f'{self.tracker}: This movie is not registered in the {self.tracker} database, please enter the details of 1 director')
-            imdb_id_raw = await asyncio.to_thread(cli_ui.ask_string, 'Enter Director IMDb ID (e.g., nm0000138): ')
-            imdb_id = (imdb_id_raw or "").strip()
-            english_name_raw = await asyncio.to_thread(cli_ui.ask_string, 'Enter Director English name: ')
-            english_name = (english_name_raw or "").strip()
+
+            imdb_id = ''
+            while not re.match(r'^nm\d+$', imdb_id):
+                imdb_id_raw = await asyncio.to_thread(cli_ui.ask_string, 'Enter Director IMDb ID (e.g., nm0000138): ')
+                imdb_id = (imdb_id_raw or "").strip()
+                if not re.match(r'^nm\d+$', imdb_id):
+                    console.print('[red]Invalid IMDb person ID. Format must be like nm0000138.[/red]')
+
+            english_name = ''
+            while not english_name:
+                english_name_raw = await asyncio.to_thread(cli_ui.ask_string, 'Enter Director English name: ')
+                english_name = (english_name_raw or "").strip()
+                if not english_name:
+                    console.print('[red]Director English name cannot be empty.[/red]')
+
             chinese_name_raw = await asyncio.to_thread(cli_ui.ask_string, 'Enter Director Chinese name (optional, press Enter to skip): ')
             chinese_name = (chinese_name_raw or "").strip()
 
-        post_data = {
-            'artist_ids[]': imdb_id,
-            'artists[]': english_name,
-            'artists_sub[]': chinese_name,
-            'importance[]': '1'
-        }
+        artists: list[str] = [english_name]
+        artist_ids: list[str] = [imdb_id]
+        importances: list[str] = ['1']  # 1 = director (main artist)
+        artist_subs: list[str] = [chinese_name if chinese_name else '']
+        characters: list[str] = ['']
 
+        # Add writer entries (best-effort).
+        if isinstance(writers, list) and isinstance(writers_id, list):
+            for idx, writer_name_value in enumerate(writers):
+                writer_name = str(writer_name_value).strip()
+                if not writer_name or writer_name.lower() == 'n/a':
+                    continue
+                writer_id = str(writers_id[idx]).strip() if idx < len(writers_id) else ''
+                if not re.match(r'^nm\d+$', writer_id):
+                    continue
+                if writer_id in artist_ids:
+                    continue
+                artists.append(writer_name)
+                artist_ids.append(writer_id)
+                importances.append('2')  # 2 = writer
+                artist_subs.append('')
+                characters.append('')
+
+        # Add cast entries (best-effort) so new groups include actor info.
+        if isinstance(stars, list) and isinstance(stars_id, list):
+            for idx, star_name_value in enumerate(stars):
+                star_name = str(star_name_value).strip()
+                if not star_name or star_name.lower() == 'n/a':
+                    continue
+                star_id = str(stars_id[idx]).strip() if idx < len(stars_id) else ''
+                if not re.match(r'^nm\d+$', star_id):
+                    continue
+                if star_id in artist_ids:
+                    continue
+                artists.append(star_name)
+                artist_ids.append(star_id)
+                importances.append('6')  # 6 = actor
+                artist_subs.append('')
+                characters.append(cast_character_map.get(star_id, 'Unknown'))
+
+        post_data: dict[str, Any] = {
+            'artist_ids[]': artist_ids,
+            'artists[]': artists,
+            'importance[]': importances,
+            'characters[]': characters,
+            'artists_sub[]': artist_subs,
+        }
         return post_data
+
+    async def _fetch_gpw_movie_info(self, meta: dict[str, Any], data_source: str, identifier: str) -> dict[str, Any]:
+        if not data_source or not identifier:
+            return {}
+
+        endpoint_candidates: list[tuple[str, dict[str, str], bool, str]] = [
+            (
+                f"{self.base_url}/upload.php",
+                {
+                    "action": "movie_info",
+                    "source": data_source,
+                    "identifier": identifier,
+                },
+                True,
+                "get",
+            ),
+            (
+                f"{self.base_url}/api.php",
+                {
+                    "api_key": self.api_key,
+                    "action": "movie_info",
+                    "imdbid": identifier,
+                },
+                False,
+                "get",
+            ),
+        ]
+
+        cookies: Any = None
+        best_response: dict[str, Any] = {}
+        best_score = -1
+        for url, params, use_cookies, method in endpoint_candidates:
+            try:
+                if use_cookies and cookies is None:
+                    cookies = await self.load_cookies(meta)
+
+                request_cookies = cookies if use_cookies and cookies else None
+                async with httpx.AsyncClient(timeout=15, cookies=request_cookies, headers={'User-Agent': 'Upload Assistant/2.3'}) as client:
+                    if method == "post":
+                        response = await client.post(url, data=params)
+                    else:
+                        response = await client.get(url, params=params)
+                response.raise_for_status()
+                payload: Any = response.json()
+                if not isinstance(payload, dict):
+                    continue
+                status_value = str(payload.get("status", "")).strip().lower()
+                if status_value in {"success", "ok", "200"} or payload.get("status") == 200:
+                    response_data = payload.get("response")
+                    if isinstance(response_data, dict):
+                        full_credits_value = response_data.get("FullCredits") or response_data.get("fullCredits")
+                        score = len(full_credits_value) if isinstance(full_credits_value, list) else 0
+                        if score > best_score:
+                            best_response = response_data
+                            best_score = score
+                        if score >= 10:
+                            return response_data
+            except Exception:
+                continue
+
+        return best_response
 
     def _get_movie_type(self, meta: dict[str, Any]) -> str:
         movie_type = ''
@@ -855,6 +1061,7 @@ class GPW:
 
     async def fetch_data(self, meta: dict[str, Any], _disctype: str) -> dict[str, Any]:
         await self.load_localized_data(meta)
+        await self.get_groupid(meta)
         remaster_title = self.get_remaster_title(meta)
         codec = self.get_codec(meta)
         container = self.get_container(meta)
@@ -871,7 +1078,6 @@ class GPW:
                 "codec": codec,
                 "container_other": meta.get("container", "") if container == "Other" else "",
                 "container": container,
-                "groupid": GPW.group_id if GPW.group_id else "",
                 "mediainfo[]": await self.get_media_info(meta),
                 "movie_edition_information": "on" if remaster_title else "",
                 "processing_other": self.get_processing_other(meta) if meta.get("type") == "DISC" else "",
@@ -890,6 +1096,8 @@ class GPW:
                 "subtitles[]": await self.get_subtitle(meta),
             }
         )
+        if GPW.group_id:
+            data["groupid"] = GPW.group_id
 
         if await self.get_ch_dubs(meta):
             data.update({
@@ -931,34 +1139,61 @@ class GPW:
 
             try:
                 async with httpx.AsyncClient(timeout=30) as client:
+                    def _extract_torrent_id(payload: Any) -> str:
+                        if isinstance(payload, dict):
+                            torrent_id_value = payload.get('torrent_id')
+                            return str(torrent_id_value) if torrent_id_value is not None else ''
+                        if isinstance(payload, list) and payload:
+                            first_item = payload[0]
+                            if isinstance(first_item, dict):
+                                torrent_id_value = first_item.get('torrent_id')
+                                return str(torrent_id_value) if torrent_id_value is not None else ''
+                        return ''
+
                     response = await client.post(url=upload_url, files=files, data=data)
                     try:
                         response_data = response.json()
                     except Exception as e:
                         console.print(f"{self.tracker}: Failed to decode JSON response: {e}")
-                        content_type = response.headers.get("Content-Type", "")
-                        if "text/html" in content_type or "<!DOCTYPE html>" in response.text:
-                            failure_path = await self.common.save_html_file(meta, self.tracker, response.text, "Failed_Upload")
-                            console.print(f"{self.tracker}: HTML response saved to {failure_path}")
-                        else:
-                            truncated_text = (response.text[:500] + "...") if len(response.text) > 500 else response.text
-                            console.print(f"{self.tracker}: Unexpected Response Text: {truncated_text}")
                         return False
 
-                    torrent_id = str(response_data['response']['torrent_id'])
-                    meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
-                    meta['tracker_status'][self.tracker]['status_message'] = 'Torrent uploaded successfully.'
-                    await self.common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
-                    return True
+                    if not isinstance(response_data, dict):
+                        meta['tracker_status'][self.tracker]['status_message'] = f'data error: Invalid API response: {response_data}'
+                        return False
+
+                    status_value = str(response_data.get('status', '')).strip().lower()
+                    response_payload = response_data.get('response')
+                    torrent_id_from_payload = _extract_torrent_id(response_payload)
+
+                    success_status = status_value in ('success', 'ok', '200')
+                    if success_status and torrent_id_from_payload:
+                        torrent_id = torrent_id_from_payload
+                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+                        meta['tracker_status'][self.tracker]['status_message'] = 'Torrent uploaded successfully.'
+                        await self.common.create_torrent_ready_to_seed(meta, self.tracker, self.source_flag, self.announce, self.torrent_url + torrent_id)
+                        return True
+
+                    error_message = str(response_data.get('error') or response_data.get('message') or 'Upload failed')
+                    duplicate_phrase = 'the exact same torrent file already exists on the site'
+                    if duplicate_phrase in error_message.lower():
+                        meta['tracker_status'][self.tracker]['status_message'] = (
+                            'data error: Torrent already exists on GPW (duplicate file).'
+                        )
+                        return False
+
+                    meta['tracker_status'][self.tracker]['status_message'] = (
+                        f'data error: {error_message}.'
+                    )
+                    return False
 
             except httpx.TimeoutException:
                 meta['tracker_status'][self.tracker]['status_message'] = 'data error: Request timed out after 10 seconds'
                 return False
             except httpx.RequestError as e:
-                meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e}.\nResponse: {response_data}'
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: Unable to upload. Error: {e}.'
                 return False
             except Exception as e:
-                meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e}.\nResponse: {response_data}'
+                meta['tracker_status'][self.tracker]['status_message'] = f'data error: It may have uploaded, go check. Error: {e}.'
                 return False
 
         else:
