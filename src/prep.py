@@ -199,6 +199,16 @@ class Prep:
                         guess_name = bdinfo['title'].replace('-', ' ')
                         untouched_filename = bdinfo['title']
                         filename = str(guessit_fn(re.sub(r"[^0-9a-zA-Z\[\\]]+", " ", guess_name), {"excludes": ["country", "language"]}).get('title', ''))
+
+                    try:
+                        is_hfr = bdinfo['video'][0]['fps'].split()[0] if bdinfo['video'] else "25"
+                        if int(float(is_hfr)) > 30:
+                            meta['hfr'] = True
+                        else:
+                            meta['hfr'] = False
+                    except Exception:
+                        meta['hfr'] = False
+
                 try:
                     meta['search_year'] = guessit_fn(bdinfo['title'])['year']
                 except Exception:
@@ -219,15 +229,8 @@ class Prep:
                     width="OTHER",
                     scan="p",
                 )
-                try:
-                    is_hfr = bdinfo['video'][0]['fps'].split()[0] if bdinfo['video'] else "25"
-                    if int(float(is_hfr)) > 30:
-                        meta['hfr'] = True
-                    else:
-                        meta['hfr'] = False
-                except Exception:
-                    meta['hfr'] = False
-            else:
+
+            elif meta.get('emby', False):
                 meta['resolution'] = "1080p"
 
             meta['sd'] = await video_manager.is_sd(str(meta.get('resolution', '')))
