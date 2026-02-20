@@ -71,8 +71,13 @@ class A4K(UNIT3D):
             if not meta.get('unattended'):
                 console.print(f"[red]{self.tracker} only accepts DISC, REMUX, WEBDL, and ENCODE uploads.")
             return False
+        
+        if 'AV1' in meta.get('video_codec', ''):
+            # AV1 has no bitrate requirements, so skip the bitrate check for AV1 uploads
+            return should_continue
 
-        if not meta['is_disc'] and meta['type'] in ['ENCODE', 'WEBRIP', 'DVDRIP', 'HDTV']:
+        # check bitrate requirements for A4K uploads, but only if it's not a disc upload since discs can have variable bitrates and A4K doesn't specify bitrate requirements for disc uploads
+        if not meta['is_disc'] and meta['type'] in ['ENCODE', 'WEBRIP', 'WEBDL']:
             tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
             for track in tracks:
                 if track.get('@type') == "Video":
@@ -88,7 +93,6 @@ class A4K(UNIT3D):
 
                             if bit_rate_num is not None:
                                 bit_rate_kbps = bit_rate_num / 1000
-
                                 if meta.get('category') == "MOVIE" and bit_rate_kbps < 15000:
                                     if not meta.get('unattended', False):
                                         console.print(f"Video bitrate too low: {bit_rate_kbps:.0f} kbps for A4K movie uploads.")
@@ -150,7 +154,6 @@ class A4K(UNIT3D):
 
     async def get_name(self, meta: dict[str, Any]):
         a4k_name: str = meta["name"]
-
         if not meta.get('language_checked', False):
             await languages_manager.process_desc_language(meta, tracker=self.tracker)
         audio_languages: list[str] = meta['audio_languages']
@@ -158,5 +161,5 @@ class A4K(UNIT3D):
             foreign_lang = audio_languages[0].upper()
             if meta.get('is_disc') != "BDMV":
                 a4k_name = a4k_name.replace(meta['resolution'], f"{foreign_lang} {meta['resolution']}", 1)
-
+        console.print(f"[yellow]Generated name for {self.tracker}: [bold]{a4k_name}[/bold][/yellow]")
         return {'name': a4k_name}
