@@ -1,0 +1,56 @@
+[img]{{ poster }}[/img]
+
+[b][font=Verdana][color=#3d85c6][size=29]{{ title }}[/size][/font]
+[size=18]{{ year }}[/size][/color][/b]
+
+{% if category == "TV" %}
+[b][size=18]S{{ season }}E{{ episode }}[/size][/b]
+{% endif %}
+
+[font=Verdana][size=13][b][color=#3d85c6]Titre original :[/color][/b] [i]{{ original_title }}[/i][/size][/font]
+[b][color=#3d85c6]Pays :[/color][/b] [i]{{ pays }}[/i]
+[b][color=#3d85c6]Genres :[/color][/b] [i]{{ genre }}[/i]
+[b][color=#3d85c6]Date de sortie :[/color][/b] [i]{{ release_date }}[/i]
+
+{% if category == 'MOVIE' %}
+[b][color=#3d85c6]Durée :[/color][/b] [i]{{ video_duration }} Minutes[/i]
+{% endif %}
+
+{% if imdb_url %}[url={{ imdb_url }}]IMDb[/url]{% endif %}
+{% if tmdb %}[url=https://www.themoviedb.org/{{ category.lower() }}/{{ tmdb }}]TMDB[/url]{% endif %}
+{% if tvdb_id %}[url=https://www.thetvdb.com/?id={{ tvdb_id }}&tab=series]TVDB[/url]{% endif %}
+{% if tvmaze_id %}[url=https://www.tvmaze.com/shows/{{ tvmaze_id }}]TVmaze[/url]{% endif %}
+{% if mal_id %}[url=https://myanimelist.net/anime/{{ mal_id }}]MyAnimeList[/url]{% endif %}
+
+[img]https://i.imgur.com/W3pvv6q.png[/img]
+
+{{ description }}
+
+[img]https://i.imgur.com/KMZsqZn.png[/img]
+
+[b][color=#3d85c6]Source :[/color][/b] [i]{{ source }}   {{ service_longname }}[/i]
+[b][color=#3d85c6]Type :[/color][/b] [i]{{ type }}[/i]
+[b][color=#3d85c6]Résolution vidéo :[/color][/b][i]{{ resolution }}[/i]
+[b][color=#3d85c6]Format vidéo :[/color][/b] [i]{{ container }}[/i]
+[b][color=#3d85c6]Codec vidéo :[/color][/b] [i]{{ video_codec }}   {{ hdr }}[/i]
+[b][color=#3d85c6]Débit vidéo :[/color][/b] [i]{{ mbps:.2f }} MB/s[/i]
+
+[b][color=#3d85c6] Audio(s) :[/color][/b]
+{% for line in audio_lines %}
+{{ line }}
+{% endfor %}
+
+{% if subtitle_lines %}[b][color=#3d85c6]Sous-titres :[/color][/b]
+{% for line in subtitle_lines %}
+{{ line }}
+{% endfor %}
+{% endif %}
+
+[b][color=#3d85c6]Team :[/color][/b] [i]{{ tag }}[/i]
+[b][color=#3d85c6]  Taille totale :[/color][/b] {{ size_gib:.2f }} GB
+
+{% if images %}{% for image in images %}
+[img]{{ image['raw_url'] }}[/img]
+{% endfor %}{% endif %}
+
+[url=https://github.com/Audionut/Upload-Assistant]{{ signature }}[/url]
