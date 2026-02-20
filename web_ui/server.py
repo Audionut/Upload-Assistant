@@ -28,6 +28,7 @@ from flask_limiter.util import get_remote_address
 from werkzeug.security import safe_join
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+
 import web_ui.auth as auth_mod
 from flask_session import Session
 
@@ -1123,43 +1124,27 @@ def set_runtime_browse_roots(browse_roots: str) -> None:
     _runtime_browse_roots = browse_roots
 
 
-def _load_config_from_file(path: Path) -> dict[str, Any]:
+def _load_config_from_file(path: Path) -> dict[str, Any] | None:
+    """Load and return the ``config`` dict from a Python config file.
+
+    Only files inside the repository ``data/`` directory with a ``.py``
+    extension are accepted.  No ownership or permission checks are
+    performed — the file lives in a user-controlled directory and the app
+    already writes to it freely via ``config_update``.
+
+    Returns None on error (file missing, invalid path, parse error, or no valid
+    config dict).  Returns {} for a valid file that defines config = {}.
+    """
     if not path.exists():
-        return {}
+        return None
 
     # Restrict to the repository `data` directory and ensure .py extension.
     repo_data_dir = Path(__file__).resolve().parent.parent / "data"
     try:
         if not path.resolve().is_relative_to(repo_data_dir.resolve()) or path.suffix != ".py":
-            return {}
+            return None
     except Exception:
-        return {}
-
-    # Basic permissions check: ensure file is readable and not world-writable (on Unix-like; on Windows, minimal check)
-    try:
-        stat_info = path.stat()
-        # On Windows, check if file is not hidden and readable
-        if os.name == 'nt':
-            # Windows: check if not hidden (FILE_ATTRIBUTE_HIDDEN = 2)
-            if getattr(stat_info, 'st_file_attributes', 0) & 2:  # Hidden
-                return {}
-        else:
-            # Unix-like: check ownership and permissions. Only call os.getuid()
-            # on platforms that expose it (non-Windows). This avoids raising
-            # AttributeError on Windows.
-            if hasattr(os, 'getuid'):
-                try:
-                    if stat_info.st_uid != os.getuid() or (stat_info.st_mode & 0o022):
-                        return {}
-                except Exception:
-                    return {}
-            else:
-                # If getuid is not available, fall back to a conservative
-                # permissions check using the mode bits only.
-                if (stat_info.st_mode & 0o022):
-                    return {}
-    except Exception:
-        return {}
+        return None
 
     try:
         with open(path, encoding='utf-8') as f:
@@ -1172,9 +1157,15 @@ def _load_config_from_file(path: Path) -> dict[str, Any]:
                         config_value = ast.literal_eval(node.value)
                         if isinstance(config_value, dict):
                             return config_value
-        return {}
-    except Exception:
-        return {}
+        console.print(
+            f"[yellow]Config file {path.name} does not contain a valid 'config' dict assignment.[/yellow]"
+        )
+        return None
+    except Exception as exc:
+        console.print(
+            f"[yellow]Failed to parse config file {path.name}: {exc}[/yellow]"
+        )
+        return None
 
 
 def _json_safe(value: Any) -> Any:
@@ -2444,9 +2435,25 @@ def config_options():
     example_path = base_dir / "data" / "example-config.py"
     config_path = base_dir / "data" / "config.py"
 
-    example_config = _load_config_from_file(example_path)
+    example_config = _load_config_from_file(example_path) or {}
     user_config = _load_config_from_file(config_path)
     comments_map, subsection_map = _extract_example_metadata(example_path)
+
+    # Determine config load status so the UI can warn the user
+    # instead of silently showing defaults.
+    config_warning: Optional[str] = None
+    if not config_path.exists():
+        config_warning = (
+            "No config.py found — showing example defaults. "
+            "Configure your settings and save, or place your config.py "
+            "into the mounted data/ directory."
+        )
+    elif user_config is None:
+        config_warning = (
+            "config.py exists but could not be loaded — showing example defaults. "
+            "Check the container logs for details. The file may have a syntax error "
+            "or may not contain a valid 'config' dict."
+        )
 
     sections: list[ConfigSection] = []
 
@@ -2454,7 +2461,7 @@ def config_options():
         if not isinstance(example_section, dict):
             continue
 
-        user_section = user_config.get(section_name, {})
+        user_section = (user_config or {}).get(section_name, {})
         items = _build_config_items(example_section, user_section, comments_map, subsection_map, [str(section_name)])
 
         # Add special client list items to DEFAULT section
@@ -2503,7 +2510,10 @@ def config_options():
                         client_types.add(client_type_item.get("value", "unknown"))
             sections[-1]["client_types"] = sorted(client_types, key=lambda x: (x != "qbit", x))
 
-    return jsonify({"success": True, "sections": sections})
+    result: dict[str, Any] = {"success": True, "sections": sections}
+    if config_warning:
+        result["config_warning"] = config_warning
+    return jsonify(result)
 
 
 @app.route("/api/torrent_clients")
@@ -2520,7 +2530,7 @@ def torrent_clients():
     base_dir = Path(__file__).parent.parent
     config_path = base_dir / "data" / "config.py"
 
-    user_config = _load_config_from_file(config_path)
+    user_config = _load_config_from_file(config_path) or {}
 
     # Get clients only from user config
     user_clients = user_config.get("TORRENT_CLIENTS", {})
@@ -2551,7 +2561,7 @@ def config_update():
     example_path = base_dir / "data" / "example-config.py"
     config_path = base_dir / "data" / "config.py"
 
-    example_config = _load_config_from_file(example_path)
+    example_config = _load_config_from_file(example_path) or {}
     example_value = _get_nested_value(example_config, path)
 
     # Special handling for client lists that don't exist in example config
@@ -2570,7 +2580,7 @@ def config_update():
         # Remove the key from config if it exists
         try:
             # Load prior value for audit
-            prior_config = _load_config_from_file(config_path)
+            prior_config = _load_config_from_file(config_path) or {}
             prior_value = _get_nested_value(prior_config, path)
 
             source = config_path.read_text(encoding="utf-8")
@@ -2590,7 +2600,7 @@ def config_update():
     prior_value = None
     try:
         # Load prior value for audit
-        prior_config = _load_config_from_file(config_path)
+        prior_config = _load_config_from_file(config_path) or {}
         prior_value = _get_nested_value(prior_config, path)
 
         source = config_path.read_text(encoding="utf-8")

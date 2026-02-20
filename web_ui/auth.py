@@ -106,13 +106,32 @@ def get_config_dir() -> Path:
         return repo_dir
 
 
+_cached_session_secret: Optional[bytes] = None
+
+
 def load_session_secret() -> bytes:
     """Load or generate a session secret used for session signing and key derivation.
+
+    The result is cached after the first successful call so that expensive
+    filesystem checks (and log warnings for directory bind-mounts) only
+    happen once per process lifetime.
 
     Priority:
     - `SECRET_KEY` env var (compat fallback)
     - Otherwise generate new random 64-byte secret
     """
+    global _cached_session_secret  # noqa: PLW0603
+    if _cached_session_secret is not None:
+        return _cached_session_secret
+
+    result = _resolve_session_secret()
+    _cached_session_secret = result
+    return result
+
+
+def _resolve_session_secret() -> bytes:
+    """Inner helper — resolves the session secret without caching."""
+
     def _ensure_min_length(b: bytes) -> bytes:
         if not b or len(b) < 32:
             raise ValueError("session secret must be at least 32 bytes")
@@ -130,6 +149,45 @@ def load_session_secret() -> bytes:
         if not p.exists():
             log.error("SESSION_SECRET_FILE is set but file does not exist")
             raise OSError("SESSION_SECRET_FILE is set but file does not exist; check the path and permissions")
+
+        # Docker bind-mounts create a *directory* on the host when the source
+        # path does not already exist as a file.  Detect this and transparently
+        # treat the directory as the parent — look for (or generate) a
+        # ``session_secret`` file inside it.
+        if p.is_dir():
+            p = p / "session_secret"
+            if not p.exists():
+                log.warning(
+                    "SESSION_SECRET_FILE (%s) is a directory (Docker likely "
+                    "created the bind-mount target as a directory because the "
+                    "host path did not exist). Auto-generating a "
+                    "'session_secret' file inside it.",
+                    f,
+                )
+                # Auto-generate just like the fallback path does
+                from secrets import token_bytes
+
+                try:
+                    b = token_bytes(64)
+                    p.write_text(b.hex(), encoding="utf-8")
+                    with suppress(Exception):
+                        os.chmod(p, 0o600)
+                    log.info("Auto-generated session secret at %s", p)
+                    return b
+                except Exception as e:
+                    log.error("failed to create session secret inside directory: %s", e)
+                    raise OSError(
+                        f"SESSION_SECRET_FILE points to a directory ({f}) and "
+                        f"we could not create a session_secret file inside it; "
+                        f"check permissions or mount a file instead"
+                    ) from e
+            else:
+                log.debug(
+                    "SESSION_SECRET_FILE (%s) is a directory; using "
+                    "existing file at %s",
+                    f, p,
+                )
+
         try:
             txt = p.read_text(encoding="utf-8").splitlines()[0].strip()
         except Exception as e:

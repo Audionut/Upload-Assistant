@@ -1,5 +1,7 @@
 There is a docker image available for Upload-Assistant that is automatically built within a few minutes of each release. 
 
+> **Looking for the WebUI?** See [docker-gui-wiki-full.md](docker-gui-wiki-full.md) for the WebUI Docker setup (environment variables, persistent sessions, Compose examples, and Unraid notes).
+
 See this video which covers many aspects of docker itself, and setting up for UA. Note that the video will be slightly out of date in a few minor aspects, particularly the webui if using that.
 The video should be viewed in conjunction with the documentation here.
 
@@ -88,4 +90,4 @@ function upload(){
 This prints out the parameters passed as well so you can see for sure what is happening.
 
 ## Can I utilize the -vs/--vapoursynth parameter?
-No.  The base docker image of alpine does not include vapoursynth in its package manager and building it or downloading portable version into python directory and configuring was decided to not be worth the extra complexity for something that probably gets very little usage and would probably break regularly.  If this is important to you let us know.
+No.  The base docker image does not include vapoursynth in its package manager and building it or downloading the portable version into the python directory and configuring was decided to not be worth the extra complexity for something that probably gets very little usage and would probably break regularly.  If this is important to you let us know.

@@ -97,21 +97,74 @@ def _handle_shutdown_signal(signum: int, _frame: Any) -> None:
         sys.exit(1)
 
 
-# Early check for -webui to create config if needed
-_config_path = os.path.join(base_dir, "data", "config.py")
-_example_config_path = os.path.join(base_dir, "data", "example-config.py")
+# ── Restore built-in data/ files when a Docker volume mount hides them ──
+# The Dockerfile copies the original data/ tree to defaults/data/ so that
+# volume mounts over /Upload-Assistant/data/ don't lose critical files
+# (__init__.py, version.py, example-config.py, templates/).
+_data_dir = os.path.join(base_dir, "data")
+_defaults_data_dir = os.path.join(base_dir, "defaults", "data")
+
+# Directories that should never be copied into user-facing data/
+_SKIP_DIRS = {"__pycache__", ".mypy_cache", ".ruff_cache"}
+
+if os.path.isdir(_defaults_data_dir):
+    os.makedirs(_data_dir, exist_ok=True)
+    _restored_count = 0
+    _restore_errors: list[str] = []
+    # Walk the defaults tree and copy anything missing in the live data dir.
+    # Never overwrite user files (config.py, cookies/, tags.json, etc.).
+    for dirpath, dirnames, filenames in os.walk(_defaults_data_dir):
+        # Prune unwanted directories in-place so os.walk skips them entirely
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+
+        rel_dir = os.path.relpath(dirpath, _defaults_data_dir)
+        target_dir = os.path.join(_data_dir, rel_dir) if rel_dir != "." else _data_dir
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+        except OSError as exc:
+            _restore_errors.append(f"mkdir {rel_dir}: {exc}")
+            continue  # skip this subtree if we can't create the directory
+        for fname in filenames:
+            # Skip bytecode and cache files
+            if fname.endswith((".pyc", ".pyo")):
+                continue
+            target_file = os.path.join(target_dir, fname)
+            if not os.path.exists(target_file):
+                src_file = os.path.join(dirpath, fname)
+                try:
+                    shutil.copy2(src_file, target_file)
+                    _restored_count += 1
+                except OSError as exc:
+                    _restore_errors.append(f"{os.path.join(rel_dir, fname)}: {exc}")
+    if _restored_count:
+        console.print(f"Restored {_restored_count} built-in file(s) into data/ from defaults.", markup=False)
+    if _restore_errors:
+        console.print(f"[red]Warning: failed to restore {len(_restore_errors)} file(s) into data/:[/red]")
+        for _err in _restore_errors[:5]:
+            console.print(f"[red]  {_err}[/red]")
+        if len(_restore_errors) > 5:
+            console.print(f"[red]  ... and {len(_restore_errors) - 5} more[/red]")
+        console.print("[yellow]Hint: ensure the mounted data/ directory is writable by the container user.[/yellow]")
+        console.print("[yellow]  e.g. on the host: chown -R 1000:1000 /path/to/data[/yellow]")
+
+_config_path = os.path.join(_data_dir, "config.py")
+
 # Detect -webui or --webui forms, including --webui=host:port
-if any(
+_is_webui_arg = any(
     (arg == "-webui" or arg == "--webui" or arg.startswith("-webui=") or arg.startswith("--webui="))
     for arg in sys.argv
-) and not os.path.exists(_config_path) and os.path.exists(_example_config_path):
-    console.print("No config.py found. Creating default config from example-config.py...", markup=False)
-    try:
-        shutil.copy2(_example_config_path, _config_path)
-        console.print("Default config created successfully!", markup=False)
-    except Exception as e:
-        console.print(f"Failed to create default config: {e}", markup=False)
-        console.print("Continuing without config file...", markup=False)
+)
+# Auto-create config.py from example on first WebUI start
+if _is_webui_arg and not os.path.exists(_config_path):
+    _example_config_path = os.path.join(_data_dir, "example-config.py")
+    if os.path.exists(_example_config_path):
+        console.print("No config.py found. Creating default config from example-config.py...", markup=False)
+        try:
+            shutil.copy2(_example_config_path, _config_path)
+            console.print("Default config created successfully!", markup=False)
+        except Exception as e:
+            console.print(f"Failed to create default config: {e}", markup=False)
+            console.print("Continuing without config file...", markup=False)
 
 Meta: TypeAlias = dict[str, Any]
 
@@ -1230,6 +1283,24 @@ async def update_notification(base_dir: str) -> Optional[str]:
 
 
 async def do_the_thing(base_dir: str) -> None:
+    # Reload config from disk so that changes made via the WebUI config
+    # editor (or manual file edits between runs) are picked up.  The
+    # module-level ``config`` dict is imported once at startup and would
+    # otherwise remain stale for the lifetime of the process.  Updating
+    # in-place (clear + update) keeps all existing references (Args,
+    # Clients, managers, etc.) pointing at the same dict object.
+    try:
+        import importlib
+        import data.config as _cfg_mod  # may already be cached
+        importlib.reload(_cfg_mod)
+        _reloaded = _cfg_mod.config  # may raise AttributeError
+        if not isinstance(_reloaded, dict):
+            raise TypeError(f"Expected dict, got {type(_reloaded).__name__}")
+        config.clear()
+        config.update(_reloaded)
+    except Exception as exc:
+        console.print(f"[yellow]Warning: could not reload config from disk: {exc}[/yellow]")
+
     await asyncio.sleep(0.1)  # Ensure it's not racing
 
     tmp_dir = os.path.join(base_dir, "tmp")

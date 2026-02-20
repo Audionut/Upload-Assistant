@@ -1,0 +1,4 @@
+# Ensure shell scripts always have Unix line endings (LF), even on Windows.
+# Docker exec fails with "no such file or directory" if CRLF leaks into shebangs.
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
