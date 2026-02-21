@@ -912,9 +912,7 @@ class TVC:
 
         # Apply BBCode transformations
         desc = self._apply_bbcode_transforms(desc, comparison)
-
-        # NORMALIZE CENTER TAG NEWLINES (Aicoderabbit fix)
-
+        
         # Remove newline(s) immediately after [center]
         desc = re.sub(r"\[center\]\s+", "[center]", desc)
 
