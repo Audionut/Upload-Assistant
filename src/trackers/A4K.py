@@ -77,7 +77,7 @@ class A4K(UNIT3D):
             return should_continue
 
         # check bitrate requirements for A4K uploads, but only if it's not a disc upload since discs can have variable bitrates and A4K doesn't specify bitrate requirements for disc uploads
-        if not meta['is_disc'] and meta['type'] in ['ENCODE', 'WEBRIP', 'WEBDL']:
+        if not meta['is_disc'] and meta['type'] in ['ENCODE', 'WEBDL']:
             tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
             for track in tracks:
                 if track.get('@type') == "Video":
@@ -152,7 +152,7 @@ class A4K(UNIT3D):
         )
         return
 
-    async def get_name(self, meta: dict[str, Any]):
+    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         a4k_name: str = meta["name"]
         if not meta.get('language_checked', False):
             await languages_manager.process_desc_language(meta, tracker=self.tracker)
