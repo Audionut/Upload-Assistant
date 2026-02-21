@@ -9,9 +9,9 @@ This short guide explains how to use the built-in Web UI.
 python upload.py "/path/to/folder" "/another/path" --webui 127.0.0.1:8080
 ```
 
-- Path handling: you may pass one or more paths on the command line; when `--webui` is used and no `UA_BROWSE_ROOTS` env var is set, the supplied positional paths become the web UI browse roots. Multiple paths are accepted and are joined with commas internally (equivalent to the `UA_BROWSE_ROOTS` format).
-
-- `UA_BROWSE_ROOTS` (optional): you can instead configure browse roots via the environment variable `UA_BROWSE_ROOTS` as a comma-separated list of directories. If `UA_BROWSE_ROOTS` is present it takes precedence over the command-line paths.
+- Path handling: browse roots can be provided in two ways:
+  - **Command-line paths** (when running as script): pass one or more paths before `--webui`, e.g. `python upload.py /path/to/folder --webui 127.0.0.1:8080`. These become the browse roots when `UA_BROWSE_ROOTS` is not set.
+  - **`UA_BROWSE_ROOTS`** (environment variable): comma-separated list of directories. Takes precedence over command-line paths. **Required when running in Docker** — the Docker command typically uses `--webui` only with no paths, so without `UA_BROWSE_ROOTS` the app would use a dummy path and the file browser would not work.
 
 - Other optional environment variables used by the Web UI:
 	- `UA_WEBUI_USE_SUBPROCESS` — if set (non-empty) the server will run uploads in a subprocess rather than in-process (affects interactive behavior and Rich output recording).
@@ -19,8 +19,8 @@ python upload.py "/path/to/folder" "/another/path" --webui 127.0.0.1:8080
 	- `SESSION_SECRET` or `SESSION_SECRET_FILE` — provide a stable session secret (permission handling needed). Do not just use this by default.
 
 Notes:
-- The server enforces that browse roots only the only configured roots (it will not expose arbitrary filesystem locations). Paths supplied on the command line or via `UA_BROWSE_ROOTS` are normalized and validated by the server before being exposed.
-- If you get "No browse roots specified" when starting with `--webui`, set `UA_BROWSE_ROOTS` or pass one or more paths on the command line as in the example above.
+- The server enforces that browse roots are the only configured roots (it will not expose arbitrary filesystem locations). Paths supplied on the command line or via `UA_BROWSE_ROOTS` are normalized and validated by the server before being exposed.
+- If you get "No browse roots specified" when starting with `--webui`: when running as a script, pass paths on the command line (e.g. `python upload.py /path/to/folder --webui 127.0.0.1:5000`) or set `UA_BROWSE_ROOTS`. When running in Docker, you must set `UA_BROWSE_ROOTS` because the command has no paths.
 - The webui arg uses `127.0.0.1:5000` by default. `HOST:PORT` are only needed if overriding.
 
 ### Open the UI
@@ -66,7 +66,7 @@ Notes:
 - When running through a cloudflare proxy, you likely need to disable `Real User Measurements` from the cloudflare dashboard, then `caching/configuration` and `purge everything`.
 
 ### Notes and troubleshooting
-- If browsing is not configured (no browse roots), the file browser will be empty — set `UA_BROWSE_ROOTS` or configure `upload.py` to set the runtime browse roots.
+- If browsing is not configured (no browse roots), the file browser will be empty. When running as a script: pass paths on the command line or set `UA_BROWSE_ROOTS`. When running in Docker: set `UA_BROWSE_ROOTS` (required — Docker uses `--webui` only, so no paths are passed and the app would otherwise use a dummy path).
 - Credentials and recovery storage: the Web UI stores the encrypted local user record (password hash, API tokens, 2FA secret/recovery hashes) in `webui_auth.json` under the application config directory. On Windows this is under `%APPDATA%/upload-assistant` by default; on Unix-like systems it prefers `XDG_CONFIG_HOME` or the repository `data/` directory depending on environment (docker users should correctly map as needed).
 
 - Resetting password / 2FA problems: stopping the web UI and removing the `webui_auth.json` file in the app config dir will remove the persisted user record and allow you to recreate a local user via the login page (this also removes persisted API tokens and recovery codes). If you rely on a persisted session secret, `session_secret` in the config dir may be used to derive encryption keys — removing or changing it will invalidate encrypted fields, so treat that file carefully.
@@ -76,7 +76,7 @@ Use this checklist when deploying the Web UI to reduce risk and harden the runti
 
 - **Bind to localhost by default:** set `UA_WEBUI_HOST=127.0.0.1` unless you intentionally need network access; expose via an authenticated reverse proxy when remote access is required.
 - **Prefer managed secrets:** provide `SESSION_SECRET`, `SESSION_SECRET_FILE`, via environment variables when possible. Ensure any file/directory has the correct permissions.
-- **Restrict `UA_BROWSE_ROOTS`:** list only the absolute paths required for upload/browse operations and mount volumes read-only where feasible.
+- **Restrict `UA_BROWSE_ROOTS`:** list only the absolute paths required for upload/browse operations. This gives granular access—you can mount volumes the app needs without exposing them to the file browser. Mount volumes read-only where feasible.
 - **Run unprivileged:** do not run the Web UI as root; restrict filesystem permissions so the server user cannot write to unrelated user data or system locations.
 - **Network controls:** firewall host ports, avoid automatic UPnP/port-forwarding, and publish ports only on necessary interfaces.
 - **Monitor and alert:** collect server logs and monitor for unexpected config changes, token writes, or repeated failed auth attempts.

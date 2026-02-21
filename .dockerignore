@@ -1,0 +1,45 @@
+# Version control
+.git
+.gitignore
+.github
+
+# Python bytecode & caches
+**/__pycache__
+**/*.pyc
+**/*.pyo
+*.egg-info
+.mypy_cache
+.ruff_cache
+
+# Virtual environments (host-side; the image builds its own at /venv)
+venv
+.venv
+
+# IDE / editor
+.vscode
+.cursor
+.idea
+*.swp
+*.swo
+
+# Docker files (not needed inside the image)
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Documentation (not needed at runtime)
+docs
+
+# Runtime artifacts that should not leak into the build context
+tmp
+*.torrent
+*.log
+
+# OS junk
+Thumbs.db
+.DS_Store
+
+# Tests / CI
+tests
+.bandit.yaml
+bandit.yaml

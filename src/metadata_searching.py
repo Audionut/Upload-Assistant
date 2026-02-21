@@ -105,7 +105,8 @@ async def all_ids(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: TmdbMan
             meta.get('debug', False),
             season=meta.get('season_int'),
             episode=meta.get('episode_int'),
-            aired_date=meta.get('daily_episode_title')
+            aired_date=meta.get('daily_episode_title'),
+            original_language=meta.get('original_language')
         )
         all_tasks.append(tvdb_episodes_task)
 
@@ -294,7 +295,8 @@ async def imdb_tmdb_tvdb(meta: dict[str, Any], filename: str, tvdb_handler: Any,
             meta.get('debug', False),
             season=meta.get('season_int'),
             episode=meta.get('episode_int'),
-            aired_date=meta.get('daily_episode_title')
+            aired_date=meta.get('daily_episode_title'),
+            original_language=meta.get('original_language')
         )
         tasks.append(tvdb_task)
 
@@ -445,7 +447,8 @@ async def imdb_tvdb(meta: dict[str, Any], filename: str, tvdb_handler: Any, tmdb
             meta.get('debug', False),
             season=meta.get('season_int'),
             episode=meta.get('episode_int'),
-            aired_date=meta.get('daily_episode_title')
+            aired_date=meta.get('daily_episode_title'),
+            original_language=meta.get('original_language')
         )
         tasks.append(tvdb_episodes_task)
 
@@ -761,7 +764,7 @@ async def get_tv_data(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: Tmd
     if "tvdb_series_name" not in meta:
         meta['tvdb_series_name'] = None
     if not meta.get('tv_pack', False) and meta.get('episode_int') != 0:
-        if (not meta.get('we_checked_tvdb', False) and not meta.get('we_asked_tvmaze', False)) and meta.get('tvmaze_id') != 0 and meta['tvmaze_id'] != 0 and not meta.get('anime', False):
+        if (not meta.get('we_checked_tvdb', False) and not meta.get('we_asked_tvmaze', False)) and meta.get('tvmaze_id') != 0 and meta['tvdb_id'] != 0 and meta.get('tmdb_id') != 0 and not meta.get('anime', False):
             meta = await get_tvdb_tvmaze_tmdb_episode_data(meta, tvdb_handler, tmdb_manager)
         elif meta.get('tvdb_id', 0) and not meta.get('we_checked_tvdb', False):
             tvdb_episode_data, tvdb_name = await tvdb_handler.get_tvdb_episodes(
@@ -770,7 +773,8 @@ async def get_tv_data(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: Tmd
                 meta.get('debug', False),
                 season=meta.get('season_int'),
                 episode=meta.get('episode_int'),
-                aired_date=meta.get('daily_episode_title')
+                aired_date=meta.get('daily_episode_title'),
+                original_language=meta.get('original_language')
             )
             if tvdb_episode_data:
                 meta['tvdb_episode_data'] = tvdb_episode_data
@@ -890,7 +894,8 @@ async def get_tv_data(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: Tmd
                 meta.get('debug', False),
                 season=meta.get('season_int'),
                 episode=meta.get('episode_int'),
-                aired_date=meta.get('daily_episode_title')
+                aired_date=meta.get('daily_episode_title'),
+                original_language=meta.get('original_language')
             )
             if tvdb_episode_data:
                 meta['tvdb_episode_data'] = tvdb_episode_data
@@ -958,7 +963,8 @@ async def get_tvdb_tvmaze_tmdb_episode_data(meta: dict[str, Any], tvdb_handler: 
                 meta.get('debug', False),
                 season=meta.get('season_int'),
                 episode=meta.get('episode_int'),
-                aired_date=meta.get('daily_episode_title')
+                aired_date=meta.get('daily_episode_title'),
+                original_language=meta.get('original_language')
             )
         )
         task_map['tvdb'] = len(tasks) - 1
