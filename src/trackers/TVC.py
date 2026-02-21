@@ -265,7 +265,7 @@ class TVC:
         for cc in meta['release_dates']['results']:
             for rd in cc['release_dates']:
                 if rd['type'] == 6:  # TV release
-                    channel = rd['note'] if rd['note'] else "N/A Channel"
+                    channel = rd.get('note') or "N/A Channel"
                     parts.append(
                         f"[color=orange][size=15]{cc['iso_3166_1']} TV Release info [/size][/color]\n"
                         f"{str(rd['release_date'])[:10]} on {channel}\n"
@@ -357,7 +357,7 @@ class TVC:
                     f.write(content)
 
             await asyncio.to_thread(_write)
-        except Exception as e:
+        except OSError as e:
             console.print(f"[yellow]Warning: Failed to write description file: {e}[/yellow]")
 
     async def get_cat_id(self, genres: str) -> str:
@@ -877,7 +877,7 @@ class TVC:
         Build and write the tracker-specific DESCRIPTION.txt file (FNP multi-block style).
 
         Constructs BBCode-formatted description text for discs, TV packs,
-        episodes, or movies using multiple separate [center] blocks with [pre] tags.
+        episodes, or movies using multiple separate [center] blocks.
         Always writes a non-empty description file to tmp/<uuid>/[TVC]DESCRIPTION.txt.
         """
         # Read base description file
@@ -912,7 +912,7 @@ class TVC:
 
         # Apply BBCode transformations
         desc = self._apply_bbcode_transforms(desc, comparison)
-        
+
         # Remove newline(s) immediately after [center]
         desc = re.sub(r"\[center\]\s+", "[center]", desc)
 
@@ -935,15 +935,13 @@ class TVC:
 
         return desc
 
-
     def get_links(self, meta: Meta) -> str:
         """
         Returns a BBCode string with icon links (for multi-block layout).
         No [center] tags or extra newlines - caller handles layout.
         """
-        parts = ["[b]External Info Sources:[/b]\n\n"]
+        parts = []
 
-        # Configuration for each link type: (meta_key, url_builder, config_image_key)
         link_configs = [
             (
                 'imdb_id',
@@ -974,16 +972,15 @@ class TVC:
 
         for id_key, url_func, img_key in link_configs:
             if meta.get(id_key, 0):
-                # Safe config access with fallback
-                if 'IMAGES' in self.config and img_key in self.config['IMAGES']:
-                    url = url_func(meta)
-                    img = self.config['IMAGES'][img_key]
+                url = url_func(meta)
+                img = self.config["IMAGES"].get(img_key, "")
+                if url and img:
                     parts.append(f"[URL={url}][img]{img}[/img][/URL] ")
-                else:
-                    # Fallback: just include the URL without an image icon
-                    url = url_func(meta)
-                    parts.append(f"[URL={url}]{id_key.replace('_id', '').upper()}[/URL] ")
 
+        if not parts:
+            return ""
+
+        parts.insert(0, "[b]External Info Sources:[/b]\n\n")
         return "".join(parts)
 
     # get subs function
