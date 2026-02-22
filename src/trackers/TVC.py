@@ -973,7 +973,7 @@ class TVC:
         for id_key, url_func, img_key in link_configs:
             if meta.get(id_key, 0):
                 url = url_func(meta)
-                img = self.config["IMAGES"].get(img_key, "")
+                img = self.config.get("IMAGES", {}).get(img_key, "")
                 if url and img:
                     parts.append(f"[URL={url}][img]{img}[/img][/URL] ")
 
