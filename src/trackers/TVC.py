@@ -534,7 +534,7 @@ class TVC:
         desc = await self.unit3d_edit_desc(meta, self.tracker, self.signature, image_list)
 
         if not desc:
-            console.print(f"[yellow]Warning: DESCRIPTION file not found at {descfile_path}")
+            console.print(f"[yellow]Warning: DESCRIPTION.txt file not found at {descfile_path}")
             desc = ""
 
         # Naming logic
