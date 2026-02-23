@@ -1,6 +1,5 @@
 [h1]{{ title }} ({{ year }})[/h1]
 
-
 {% if category == "TV" %}
 [h2]Saison {{ season }} {% if episode %}Episode {{ episode }}{% endif %}[/h2]
 {% endif %}
