@@ -1,5 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import json
+import re
 from typing import Any, Optional, Union, cast
 
 import aiofiles
@@ -28,6 +29,7 @@ class NBL:
         self.source_flag = 'NBL'
         self.upload_url = 'https://nebulance.io/api.php'
         self.search_url = 'https://nebulance.io/api.php'
+        self.torrent_url = 'https://nebulance.io/torrents.php?id='
         self.api_key = str(self.config['TRACKERS'][self.tracker]['api_key']).strip()
         self.banned_groups = ['0neshot', '3LTON', '4yEo', '[Oj]', 'AFG', 'AkihitoSubs', 'AniHLS', 'Anime Time', 'AnimeRG', 'AniURL', 'ASW', 'BakedFish',
                               'bonkai77', 'Cleo', 'DeadFish', 'DeeJayAhmed', 'ELiTE', 'EMBER', 'eSc', 'EVO', 'FGT', 'FUM', 'GERMini', 'HAiKU', 'Hi10', 'ION10',
@@ -79,6 +81,10 @@ class NBL:
                         try:
                             response_data = response.json()
                             meta['tracker_status'][self.tracker]['status_message'] = response_data
+                            match = re.search(r"https://nebulance\.io/torrents\.php\?id=(\d+)", response_data.get('link', ''))
+                            if match:
+                                torrent_id = match.group(1)
+                                meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
                             return True
                         except json.JSONDecodeError:
                             meta['tracker_status'][self.tracker]['status_message'] = "data error: NBL json decode error, the API is probably down"
