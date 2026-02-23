@@ -1,20 +1,18 @@
-[img]{{ poster }}[/img]
-
-[b][font=Verdana][color=#3d85c6][size=29]{{ title }}[/size][/font]
-[size=18]{{ year }}[/size][/color][/b]
+[h1]{{ title }} ({{ year }})[/h1]
 
 {% if category == "TV" %}
-[b][size=18]S{{ season }}E{{ episode }}[/size][/b]
+[h2]Saison {{ season }} {% if episode %}Episode {{ episode }}{% endif %}[/h2]
 {% endif %}
 
-[font=Verdana][size=13][b][color=#3d85c6]Titre original :[/color][/b] [i]{{ original_title }}[/i][/size][/font]
-[b][color=#3d85c6]Pays :[/color][/b] [i]{{ pays }}[/i]
-[b][color=#3d85c6]Genres :[/color][/b] [i]{{ genre }}[/i]
-[b][color=#3d85c6]Date de sortie :[/color][/b] [i]{{ release_date }}[/i]
+[img]{{ poster }}[/img]
 
-{% if category == 'MOVIE' %}
-[b][color=#3d85c6]Durée :[/color][/b] [i]{{ video_duration }} Minutes[/i]
-{% endif %}
+
+[h2]🎬 Informations[/h2]
+
+[b]Pays :[/b] {{pays}}
+[b]Genres :[/b] {{genre}}
+[b]Date de sortie :[/b] {{release_date}}
+{% if video_duration %}[b]Durée :[/b] {{video_duration}}{% endif %}
 
 {% if imdb_url %}[url={{ imdb_url }}]IMDb[/url]{% endif %}
 {% if tmdb %}[url=https://www.themoviedb.org/{{ category.lower() }}/{{ tmdb }}]TMDB[/url]{% endif %}
@@ -22,11 +20,11 @@
 {% if tvmaze_id %}[url=https://www.tvmaze.com/shows/{{ tvmaze_id }}]TVmaze[/url]{% endif %}
 {% if mal_id %}[url=https://myanimelist.net/anime/{{ mal_id }}]MyAnimeList[/url]{% endif %}
 
-[img]https://i.imgur.com/W3pvv6q.png[/img]
+[h3]📖 Synopsis[/h3]
 
-{{ description }}
+{{description}}
 
-[img]https://i.imgur.com/KMZsqZn.png[/img]
+[h2]⚙️ Détails Techniques[/h2]
 
 [b][color=#3d85c6]Source :[/color][/b] [i]{{ source }}   {{ service_longname }}[/i]
 [b][color=#3d85c6]Type :[/color][/b] [i]{{ type }}[/i]
@@ -35,12 +33,16 @@
 [b][color=#3d85c6]Codec vidéo :[/color][/b] [i]{{ video_codec }}   {{ hdr }}[/i]
 [b][color=#3d85c6]Débit vidéo :[/color][/b] [i]{{ mbps|round(2)  }} MB/s[/i]
 
-[b][color=#3d85c6] Audio(s) :[/color][/b]
+[h3]🔊 Langue(s)[/h3]
+
 {% for line in audio_lines %}
 {{ line }}
 {% endfor %}
 
-{% if subtitle_lines %}[b][color=#3d85c6]Sous-titres :[/color][/b]
+{% if subtitle_lines %}
+
+[h3]💬 Sous-titre(s)[/h3]
+
 {% for line in subtitle_lines %}
 {{ line }}
 {% endfor %}

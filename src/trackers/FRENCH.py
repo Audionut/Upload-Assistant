@@ -635,6 +635,7 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
         template_path = os.path.abspath(f"{meta['base_dir']}/data/templates/FRENCH.txt")
 
     if os.path.exists(template_path):
+        
         async with aiofiles.open(template_path, 'r', encoding='utf-8') as description_file:
             template_content = await description_file.read()
         try:
