@@ -26,7 +26,7 @@ class NBL:
         self.config: Config = config
         self.tracker = 'NBL'
         self.source_flag = 'NBL'
-        self.upload_url = 'https://nebulance.io/upload.php'
+        self.upload_url = 'https://nebulance.io/api.php'
         self.search_url = 'https://nebulance.io/api.php'
         self.api_key = str(self.config['TRACKERS'][self.tracker]['api_key']).strip()
         self.banned_groups = ['0neshot', '3LTON', '4yEo', '[Oj]', 'AFG', 'AkihitoSubs', 'AniHLS', 'Anime Time', 'AnimeRG', 'AniURL', 'ASW', 'BakedFish',
@@ -63,6 +63,7 @@ class NBL:
             'file_input': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')
         }
         data: dict[str, Any] = {
+            'action': 'upload',
             'api_key': self.api_key,
             'tvmazeid': int(meta.get('tvmaze_id', 0)),
             'mediainfo': mi_dump,
@@ -72,7 +73,7 @@ class NBL:
 
         try:
             if not meta['debug']:
-                async with httpx.AsyncClient(timeout=10) as client:
+                async with httpx.AsyncClient(timeout=30) as client:
                     response = await client.post(url=self.upload_url, files=files, data=data)
                     if response.status_code in [200, 201]:
                         try:
@@ -130,53 +131,72 @@ class NBL:
 
         dupes: list[dict[str, Any]] = []
 
-        if int(meta.get('tvmaze_id', 0) or 0) != 0:
-            search_term: dict[str, Any] = {'tvmaze': int(meta['tvmaze_id'])}
-        elif int(meta.get('imdb_id', 0) or 0) != 0:
-            search_term = {'imdb': meta.get('imdb')}
-        else:
-            search_term = {'series': meta['title']}
-        payload: dict[str, Any] = {
-            'jsonrpc': '2.0',
-            'id': 1,
-            'method': 'getTorrents',
-            'params': [
-                self.api_key,
-                search_term
-            ]
+        season = meta.get("season_int", 0)
+        tvmaze_data = meta.get('tvmaze_episode_data', {})
+        if tvmaze_data:
+            season = tvmaze_data.get('season_number', season)
+
+        params: dict[str, Any] = {
+            "action": "search",
+            "api_key": self.api_key,
+            "extended": 1,
+            "season": season,
         }
+
+        if int(meta.get("tvmaze_id", 0) or 0) != 0:
+            params["tvmaze"] = int(meta["tvmaze_id"])
+        elif int(meta.get("imdb_id", 0) or 0) != 0:
+            params["imdb"] = meta.get("imdb_id")
+        else:
+            params["series"] = meta["title"]
 
         response: Optional[httpx.Response] = None
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.post(self.search_url, json=payload)
-                if response.status_code == 200:
+            max_pages = int(self.config['TRACKERS'][self.tracker].get('search_max_pages', 30))
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                for page in range(max_pages):
+                    page_params = dict(params)
+                    if page > 0:
+                        page_params["page"] = page
+
+                    response = await client.post(self.search_url, params=page_params)
+                    if response.status_code != 200:
+                        console.print(f"[bold red]NBL HTTP request failed. Status: {response.status_code}")
+                        console.print(f"[bold red]NBL Search Response Content (page {page}): {response.text}")
+                        meta['skipping'] = "NBL"
+                        break
+
                     try:
                         data = cast(dict[str, Any], response.json())
-                        result = cast(dict[str, Any], data.get('result', {}))
-                        items = cast(list[dict[str, Any]], result.get('items', []))
-                        for each in items:
-                            tags_value = each.get('tags', [])
-                            tags = cast(list[Any], tags_value) if isinstance(tags_value, list) else []
-                            if meta['resolution'] in tags:
-                                file_list_value = each.get('file_list', [])
-                                file_list = cast(list[Any], file_list_value) if isinstance(file_list_value, list) else []
-                                files_str = ', '.join(str(item) for item in file_list) if file_list else str(cast(Any, file_list_value))
-                                result = {
-                                    'name': str(each.get('rls_name', '')),
-                                    'files': files_str,
-                                    'size': int(each.get('size', 0)),
-                                    'link': f"https://nebulance.io/torrents.php?id={each.get('group_id', '')}",
-                                    'file_count': len(file_list) if file_list else 1,
-                                    'download': str(each.get('download', '')),
-                                }
-                                dupes.append(result)
                     except json.JSONDecodeError:
                         console.print("[bold yellow]NBL response content is not valid JSON. Skipping this API call.")
                         meta['skipping'] = "NBL"
-                else:
-                    console.print(f"[bold red]NBL HTTP request failed. Status: {response.status_code}")
-                    meta['skipping'] = "NBL"
+                        break
+
+                    items_value = data.get('items')
+                    if not isinstance(items_value, list):
+                        result = cast(dict[str, Any], data.get('result', {}))
+                        items_value = result.get('items', [])
+                    items = cast(list[dict[str, Any]], items_value) if isinstance(items_value, list) else []
+                    if not items:
+                        break
+
+                    for each in items:
+                        tags_value = each.get('tags', [])
+                        tags = cast(list[Any], tags_value) if isinstance(tags_value, list) else []
+                        if meta['resolution'] in tags:
+                            file_list_value = each.get('file_list', [])
+                            file_list = cast(list[Any], file_list_value) if isinstance(file_list_value, list) else []
+                            files_str = ', '.join(str(item) for item in file_list) if file_list else str(cast(Any, file_list_value))
+                            result = {
+                                'name': str(each.get('rls_name', '')),
+                                'files': files_str,
+                                'size': int(each.get('size', 0)),
+                                'link': f"https://nebulance.io/torrents.php?id={each.get('group_id', '')}",
+                                'file_count': len(file_list) if file_list else 1,
+                                'download': str(each.get('download', '')),
+                            }
+                            dupes.append(result)
 
         except httpx.TimeoutException:
             console.print("[bold red]NBL request timed out after 5 seconds")
