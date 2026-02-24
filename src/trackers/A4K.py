@@ -26,7 +26,7 @@ class A4K(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.rehost_images_manager = RehostImagesManager(config)
-        self.approved_image_hosts = ['imgbox', 'ptscreens', 'imgbb', 'imgur', 'postimg']
+        self.approved_image_hosts = ['ptpimg', 'onlyimage','imgbox', 'ptscreens', 'imgbb', 'imgur', 'postimg']
         self.banned_groups = ["BiTOR", "DepraveD", "Flights", "SasukeducK", "SPDVD", "TEKNO3D"]
         pass
 
@@ -142,6 +142,8 @@ class A4K(UNIT3D):
             'imgur.com': 'imgur',
             'postimg.cc': 'postimg',
             'ptscreens.com': 'ptscreens',
+            'onlyimage.org': 'onlyimage',
+            'ptpimg.me': 'ptpimg',
         }
         await self.rehost_images_manager.check_hosts(
             meta,
