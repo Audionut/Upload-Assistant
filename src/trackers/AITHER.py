@@ -30,7 +30,7 @@ class AITHER(UNIT3D):
         should_continue = True
 
         if meta['is_disc'] not in ["BDMV", "DVD"] and not await self.common.check_language_requirements(
-            meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True, original_language=True
+            meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True, original_language=True, original_required=True
         ):
             return False
 
