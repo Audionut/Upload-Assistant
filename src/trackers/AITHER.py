@@ -28,6 +28,12 @@ class AITHER(UNIT3D):
 
     async def get_additional_checks(self, meta: dict[str, Any]):
         should_continue = True
+
+        if meta['is_disc'] not in ["BDMV", "DVD"] and not await self.common.check_language_requirements(
+            meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True, original_language=True, original_required=True
+        ):
+            return False
+
         if meta['valid_mi'] is False:
             console.print(f"[bold red]No unique ID in mediainfo, skipping {self.tracker} upload.")
             return False
