@@ -17,6 +17,7 @@ class CBR(UNIT3D):
         self.upload_url = f'{self.base_url}/api/torrents/upload'
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
+        self.requests_url = f'{self.base_url}/api/requests/filter'
         self.banned_groups = [
             "4K4U", "afm72", "Alcaide_Kira", "AROMA", "ASM", "Bandi", "BiTOR", "BLUDV", "Bluespots",
             "BOLS", "CaNNIBal", "Comando", "d3g", "DepraveD", "EMBER", "FGT", "FreetheFish", "Garshasp",
