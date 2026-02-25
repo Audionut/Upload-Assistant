@@ -147,6 +147,7 @@ class NBL:
             "api_key": self.api_key,
             "extended": 1,
             "season": season,
+            "per_page": 100
         }
 
         if int(meta.get("tvmaze_id", 0) or 0) != 0:
@@ -162,11 +163,19 @@ class NBL:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 for page in range(max_pages):
                     page_params = dict(params)
-                    if page > 0:
-                        page_params["page"] = page
+                    page_params["page"] = page
 
                     response = await client.post(self.search_url, params=page_params)
                     if response.status_code != 200:
+                        if response.status_code == 400 and page > 0:
+                            try:
+                                error_data = cast(dict[str, Any], response.json())
+                            except json.JSONDecodeError:
+                                error_data = {}
+                            error = error_data.get('error', {})
+                            message = str(error.get('message', '')) if isinstance(error, dict) else ''
+                            if "out of range" in message.lower() and "valid pages" in message.lower():
+                                break
                         console.print(f"[bold red]NBL HTTP request failed. Status: {response.status_code}")
                         console.print(f"[bold red]NBL Search Response Content (page {page}): {response.text}")
                         meta['skipping'] = "NBL"
@@ -205,7 +214,7 @@ class NBL:
                             dupes.append(result)
 
         except httpx.TimeoutException:
-            console.print("[bold red]NBL request timed out after 5 seconds")
+            console.print("[bold red]NBL request timed out after 10 seconds")
             meta['skipping'] = "NBL"
         except httpx.RequestError as e:
             console.print(f"[bold red]NBL an error occurred while making the request: {e}")
