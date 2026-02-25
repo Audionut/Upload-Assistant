@@ -71,6 +71,11 @@ class A4K(UNIT3D):
                 console.print(f"[red]{self.tracker} only accepts DISC, REMUX, WEBDL, and ENCODE uploads.")
             return False
 
+        if meta['is_disc'] not in ["BDMV", "DVD"] and not await self.common.check_language_requirements(
+            meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True, original_language=True
+        ):
+            return False
+
         if not meta['is_disc'] and meta['type'] in ['ENCODE', 'WEBRIP', 'DVDRIP', 'HDTV']:
             tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
             for track in tracks:

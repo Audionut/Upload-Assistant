@@ -1071,6 +1071,7 @@ class COMMON:
         check_subtitle: bool = False,
         require_both: bool = False,
         original_language: bool = False,
+        original_required: bool = False,
     ) -> bool:
         """
         Check if the media metadata meets specific language requirements for audio and/or subtitles.
@@ -1095,7 +1096,9 @@ class COMMON:
         :param original_language: If True, checks if the media's original language matches the audio
                                   track, allowing a fallback to subtitle-only validation.
         :type original_language: bool
-        :return: True if language requirements are met, False otherwise.
+        :param original_required: If True, the original language must be present in the audio tracks.
+        :type original_required: bool
+        :return: True if the media meets the specified language requirements, False otherwise.
         :rtype: bool
         """
         try:
@@ -1133,6 +1136,14 @@ class COMMON:
 
             if language_display:
                 original_ok = language_display in audio_languages
+
+            if original_required and not original_ok:
+                console.print(
+                    f"[red]Original language requirement not met for [bold]{tracker}[/bold].[/red]\n"
+                    f"[yellow]Required original audio language:[/yellow] {language_display}\n"
+                    f"[cyan]Found Audio Languages:[/cyan] {', '.join(audio_languages) or 'None'}"
+                )
+                return False
 
             audio_ok = (
                 not check_audio
