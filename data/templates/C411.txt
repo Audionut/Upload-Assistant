@@ -35,17 +35,24 @@
 
 [h3]🔊 Langue(s)[/h3]
 
-{% for line in audio_lines %}
-{{ line }}
+
+[table][tr][th]#[/th][th]Langue[/th][th]Canaux[/th][th]Codec[/th][/tr]
+
+{% for line in audio_lines_dict %}
+[tr][td]{{ loop.index }}[/td][td]{{ line.language }}[/td][td]{{ line.channels }}[/td][td]{{ line.format }} ({{ line.bitrate|round(2) }} KB/s)[/td][/tr]
 {% endfor %}
+[/table]
 
 {% if subtitle_lines %}
 
 [h3]💬 Sous-titre(s)[/h3]
+[table][tr][th]#[/th][th]Langue[/th][th]Format[/th][th]Type[/th][/tr]
+{% for line in subtitle_lines_dict %}
+[tr][td]{{ loop.index }}[/td][td]{{ line.language }}[/td][td]{{ line.format }}[/td][td]{{ line.type 
 
-{% for line in subtitle_lines %}
-{{ line }}
+}}[/td][/tr]
 {% endfor %}
+[/table]
 {% endif %}
 
 [b][color=#3d85c6]Team :[/color][/b] [i]{{ tag }}[/i]
