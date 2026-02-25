@@ -446,6 +446,10 @@ async def get_translation_fr(meta: dict[str, Any]) -> tuple[str, str]:
     tmdb_id = int(meta["tmdb_id"])
     category = str(meta["category"])
     tmdb_title, tmdb_overview = await get_tmdb_translations(tmdb_id, category, "fr")
+    # fallback in case the translated title is empty
+    if tmdb_title == '':
+        tmdb_title = meta.get("title","")
+
     meta["frtitle"] = french_title or tmdb_title
     meta["froverview"] = tmdb_overview
 
@@ -549,6 +553,7 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
 
     # pre‑compute the lines that were previously appended to ``desc_parts``
     audio_lines: list[str] = []
+    audio_lines_dict = []
     for obj in audio_tracks:
         if isinstance(obj, dict):
             bitrate = obj.get('BitRate')
@@ -563,15 +568,23 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
                 flags.append("Commentary")
             if " ad" in str(obj.get('Title')).lower():
                 flags.append("Audio Description")
+            line_dict = {}
+            line_dict['language'] = obj['Language']
+            line_dict['format'] = obj['Format']
+            line_dict['channels'] = obj['Channels']
+            line_dict['bitrate'] = kbps
+
 
             line = f"{obj['Language']} / {obj['Format']} / {obj['Channels']}ch / {kbps:.2f}KB/s"
             if flags:
                 line += " / " + " / ".join(flags)
             audio_lines.append(line)
+            audio_lines_dict.append(line_dict)
         else:
             audio_lines.append(f"*{obj}*")
 
     subtitle_lines: list[str] = []
+    subtitle_lines_dict = []
     if subtitle_tracks:
         for obj in subtitle_tracks:
             if isinstance(obj, dict):
@@ -583,7 +596,13 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
                 line = f"{obj['Language']} / {obj['Format']}"
                 if flags:
                     line += " / " + " / ".join(flags)
+                line_dict = {}
+                line_dict['language'] = obj['Language']
+                line_dict['format'] = obj['Format']
+                line_dict['type'] = ", ".join(flags)
                 subtitle_lines.append(line)
+                subtitle_lines_dict.append(line_dict)
+
             else:
                 subtitle_lines.append(f"*{obj}*")
 
@@ -608,7 +627,9 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
         'mal_id': meta.get('mal_id', ''),
         'description': description,
         'audio_lines': audio_lines,
+        'audio_lines_dict': audio_lines_dict,
         'subtitle_lines': subtitle_lines,
+        'subtitle_lines_dict': subtitle_lines_dict,
         'source': source,
         'service_longname': service_longname,
         'type': type,
