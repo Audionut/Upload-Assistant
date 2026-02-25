@@ -871,8 +871,13 @@ class AZTrackerBase:
                     f"{meta['title']} {meta.get('season')} {year_to_use}"
                 )
 
-        if meta.get('type', '') == 'DVDRIP' and meta.get('source', ''):
-            upload_name = upload_name.replace(meta['source'], '')
+        source = meta.get("source", "")
+        audio = meta.get("audio", "")
+        if meta.get("type", "") == "DVDRIP" and source:
+            upload_name = upload_name.replace(source, "")
+
+        if meta.get("is_disc", "") == "DVD":
+            upload_name = upload_name.replace(meta.get("region", ""), "").replace(source, meta.get("resolution", "")).replace(audio, f"{audio} {meta.get('video_codec', '')}")
 
         return re.sub(r'\s{2,}', ' ', upload_name)
 
