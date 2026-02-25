@@ -232,54 +232,92 @@ class VideoManager:
         filelist = sorted(filelist, key=os.path.getsize, reverse=True) if sorted_filelist else sorted(filelist)
         return video, filelist
 
-    async def get_resolution(self, guess: Any, folder_id: str, base_dir: str) -> tuple[str, bool]:
+    async def get_resolution(self, guess: Any, folder_id: str, base_dir: str, meta: dict[str, Any]) -> tuple[str, bool]:
         hfr = False
-        async with aiofiles.open(f'{base_dir}/tmp/{folder_id}/MediaInfo.json', encoding='utf-8') as f:
-            mi = cast(dict[str, Any], json.loads(await f.read()))
-            try:
-                width = mi['media']['track'][1]['Width']
-                height = mi['media']['track'][1]['Height']
-            except Exception:
-                width = 0
-                height = 0
+        mi: dict[str, Any] = {}
+        dvd_mi_text = ""
+        if meta['is_disc'] == "DVD":
+            meta_discs = meta.get('discs', [])
+            if meta_discs and isinstance(meta_discs, list) and isinstance(meta_discs[0], dict):
+                disc = cast(dict[str, Any], meta_discs[0])
+                disc_mi = disc.get('ifo_mi_json', {})
+                if isinstance(disc_mi, dict):
+                    mi = disc_mi
+                elif isinstance(disc_mi, str):
+                    try:
+                        loaded = json.loads(disc_mi)
+                        if isinstance(loaded, dict):
+                            mi = loaded
+                    except Exception:
+                        mi = {}
+                dvd_mi_text = str(disc.get('vob_mi', '') or disc.get('ifo_mi', ''))
+        else:
+            async with aiofiles.open(f'{base_dir}/tmp/{folder_id}/MediaInfo.json', encoding='utf-8') as f:
+                mi = cast(dict[str, Any], json.loads(await f.read()))
 
-            framerate = mi['media']['track'][1].get('FrameRate')
-            if not framerate or framerate == '0':
-                framerate = mi['media']['track'][1].get('FrameRate_Original')
-            if not framerate or framerate == '0':
-                framerate = mi['media']['track'][1].get('FrameRate_Num')
-            if framerate:
+        tracks = mi.get('media', {}).get('track', []) if isinstance(mi, dict) else []
+        video_track = tracks[1] if isinstance(tracks, list) and len(tracks) > 1 and isinstance(tracks[1], dict) else {}
+
+        try:
+            width = int(float(video_track.get('Width', 0)))
+            height = int(float(video_track.get('Height', 0)))
+        except Exception:
+            width = 0
+            height = 0
+
+        if (width == 0 or height == 0) and dvd_mi_text:
+            width_match = re.search(r'Width\s*:\s*(\d+)', dvd_mi_text, re.IGNORECASE)
+            height_match = re.search(r'Height\s*:\s*(\d+)', dvd_mi_text, re.IGNORECASE)
+            if width_match and height_match:
                 try:
-                    if int(float(framerate)) > 30:
-                        hfr = True
+                    width = int(width_match.group(1))
+                    height = int(height_match.group(1))
                 except Exception:
-                    hfr = False
-            else:
-                framerate = "24.000"
+                    width = 0
+                    height = 0
 
+        framerate = video_track.get('FrameRate')
+        if not framerate or framerate == '0':
+            framerate = video_track.get('FrameRate_Original')
+        if not framerate or framerate == '0':
+            framerate = video_track.get('FrameRate_Num')
+        if (not framerate or framerate == '0') and dvd_mi_text:
+            frame_match = re.search(r'Frame rate\s*:\s*([\d.]+)', dvd_mi_text, re.IGNORECASE)
+            if frame_match:
+                framerate = frame_match.group(1)
+        if framerate:
             try:
-                scan = mi['media']['track'][1]['ScanType']
+                if int(float(framerate)) > 30:
+                    hfr = True
             except Exception:
-                scan = "Progressive"
-            if not scan or scan == "Progressive":
-                scan = "p"
-            elif scan == "Interlaced":
-                scan = 'i'
-            elif framerate == "25.000":
-                scan = "p"
-            else:
-                # Fallback using regex on meta['uuid'] - mainly for HUNO fun and games.
-                match = re.search(r'\b(1080p|720p|2160p|576p|480p)\b', folder_id, re.IGNORECASE)
-                scan = "p" if match else "i"  # Assume progressive based on common resolution markers
-            width_list = [3840, 2560, 1920, 1280, 1024, 854, 720, 15360, 7680, 0]
-            height_list = [2160, 1440, 1080, 720, 576, 540, 480, 8640, 4320, 0]
-            width = await self.closest(width_list, int(width))
-            height = await self.closest(height_list, int(height))
-            res = f"{width}x{height}{scan}"
-            resolution = await mi_resolution(res, guess, width, scan)
+                hfr = False
+        else:
+            framerate = "24.000"
+
+        scan = str(video_track.get('ScanType', "Progressive"))
+        if (not scan or scan == "Progressive") and dvd_mi_text:
+            scan_match = re.search(r'Scan type\s*:\s*([^\r\n]+)', dvd_mi_text, re.IGNORECASE)
+            if scan_match:
+                scan = scan_match.group(1).strip()
+        if not scan or scan == "Progressive":
+            scan = "p"
+        elif scan == "Interlaced":
+            scan = 'i'
+        elif framerate == "25.000":
+            scan = "p"
+        else:
+            # Fallback using regex on meta['uuid'] - mainly for HUNO fun and games.
+            match = re.search(r'\b(1080p|720p|2160p|576p|480p)\b', folder_id, re.IGNORECASE)
+            scan = "p" if match else "i"  # Assume progressive based on common resolution markers
+        width_list = [3840, 2560, 1920, 1280, 1024, 854, 720, 15360, 7680, 0]
+        height_list = [2160, 1440, 1080, 720, 576, 540, 480, 8640, 4320, 0]
+        width = self.closest(width_list, int(width))
+        height = self.closest(height_list, int(height))
+        res = f"{width}x{height}{scan}"
+        resolution = await mi_resolution(res, guess, width, scan)
         return resolution, hfr
 
-    async def closest(self, lst: list[int], K: int) -> int:
+    def closest(self, lst: list[int], K: int) -> int:
         # Get closest, but not over
         lst = sorted(lst)
         mi_input = K

@@ -288,7 +288,7 @@ class Prep:
                     mi = meta['mediainfo']
 
                 meta['dvd_size'] = await self.disc_info_manager.get_dvd_size(meta['discs'], meta.get('manual_dvds'))
-                meta['resolution'], meta['hfr'] = await video_manager.get_resolution(guessit_fn(video), meta['uuid'], base_dir)
+                meta['resolution'], meta['hfr'] = await video_manager.get_resolution(guessit_fn(video), meta['uuid'], base_dir, meta)
                 meta['sd'] = await video_manager.is_sd(meta['resolution'])
 
         elif meta['is_disc'] == "HDDVD":
@@ -309,7 +309,7 @@ class Prep:
                 meta['mediainfo'] = mi
             else:
                 mi = meta['mediainfo']
-            meta['resolution'], meta['hfr'] = await video_manager.get_resolution(guessit_fn(video), meta['uuid'], base_dir)
+            meta['resolution'], meta['hfr'] = await video_manager.get_resolution(guessit_fn(video), meta['uuid'], base_dir, meta)
             meta['sd'] = await video_manager.is_sd(meta['resolution'])
 
         else:
@@ -381,7 +381,7 @@ class Prep:
                         mi = meta['mediainfo']
 
                     if meta.get('resolution') is None:
-                        meta['resolution'], meta['hfr'] = await video_manager.get_resolution(guessit_fn(video), meta['uuid'], base_dir)
+                        meta['resolution'], meta['hfr'] = await video_manager.get_resolution(guessit_fn(video), meta['uuid'], base_dir, meta)
 
                     meta['sd'] = await video_manager.is_sd(meta['resolution'])
                 else:
