@@ -5,10 +5,10 @@ from typing import Any, Optional
 import cli_ui
 
 from src.console import console
+from src.languages import languages_manager
 from src.rehostimages import RehostImagesManager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
-from src.languages import languages_manager
 
 Meta = dict[str, Any]
 Config = dict[str, Any]
@@ -71,7 +71,7 @@ class A4K(UNIT3D):
             if not meta.get('unattended'):
                 console.print(f"[red]{self.tracker} only accepts DISC, REMUX, WEBDL, and ENCODE uploads.")
             return False
-        
+
         if 'AV1' in meta.get('video_codec', ''):
             # AV1 has no bitrate requirements, so skip the bitrate check for AV1 uploads
             return should_continue
