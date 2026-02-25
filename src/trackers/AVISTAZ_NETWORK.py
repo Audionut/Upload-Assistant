@@ -877,7 +877,17 @@ class AZTrackerBase:
             upload_name = upload_name.replace(source, "")
 
         if meta.get("is_disc", "") == "DVD":
-            upload_name = upload_name.replace(meta.get("region", ""), "").replace(source, meta.get("resolution", "")).replace(audio, f"{audio} {meta.get('video_codec', '')}")
+            region = meta.get("region", "")
+            resolution = meta.get("resolution", "")
+            video_codec = str(meta.get("video_codec", "")).strip()
+
+            if region:
+                upload_name = upload_name.replace(region, "")
+            if source and resolution:
+                upload_name = upload_name.replace(source, resolution)
+            if audio:
+                codec_suffix = f" {video_codec}" if video_codec else ""
+                upload_name = upload_name.replace(audio, f"{audio}{codec_suffix}")
 
         return re.sub(r'\s{2,}', ' ', upload_name)
 
