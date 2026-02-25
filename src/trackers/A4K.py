@@ -72,10 +72,6 @@ class A4K(UNIT3D):
                 console.print(f"[red]{self.tracker} only accepts DISC, REMUX, WEBDL, and ENCODE uploads.")
             return False
 
-        if 'AV1' in meta.get('video_codec', ''):
-            # AV1 has no bitrate requirements, so skip the bitrate check for AV1 uploads
-            return should_continue
-
         if meta['is_disc'] not in ["BDMV", "DVD"] and not await self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True, original_language=True
         ):
