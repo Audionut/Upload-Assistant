@@ -31,6 +31,11 @@ class LST(UNIT3D):
             console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
             return False
 
+        if meta['is_disc'] not in ["BDMV", "DVD"] and not await self.common.check_language_requirements(
+            meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True, original_language=True
+        ):
+            return False
+
         return should_continue
 
     async def get_type_id(

@@ -76,6 +76,11 @@ class A4K(UNIT3D):
             # AV1 has no bitrate requirements, so skip the bitrate check for AV1 uploads
             return should_continue
 
+        if meta['is_disc'] not in ["BDMV", "DVD"] and not await self.common.check_language_requirements(
+            meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True, original_language=True
+        ):
+            return False
+
         # check bitrate requirements for A4K uploads, but only if it's not a disc upload since discs can have variable bitrates and A4K doesn't specify bitrate requirements for disc uploads
         if not meta['is_disc'] and meta['type'] in ['ENCODE', 'WEBDL']:
             tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
