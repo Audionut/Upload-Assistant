@@ -63,8 +63,10 @@ async def get_extra_french_tag(meta: dict[str, Any], check_origin: bool) -> str:
 
     for _, item in enumerate(audio_track):
         title = (item.get("Title") or "").lower()
-        lang = item.get('Language', "").lower()
-
+        try:
+            lang = item.get('Language', "").lower()
+        except:
+            lang = ""
         if lang == "fr-ca" or "vfq" in title:
             vfq = True
         elif lang == "fr-fr" or "vff" in title:
