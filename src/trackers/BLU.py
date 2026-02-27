@@ -57,6 +57,11 @@ class BLU(UNIT3D):
             else:
                 return False
 
+        if meta['type'] in ["ENCODE"] and meta['resolution'] in ['576p', '576i', '480p', '480i']:
+            if not meta['unattended']:
+                console.print(f'[bold red]Encodes must be at least 720p resolution for {self.tracker}.[/bold red]')
+            return False
+        
         if not meta['valid_mi_settings']:
             console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
             return False
