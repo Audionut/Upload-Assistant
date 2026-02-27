@@ -1,0 +1,65 @@
+[h1]{{ title }} ({{ year }})[/h1]
+
+{% if category == "TV" %}
+[h2]Saison {{ season }} {% if episode %}Episode {{ episode }}{% endif %}[/h2]
+{% endif %}
+
+[img]{{ poster }}[/img]
+
+
+[h2]🎬 Informations[/h2]
+
+[b]Pays :[/b] {{pays}}
+[b]Genres :[/b] {{genre}}
+[b]Date de sortie :[/b] {{release_date}}
+{% if video_duration %}[b]Durée :[/b] {{video_duration}}{% endif %}
+
+{% if imdb_url %}[url={{ imdb_url }}]IMDb[/url]{% endif %}
+{% if tmdb %}[url=https://www.themoviedb.org/{{ category.lower() }}/{{ tmdb }}]TMDB[/url]{% endif %}
+{% if tvdb_id %}[url=https://www.thetvdb.com/?id={{ tvdb_id }}&tab=series]TVDB[/url]{% endif %}
+{% if tvmaze_id %}[url=https://www.tvmaze.com/shows/{{ tvmaze_id }}]TVmaze[/url]{% endif %}
+{% if mal_id %}[url=https://myanimelist.net/anime/{{ mal_id }}]MyAnimeList[/url]{% endif %}
+
+[h3]📖 Synopsis[/h3]
+
+{{description}}
+
+[h2]⚙️ Détails Techniques[/h2]
+
+[b][color=#3d85c6]Source :[/color][/b] [i]{{ source }}   {{ service_longname }}[/i]
+[b][color=#3d85c6]Type :[/color][/b] [i]{{ type }}[/i]
+[b][color=#3d85c6]Résolution vidéo :[/color][/b][i]{{ resolution }}[/i]
+[b][color=#3d85c6]Format vidéo :[/color][/b] [i]{{ container }}[/i]
+[b][color=#3d85c6]Codec vidéo :[/color][/b] [i]{{ video_codec }}   {{ hdr }}[/i]
+[b][color=#3d85c6]Débit vidéo :[/color][/b] [i]{{ mbps|round(2)  }} MB/s[/i]
+
+[h3]🔊 Langue(s)[/h3]
+
+
+[table][tr][th]#[/th][th]Langue[/th][th]Canaux[/th][th]Codec[/th][/tr]
+
+{% for line in audio_lines_dict %}
+[tr][td]{{ loop.index }}[/td][td]{{ line.language }}[/td][td]{{ line.channels }}[/td][td]{{ line.format }} ({{ line.bitrate|round(2) }} KB/s)[/td][/tr]
+{% endfor %}
+[/table]
+
+{% if subtitle_lines %}
+
+[h3]💬 Sous-titre(s)[/h3]
+[table][tr][th]#[/th][th]Langue[/th][th]Format[/th][th]Type[/th][/tr]
+{% for line in subtitle_lines_dict %}
+[tr][td]{{ loop.index }}[/td][td]{{ line.language }}[/td][td]{{ line.format }}[/td][td]{{ line.type 
+
+}}[/td][/tr]
+{% endfor %}
+[/table]
+{% endif %}
+
+[b][color=#3d85c6]Team :[/color][/b] [i]{{ tag }}[/i]
+[b][color=#3d85c6]  Taille totale :[/color][/b] {{ size_gib|round(2)  }} GB
+
+{% if images %}{% for image in images %}
+[img]{{ image['raw_url'] }}[/img]
+{% endfor %}{% endif %}
+
+[url=https://github.com/Audionut/Upload-Assistant]{{ signature }}[/url]
