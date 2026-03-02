@@ -303,8 +303,6 @@ class VideoManager:
             scan = "p"
         elif scan == "Interlaced":
             scan = 'i'
-        elif framerate == "25.000":
-            scan = "p"
         else:
             # Fallback using regex on meta['uuid'] - mainly for HUNO fun and games.
             match = re.search(r'\b(1080p|720p|2160p|576p|480p)\b', folder_id, re.IGNORECASE)
