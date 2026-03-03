@@ -210,6 +210,11 @@ class C411:
         else:
             video_codec = str(meta.get('video_codec', "")).replace('H.264', 'H264').replace('H.265', 'H265')
             video_encode = str(meta.get('video_encode', "")).replace('H.264', 'H264').replace('H.265', 'H265')
+        temp = meta.get('type',"")
+        if meta.get('type',"") == "WEBDL" and '264' in video_encode:
+            video_encode = "x264"
+        if meta.get('type',"") == "WEBDL" and '265' in video_encode:
+            video_encode = "x265"
         edition = str(meta.get('edition', ""))
         if 'hybrid' in edition.upper():
             edition = edition.replace('Hybrid', '').strip()
