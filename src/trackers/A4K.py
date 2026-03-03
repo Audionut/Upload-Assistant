@@ -5,6 +5,7 @@ from typing import Any, Optional
 import cli_ui
 
 from src.console import console
+from src.languages import languages_manager
 from src.rehostimages import RehostImagesManager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -25,7 +26,7 @@ class A4K(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.rehost_images_manager = RehostImagesManager(config)
-        self.approved_image_hosts = ['imgbox', 'ptscreens', 'imgbb', 'imgur', 'postimg']
+        self.approved_image_hosts = ['ptpimg', 'onlyimage','imgbox', 'ptscreens', 'imgbb', 'imgur', 'postimg']
         self.banned_groups = ["BiTOR", "DepraveD", "Flights", "SasukeducK", "SPDVD", "TEKNO3D"]
         pass
 
@@ -76,7 +77,8 @@ class A4K(UNIT3D):
         ):
             return False
 
-        if not meta['is_disc'] and meta['type'] in ['ENCODE', 'WEBRIP', 'DVDRIP', 'HDTV']:
+        # check bitrate requirements for A4K uploads, but only if it's not a disc upload since discs can have variable bitrates and A4K doesn't specify bitrate requirements for disc uploads
+        if not meta['is_disc'] and meta['type'] in ['ENCODE', 'WEBDL']:
             tracks = meta.get('mediainfo', {}).get('media', {}).get('track', [])
             for track in tracks:
                 if track.get('@type') == "Video":
@@ -92,7 +94,6 @@ class A4K(UNIT3D):
 
                             if bit_rate_num is not None:
                                 bit_rate_kbps = bit_rate_num / 1000
-
                                 if meta.get('category') == "MOVIE" and bit_rate_kbps < 15000:
                                     if not meta.get('unattended', False):
                                         console.print(f"Video bitrate too low: {bit_rate_kbps:.0f} kbps for A4K movie uploads.")
@@ -142,6 +143,8 @@ class A4K(UNIT3D):
             'imgur.com': 'imgur',
             'postimg.cc': 'postimg',
             'ptscreens.com': 'ptscreens',
+            'onlyimage.org': 'onlyimage',
+            'ptpimg.me': 'ptpimg',
         }
         await self.rehost_images_manager.check_hosts(
             meta,
@@ -151,3 +154,15 @@ class A4K(UNIT3D):
             approved_image_hosts=self.approved_image_hosts,
         )
         return
+
+    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
+        a4k_name: str = meta["name"]
+        if not meta.get('language_checked', False):
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
+        audio_languages: list[str] = meta['audio_languages']
+        if audio_languages and not await languages_manager.has_english_language(audio_languages):
+            foreign_lang = audio_languages[0].upper()
+            if meta.get('is_disc') != "BDMV":
+                a4k_name = a4k_name.replace(meta['resolution'], f"{foreign_lang} {meta['resolution']}", 1)
+        console.print(f"[yellow]Generated name for {self.tracker}: [bold]{a4k_name}[/bold][/yellow]")
+        return {'name': a4k_name}
