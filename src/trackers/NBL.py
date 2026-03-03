@@ -2,6 +2,7 @@
 import json
 import re
 from typing import Any, Optional, Union, cast
+from urllib.parse import urlencode
 
 import aiofiles
 import cli_ui
@@ -145,10 +146,15 @@ class NBL:
         params: dict[str, Any] = {
             "action": "search",
             "api_key": self.api_key,
-            "extended": 1,
-            "season": season,
-            "per_page": 100
         }
+
+        try:
+            season_int = int(season) if season is not None else 0
+        except (TypeError, ValueError):
+            season_int = 0
+
+        if season_int > 0:
+            params["season"] = season_int
 
         if int(meta.get("tvmaze_id", 0) or 0) != 0:
             params["tvmaze"] = int(meta["tvmaze_id"])
@@ -157,15 +163,19 @@ class NBL:
         else:
             params["series"] = meta["title"]
 
+        params['tags'] = [meta['resolution']]
+        params['per_page'] = 100
+
         response: Optional[httpx.Response] = None
         try:
-            max_pages = int(self.config['TRACKERS'][self.tracker].get('search_max_pages', 30))
+            max_pages = int(self.config['TRACKERS'][self.tracker].get('search_max_pages', 10))
             async with httpx.AsyncClient(timeout=10.0) as client:
                 for page in range(max_pages):
                     page_params = dict(params)
                     page_params["page"] = page
+                    search_url_with_query = f"{self.search_url}?{urlencode(page_params, doseq=True)}"
 
-                    response = await client.post(self.search_url, params=page_params)
+                    response = await client.get(search_url_with_query)
                     if response.status_code != 200:
                         if response.status_code == 400 and page > 0:
                             try:
