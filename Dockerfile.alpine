@@ -2,6 +2,8 @@ FROM python:3.12-alpine AS base
 
 ENV PIP_VERSION=25.3
 ENV REQUESTS_VERSION=2.32.5
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 
 # Install system dependencies including mono
 RUN apk add --no-cache \
@@ -64,6 +66,17 @@ RUN python3 -c "from bin.get_mkbrr import MkbrrBinaryManager; MkbrrBinaryManager
 # Download bdinfo binary for the container architecture using the docker helper
 RUN python3 bin/get_bdinfo_docker.py
 
+RUN chown -R 1000:1000 /Upload-Assistant/bin/mkbrr \
+    && chown -R 1000:1000 /Upload-Assistant/bin/MI \
+    && chown -R 1000:1000 /Upload-Assistant/bin/bdinfo \
+    && chmod -R +rx /Upload-Assistant/bin/mkbrr \
+    && chmod -R +rx /Upload-Assistant/bin/MI \
+    && chmod -R +rx /Upload-Assistant/bin/bdinfo
+
+# Create tmp directory with appropriate permissions
+RUN mkdir -p /Upload-Assistant/tmp && chmod 1777 /Upload-Assistant/tmp
+ENV TMPDIR=/Upload-Assistant/tmp
+
 # START BUILDING SLIM IMAGE
 FROM base
 
@@ -74,22 +87,17 @@ ENV PATH="/venv/bin:$PATH"
 # Copy application
 COPY --from=builder-app /Upload-Assistant /Upload-Assistant
 
-# Set workdir
 WORKDIR /Upload-Assistant
 
-# Ensure mkbrr is executable
-RUN find bin/mkbrr -name "mkbrr" -exec chmod +x {} \; && \
-    find bin/bdinfo -name "bdinfo" -exec chmod +x {} \;
+EXPOSE 5000
 
-# Enable non-root access while still letting Upload-Assistant tighten mkbrr permissions at runtime
-RUN chown -R 1000:1000 /Upload-Assistant/bin/mkbrr
+STOPSIGNAL SIGTERM
 
-# Enable non-root access for DVD MediaInfo binary
-RUN chown -R 1000:1000 /Upload-Assistant/bin/MI
+# Health check for WebUI mode — ignored when running CLI
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -sf http://localhost:5000/api/health || exit 1
 
-# Create tmp directory with appropriate permissions
-RUN mkdir -p /Upload-Assistant/tmp && chmod 777 /Upload-Assistant/tmp
-ENV TMPDIR=/Upload-Assistant/tmp
-
-# Set the entry point for the container
 ENTRYPOINT ["python", "/Upload-Assistant/upload.py"]
+
+# Default: show help when no arguments are provided
+CMD ["-h"]
