@@ -1,4 +1,4 @@
-v7.0.3
+v7.1.0
 
 ### NOTE:
 - This project is in development freeze. Only critical bugs will be addressed moving forward.
@@ -13,3 +13,7 @@ v7.0.3
 
 ## Release notes:
 - thatonePRguy added some features to the webui, including file browser searching and better mobile view support.
+- Spy-God added DesiTorrents support
+- maksii refactored the docker handling and documentation
+- some tvdb related fixes
+- Updated NBL api support

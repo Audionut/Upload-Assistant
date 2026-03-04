@@ -1,4 +1,62 @@
-__version__ = "v7.0.2"
+__version__ = "v7.1.0"
+
+"""
+Release Notes for version v7.1.0 (2026-03-03):
+
+# 
+# ### NOTE:
+# - This project is in development freeze. Only critical bugs will be addressed moving forward.
+# - More details on the future of Upload Assistant will be available at a later date.
+# - Thanks to all who have contributed to this project, to everyone who has used Upload Assistant and everyone who has shared this project for the benefit of others.
+# - A special thankyou to all of the site staffers who have shown great patience and understanding, during the development of Upload Assistant. Each and everyone one of you, who fixed issues, and quietly addressed those same issues with me. I can't emphasize enough how that has allowed me to focus entirely on fixing the issues code side, and the boost to motivation that it gave.
+# - To those of you who I will not name, working in tandem to bring new features to the ecosystem, you rock.
+# - Specifically, to everyone at Aither. You're unwavering support has been truly appreciated.
+# - Last but certainly not least, a huge thanks to @wastaken7, who contributed greatly to the success of Upload Assistant. Not only did wasteken7 being a whole suite of new site support, but he persistently maintained all of those sites. The sheer amount of refactoring work on the codebase, to increase the ease of development cannot be overstated.
+# - Upload Assistant is not dead. I look forward to sharing a new chapter in the future.
+# 
+# 
+# ## Release notes:
+# - thatonePRguy added some features to the webui, including file browser searching and better mobile view support.
+# - Spy-God added DesiTorrents support
+# - maksii refactored the docker handling and documentation
+# - some tvdb related fixes
+# - Updated NBL api support
+# 
+# ---
+# 
+# ## What's Changed
+# 
+# * BJS: change TMDb output, skip tags for existing groups (#1229) by @wastaken7 in 42fc2cc
+# * feat(webui): add search functionality to file browser (#1228) by @PRguy in f35a556
+# * Fix mkbrr: Resolve TypeError (int vs str) and support system binary path (#1233) by @Spy-God in e036ff7
+# * feat(webui): add mobile responsive layout for main and config views (#1231) by @PRguy in 652e135
+# * Add DesiTorrents (DT) tracker support (#1224) by @Spy-God in a76b6ac
+# * BJS(fix): Don't skip tags (#1239) by @wastaken7 in 231797a
+# * shutdown (#1238) by @Audionut in c9dbd01
+# * refactor(docker): enhance Docker setup and documentation (#1245) by @maksii in 452bcff
+# * reset tvdb series name by @Audionut in 2014d84
+# * SHRI(fix): WEBRIP type (#1255) by @TheDarkMan in 0991595
+# * Update bluray_com.py to fix extract_cover_images (#1252) by @9Oc in 6818dbd
+# * fix(bdmv): manual resolution handling by @Audionut in f8a3679
+# * fix(tvdb): handle when year not in alias by @Audionut in df93bbd
+# * CBR: enable request search (#1267) by @wastaken7 in ccb96f0
+# * BLU: update banned groups (#1263) by @vmt5m3mjb in 92febfe
+# * GPW: Add avc codec_map (#1256) by @xslidi in 7f58728
+# * Aither: fix language requirements (#1264) by @vmt5m3mjb in 557dd86
+# * A4K: fix language requirements (#1265) by @vmt5m3mjb in ebc6ab7
+# * LST: fix language requirements (#1266) by @vmt5m3mjb in 49fd729
+# * TVC: Add constants and refactor description building methods (#1261) by @Lusephur in 8a1ee44
+# * GPW: fix new group torrent uploading failure (#1258) by @xslidi in 3dc255b
+# * A4K: adding foreign language changes & img hosters (#1260) by @llm in 316d950
+# * DC: Add option to disable metadata-based names for torrents (#1268) by @wastaken7 in e5dffce
+# * AvistaZ Network: Fix raw DVD names (#1269) by @wastaken7 in da8bff5
+# * fix(DVD): scantype handling (#1270) by @Audionut in 5c51bf3
+# * NBL api update (#1274) by @Audionut in d2e31b4
+# * release notes by @Audionut in e26f94f
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v7.0.2...v7.1.0
+"""
+
 
 """
 Release Notes for version v7.0.2 (2026-02-07):
