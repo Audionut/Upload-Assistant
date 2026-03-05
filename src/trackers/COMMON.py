@@ -1212,7 +1212,7 @@ class COMMON:
             language_display = None
             original_ok = False
             if original_language:
-                original_language_raw = meta.get("original_language", []) if not meta.get('manual_language', False) else meta.get("manual_language", [])
+                original_language_raw = meta.get("original_language", [])
                 first_lang = ""
                 if original_language_raw:
                     if isinstance(original_language_raw, str):
@@ -1238,7 +1238,7 @@ class COMMON:
                     f"[yellow]Required original audio language:[/yellow] {language_display}\n"
                     f"[cyan]Found Audio Languages:[/cyan] {', '.join(audio_languages) or 'None'}"
                 )
-                return False
+                return not meta.get('unattended') and cli_ui.ask_yes_no("Do you want to upload anyway?", default=False)
 
             audio_ok = (
                 not check_audio
