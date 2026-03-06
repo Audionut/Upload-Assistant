@@ -43,6 +43,8 @@ class C411:
                 sub_cat_id = '6'
         elif meta['category'] == 'TV':
             sub_cat_id = '2' if meta.get('mal_id') else '7'
+            if "reality" in genres:
+                sub_cat_id = 5
 
         return sub_cat_id
 
@@ -210,11 +212,7 @@ class C411:
         else:
             video_codec = str(meta.get('video_codec', "")).replace('H.264', 'H264').replace('H.265', 'H265')
             video_encode = str(meta.get('video_encode', "")).replace('H.264', 'H264').replace('H.265', 'H265')
-        temp = meta.get('type',"")
-        if meta.get('type',"") == "WEBDL" and '264' in video_encode:
-            video_encode = "x264"
-        if meta.get('type',"") == "WEBDL" and '265' in video_encode:
-            video_encode = "x265"
+        #video_encode = "x264"
         edition = str(meta.get('edition', ""))
         if 'hybrid' in edition.upper():
             edition = edition.replace('Hybrid', '').strip()

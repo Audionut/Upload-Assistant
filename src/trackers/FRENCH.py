@@ -552,6 +552,8 @@ async def get_desc_full(meta: dict[str, Any], tracker) -> str:
     service_longname = str(meta.get('service_longname', ""))
     season = str(meta.get('season_int', ''))
     episode = str(meta.get('episode_int', ''))
+    if episode == '0':
+        episode = ''
 
     # pre‑compute the lines that were previously appended to ``desc_parts``
     audio_lines: list[str] = []
