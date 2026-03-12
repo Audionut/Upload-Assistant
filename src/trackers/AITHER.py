@@ -43,6 +43,8 @@ class AITHER(UNIT3D):
     async def get_additional_data(self, meta: dict[str, Any]):
         data = {
             'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
+            'hdr': 'HDR' in meta['hdr'] if meta.get('hdr') else False,
+            'dv': 'DV' in meta['hdr'] if meta.get('hdr') else False,
         }
 
         return data
