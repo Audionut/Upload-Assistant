@@ -359,7 +359,7 @@ config = {
             "link_dir_name": "",
             "api_key": "",
             "anon": False,
-            # Send uploads to Aither modq for staff approval
+            # Send uploads to Aura4K modq for staff approval
             "modq": False,
         },
 

@@ -131,7 +131,7 @@ class A4K(UNIT3D):
 
     async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
         data = {
-            'modq': await self.get_flag(meta, 'modq'),
+            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
         }
 
         return data

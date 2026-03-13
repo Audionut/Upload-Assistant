@@ -290,7 +290,7 @@ class UNIT3D:
         # Used to add additional data if needed
         """
         data = {
-            'modq': await self.get_flag(meta, 'modq'),
+            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
             'draft': await self.get_flag(meta, 'draft'),
         }
         """
