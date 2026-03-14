@@ -294,7 +294,7 @@ class VideoManager:
         else:
             framerate = "24.000"
 
-        scan = str(video_track.get('ScanType', "Progressive"))
+        scan = video_track.get('ScanType', "Progressive")
         if (not scan or scan == "Progressive") and dvd_mi_text:
             scan_match = re.search(r'Scan type\s*:\s*([^\r\n]+)', dvd_mi_text, re.IGNORECASE)
             if scan_match:
