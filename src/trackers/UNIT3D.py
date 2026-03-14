@@ -1,5 +1,4 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# import discord
 import asyncio
 import glob
 import json
@@ -290,7 +289,7 @@ class UNIT3D:
         # Used to add additional data if needed
         """
         data = {
-            'modq': await self.get_flag(meta, 'modq'),
+            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
             'draft': await self.get_flag(meta, 'draft'),
         }
         """

@@ -372,7 +372,7 @@ class TRACKER_SETUP:
         if result:
             if not meta['unattended'] or meta.get('unattended_confirm', False):
                 try:
-                    if not cli_ui.ask_yes_no(cli_ui.red, "Do you want to continue anyway?", default=False):
+                    if cli_ui.ask_yes_no(cli_ui.red, "Do you want to continue anyway?", default=False):
                         return False
                 except EOFError:
                     console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
