@@ -1,4 +1,27 @@
-__version__ = "v7.1.0"
+__version__ = "v7.1.1"
+
+"""
+Release Notes for version v7.1.1 (2026-03-13):
+
+# 
+# ### NOTE:
+# - Bugix release
+# - webui health endpoint now has a rate limit of 70 requests per hour.
+# 
+# ---
+# 
+# ## What's Changed
+# 
+# * original language mapping (#1278) by @Audionut in cb8964c
+# * fix: override default rate limit for health endpoint by @Audionut in a6ed307
+# * Fix continue anyway on banned group detection (#1275) by @mrz948 in 829a6d6
+# * fix(IS): cartoon category and upload success_text (#1284) by @wastaken7 in f277cb6
+# * AITHER: support new DV HDR flags (#1287) by @markhc in 84b6f7f
+# * release notes by @Audionut in c5d0b9c
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v7.1.0...v7.1.1
+"""
+
 
 """
 Release Notes for version v7.1.0 (2026-03-03):

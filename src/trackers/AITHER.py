@@ -24,7 +24,6 @@ class AITHER(UNIT3D):
         self.requests_url = f'{self.base_url}/api/requests/filter'
         self.trumping_url = f'{self.base_url}/api/trumping-reports/filter'
         self.banned_groups: list[str] = []
-        pass
 
     async def get_additional_checks(self, meta: dict[str, Any]):
         should_continue = True
@@ -41,10 +40,12 @@ class AITHER(UNIT3D):
         return should_continue
 
     async def get_additional_data(self, meta: dict[str, Any]):
+        hdr_value = meta.get('hdr', '')
+
         data = {
             'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
-            'hdr': 'HDR' in meta['hdr'] if meta.get('hdr') else False,
-            'dv': 'DV' in meta['hdr'] if meta.get('hdr') else False,
+            'hdr': any(flag in hdr_value for flag in ['HDR', 'HLG']),
+            'dv': 'DV' in hdr_value,
         }
 
         return data
