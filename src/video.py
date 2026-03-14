@@ -153,7 +153,9 @@ class VideoManager:
             if debug:
                 console.print("[blue]Scanning directory for video files...[/blue]")
             try:
-                entries = [e for e in os.listdir(videoloc) if os.path.isfile(os.path.join(videoloc, e))]
+                # entries = [e for e in os.listdir(videoloc) if os.path.isfile(os.path.join(videoloc, e))]
+                entries = [os.path.join(dp, f) for dp, dn, filenames in os.walk(videoloc) for f in filenames ]
+                #entries = list (os.walk(videoloc))
             except Exception:
                 entries = []
 
