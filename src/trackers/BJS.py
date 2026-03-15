@@ -974,19 +974,10 @@ class BJS:
         """
         Extracts runtime from metadata and converts total minutes into hours and minutes.
         """
-        raw_runtime = meta.get('runtime', 0)
-
-        try:
-            total_minutes = max(0, int(raw_runtime))
-        except (ValueError, TypeError):
-            total_minutes = 0
-
+        total_minutes = meta.get("video_duration", 0)
         hours, minutes = divmod(total_minutes, 60)
 
-        return {
-            'hours': hours,
-            'minutes': minutes
-        }
+        return hours, minutes
 
     def get_release_date(self) -> str:
         raw_date_string = self.main_tmdb_data.get('first_air_date') or self.main_tmdb_data.get('release_date')
@@ -1211,37 +1202,40 @@ class BJS:
         category = meta['category']
         original_title, brazilian_title = self.get_title(meta)
         width, height = self.get_resolution(meta)
+        hours, minutes = self.get_runtime(meta)
 
         data: dict[str, Any] = {}
 
         # These fields are common across all upload types
-        data.update({
-            'audio': await self.get_audio(meta),
-            'auth': BJS.secret_token,
-            'codecaudio': self.get_audio_codec(meta),
-            'codecvideo': self.get_video_codec(meta),
-            'duracaoHR': self.get_runtime(meta).get('hours'),
-            'duracaoMIN': self.get_runtime(meta).get('minutes'),
-            'duracaotipo': 'selectbox',
-            'fichatecnica': await self.build_description(meta),
-            'formato': self.get_container(meta),
-            'idioma': self.get_languages(),
-            'imdblink': self.get_imdblink(meta),
-            'qualidade': self.get_bitrate(meta),
-            'release': meta.get('service_longname', ''),
-            'remaster_title': self.build_remaster_title(meta),
-            'resolucaoh': height,
-            'resolucaow': width,
-            'sinopse': await self.get_overview(),
-            'submit': 'true',
-            'tags': await self.get_tags(),
-            'tipolegenda': await self.get_subtitle(meta),
-            'title': original_title,
-            'titulobrasileiro': brazilian_title,
-            'traileryoutube': self.get_trailer(meta),
-            'type': self.get_type(meta),
-            'year': self.get_year(meta),
-        })
+        data.update(
+            {
+                "audio": await self.get_audio(meta),
+                "auth": BJS.secret_token,
+                "codecaudio": self.get_audio_codec(meta),
+                "codecvideo": self.get_video_codec(meta),
+                "duracaoHR": str(hours),
+                "duracaoMIN": str(minutes),
+                "duracaotipo": "selectbox",
+                "fichatecnica": await self.build_description(meta),
+                "formato": self.get_container(meta),
+                "idioma": self.get_languages(),
+                "imdblink": self.get_imdblink(meta),
+                "qualidade": self.get_bitrate(meta),
+                "release": meta.get("service_longname", ""),
+                "remaster_title": self.build_remaster_title(meta),
+                "resolucaoh": height,
+                "resolucaow": width,
+                "sinopse": await self.get_overview(),
+                "submit": "true",
+                "tags": await self.get_tags(),
+                "tipolegenda": await self.get_subtitle(meta),
+                "title": original_title,
+                "titulobrasileiro": brazilian_title,
+                "traileryoutube": self.get_trailer(meta),
+                "type": self.get_type(meta),
+                "year": self.get_year(meta),
+            }
+        )
 
         # These fields are common in movies and TV shows, even if it's anime
         if category == 'MOVIE':

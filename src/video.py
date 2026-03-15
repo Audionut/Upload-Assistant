@@ -384,7 +384,19 @@ class VideoManager:
                     console.print("[red]No valid duration found in MediaInfo General track[/red]")
                 return None
         else:
-            return None
+            length = meta.get("bdinfo", {}).get("length", "")
+            if length:
+                try:
+                    hours, minutes, seconds = length.split(":")
+                    return int(hours) * 60 + int(minutes)
+                except ValueError:
+                    if meta["debug"]:
+                        console.print(f"[red]Invalid duration value: {length}[/red]")
+                    return None
+            else:
+                if meta["debug"]:
+                    console.print("[red]No valid duration found in BDInfo[/red]")
+                return None
 
     async def get_container(self, meta: dict[str, Any]) -> str:
         if meta.get('is_disc', '') == 'BDMV':
