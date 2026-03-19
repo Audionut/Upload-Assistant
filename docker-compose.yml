@@ -89,7 +89,7 @@ services:
 
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:5000/api/health"]
-      interval: 30s
+      interval: 60s
       timeout: 5s
       start_period: 10s
       retries: 3
