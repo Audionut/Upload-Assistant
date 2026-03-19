@@ -238,6 +238,9 @@ class SPD:
         bbcode = BBCODE()
         description = bbcode.remove_img_resize(description)
         description = bbcode.convert_named_spoiler_to_normal_spoiler(description)
+        description = description.replace("[note]", "Note: ").replace("[/note]", "").replace("[code]", "").replace("[/code]", "").replace("[*]", "• ")
+        description = bbcode.remove_spoiler(description)
+        description = bbcode.remove_list(description)
         description = bbcode.remove_extra_lines(description)
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
