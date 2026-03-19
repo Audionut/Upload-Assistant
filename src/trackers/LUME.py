@@ -1,5 +1,4 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import re
 from typing import Any
 
 import cli_ui
@@ -54,16 +53,7 @@ class LUME(UNIT3D):
             console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
             return False
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                console.print(f"[bold red]Pornography is not allowed at {self.tracker}.[/bold red]")
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
-                    return False
-            else:
-                return False
+        if not self.common.check_and_confirm_adult_media_upload(meta, self.tracker):
+            return False
 
         return should_continue

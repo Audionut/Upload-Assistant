@@ -141,6 +141,7 @@ class Prep:
         meta['audio_languages'] = None
         meta['subtitle_languages'] = None
         meta['aither_trumpable'] = None
+        meta["adult_media"] = False
 
         folder_id = os.path.basename(meta['path'])
         if meta.get('uuid') is None:
@@ -1246,6 +1247,7 @@ class Prep:
                     unique_genres.append(genre)
 
             meta['combined_genres'] = ', '.join(unique_genres) if unique_genres else ''
+            meta["adult_media"] = self.check_adult_media(meta)
 
         # return duplicate ids so I don't have to catch every site file
         # this has the other advantage of stringing imdb for this object
@@ -1266,6 +1268,14 @@ class Prep:
             console.print(f"Metadata processed in {meta_finish_time - meta_start_time:.2f} seconds")
 
         return meta
+
+    def check_adult_media(self, meta) -> bool:
+        adult_keywords = ["xxx", "erotic", "porn", "adult", "orgy"]
+        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
+        if meta.get("tmdb_adult_media", False):
+            return True
+        else:
+            return bool(any(re.search(rf"(^|,\s*){re.escape(keyword)}(\s*,|$)", genres, re.IGNORECASE) for keyword in adult_keywords))
 
     async def get_cat(self, _video: str, meta: dict[str, Any]) -> Optional[str]:
         if meta.get('manual_category'):

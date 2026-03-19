@@ -47,11 +47,7 @@ class OE(UNIT3D):
         pass
 
     async def get_additional_checks(self, meta: Meta) -> bool:
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            if not meta['unattended']:
-                console.print('[bold red]Erotic not allowed at OE.')
+        if not self.common.check_and_confirm_adult_media_upload(meta, self.tracker):
             return False
 
         return not (meta['is_disc'] != "BDMV" and not await self.common.check_language_requirements(meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True))
