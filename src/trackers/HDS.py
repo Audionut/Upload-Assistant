@@ -205,7 +205,11 @@ class HDS:
             try:
                 response = await self.session.get(search_url, params=params)
                 response.raise_for_status()
-                relevant_html = response.text.split("Show/Hide Categories", 1)[1]
+                parts = response.text.split("Show/Hide Categories", 1)
+                if len(parts) < 2:
+                    console.print(f"[bold yellow]{self.tracker}: Unexpected page structure on page {current_page}, stopping search[/bold yellow]")
+                    break
+                relevant_html = parts[1]
                 soup = BeautifulSoup(relevant_html, "html.parser")
                 rows = soup.select("tr:has(td.lista)")
 
