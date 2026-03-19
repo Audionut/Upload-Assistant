@@ -1,5 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
+import glob
 import importlib
 import json
 import os
@@ -14,6 +15,7 @@ import aiofiles
 import cli_ui
 import httpx
 from bs4 import BeautifulSoup
+from pymediainfo import MediaInfo
 
 import bbcode
 from cogs.redaction import Redaction
@@ -372,6 +374,12 @@ class AZTrackerBase:
         if meta.get('is_disc') == 'BDMV':
             summary_file = 'BD_SUMMARY_EXT_00' if self.tracker == 'CZ' else 'BD_SUMMARY_00'
             info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/{summary_file}.txt"
+        elif meta.get("is_disc") == "DVD":
+            vob_files = glob.glob(os.path.join(meta["path"], "**/*.vob"), recursive=True)
+            if vob_files:
+                largest_vob = max(vob_files, key=os.path.getsize)
+                vob_mi_obj = MediaInfo.parse(largest_vob, output="STRING")
+                return vob_mi_obj
         else:
             info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/MEDIAINFO_CLEANPATH.txt"
 
