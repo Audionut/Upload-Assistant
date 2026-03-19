@@ -173,12 +173,18 @@ class HDS:
         return description
 
     async def search_existing(self, meta: Meta, _disctype: str) -> list[dict[str, Union[str, None]]]:
+        dupes: list[dict[str, Union[str, None]]] = []
+
+        if str(meta.get("resolution", "")) not in ["2160p", "1080p", "1080i", "720p"]:
+            console.print(f"{self.tracker}: The resolution must be at least 720p, skipping the upload...")
+            meta["skipping"] = f"{self.tracker}"
+            return dupes
+
         cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         self.session.cookies.clear()
         if cookies is not None:
             self.session.cookies.update(cookies)
 
-        dupes: list[dict[str, Union[str, None]]] = []
         imdb_id = str(meta.get('imdb', ''))
         if imdb_id == '0':
             console.print(f'IMDb ID not found, cannot search for duplicates on {self.tracker}.')
@@ -199,9 +205,8 @@ class HDS:
             try:
                 response = await self.session.get(search_url, params=params)
                 response.raise_for_status()
-                if "Show/Hide Categories" in response.text:
-                    relevant_html = response.text.split("Show/Hide Categories", 1)[1]
-                    soup = BeautifulSoup(relevant_html, "html.parser")
+                relevant_html = response.text.split("Show/Hide Categories", 1)[1]
+                soup = BeautifulSoup(relevant_html, "html.parser")
                 rows = soup.select("tr:has(td.lista)")
 
                 if not rows:
@@ -214,8 +219,9 @@ class HDS:
                     name = name_tag.get_text(strip=True)
 
                     if not name and name_tag.has_attr("title"):
-                        name = name_tag["title"]
-                    link_path = name_tag["href"].lstrip("/")
+                        name = str(name_tag["title"])
+                    href_value = name_tag.get("href", "")
+                    link_path = str(href_value).lstrip("/")
                     torrent_link = f"{self.base_url.rstrip('/')}/{link_path}"
                     cells = row.find_all("td", class_="lista")
                     size = None
@@ -229,7 +235,7 @@ class HDS:
                     if name and torrent_link:
                         dupes.append({"name": name, "size": size, "link": torrent_link})
 
-                next_page = soup.find("a", href=re.compile(r"pages="), string=re.compile(r"Next|>>", re.I))
+                next_page = soup.find("a", href=re.compile(r"pages="), text=re.compile(r"Next|>>", re.I))
 
                 if not next_page:
                     next_page = soup.find("a", href=re.compile(rf"pages={current_page + 1}"))
