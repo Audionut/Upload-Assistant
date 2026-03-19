@@ -375,7 +375,7 @@ class AZTrackerBase:
             summary_file = 'BD_SUMMARY_EXT_00' if self.tracker == 'CZ' else 'BD_SUMMARY_00'
             info_file_path = f"{meta.get('base_dir')}/tmp/{meta.get('uuid')}/{summary_file}.txt"
         elif meta.get("is_disc") == "DVD":
-            vob_files = glob.glob(os.path.join(meta["path"], "**/*.vob"), recursive=True)
+            vob_files = glob.glob(os.path.join(meta["path"], "VTS_*.VOB"), recursive=True)
             if vob_files:
                 largest_vob = max(vob_files, key=os.path.getsize)
                 vob_mi_obj = MediaInfo.parse(largest_vob, output="STRING")
