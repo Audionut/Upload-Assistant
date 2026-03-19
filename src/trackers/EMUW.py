@@ -470,6 +470,22 @@ class EMUW(UNIT3D):
         """
         dupes: list[dict[str, Any]] = []
 
+        # Mirror UNIT3D preflight: initialise tracker state, validate api_key,
+        # run additional checks — same guard rails as the base class
+        meta.setdefault('tracker_status', {})
+        meta['tracker_status'].setdefault(self.tracker, {})
+
+        api_key = str(self.config['TRACKERS'][self.tracker].get('api_key', '')).strip()
+        if not api_key:
+            console.print(f'[bold red]{self.tracker}: Missing API key in config file. Skipping...[/bold red]')
+            meta['skipping'] = self.tracker
+            return dupes
+
+        should_continue = await self.get_additional_checks(meta)
+        if not should_continue:
+            meta['skipping'] = self.tracker
+            return dupes
+
         # For TV use only the season token; for movies leave name empty
         name = ''
         if meta['category'] == 'TV' and meta.get('season'):
@@ -494,8 +510,6 @@ class EMUW(UNIT3D):
             params.append(('resolutions[]', res_id))
 
         params.append(('types[]', type_id))
-
-        api_key = str(self.config['TRACKERS'][self.tracker]['api_key']).strip()
         headers = {
             'Authorization': f"Bearer {api_key}",
             'Content-Type': 'application/json',
