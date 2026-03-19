@@ -42,9 +42,9 @@ class SPD:
         if not meta.get('language_checked', False):
             await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
-        subtitle_langs = cast(list[Any], meta.get('subtitle_languages', []))
-        audio_langs = cast(list[Any], meta.get('audio_languages', []))
-        langs = [str(lang).lower() for lang in subtitle_langs + audio_langs]
+        subtitle_langs = cast(list[Any], meta.get("subtitle_languages") or [])
+        audio_langs = cast(list[Any], meta.get("audio_languages") or [])
+        langs = [str(lang).lower() for lang in (subtitle_langs + audio_langs)]
         romanian = 'romanian' in langs
 
         origin_countries = cast(list[Any], meta.get('origin_country', []))
