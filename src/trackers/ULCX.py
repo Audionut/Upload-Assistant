@@ -143,15 +143,18 @@ class ULCX(UNIT3D):
         if meta.get("category") == "TV":
             season_str = str(meta.get("season_int", 0))
             episode_str = str(meta.get("episode_int", 0))
-            if episode_str == "0":
+            if season_str == "0" or episode_str == "0" and not meta.get("tv_pack", 0):
                 imdb_info: dict[str, Any] = meta.get("imdb_info", {})
                 if imdb_info:
                     episodes = imdb_info.get("episodes", [])
                     if episodes:
+                        episode_token = str(meta.get("episode", "")).strip()
                         ep_entry: dict[str, Any]
                         for ep_entry in episodes:
                             if ep_entry.get("season", "") == season_str and ep_entry.get("episode_number", "") == episode_str:
-                                ulcx_name = ulcx_name.replace(meta.get("episode", ""), f"{str(meta.get('episode', ''))} {ep_entry.get('title', '')}", 1)
+                                ep_title = str(ep_entry.get("title", "")).strip()
+                                if episode_token and ep_title:
+                                    ulcx_name = ulcx_name.replace(episode_token, f"{episode_token} {ep_title}", 1)
                                 break
 
         return {'name': ulcx_name}
