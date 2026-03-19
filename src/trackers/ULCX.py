@@ -122,7 +122,7 @@ class ULCX(UNIT3D):
         return {'description': desc}
 
     async def get_name(self, meta: Meta) -> dict[str, str]:
-        ulcx_name = meta['name']
+        ulcx_name: str = meta["name"]
         imdb_name = meta.get('imdb_info', {}).get('title', "")
         imdb_year = str(meta.get('imdb_info', {}).get('year', ""))
         imdb_aka = meta.get('imdb_info', {}).get('aka', "")
@@ -138,5 +138,20 @@ class ULCX(UNIT3D):
             ulcx_name = ulcx_name.replace("Hybrid ", "", 1)
         if meta.get('category') != "TV" and imdb_year and imdb_year.strip() and year and year.strip() and imdb_year != year:
             ulcx_name = ulcx_name.replace(f"{year}", imdb_year, 1)
+
+        # Add the episode title for TV shows, if it is a special
+        if meta.get("category") == "TV":
+            season_str = str(meta.get("season_int", 0))
+            episode_str = str(meta.get("episode_int", 0))
+            if episode_str == "0":
+                imdb_info: dict[str, Any] = meta.get("imdb_info", {})
+                if imdb_info:
+                    episodes = imdb_info.get("episodes", [])
+                    if episodes:
+                        ep_entry: dict[str, Any]
+                        for ep_entry in episodes:
+                            if ep_entry.get("season", "") == season_str and ep_entry.get("episode_number", "") == episode_str:
+                                ulcx_name = ulcx_name.replace(meta.get("episode", ""), f"{str(meta.get('episode', ''))} {ep_entry.get('title', '')}", 1)
+                                break
 
         return {'name': ulcx_name}
