@@ -1271,11 +1271,10 @@ class Prep:
 
     def check_adult_media(self, meta) -> bool:
         adult_keywords = ["xxx", "erotic", "porn", "adult", "orgy"]
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
         if meta.get("tmdb_adult_media", False):
             return True
-        else:
-            return bool(any(re.search(rf"(^|,\s*){re.escape(keyword)}(\s*,|$)", genres, re.IGNORECASE) for keyword in adult_keywords))
+        searchable = ", ".join(part for part in (meta.get("keywords", ""), meta.get("combined_genres", "")) if part)
+        return any(re.search(rf"(^|,\s*){re.escape(keyword)}(\s*,|$)", searchable, re.IGNORECASE) for keyword in adult_keywords)
 
     async def get_cat(self, _video: str, meta: dict[str, Any]) -> Optional[str]:
         if meta.get('manual_category'):
