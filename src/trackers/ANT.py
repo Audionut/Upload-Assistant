@@ -151,7 +151,10 @@ class ANT:
         if antType is None:
             if not meta['unattended']:
                 antTypeList = ["Feature Film", "Short Film", "Miniseries", "Other"]
-                choice = cli_ui.ask_choice("Select the proper type for ANT", choices=antTypeList)
+                try:
+                    choice = cli_ui.ask_choice("Select the proper type for ANT", choices=antTypeList)
+                except EOFError:
+                    choice = "Feature Film"
                 # Map the choice back to the integer
                 type_map = {
                     "Feature Film": 0,
