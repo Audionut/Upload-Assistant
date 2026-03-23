@@ -165,7 +165,7 @@ class TL:
         description = re.sub(r'\[c\](.*?)\[/c\]', r'[code]\1[/code]', description, flags=re.IGNORECASE | re.DOTALL)
         description = re.sub(r'\[hr\]', '---', description, flags=re.IGNORECASE)
         description = re.sub(r'\[img=[\d"x]+\]', '[img]', description, flags=re.IGNORECASE)
-        description = description.replace('[*] ', '• ').replace('[*]', '• ')
+        description = description.replace("[*] ", "• ").replace("[*]", "• ").replace("[note]", "Note: ").replace("[/note]", "").replace("[code]", "").replace("[/code]", "")
         description = bbcode.remove_list(description)
         description = bbcode.convert_comparison_to_centered(description, 1000)
         description = bbcode.remove_spoiler(description)
