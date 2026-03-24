@@ -52,6 +52,7 @@ from src.trackers.LST import LST
 from src.trackers.LT import LT
 from src.trackers.LUME import LUME
 from src.trackers.MTV import MTV
+from src.trackers.NB import NB
 from src.trackers.NBL import NBL
 from src.trackers.OE import OE
 from src.trackers.OTW import OTW
