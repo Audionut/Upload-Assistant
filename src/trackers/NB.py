@@ -1,8 +1,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import os
 import re
-from typing import Any, cast
-from typing import Optional
+from typing import Any, cast, Optional
 
 import cli_ui
 
@@ -23,7 +22,7 @@ class NB(UNIT3D):
         self.config = config
         self.common = COMMON(config)
         self.tmdb_manager = TmdbManager(config)
-        self.tracker = 'NordicBytes'
+        self.tracker = 'NB'
         self.base_url = 'https://nordicbytes.org'
         self.id_url = f'{self.base_url}/api/torrents/'
         self.upload_url = f'{self.base_url}/api/torrents/upload'
@@ -58,12 +57,9 @@ class NB(UNIT3D):
         reverse: bool = False,
         mapping_only: bool = False,
     ) -> dict[str, str]:
-        _ = (category, reverse, mapping_only)
-        category_id = {
-            'MOVIE': '1',
-            'TV': '2',
-        }.get(meta['category'], '0')
-        return {'category_id': category_id}
+        # Use UNIT3D default implementation for category mapping to ensure
+        # consistent behavior (supports category param, reverse, mapping_only)
+        return await super().get_category_id(meta, category or "", reverse, mapping_only)
 
     # If there are tracker specific checks to be done before upload, add them here
     # Is it a movie only tracker? Are concerts banned? Etc.
@@ -88,7 +84,7 @@ class NB(UNIT3D):
             )
         
         tag_value = str(meta.get('tag', '')).strip()
-        if tag_value and '-' not in upload_name:
+        if tag_value and not upload_name.endswith(f'-{tag_value}'):
             return self._reject_or_confirm(
                 meta,
                 f'{self.tracker} title appears to be missing the group separator before tag (-GROUP).',
@@ -114,7 +110,7 @@ class NB(UNIT3D):
         if meta.get('logo', "") == "":
             TMDB_API_KEY = self.config['DEFAULT'].get('tmdb_api')
             TMDB_BASE_URL = "https://api.themoviedb.org/3"
-            tmdb_id_raw = meta.get('tmdb')
+            tmdb_id_raw = meta.get('tmdb_id', meta.get('tmdb'))
             tmdb_id = int(tmdb_id_raw) if isinstance(tmdb_id_raw, (int, str)) and str(tmdb_id_raw).isdigit() else 0
             category = str(meta.get('category', ''))
             debug = bool(meta.get('debug'))
@@ -132,7 +128,7 @@ class NB(UNIT3D):
                 if logo_path:
                     meta['logo'] = logo_path
 
-        return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta)}
+        return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, comparison=True)}
 
     async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         data = {
