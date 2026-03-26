@@ -144,5 +144,6 @@ class NB(UNIT3D):
     # If the tracker has specific naming conventions, add them here; otherwise, remove this function
     async def get_name(self, meta: Meta) -> dict[str, str]:
         nb_name = meta['name']
+        nb_name = nb_name.replace(' - ', '.') # Fix for eg. "xx - yy" being "xx.-.yy" instead of "xx.yy"
         nb_name = nb_name.replace(' ', '.')
         return {'name': nb_name}
