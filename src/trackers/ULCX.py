@@ -141,20 +141,63 @@ class ULCX(UNIT3D):
 
         # Add the episode title for TV shows, if it is a special
         if meta.get("category") == "TV":
-            season_str = str(meta.get("season_int", 0))
-            episode_str = str(meta.get("episode_int", 0))
-            if season_str == "0" or episode_str == "0" and not meta.get("tv_pack", 0):
-                imdb_info: dict[str, Any] = meta.get("imdb_info", {})
-                if imdb_info:
-                    episodes = imdb_info.get("episodes", [])
-                    if episodes:
-                        episode_token = str(meta.get("episode", "")).strip()
-                        ep_entry: dict[str, Any]
-                        for ep_entry in episodes:
-                            if ep_entry.get("season", "") == season_str and ep_entry.get("episode_number", "") == episode_str:
-                                ep_title = str(ep_entry.get("title", "")).strip()
-                                if episode_token and ep_title:
-                                    ulcx_name = ulcx_name.replace(episode_token, f"{episode_token} {ep_title}", 1)
-                                break
+            season_int = meta.get("season_int", 0)
+            episode_int = meta.get("episode_int", 0)
+            if (season_int == 0 or episode_int == 0) and not meta.get("tv_pack", 0):
+                ep_title = ""
+                # 1. TVDB
+                if not ep_title:
+                    tvdb_episode_data = meta.get("tvdb_episode_data")
+                    if tvdb_episode_data and isinstance(tvdb_episode_data, dict):
+                        episodes = tvdb_episode_data.get("episodes", [])
+                        if episodes:
+                            if episode_int == 0:
+                                # For SxxE00, find first episode of the season
+                                for ep_entry in episodes:
+                                    if ep_entry.get("seasonNumber") == season_int:
+                                        ep_title = ep_entry.get("name", "").strip()
+                                        if ep_title:
+                                            break
+                            else:
+                                # For S00E## or regular episodes
+                                for ep_entry in episodes:
+                                    if ep_entry.get("seasonNumber") == season_int and ep_entry.get("number") == episode_int:
+                                        ep_title = ep_entry.get("name", "").strip()
+                                        if ep_title:
+                                            break
+
+                # 2. TVMaze
+                if not ep_title:
+                    tvmaze_episode_data = meta.get("tvmaze_episode_data")
+                    if tvmaze_episode_data and isinstance(tvmaze_episode_data, dict):
+                        ep_title = tvmaze_episode_data.get("episode_name", "").strip()
+
+                # 3. TMDB
+                if not ep_title:
+                    tmdb_episode_data = meta.get("tmdb_episode_data")
+                    if tmdb_episode_data and isinstance(tmdb_episode_data, dict):
+                        ep_title = tmdb_episode_data.get("name", "").strip()
+
+                # 4. IMDB (fallback)
+                if not ep_title:
+                    imdb_info: dict[str, Any] = meta.get("imdb_info", {})
+                    if imdb_info:
+                        episodes = imdb_info.get("episodes", [])
+                        if episodes and isinstance(episodes, list):
+                            season_str = str(season_int)
+                            episode_str = str(episode_int)
+                            for ep_entry in episodes:
+                                if str(ep_entry.get("season", "")) == season_str and str(ep_entry.get("episode_number", "")) == episode_str:
+                                    ep_title = str(ep_entry.get("title", "")).strip()
+                                    if ep_title:
+                                        break
+
+                if ep_title and ep_title.lower() in ("tba", "tbd"):
+                    ep_title = ""
+
+                if ep_title:
+                    episode_token = str(meta.get("episode", "")).strip()
+                    if episode_token:
+                        ulcx_name = ulcx_name.replace(episode_token, f"{episode_token} {ep_title}", 1)
 
         return {'name': ulcx_name}
