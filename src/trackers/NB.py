@@ -30,6 +30,7 @@ class NB(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [""]
+        self.signature = ""
         pass
     
     
@@ -128,7 +129,24 @@ class NB(UNIT3D):
                 if logo_path:
                     meta['logo'] = logo_path
 
-        return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, comparison=True)}
+            description = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(
+                meta, comparison=True
+            )
+
+            try:
+                # Remove the UA signature BBCode block that the global generator appends by default. Matches patterns like:
+                # [right][url=https://github.com/Audionut/Upload-Assistant][size=4]...[/size][/url][/right]
+                description = re.sub(
+                    r"\s*\[right\]\[url=https://github.com/Audionut/Upload-Assistant\]\[size=\d+\].*?\[/size\]\[/url\]\[/right\]\s*$",
+                    "",
+                    description,
+                    flags=re.DOTALL,
+                )
+            except Exception:
+                # If regex fails for any reason, fall back to the original description
+                pass
+
+            return {'description': description}
 
     async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
         data = {
