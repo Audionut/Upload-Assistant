@@ -102,7 +102,7 @@ async def get_service(video: Optional[str] = None, tag: Optional[str] = None, au
         'CNLP': 'CNLP', 'Canal+': 'CNLP', 'CNGO': 'CNGO', 'Cinego': 'CNGO', 'COOK': 'COOK', 'CORE': 'CORE', 'CR': 'CR',
         'Crunchy Roll': 'CR', 'Crave': 'CRAV', 'CRAV': 'CRAV', 'CRIT': 'CRIT', 'Criterion': 'CRIT', 'Chorki': 'CRKI', 'CRKI': 'CRKI', 'CRKL': 'CRKL', 'Crackle': 'CRKL',
         'CSPN': 'CSPN', 'CSpan': 'CSPN', 'CTHP': 'CTHP', 'CTV': 'CTV', 'CUR': 'CUR', 'CuriosityStream': 'CUR', 'CW': 'CW', 'The CW': 'CW',
-        'CWS': 'CWS', 'CWSeed': 'CWS', 'DAZN': 'DAZN', 'DCU': 'DCU', 'DC Universe': 'DCU', 'DDY': 'DDY',
+        'CWS': 'CWS', 'CWSeed': 'CWS', 'DARKROOM': 'DARKROOM', 'DAZN': 'DAZN', 'DCU': 'DCU', 'DC Universe': 'DCU', 'DDY': 'DDY',
         'Digiturk Diledigin Yerde': 'DDY', 'DEST': 'DEST', 'DramaFever': 'DF', 'DHF': 'DHF', 'Deadhouse Films': 'DHF',
         'DISC': 'DISC', 'Discovery': 'DISC', 'DIY': 'DIY', 'DIY Network': 'DIY', 'DOCC': 'DOCC', 'Doc Club': 'DOCC', 'DOCPLAY': 'DOCPLAY',
         'DPLY': 'DPLY', 'DPlay': 'DPLY', 'DRPO': 'DRPO', 'Discovery Plus': 'DSCP', 'DSKI': 'DSKI', 'Daisuki': 'DSKI',

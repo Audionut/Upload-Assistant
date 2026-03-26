@@ -629,6 +629,18 @@ class DupeChecker:
         season_match = re.search(r'[sS](\d+)', str(target_season))
         target_season_value = int(season_match.group(1)) if season_match else None
 
+        # Handle daily-style episodes where the episode value is a date (YYYY-MM-DD / YYYY.MM.DD).
+        target_episode_str = str(target_episode or "")
+        date_match = re.search(r'(?<!\d)((?:19|20)\d{2})[.\-_/\s](\d{1,2})[.\-_/\s](\d{1,2})(?!\d)', target_episode_str)
+        if date_match:
+            year = int(date_match.group(1))
+            month = int(date_match.group(2))
+            day = int(date_match.group(3))
+            daily_date_pattern = rf"(?<!\d){year}[.\-_/\s]?{month:02d}[.\-_/\s]?{day:02d}(?!\d)"
+            if re.search(daily_date_pattern, filename, re.IGNORECASE):
+                return (True, False)
+            return (False, False)
+
         if target_episode:
             episode_matches = re.findall(r'\d+', str(target_episode))
             target_episodes = [int(ep) for ep in episode_matches]

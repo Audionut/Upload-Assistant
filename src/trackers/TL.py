@@ -325,25 +325,6 @@ class TL:
 
         return results
 
-    async def get_anilist_id(self, meta: Meta) -> Optional[int]:
-        url = 'https://graphql.anilist.co'
-        query = '''
-        query ($idMal: Int) {
-        Media(idMal: $idMal, type: ANIME) {
-            id
-        }
-        }
-        '''
-        variables = {'idMal': meta.get('mal_id')}
-
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, json={'query': query, 'variables': variables})
-            response.raise_for_status()
-            data = cast(dict[str, Any], response.json())
-
-            media = cast(dict[str, Any], data.get('data', {})).get('Media')
-            return media['id'] if media else None
-
     async def upload(self, meta: Meta, _disctype: str) -> Optional[bool]:
         await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
@@ -371,10 +352,8 @@ class TL:
             'nonscene': 'on' if not meta.get('scene') else 'off',
         }
 
-        if meta.get('anime', False):
-            anilist_id = await self.get_anilist_id(meta)
-            if anilist_id:
-                data.update({'animeid': f"https://anilist.co/anime/{anilist_id}"})
+        if meta.get('anime', False) and meta.get('mal_id', 0) != 0:
+            data.update({'animeid': f"https://anilist.co/anime/{meta.get('mal_id')}"})
 
         else:
             if meta.get('category') == 'MOVIE':
