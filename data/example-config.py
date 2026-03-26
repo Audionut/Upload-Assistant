@@ -691,6 +691,14 @@ config = {
             # Iterate over found torrents and prefer MTV suitable torrents if found.
             'prefer_mtv_torrent': False,
         },
+        "NB": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            "api_key": "",
+            "anon": False,
+            # Send uploads to DP modq for staff approval
+            "modq": False,
+        },
         "NBL": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
