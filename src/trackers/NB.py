@@ -2,7 +2,7 @@
 import os
 import re
 from typing import Any, cast
-import Optional
+from typing import Optional
 
 import cli_ui
 
