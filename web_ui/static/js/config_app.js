@@ -248,6 +248,7 @@ const trackerNameMap = {
   'LST': 'LST',
   'LUME': 'Luminarr',
   'MTV': 'MoreThanTV',
+  'NB': 'NordicBytes',
   'NBL': 'Nebulance',
   'OTW': 'OldToonsWorld',
   'OE': 'OnlyEncodes+',
