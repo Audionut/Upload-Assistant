@@ -1,4 +1,51 @@
-__version__ = "v7.1.1"
+__version__ = "v7.1.2"
+
+"""
+Release Notes for version v7.1.2 (2026-03-28):
+
+# 
+# ### NOTE:
+# - Bugix release
+# 
+# ---
+# 
+# ## What's Changed
+# 
+# * fix: compose file to follow health endpoint limit by @Audionut in d551035
+# * Fix mod_queue_opt_in for all UNIT3D trackers, remove #import discord (#1291) by @おはよう in 38ce348
+# * fix(BJS): media runtime (#1290) by @wastaken7 in 7df0d14
+# * fix(HDS): remove incompatible BBCode tags (#1302) by @wastaken7 in 8b48a6f
+# * fix(DC): remove incompatible BBCode tags (#1303) by @wastaken7 in 88b2212
+# * fix(SPD): remove incompatible BBCode tags (#1304) by @wastaken7 in d31a196
+# * fix(TL): remove incompatible BBCode tags (#1305) by @wastaken7 in 574fbf6
+# * fix(LUME): enforce MKV container requirement for non-disc uploads (#1306) by @wastaken7 in e6192b9
+# * fix(SPD): handle missing subtitle and audio languages gracefully (#1307) by @wastaken7 in d015934
+# * fix(OE): update default type_id mapping (Other/Unknown) (#1308) by @wastaken7 in 1495a88
+# * fix(HDS): duplicate search pagination and minimum resolution check (#1309) by @wastaken7 in db3c983
+# * fix: Ignore the MediaInfo template for DVDs (#1310) by @wastaken7 in 421bab0
+# * fix(SHRI): remove SUBS tag and update island release shoutout (#1313) by @TheDarkMan in b204df0
+# * fix(EMUW): duplicate detection  (#1299) by @HichamLL04 in 0570e4b
+# * fix scan detection by @Audionut in 14c491f
+# * PTP: fix login on cookie expiration by @Audionut in 126045c
+# * PTP: fix expired cookie handling by @Audionut in 105a92f
+# * Aither: add hdr10p handling by @Audionut in 1d607db
+# * AITHER: fix HDR/HDR10P mutually exclusive values (#1323) by @9Oc in db2fa5a
+# * add DARKROOM to region.py (#1319) by @wastaken7 in 86a532d
+# * THR: fix image rehosting by @Audionut in 6f2574d
+# * skip tmdb images from existing descriptions by @Audionut in ceee681
+# * LDU: don't except from a nonsense weeb decision by @Audionut in 60b8a9a
+# * fix: languages use stable deduping by @Audionut in 01cb0c3
+# * TL: fix anilist url handling by @Audionut in 1a7ab78
+# * retry anilist.co by @Audionut in f2b0a52
+# * fix: catch daily episodes in dupe checking by @Audionut in d3bccf0
+# * NBL: language handling by @Audionut in 71960c0
+# * fix: edition not upper by @Audionut in e7f49e6
+# * ANT: fix tag handling by @Audionut in db27855
+# * release notes by @Audionut in 7efa0c3
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v7.1.1...v7.1.2
+"""
+
 
 """
 Release Notes for version v7.1.1 (2026-03-13):
