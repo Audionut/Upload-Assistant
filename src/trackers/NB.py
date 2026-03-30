@@ -76,14 +76,14 @@ class NB(UNIT3D):
                 return self._reject_or_confirm(meta, f'{self.tracker} does not allow uploads with .PAD files.')
         
         # NordicBytes has strict naming requirements, we check for unsupported characters here and reject if found.
-        upload_name = str(meta.get('name', '')).strip()
+        """upload_name = str(meta.get('name', '')).strip()
         normalized_title = upload_name.replace(' ', '.')
         if re.search(r'[^A-Za-z0-9.\-]', normalized_title):
             return self._reject_or_confirm(
                 meta,
                 f'{self.tracker} title contains unsupported characters. Use only letters, numbers, dots, and hyphens.',
             )
-        
+        """ # waiting on a fix
         tag_value = str(meta.get('tag', '')).strip()
         if tag_value and not upload_name.endswith(f'-{tag_value}'):
             return self._reject_or_confirm(
