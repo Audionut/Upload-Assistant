@@ -296,19 +296,18 @@ class VideoManager:
         else:
             framerate = "24.000"
 
-        scan = str(video_track.get('ScanType', "Progressive"))
-        if (not scan or scan == "Progressive") and dvd_mi_text:
+        scan = str(video_track.get('ScanType', ""))
+        if not scan and dvd_mi_text:
             scan_match = re.search(r'Scan type\s*:\s*([^\r\n]+)', dvd_mi_text, re.IGNORECASE)
             if scan_match:
                 scan = scan_match.group(1).strip()
-        if not scan or scan == "Progressive":
+        if scan == "Progressive":
             scan = "p"
         elif scan == "Interlaced":
             scan = 'i'
         else:
-            # Fallback using regex on meta['uuid'] - mainly for HUNO fun and games.
-            match = re.search(r'\b(1080p|720p|2160p|576p|480p)\b', folder_id, re.IGNORECASE)
-            scan = "p" if match else "i"  # Assume progressive based on common resolution markers
+            match = re.search(r'\b(1080i|576i|480i)\b', folder_id, re.IGNORECASE)
+            scan = "i" if match else "p"
         width_list = [3840, 2560, 1920, 1280, 1024, 854, 720, 15360, 7680, 0]
         height_list = [2160, 1440, 1080, 720, 576, 540, 480, 8640, 4320, 0]
         width = self.closest(width_list, int(width))
@@ -386,7 +385,19 @@ class VideoManager:
                     console.print("[red]No valid duration found in MediaInfo General track[/red]")
                 return None
         else:
-            return None
+            length = meta.get("bdinfo", {}).get("length", "")
+            if length:
+                try:
+                    hours, minutes, seconds = length.split(":")
+                    return int(hours) * 60 + int(minutes)
+                except ValueError:
+                    if meta["debug"]:
+                        console.print(f"[red]Invalid duration value: {length}[/red]")
+                    return None
+            else:
+                if meta["debug"]:
+                    console.print("[red]No valid duration found in BDInfo[/red]")
+                return None
 
     async def get_container(self, meta: dict[str, Any]) -> str:
         if meta.get('is_disc', '') == 'BDMV':

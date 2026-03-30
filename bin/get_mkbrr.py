@@ -33,6 +33,8 @@ class MkbrrBinaryManager:
             "windows": {
                 "x86_64": {"file": "windows_x86_64.zip", "folder": "windows/x86_64"},
                 "amd64": {"file": "windows_x86_64.zip", "folder": "windows/x86_64"},
+                "arm64": {"file": "windows_x86_64.zip", "folder": "windows/x86_64"},
+                "aarch64": {"file": "windows_x86_64.zip", "folder": "windows/x86_64"},
             },
             "darwin": {
                 "arm64": {"file": "darwin_arm64.tar.gz", "folder": "macos/arm64"},

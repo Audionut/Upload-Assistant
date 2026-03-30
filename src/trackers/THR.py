@@ -257,51 +257,73 @@ class THR:
                           flags=re.DOTALL)
             desc_parts.append("\n\n" + base)
 
-            # REHOST IMAGES
-            os.chdir(f"{meta['base_dir']}/tmp/{meta['uuid']}")
-            image_patterns: list[str] = ["*.png", ".[!.]*.png"]
-            for pattern in image_patterns:
-                image_glob.extend(glob.glob(pattern))
+        # REHOST IMAGES
+        tmp_dir = os.path.join(str(meta['base_dir']), 'tmp', str(meta['uuid']))
+        image_patterns: list[str] = ["*.png", ".[!.]*.png"]
+        for pattern in image_patterns:
+            image_glob.extend(glob.glob(os.path.join(tmp_dir, pattern)))
 
-            unwanted_patterns = ["FILE*", "PLAYLIST*", "POSTER*"]
-            unwanted_files: set[str] = set()
-            for pattern in unwanted_patterns:
-                unwanted_files.update(glob.glob(pattern))
-                if pattern.startswith("FILE") or pattern.startswith("PLAYLIST") or pattern.startswith("POSTER"):
-                    hidden_pattern = "." + pattern
-                    unwanted_files.update(glob.glob(hidden_pattern))
+        unwanted_patterns = ["FILE*", "PLAYLIST*", "POSTER*"]
+        unwanted_files: set[str] = set()
+        for pattern in unwanted_patterns:
+            unwanted_files.update(glob.glob(os.path.join(tmp_dir, pattern)))
+            hidden_pattern = f".{pattern}"
+            unwanted_files.update(glob.glob(os.path.join(tmp_dir, hidden_pattern)))
 
-            image_glob = [file for file in image_glob if file not in unwanted_files]
-            image_glob = list(set(image_glob))
+        ordered_images: list[str] = []
+        seen_images: set[str] = set()
+        for image in image_glob:
+            if image in unwanted_files or image in seen_images:
+                continue
+            seen_images.add(image)
+            ordered_images.append(image)
+
         image_list: list[str] = []
-        async with httpx.AsyncClient(timeout=30.0) as image_client:
-            for image in image_glob:
-                url = "https://img2.torrenthr.org/api/1/upload"
-                data: dict[str, Any] = {
-                    'key': str(self.config['TRACKERS']['THR'].get('img_api', '')),
-                    # 'source' : base64.b64encode(open(image, "rb").read()).decode('utf8')
-                }
-                async with aiofiles.open(image, 'rb') as image_file:
-                    file_bytes = await image_file.read()
-                response: Optional[httpx.Response] = None
-                response_data: dict[str, Any] = {}
-                try:
+        image_api_key = str(self.config['TRACKERS']['THR'].get('img_api', '')).strip()
+        if ordered_images and not image_api_key:
+            console.print("[yellow]THR image API key is not configured, skipping screenshot rehost")
+
+        for image in ordered_images:
+            if not image_api_key:
+                break
+
+            url = "https://img2.torrenthr.org/api/1/upload"
+            data: dict[str, Any] = {
+                'key': image_api_key,
+            }
+            async with aiofiles.open(image, 'rb') as image_file:
+                file_bytes = await image_file.read()
+            response: Optional[httpx.Response] = None
+            response_data: dict[str, Any] = {}
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as image_client:
                     response = await image_client.post(
                         url,
                         data=data,
                         files={'source': (os.path.basename(image), file_bytes)},
                     )
+                    response.raise_for_status()
                     response_data = response.json()
-                    img_url = response_data['image']['url']
+                    img_data = cast(dict[str, Any], response_data.get('image', {}))
+                    img_url = str(img_data.get('url', '')).strip()
+                    if not img_url:
+                        raise KeyError('image.url')
                     image_list.append(img_url)
-                except json.decoder.JSONDecodeError:
-                    console.print("[yellow]Failed to upload image")
-                    if response is not None:
-                        console.print(response.text)
-                except KeyError:
-                    console.print("[yellow]Failed to upload image")
-                    console.print(response_data)
-                await asyncio.sleep(1)
+            except httpx.RequestError as exc:
+                console.print(f"[yellow]Failed to upload image {os.path.basename(image)}: {exc}")
+            except httpx.HTTPStatusError:
+                console.print(f"[yellow]Failed to upload image {os.path.basename(image)}")
+                if response is not None:
+                    console.print(f"[yellow]THR image host returned HTTP {response.status_code}")
+                    console.print(response.text)
+            except json.decoder.JSONDecodeError:
+                console.print(f"[yellow]Failed to parse THR image host response for {os.path.basename(image)}")
+                if response is not None:
+                    console.print(response.text)
+            except KeyError:
+                console.print(f"[yellow]THR image host response was missing an image URL for {os.path.basename(image)}")
+                console.print(response_data)
+            await asyncio.sleep(1)
 
         desc_parts.append("[align=center]")
         if str(meta.get('is_disc', '')) == 'BDMV':

@@ -39,13 +39,17 @@ class AITHER(UNIT3D):
         return should_continue
 
     async def get_additional_data(self, meta: dict[str, Any]):
-        hdr_value = meta.get('hdr', '')
+        hdr_value = str(meta.get('hdr') or '')
+        has_hdr10p = 'HDR10+' in hdr_value
 
         data = {
             'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
-            'hdr': any(flag in hdr_value for flag in ['HDR', 'HLG']),
             'dv': 'DV' in hdr_value,
         }
+        if has_hdr10p:
+            data['hdr10p'] = True
+        elif not has_hdr10p and any(flag in hdr_value for flag in ['HDR', 'HLG']):
+            data['hdr'] = True
 
         return data
 
