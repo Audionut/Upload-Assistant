@@ -158,6 +158,22 @@ class NB(UNIT3D):
     # If the tracker has specific naming conventions, add them here; otherwise, remove this function
     async def get_name(self, meta: Meta) -> dict[str, str]:
         nb_name = meta['name']
+        name = (
+            str(nb_name)
+            .replace("DD+ ", "DDP")
+            .replace("DD ", "DD")
+            .replace("AAC ", "AAC")
+            .replace("FLAC ", "FLAC")
+            .replace("Dubbed", "")
+            .replace("Dual-Audio", "")
+        )
         nb_name = nb_name.replace(' - ', '.') # Fix for eg. "xx - yy" being "xx.-.yy" instead of "xx.yy"
         nb_name = nb_name.replace(' ', '.')
+        nb_name = nb_name.replace(':', '')
+        nb_name = nb_name.replace(',', '')
+
+        # æøå -> ae,oe,aa
+        nb_name = nb_name.replace('æ', 'ae')
+        nb_name = nb_name.replace('ø', 'oe')
+        nb_name = nb_name.replace('å', 'aa')
         return {'name': nb_name}
