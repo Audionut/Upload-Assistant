@@ -165,7 +165,7 @@ class NB(UNIT3D):
             .replace("AAC ", "AAC")
             .replace("FLAC ", "FLAC")
             .replace("Dubbed", "")
-            .replace("Dual-Audio", "")
+            #.replace("Dual-Audio", "")
         )
         nb_name = nb_name.replace(' - ', '.') # Fix for eg. "xx - yy" being "xx.-.yy" instead of "xx.yy"
         nb_name = nb_name.replace(' ', '.')
