@@ -83,7 +83,7 @@ class NB(UNIT3D):
                 meta,
                 f'{self.tracker} title contains unsupported characters. Use only letters, numbers, dots, and hyphens.',
             )
-        """ # waiting on a fix
+        
         tag_value = str(meta.get('tag', '')).strip()
         if tag_value and not upload_name.endswith(f'-{tag_value}'):
             return self._reject_or_confirm(
@@ -91,7 +91,7 @@ class NB(UNIT3D):
                 f'{self.tracker} title appears to be missing the group separator before tag (-GROUP).',
                 allow_override=True,
             )
-        
+        """ # waiting on a fix
         if meta.get('hardcoded_subs', False):
             return self._reject_or_confirm(meta, f'{self.tracker} does not allow hardcoded subtitles.')
         
