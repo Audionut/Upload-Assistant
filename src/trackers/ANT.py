@@ -203,12 +203,21 @@ class ANT:
             'api_key': str(self.tracker_config.get('api_key', '')).strip(),
             'action': 'upload',
             'tmdbid': meta['tmdb'],
-            'mediainfo': await self.mediainfo(meta),
             'flags[]': flags,
             'release_desc': await self.edit_desc(meta),
         }
+
         if meta['bdinfo'] is not None:
-            data.update({"media": "BluRay"})
+            async with aiofiles.open(
+                f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding="utf-8"
+            ) as f:
+                bdinfo_output = await f.read()
+            data.update({"bdinfo": bdinfo_output})
+        else:
+            mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
+            async with aiofiles.open(mi_path, encoding='utf-8') as f:
+                mediainfo_output = str(await f.read())
+            data.update({"mediainfo": mediainfo_output})
         if meta['scene']:
             # ID of "Scene?" checkbox on upload form is actually "censored"
             data['censored'] = 1
@@ -388,16 +397,6 @@ class ANT:
         )
         console.print(f"{self.tracker}: Audio will be set to 'Other'. [bold red]Correct manually if necessary.[/bold red]")
         return "Other"
-
-    async def mediainfo(self, meta: Meta) -> str:
-        if meta.get('is_disc') == 'BDMV':
-            mediainfo = str(await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'], char_limit=100000))
-        else:
-            mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-            async with aiofiles.open(mi_path, encoding='utf-8') as f:
-                mediainfo = str(await f.read())
-
-        return mediainfo
 
     async def edit_desc(self, meta: Meta) -> str:
         builder = DescriptionBuilder(self.tracker, self.config)
