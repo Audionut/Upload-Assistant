@@ -3,7 +3,6 @@ import asyncio
 import json
 import os
 import platform
-import re
 from pathlib import Path
 from typing import Any, Union
 
@@ -223,9 +222,7 @@ class ANT:
         else:
             data.update({'noreleasegroup': 1})
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
+        if meta.get("adult_media", False):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print('[bold red]Adult content detected[/bold red]')
                 if cli_ui.ask_yes_no("Are the screenshots safe?", default=False):
