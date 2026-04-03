@@ -586,7 +586,6 @@ class TRACKER_SETUP:
                 response = await client.get(url=url, headers=headers, params=params)
                 if response.status_code == 200:
                     data = response.json()
-                    console.print(data)
                     if not isinstance(data, dict):
                         console.print(f"[bold red]Unexpected response format: {type(data)}[/bold red]")
                         return requests

@@ -26,7 +26,7 @@ class HUNO(UNIT3D):
         self.search_url = f"{self.base_url}/api/torrents/filter"
         self.torrent_url = f"{self.base_url}/torrents/"
         self.requests_url = f"{self.base_url}/api/requests/filter"
-        self.announce_url = self.config["TRACKERS"][self.tracker]["announce_url"]
+        self.announce_url = str(self.config.get("TRACKERS", {}).get(self.tracker, {}).get("announce_url", "")).strip()
         self.banned_groups = [
             '4K4U', 'Bearfish', 'BiTOR', 'BONE', 'D3FiL3R', 'd3g', 'DTR', 'ELiTE',
             'EVO', 'eztv', 'EzzRips', 'FGT', 'HashMiner', 'HETeam', 'HEVCBay', 'HiQVE',
@@ -42,6 +42,10 @@ class HUNO(UNIT3D):
 
         if not meta["valid_mi_settings"]:
             console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
+            return False
+
+        if not self.announce_url:
+            console.print(f"[bold red]{self.tracker}: Missing announce URL in config.[/bold red]")
             return False
 
         if not meta["is_disc"] and meta["type"] in ["ENCODE", "WEBRIP", "DVDRIP", "HDTV"]:
@@ -202,26 +206,6 @@ class HUNO(UNIT3D):
 
         url = f"{self.upload_url}?api_token={api_token}"
 
-        # Gather files
-        files: dict[str, tuple[str, bytes, str]] = {}
-        await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, announce_url=self.announce_url)
-        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        async with aiofiles.open(torrent_path, "rb") as f:
-            files["torrent"] = (f"{meta['clean_name']}.torrent", await f.read(), "application/x-bittorrent")
-
-        desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-        async with aiofiles.open(desc_path, "rb") as f:
-            files["description"] = ("description.txt", await f.read(), "text/plain")
-
-        if meta.get("is_disc"):
-            bdinfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
-            async with aiofiles.open(bdinfo_path, "rb") as f:
-                files["bdinfo"] = ("bdinfo.txt", await f.read(), "text/plain")
-        else:
-            mediainfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-            async with aiofiles.open(mediainfo_path, "rb") as f:
-                files["mediainfo"] = ("mediainfo.txt", await f.read(), "text/plain")
-
         if meta.get("debug", False):
             console.print(f"[cyan]{self.tracker} Request Data:")
             console.print(data)
@@ -229,8 +213,26 @@ class HUNO(UNIT3D):
             await self.common.create_torrent_for_upload(meta, f"{self.tracker}_DEBUG", f"{self.tracker}_DEBUG", announce_url="https://fake.tracker")
             return True
 
-        # Perform the upload request
         try:
+            files: dict[str, tuple[str, bytes, str]] = {}
+            await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, announce_url=self.announce_url)
+            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+            async with aiofiles.open(torrent_path, "rb") as f:
+                files["torrent"] = (f"{meta['clean_name']}.torrent", await f.read(), "application/x-bittorrent")
+
+            desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+            async with aiofiles.open(desc_path, "rb") as f:
+                files["description"] = ("description.txt", await f.read(), "text/plain")
+
+            if meta.get("is_disc"):
+                bdinfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
+                async with aiofiles.open(bdinfo_path, "rb") as f:
+                    files["bdinfo"] = ("bdinfo.txt", await f.read(), "text/plain")
+            else:
+                mediainfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
+                async with aiofiles.open(mediainfo_path, "rb") as f:
+                    files["mediainfo"] = ("mediainfo.txt", await f.read(), "text/plain")
+
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
                 response = await client.post(url=url, data=data, files=files)
                 response.raise_for_status()
