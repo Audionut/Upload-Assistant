@@ -46,7 +46,7 @@ class ANT:
         flags.extend(
             [
                 each
-                for each in ['Directors', 'Extended', 'Uncut', 'Unrated', '4KRemaster']
+                for each in ['Directors', 'Extended', 'Uncut', 'Unrated', '4KRemaster', 'IMAX']
                 if each in str(meta.get('edition', '')).replace("'", "")
             ]
         )
@@ -65,7 +65,7 @@ class ANT:
             flags.append('HDR10')
         if "DV" in meta['hdr']:
             flags.append('DV')
-        if "Criterion" in meta.get('distributor', ''):
+        if "Criterion" in (meta.get('distributor', '') or meta.get('edition', '')):
             flags.append('Criterion')
         if "REMUX" in meta['type']:
             flags.append('Remux')
