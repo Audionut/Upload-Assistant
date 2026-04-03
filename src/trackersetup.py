@@ -629,7 +629,6 @@ class TRACKER_SETUP:
         except Exception as e:
             console.print(f"[bold red]Unexpected error: {e}")
 
-        print(requests)
         return requests
 
     async def bhd_request_check(self, meta: Meta, tracker: str, url: str) -> list[JsonDict]:
