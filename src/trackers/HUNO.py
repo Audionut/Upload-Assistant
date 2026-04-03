@@ -14,6 +14,9 @@ from src.trackers.UNIT3D import UNIT3D
 
 
 class HUNO(UNIT3D):
+    """
+    https://hawke.uno/api-docs
+    """
     def __init__(self, config: dict[str, Any]) -> None:
         super().__init__(config, "HUNO")
         self.config = config
@@ -81,33 +84,33 @@ class HUNO(UNIT3D):
                 if track.get("@type") == "Video":
                     encoding_settings = track.get("Encoded_Library_Settings", {})
 
-                if encoding_settings:
-                    crf_match = re.search(r"crf[ =:]+([\d.]+)", encoding_settings, re.IGNORECASE)
-                    if crf_match:
-                        if meta.get("debug", False):
-                            console.print(f"Found CRF value: {crf_match.group(1)}")
-                        crf_value = float(crf_match.group(1))
-                        if crf_value > 22:
-                            if not meta["unattended"]:
-                                console.print(f"CRF value too high: {crf_value} for HUNO")
-                            return False
-                    else:
-                        if meta.get("debug", False):
-                            console.print("No CRF value found in encoding settings.")
-                        bit_rate = track.get("BitRate")
-                        if bit_rate and "Animation" not in meta.get("genre", ""):
-                            try:
-                                bit_rate_num = int(bit_rate)
-                            except (ValueError, TypeError):
-                                bit_rate_num = None
+                    if encoding_settings:
+                        crf_match = re.search(r"crf[ =:]+([\d.]+)", encoding_settings, re.IGNORECASE)
+                        if crf_match:
+                            if meta.get("debug", False):
+                                console.print(f"Found CRF value: {crf_match.group(1)}")
+                            crf_value = float(crf_match.group(1))
+                            if crf_value > 22:
+                                if not meta["unattended"]:
+                                    console.print(f"CRF value too high: {crf_value} for HUNO")
+                                return False
+                        else:
+                            if meta.get("debug", False):
+                                console.print("No CRF value found in encoding settings.")
+                            bit_rate = track.get("BitRate")
+                            if bit_rate and "Animation" not in meta.get("genre", ""):
+                                try:
+                                    bit_rate_num = int(bit_rate)
+                                except (ValueError, TypeError):
+                                    bit_rate_num = None
 
-                            if bit_rate_num is not None:
-                                bit_rate_kbps = bit_rate_num / 1000
+                                if bit_rate_num is not None:
+                                    bit_rate_kbps = bit_rate_num / 1000
 
-                                if bit_rate_kbps < 3000:
-                                    if not meta.get("unattended", False):
-                                        console.print(f"Video bitrate too low: {bit_rate_kbps:.0f} kbps for HUNO")
-                                    return False
+                                    if bit_rate_kbps < 3000:
+                                        if not meta.get("unattended", False):
+                                            console.print(f"Video bitrate too low: {bit_rate_kbps:.0f} kbps for HUNO")
+                                        return False
 
         return should_continue
 
@@ -218,6 +221,14 @@ class HUNO(UNIT3D):
                 data["region"] = region
             if distributor:
                 data["distributor"] = distributor
+
+        if meta["category"] == "TV":
+            season_int = meta.get("season_int")
+            episode_int = meta.get("episode_int")
+            if season_int:
+                data["season_number"] = int(season_int)
+            if episode_int:
+                data["episode_number"] = int(episode_int)
 
         return data
 
