@@ -580,14 +580,13 @@ class TRACKER_SETUP:
             'Authorization': f"Bearer {self.config['TRACKERS'][tracker]['api_key'].strip()}",
             'Accept': 'application/json'
         }
-        params = {
-            'tmdb': meta['tmdb'],
-        }
+        params = {"tmdbId": meta["tmdb"]} if tracker == "HUNO" else {"tmdb": meta["tmdb"]}
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(url=url, headers=headers, params=params)
                 if response.status_code == 200:
                     data = response.json()
+                    console.print(data)
                     if not isinstance(data, dict):
                         console.print(f"[bold red]Unexpected response format: {type(data)}[/bold red]")
                         return requests
@@ -603,19 +602,19 @@ class TRACKER_SETUP:
 
                     try:
                         for each in results_list:
-                            attributes = cast(JsonDict, each)
+                            attributes = each.get("attributes", each) if tracker == "HUNO" else cast(JsonDict, each)
                             result: JsonDict = {
-                                'id': attributes.get('id'),
-                                'name': attributes.get('name'),
-                                'description': attributes.get('description'),
-                                'category': attributes.get('category_id'),
-                                'type': attributes.get('type_id'),
-                                'resolution': attributes.get('resolution_id'),
-                                'bounty': attributes.get('bounty'),
-                                'status': attributes.get('status'),
-                                'claimed': attributes.get('claimed'),
-                                'season': attributes.get('season_number'),
-                                'episode': attributes.get('episode_number'),
+                                "id": each.get("id") if tracker == "HUNO" else attributes.get("id"),
+                                "name": attributes.get("name"),
+                                "description": attributes.get("description"),
+                                "category": attributes.get("category_id"),
+                                "type": attributes.get("type_id"),
+                                "resolution": attributes.get("resolution_id"),
+                                "bounty": attributes.get("bounty"),
+                                "status": attributes.get("status"),
+                                "claimed": attributes.get("claimed"),
+                                "season": attributes.get("season_number"),
+                                "episode": attributes.get("episode_number"),
                             }
                             requests.append(result)
                     except Exception as e:
@@ -630,6 +629,7 @@ class TRACKER_SETUP:
         except Exception as e:
             console.print(f"[bold red]Unexpected error: {e}")
 
+        print(requests)
         return requests
 
     async def bhd_request_check(self, meta: Meta, tracker: str, url: str) -> list[JsonDict]:
