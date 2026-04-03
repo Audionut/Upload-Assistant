@@ -7,6 +7,7 @@ import httpx
 
 from src.console import console
 from src.get_desc import DescriptionBuilder
+from src.languages import languages_manager
 from src.rehostimages import RehostImagesManager
 from src.trackers.COMMON import COMMON
 from src.trackers.UNIT3D import UNIT3D
@@ -34,53 +35,79 @@ class HUNO(UNIT3D):
             'MRN', 'Musafirboy', 'OEPlus', 'Pahe.in', 'PHOCiS', 'PSA', 'RARBG', 'RMTeam',
             'ShieldBearer', 'SiQ', 'TBD', 'Telly', 'TSP', 'VXT', 'WKS', 'YAWNiX', 'YIFY', 'YTS'
         ]  # fmt: off
-        self.approved_image_hosts = ["ptpimg", "imgbox", "imgbb", "pixhost", "bam"]
+        self.approved_image_hosts = [
+            "ptpimg",
+            "imgbox",
+            "imgbb",
+            "pixhost",
+            "bam",
+            "onlyimage",
+            "ptscreens",
+            "passtheimage",
+            "hawke.pics",
+        ]
         pass
 
     async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         should_continue = True
 
+        # No WEBRIPs allowed
+        if meta["type"] == "WEBRIP":
+            console.print(f"{self.tracker}: [bold red]WEB-RIP is not allowed, skipping upload.[/bold red]")
+            return False
+
+        # Check language requirements
+        if not meta.get("language_checked", False):
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
+        audio_languages = meta.get("audio_languages")
+        if not audio_languages:
+            console.print(f"{self.tracker}: [bold red]No audio languages found, skipping upload.[/bold red]")
+            return False
+
+        # Check if mediainfo is valid
         if not meta["valid_mi_settings"]:
-            console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
+            console.print(f"{self.tracker}: [bold red]No encoding settings in mediainfo, skipping upload.[/bold red]")
             return False
 
+        # Check if announce URL is configured
         if not self.announce_url:
-            console.print(f"[bold red]{self.tracker}: Missing announce URL in config.[/bold red]")
+            console.print(f"{self.tracker}: [bold red]Missing announce URL in config.[/bold red]")
             return False
 
-        if not meta["is_disc"] and meta["type"] in ["ENCODE", "WEBRIP", "DVDRIP", "HDTV"]:
+        # Check if x265 or HEVC is used
+        if not meta["is_disc"] and meta["type"] in ["ENCODE", "DVDRIP", "HDTV"] and ("x265" in meta.get("video_encode", "") or "HEVC" in meta.get("video_codec", "")):
             tracks = meta.get("mediainfo", {}).get("media", {}).get("track", [])
             for track in tracks:
                 if track.get("@type") == "Video":
                     encoding_settings = track.get("Encoded_Library_Settings", {})
 
-                    if encoding_settings:
-                        crf_match = re.search(r"crf[ =:]+([\d.]+)", encoding_settings, re.IGNORECASE)
-                        if crf_match:
-                            if meta.get("debug", False):
-                                console.print(f"Found CRF value: {crf_match.group(1)}")
-                            crf_value = float(crf_match.group(1))
-                            if crf_value > 22:
-                                if not meta["unattended"]:
-                                    console.print(f"CRF value too high: {crf_value} for HUNO")
-                                return False
-                        else:
-                            if meta.get("debug", False):
-                                console.print("No CRF value found in encoding settings.")
-                            bit_rate = track.get("BitRate")
-                            if bit_rate and "Animation" not in meta.get("genre", ""):
-                                try:
-                                    bit_rate_num = int(bit_rate)
-                                except (ValueError, TypeError):
-                                    bit_rate_num = None
+                if encoding_settings:
+                    crf_match = re.search(r"crf[ =:]+([\d.]+)", encoding_settings, re.IGNORECASE)
+                    if crf_match:
+                        if meta.get("debug", False):
+                            console.print(f"Found CRF value: {crf_match.group(1)}")
+                        crf_value = float(crf_match.group(1))
+                        if crf_value > 22:
+                            if not meta["unattended"]:
+                                console.print(f"CRF value too high: {crf_value} for HUNO")
+                            return False
+                    else:
+                        if meta.get("debug", False):
+                            console.print("No CRF value found in encoding settings.")
+                        bit_rate = track.get("BitRate")
+                        if bit_rate and "Animation" not in meta.get("genre", ""):
+                            try:
+                                bit_rate_num = int(bit_rate)
+                            except (ValueError, TypeError):
+                                bit_rate_num = None
 
-                                if bit_rate_num is not None:
-                                    bit_rate_kbps = bit_rate_num / 1000
+                            if bit_rate_num is not None:
+                                bit_rate_kbps = bit_rate_num / 1000
 
-                                    if bit_rate_kbps < 3000:
-                                        if not meta.get("unattended", False):
-                                            console.print(f"Video bitrate too low: {bit_rate_kbps:.0f} kbps for HUNO")
-                                        return False
+                                if bit_rate_kbps < 3000:
+                                    if not meta.get("unattended", False):
+                                        console.print(f"Video bitrate too low: {bit_rate_kbps:.0f} kbps for HUNO")
+                                    return False
 
         return should_continue
 
@@ -91,6 +118,10 @@ class HUNO(UNIT3D):
             "pixhost.to": "pixhost",
             "imgbox.com": "imgbox",
             "imagebam.com": "bam",
+            "hawke.pics": "hawke.pics",
+            "onlyimage.org": "onlyimage",
+            "ptscreens.com": "ptscreens",
+            "passtheimage.me": "passtheimage",
         }
         await self.rehost_images_manager.check_hosts(
             meta,
@@ -104,7 +135,6 @@ class HUNO(UNIT3D):
         image_list = meta["HUNO_images_key"] if "HUNO_images_key" in meta else meta["image_list"]
 
         desc = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, image_list=image_list, approved_image_hosts=self.approved_image_hosts)
-        # save file
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", "w", encoding="utf-8") as f:
             await f.write(desc)
 
@@ -191,6 +221,28 @@ class HUNO(UNIT3D):
 
         return data
 
+    async def get_files(self, meta: dict[str, Any]) -> dict[str, tuple[str, bytes, str]]:
+        files: dict[str, tuple[str, bytes, str]] = {}
+        await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, announce_url=self.announce_url)
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
+        async with aiofiles.open(torrent_path, "rb") as f:
+            files["torrent"] = (f"{meta['clean_name']}.torrent", await f.read(), "application/x-bittorrent")
+
+        desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
+        async with aiofiles.open(desc_path, "rb") as f:
+            files["description"] = ("description.txt", await f.read(), "text/plain")
+
+        if meta.get("is_disc", "") == "BDMV":
+            bdinfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
+            async with aiofiles.open(bdinfo_path, "rb") as f:
+                files["bdinfo"] = ("bdinfo.txt", await f.read(), "text/plain")
+        else:
+            mediainfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
+            async with aiofiles.open(mediainfo_path, "rb") as f:
+                files["mediainfo"] = ("mediainfo.txt", await f.read(), "text/plain")
+
+        return files
+
     async def upload(self, meta: dict[str, Any], _: str = "") -> bool:
         data = await self.get_data(meta)
 
@@ -214,24 +266,7 @@ class HUNO(UNIT3D):
             return True
 
         try:
-            files: dict[str, tuple[str, bytes, str]] = {}
-            await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag, announce_url=self.announce_url)
-            torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-            async with aiofiles.open(torrent_path, "rb") as f:
-                files["torrent"] = (f"{meta['clean_name']}.torrent", await f.read(), "application/x-bittorrent")
-
-            desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
-            async with aiofiles.open(desc_path, "rb") as f:
-                files["description"] = ("description.txt", await f.read(), "text/plain")
-
-            if meta.get("is_disc"):
-                bdinfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
-                async with aiofiles.open(bdinfo_path, "rb") as f:
-                    files["bdinfo"] = ("bdinfo.txt", await f.read(), "text/plain")
-            else:
-                mediainfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-                async with aiofiles.open(mediainfo_path, "rb") as f:
-                    files["mediainfo"] = ("mediainfo.txt", await f.read(), "text/plain")
+            files = await self.get_files(meta)
 
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
                 response = await client.post(url=url, data=data, files=files)
