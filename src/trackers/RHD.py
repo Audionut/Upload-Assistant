@@ -32,7 +32,7 @@ class RHD(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = ["1XBET", "MEGA", "MTZ", "Whistler", "WOTT", "Taylor.D", "HELD", "FSX", "FuN", "MagicX", "w00t", "PaTroL", "BB",
-                              "266ers", "GTF", "JellyfinPlex", "2BA", "FritzBox"]
+                              "266ers", "GTF", "JellyfinPlex", "2BA", "FritzBox", "FUNXDTV"]
         pass
 
     # The section below can be deleted if no changes are needed, as everything else is handled in UNIT3D.py
@@ -216,8 +216,6 @@ class RHD(UNIT3D):
         # TV specific
         season = str(meta.get("season") or "")
         episode = str(meta.get("episode") or "")
-        episode_title = str(meta.get("episode_title") or "")
-        part = str(meta.get("part") or "")
 
         # Optional fields
         edition = str(meta.get("edition") or "")
@@ -227,8 +225,6 @@ class RHD(UNIT3D):
 
         # extract tags from basename for potential later use
         basename_up = self.get_basename(meta).upper()
-        anime = "ANiME" if "ANIME" in basename_up else ""
-        doku = "DOKU" if "DOKU" in basename_up else ""
         internal = "iNTERNAL" if "INTERNAL" in basename_up else ""
         incomplete = "INCOMPLETE" if "INCOMPLETE" in basename_up else  ""
 
@@ -272,8 +268,7 @@ class RHD(UNIT3D):
 
         effective_type = meta.get("type", "") #TODO: replace with get_effective_type function
 
-        if effective_type != "DISC":
-            source = source.replace("Blu-ray", "BluRay")
+        source = source.replace("Blu-ray", "BluRay")
 
         # Detect Hybrid from filename if not in title
         hybrid = ""
@@ -291,35 +286,28 @@ class RHD(UNIT3D):
         if effective_type == "DISC":
             # Inject region from validated session data if available
             region = meta.get("region", "")
-            if meta.get("is_disc", "") == "BDMV":
-                # BDMV: Title Year Edition REPACK Resolution 3D Hybrid Region UHD Source Audio HDR VideoCodec
-                name = f"{title} {year} {season}{episode} {edition} {anime} {doku} {repack} {resolution} {three_d} {hybrid} {region} {uhd} {source} {audio} {hdr} {video_codec} {internal}"
-            elif meta.get("is_disc", "") == "DVD":
-                dvd_size = meta.get("dvd_size", "")
-                # DVD: Title Year Edition REPACK Resolution 3D Hybrid Region Source DVDSize Audio
-                name = f"{title} {year} {season}{episode} {edition} {anime} {doku} {repack} {resolution} {three_d} {hybrid} {region} {source} {dvd_size} {audio} {internal}"
-            elif meta.get("is_disc", "") == "HDDVD":
-                # HDDVD: Title Year Edition REPACK Resolution Region Source Audio VideoCodec
-                name = f"{title} {year} {edition} {anime} {doku} {repack} {resolution} {region} {source} {audio} {video_codec} {internal}"
+            dvd_size = meta.get("dvd_size", "")
+	    # Full-Disc: Titel Jahr [(CUT) (Edition) (REPACK)] Auflösung COMPLETE (Region) Quelle [AudioCodec (Channels) (Metadata)] [(HDR) VideoCodec]-GroupTag
+            name = f"{title} {year} {season}{episode} {three_d} {edition} {repack} {resolution} COMPLETE {region} {uhd} {source} {dvd_size} {audio} {hdr} {video_codec} {internal}"
 
         elif effective_type == "REMUX":
-            # REMUX: Title Year LANG Edition REPACK Resolution 3D Hybrid UHD Source REMUX Audio HDR VideoCodec
-            name = f"{title} {year} {season}{episode} {episode_title} {part} {incomplete} {audio_lang_str} {edition} {anime} {doku} {repack} {resolution} {three_d} {hybrid} {uhd} {source} REMUX {audio} {hdr} {video_codec} {internal}"
+            # REMUX: Titel Jahr [(CUT) (Edition) Sprache (REPACK)] Auflösung Quelle REMUX [AudioCodec (Channels) (Metadata)] [(HDR) VideoCodec]-GroupTag
+            name = f"{title} {year} {season}{episode} {incomplete} {three_d} {edition} {hybrid} {audio_lang_str} {repack} {resolution} {uhd} {source} REMUX {audio} {hdr} {video_codec} {internal}"
 
         elif effective_type in ("DVDRIP", "BRRIP"):
             type_str = "DVDRip" if effective_type == "DVDRIP" else "BRRip"
-            # DVDRip/BRRip: Title Year LANG Edition REPACK Resolution Hybrid Type Audio HDR VideoCodec
-            name = f"{title} {year} {season} {incomplete} {audio_lang_str} {edition} {anime} {doku} {repack} {resolution} {hybrid} {type_str} {audio} {hdr} {video_encode} {internal}"
+            # DVDRip/BRRip: Titel Jahr  [(CUT) (Edition) Sprache (REPACK)] Auflösung Quelle [AudioCodec (Channels) (Metadata)] [(HDR) Encoder]-GroupTag
+            name = f"{title} {year} {season}{episode} {incomplete} {three_d} {edition} {hybrid} {audio_lang_str} {repack} {resolution} {type_str} {audio} {hdr} {video_encode} {internal}"
 
         elif effective_type in ("ENCODE", "HDTV"):
-            # Encode/HDTV: Title Year LANG Edition REPACK Resolution Hybrid UHD Source Audio HDR VideoCodec
-            name = f"{title} {year} {season}{episode} {episode_title} {part} {incomplete} {audio_lang_str} {edition} {anime} {doku} {repack} {resolution} {hybrid} {uhd} {source} {audio} {hdr} {video_encode} {internal}"
+            # Encode/HDTV: Titel Jahr  [(CUT) (Edition) Sprache (REPACK)] Auflösung Quelle [AudioCodec (Channels) (Metadata)] [(HDR) Encoder]-GroupTag
+            name = f"{title} {year} {season}{episode} {incomplete} {three_d} {edition} {hybrid} {audio_lang_str} {repack} {resolution} {uhd} {source} {audio} {hdr} {video_encode} {internal}"
 
         elif effective_type in ("WEBDL", "WEBRIP"):
             service = meta.get("service", "")
             type_str = "WEB-DL" if effective_type == "WEBDL" else "WEBRip"
-            # WEB: Title Year LANG Edition REPACK Resolution Hybrid UHD Type Audio service HDR VideoCodec
-            name = f"{title} {year} {season}{episode} {episode_title} {part} {incomplete} {audio_lang_str} {edition} {anime} {doku} {repack} {resolution} {hybrid} {uhd} {service} {type_str} {audio} {hdr} {video_encode} {internal}"
+            # WEB: Titel Jahr [(CUT) (Edition) Sprache (REPACK)] Auflösung [(Service) WEB-DL] [AudioCodec (Channels) (Metadata)] [(HDR) VideoCodec]-GroupTag
+            name = f"{title} {year} {season}{episode} {incomplete} {three_d} {edition} {hybrid} {audio_lang_str} {repack} {resolution} {uhd} {service} {type_str} {audio} {hdr} {video_encode} {internal}"
         else:
             console.print("[bold red]Name enrichment failed. Please manually update the name after Uploading.")
 
@@ -402,7 +390,7 @@ class RHD(UNIT3D):
                 return False
 
         # Uploading SD content is not allowed. Exception: No HD version exists. Check release databases beforehand to ensure an HD version doesn't exist
-        if meta.get("resolution") in ["384p", "480p", "480i", "540p","576p", "576i"]:
+        if meta.get("resolution") in ["384p", "480p", "480i", "540p", "576p", "576i"]:
             console.print(f"[bold red]Uploading SD releases is not allowed on {self.tracker}, unless no HD version exists.")
             console.print("[bold red]Please check release databases beforehand to be sure.")
             if meta.get("unattended") or not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
