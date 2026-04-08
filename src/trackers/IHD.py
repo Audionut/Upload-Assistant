@@ -26,9 +26,22 @@ class IHD(UNIT3D):
         self.search_url = f'{self.base_url}/api/torrents/filter'
         self.requests_url = f'{self.base_url}/api/requests/filter'
         self.torrent_url = f'{self.base_url}/torrents/'
-        self.banned_groups = []
+        self.banned_groups = ['1000', '24xHD', '41RGB', '4K4U', 'AG', 'AOC', 'AROMA', 'aXXo', 
+            'AZAZE', 'BARC0DE', 'BAUCKLEY', 'BdC', 'beAst', 'BRiNK', 'BTM', 'C1NEM4', 'C4K',
+            'CDDHD', 'CHAOS', 'CHD', 'CHX', 'CiNE', 'COLLECTiVE', 'CREATiVE24', 'CrEwSaDe',
+            'CTFOH', 'd3g', 'DDR', 'DepraveD', 'DNL', 'DRX', 'EPiC', 'EuReKA', 'EVO', 
+            'FaNGDiNG0', 'Feranki1980', 'FGT', 'FMD', 'FRDS', 'FZHD', 'GalaxyRG', 'GHD',\
+            'GHOSTS', 'GPTHD', 'HDHUB4U', 'HDS', 'HDT', 'HDTime', 'HDWinG', 'HiQVE', 'in',
+            'iNTENSO', 'iPlanet', 'iVy', 'jennaortegaUHD', 'JFF', 'KC', 'KiNGDOM', 'KIRA',
+            'L0SERNIGHT', 'LAMA', 'Leffe', 'Liber8', 'LiGaS', 'LT', 'LUCY', 'MarkII',
+            'MeGusta', 'Mesc', 'mHD', 'mSD', 'MT', 'MTeam', 'MySiLU', 'NhaNc3', 'nhanc3',
+            'nHD', 'nikt0', 'nSD', 'OFT', 'Paheph', 'PATOMiEL', 'PRODJi', 'PSA', 'PTNK', 
+            'RARBG', 'RDN', 'Rifftrax', 'RU4HD', 'SANTi', 'SasukeducK', 'Scene', 'SHD', 
+            'ShieldBearer', 'STUTTERSHIT', 'SUNSCREEN', 'TBS', 'TEKNO3D', 'TG', 'Tigole', 
+            'TIKO', 'VIDEOHOLE', 'VISIONPLUSHDR-X', 'WAF', 'WiKi', 'worldmkv', 'x0r', 
+            'XLF', 'YIFY', 'YTSMX', 'Zero00', 'Zeus',
+        ]
         pass
-
     async def get_category_id(
         self,
         meta: Meta,
