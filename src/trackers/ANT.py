@@ -207,12 +207,13 @@ class ANT:
             'release_desc': await self.edit_desc(meta),
         }
 
-        if meta['bdinfo'] is not None:
+        if meta.get('is_disc', "") == "BDMV":
             async with aiofiles.open(
                 f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding="utf-8"
             ) as f:
                 bdinfo_output = await f.read()
             data.update({"bdinfo": bdinfo_output})
+            data.update({"container_type": "m2ts"})
         else:
             mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
             async with aiofiles.open(mi_path, encoding='utf-8') as f:
@@ -414,11 +415,6 @@ class ANT:
                 if logo_resize_url.endswith(".svg"):
                     logo_resize_url = logo_resize_url.replace(".svg", ".png")
                 desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/align]")
-
-        # BDinfo
-        bdinfo = await builder.get_bdinfo_section(meta)
-        if bdinfo:
-            desc_parts.append(f"[spoiler=BDInfo][pre]{bdinfo}[/pre][/spoiler]")
 
         if user_desc:
             # User description
