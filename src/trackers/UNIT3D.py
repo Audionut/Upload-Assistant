@@ -115,21 +115,21 @@ class UNIT3D:
         try:
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 for url in urls_to_check:
-                    chekcing_pending = False
+                    check_pending = False
                     if "api/torrents/pending" in url:
-                        chekcing_pending = True
+                        check_pending = True
                     response = await client.get(url=url, headers=headers, params=request_params)
                     response.raise_for_status()
 
                     if response.status_code == 200:
                         data = response.json()
                         for each in data.get("data", []):
-                            if chekcing_pending:
+                            if check_pending:
                                 entry_tmdb = str(each.get("tmdb_id") or "")
                                 if entry_tmdb != str(meta.get("tmdb", "")):
                                     continue
                             torrent_id = each.get("id", None)
-                            attributes = each if chekcing_pending else each.get("attributes", {})
+                            attributes = each if check_pending else each.get("attributes", {})
                             name = attributes.get("name", "")
                             size = attributes.get("size", 0)
                             result: dict[str, Any]
@@ -140,7 +140,7 @@ class UNIT3D:
                                     "files": [file["name"] for file in attributes.get("files", []) if isinstance(file, dict) and "name" in file],
                                     "file_count": (len(attributes.get("files", [])) if isinstance(attributes.get("files"), list) else 0),
                                     "trumpable": attributes.get("trumpable", False),
-                                    "link": f"{self.base_url}/torrents/pending" if chekcing_pending else attributes.get("details_link", None),
+                                    "link": f"{self.base_url}/torrents/pending" if check_pending else attributes.get("details_link", None),
                                     "download": attributes.get("download_link", None),
                                     "id": torrent_id,
                                     "type": attributes.get("type", None),
@@ -154,7 +154,7 @@ class UNIT3D:
                                     "files": [],
                                     "file_count": (len(attributes.get("files", [])) if isinstance(attributes.get("files"), list) else 0),
                                     "trumpable": attributes.get("trumpable", False),
-                                    "link": f"{self.base_url}/torrents/pending" if chekcing_pending else attributes.get("details_link", None),
+                                    "link": f"{self.base_url}/torrents/pending" if check_pending else attributes.get("details_link", None),
                                     "download": attributes.get("download_link", None),
                                     "id": torrent_id,
                                     "type": attributes.get("type", None),
