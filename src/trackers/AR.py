@@ -40,8 +40,6 @@ class AR:
         self.banned_groups = []
 
     async def get_type(self, meta: dict[str, Any]) -> str:
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
         if (meta['type'] == 'DISC' or meta['type'] == 'REMUX') and meta['source'] == 'Blu-ray':
             return "14"
 
@@ -89,7 +87,7 @@ class AR:
         if meta['category'] == "MOVIE":
             if meta['sd']:
                 return '7'
-            elif any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
+            elif meta.get("adult_media", False):
                 return '13'
             else:
                 return {
