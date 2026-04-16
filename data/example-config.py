@@ -614,6 +614,8 @@ config = {
             "link_dir_name": "",
             "useAPI": False,
             "api_key": "",
+            # You can find your announce URL at https://hawke.uno/upload
+            "announce_url": "https://hawke.uno/announce/<PASSKEY>",
             "anon": False,
         },
         "IHD": {
