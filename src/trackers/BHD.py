@@ -345,12 +345,6 @@ class BHD:
             meta['skipping'] = "BHD"
             return []
 
-        if meta['sd'] and not (meta['is_disc'] or "REMUX" in meta['type'] or "WEBDL" in meta['type']):
-            if not meta['unattended']:
-                console.print("[bold red]Modified SD content not allowed at BHD[/bold red]")
-            meta['skipping'] = "BHD"
-            return []
-
         if meta['type'] not in ['WEBDL'] and meta.get('tag', "") and any(x in meta['tag'] for x in ['EVO']):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                 console.print(f'[bold red]Group {meta["tag"]} is only allowed for raw type content at BHD[/bold red]')
