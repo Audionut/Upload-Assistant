@@ -345,6 +345,11 @@ class BHD:
             meta['skipping'] = "BHD"
             return []
 
+        if meta.get('type') in ['REMUX', 'ENCODE', 'WEBDL', 'WEBRIP'] and meta.get('container') not in ['mkv', 'mp4']:
+            console.print(f"[bold red]Container '{meta.get('container')}' is not allowed for {meta['type']}. Only MKV and MP4 are permitted. Skipping upload.[/bold red]")
+            meta['skipping'] = "BHD"
+            return []
+        
         if meta['sd'] and not (meta['is_disc'] or "REMUX" in meta['type'] or "WEBDL" in meta['type']):
             if not meta['unattended']:
                 console.print("[bold red]Modified SD content not allowed at BHD[/bold red]")
