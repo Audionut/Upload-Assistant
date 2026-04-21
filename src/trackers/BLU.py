@@ -37,15 +37,17 @@ class BLU(UNIT3D):
 
         if not meta.get('is_disc'):
             container = meta.get('container', '').lower()
-            if container != 'mkv':
-                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
-                    console.print(f"[bold red]Container '{container.upper()}' is generally not allowed for non-disc releases on {self.tracker}.[/bold red]")
-                    console.print("[bold red]Rules: Remuxes, Encodes, WEB-DL and untouched HDTV must be MKV. Exceptions: DV P5 (MP4), HDTV (.ts).[/bold red]")
-                    if not cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                        return False
-                else:
-                    return False
-        
+            type_name = meta.get('type', '').upper()
+            allowed = ['mkv']
+            if type_name == 'HDTV':
+                allowed.append('ts')
+            if type_name in ['WEBDL', 'HDTV'] and "DV" in meta.get('hdr', '') and "HDR" not in meta.get('hdr', ''):
+                allowed.append('mp4')
+
+            if container not in allowed:
+                console.print(f"[bold red]For this release, {self.tracker} requires one of the following containers: {', '.join([a.upper() for a in allowed])}[/bold red]")
+                return False
+
         if (
             meta['type'] in ['ENCODE', 'REMUX']
             and 'HDR' in meta.get('hdr', '')
