@@ -1526,24 +1526,33 @@ async def get_romaji(tmdb_name: str, mal: Optional[int], meta: dict[str, Any]) -
             variables = {'search': mal}
 
         url = 'https://graphql.anilist.co'
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(url, json={'query': query, 'variables': variables})
-            json_data = typing_cast(dict[str, Any], response.json())
+        for attempt in range(3):
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(url, json={'query': query, 'variables': variables})
+                json_data = typing_cast(dict[str, Any], response.json())
 
-            demographics = ["Shounen", "Seinen", "Shoujo", "Josei", "Kodomo", "Mina"]
-            for tag in demographics:
-                if tag in response.text:
-                    demographic = tag
-                    break
+                demographics = ["Shounen", "Seinen", "Shoujo", "Josei", "Kodomo", "Mina"]
+                for tag in demographics:
+                    if tag in response.text:
+                        demographic = tag
+                        break
 
-            page_data = typing_cast(dict[str, Any], json_data.get('data', {}).get('Page', {}))
-            media = typing_cast(list[dict[str, Any]], page_data.get('media', []))
-            if media not in (None, []):
-                break  # Found results, stop retrying
-        except Exception:
-            console.print('[red]Failed to get anime specific info from anilist. Continuing without it...')
-            media = []
+                page_data = typing_cast(dict[str, Any], json_data.get('data', {}).get('Page', {}))
+                media = typing_cast(list[dict[str, Any]], page_data.get('media', []))
+                break  # Success - exit retry loop
+            except (httpx.ReadTimeout, httpx.TimeoutException):
+                if attempt < 2:
+                    console.print(f'[yellow]AniList request timed out, retrying ({attempt + 2}/3)...[/yellow]')
+                else:
+                    console.print('[red]Failed to get anime specific info from anilist. Continuing without it...')
+                    media = []
+            except Exception:
+                console.print('[red]Failed to get anime specific info from anilist. Continuing without it...')
+                media = []
+                break
+        if media not in (None, []):
+            break  # Found results, stop search_term loop
     search_name = meta['filename'].lower() if "subsplease" in meta.get('filename', '').lower() else re.sub(r"[^0-9a-zA-Z\[\\]]+", "", tmdb_name.lower().replace(' ', ''))
 
     # Extract expected season number from various sources

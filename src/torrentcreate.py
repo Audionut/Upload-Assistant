@@ -518,7 +518,11 @@ class TorrentCreator:
         arch = platform.machine().lower()
 
         if system == "windows":
-            binary_path = os.path.join(base_dir, "windows", "x86_64", "mkbrr.exe")
+            if arch in {"x86_64", "amd64", "arm64", "aarch64"}:
+                # Windows ARM currently uses the x86_64 mkbrr build via Windows emulation.
+                binary_path = os.path.join(base_dir, "windows", "x86_64", "mkbrr.exe")
+            else:
+                raise Exception("Unsupported Windows architecture")
         elif system == "darwin":
             binary_path = os.path.join(base_dir, "macos", "arm64", "mkbrr") if "arm" in arch else os.path.join(base_dir, "macos", "x86_64", "mkbrr")
         elif system == "linux":
