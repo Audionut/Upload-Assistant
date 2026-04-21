@@ -34,7 +34,7 @@ class BHD:
         self.tracker_config = cast(dict[str, Any], trackers_cfg.get('BHD', {}))
         api_key = str(self.tracker_config.get('api_key', '')).strip()
         self.requests_url = f"https://beyond-hd.me/api/requests/{api_key}"
-        self.banned_groups = ['Sicario', 'TOMMY', 'x0r', 'nikt0', 'FGT', 'd3g', 'MeGusta', 'YIFY', 'tigole', 'TEKNO3D', 'C4K', 'RARBG', '4K4U', 'EASports', 'ReaLHD', 'Telly', 'AOC', 'WKS', 'SasukeducK', 'CRUCiBLE', 'iFT']
+        self.banned_groups = ['Sicario', 'TOMMY', 'x0r', 'nikt0', 'FGT', 'd3g', 'MeGusta', 'YIFY', 'tigole', 'TEKNO3D', 'C4K', 'RARBG', '4K4U', 'EASports', 'ReaLHD', 'Telly', 'AOC', 'WKS', 'SasukeducK', 'CRUCiBLE', 'iFT', 'ProRes', 'MezRips', 'Flights', 'BiTOR', 'iVy', 'QxR', 'SyncUP', 'OFT', 'TGS']
         self.approved_image_hosts = ['ptpimg', 'imgbox', 'imgbb', 'pixhost', 'bhd', 'bam']
         pass
 
