@@ -510,5 +510,10 @@ class BHD:
             audio = str(meta.get('audio', ''))
             audio = ' '.join(audio.split())
             name = name.replace(audio, f"{meta.get('video_codec')} {audio}")
+
         name = name.replace("DD+", "DDP")
+
+        if not meta.get('tag') and meta.get('type') in ['REMUX', 'ENCODE', 'WEBDL', 'WEBRIP']:
+            name = f"{name}-NOGROUP"
+
         return name
