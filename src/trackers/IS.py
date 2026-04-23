@@ -236,7 +236,7 @@ class IS:
                     return documentary_hd
             elif is_anime:
                 return anime
-            elif "children" in genres or "cartoons" in genres or "children" in keywords or "cartoons" in keywords:
+            elif "children" in genres or "cartoons" in genres or "children" in keywords or "cartoons" in keywords or "cartoon" in keywords:
                 return childrens_cartoons
             elif meta.get('tv_pack'):
                 if resolution == "2160p":
@@ -328,12 +328,12 @@ class IS:
             torrent_url=self.torrent_url,
             data=data,
             hash_is_id=True,
-            torrent_field_name='torrentfile',
+            torrent_field_name="torrentfile",
             torrent_name=f"{meta.get('clean_name', 'placeholder')}",
             upload_cookies=self.session.cookies,
             upload_url="https://immortalseed.me/upload.php",
             additional_files=files,
-            success_text="Thank you",
+            success_text="Download Torrent (SSL)",
         )
 
         return is_uploaded

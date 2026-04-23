@@ -587,6 +587,13 @@ class BBCODE:
         desc = re.sub(r"\[\/?spoiler[\s\S]*?\]", "", desc, flags=re.IGNORECASE)
         return desc
 
+    def remove_color(self, desc: str) -> str:
+        """
+        Removes [color=...] and [/color] tags.
+        """
+        pattern = r"\[/?color(?:=[^\]]*)?\]"
+        return re.sub(pattern, "", desc, flags=re.IGNORECASE)
+
     def convert_named_spoiler_to_normal_spoiler(self, desc: str) -> str:
         desc = re.sub(r'(\[spoiler=[^]]+])', '[spoiler]', desc, flags=re.IGNORECASE)
         return desc

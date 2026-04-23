@@ -111,7 +111,7 @@ class ASC:
                 self.season_tmdb_data = local_results['season']
             else:
                 tasks_to_run.append(
-                    ('season', self.tmdb_manager.get_tmdb_localized_data(meta, data_type='season', language='pt-BR', append_to_response=''))
+                    ('season', self.tmdb_manager.get_tmdb_localized_data(meta, data_type='season', language='pt-BR', append_to_response='credits'))
                 )
 
         if meta.get('category') == 'TV' and not meta.get('tv_pack', False):
@@ -119,7 +119,7 @@ class ASC:
                 self.episode_tmdb_data = local_results['episode']
             else:
                 tasks_to_run.append(
-                    ('episode', self.tmdb_manager.get_tmdb_localized_data(meta, data_type='episode', language='pt-BR', append_to_response=''))
+                    ('episode', self.tmdb_manager.get_tmdb_localized_data(meta, data_type='episode', language='pt-BR', append_to_response='credits'))
                 )
 
         if tasks_to_run:

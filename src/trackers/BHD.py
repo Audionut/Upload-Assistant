@@ -1,5 +1,4 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# import discord
 import asyncio
 import os
 import platform
@@ -340,6 +339,12 @@ class BHD:
             else:
                 meta['skipping'] = "BHD"
                 return []
+
+        if not meta['valid_mi_settings']:
+            console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
+            meta['skipping'] = "BHD"
+            return []
+
         if meta['sd'] and not (meta['is_disc'] or "REMUX" in meta['type'] or "WEBDL" in meta['type']):
             if not meta['unattended']:
                 console.print("[bold red]Modified SD content not allowed at BHD[/bold red]")

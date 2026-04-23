@@ -158,6 +158,9 @@ class DupeChecker:
         is_hdtv = meta.get('type') == "HDTV"
         target_source = str(meta.get("source", ""))
         is_sd = int(meta.get('sd') or 0)
+        is_tv_pack = meta.get('category') == "TV" and (coerce_int(meta.get('tv_pack')) or 0) == 1
+        target_season_match = re.search(r'[sS](\d+)', str(target_season or ""))
+        target_season_number = int(target_season_match.group(1)) if target_season_match else None
 
         filenames: list[str] = []
         filelist_value = meta.get('filelist')
@@ -426,6 +429,26 @@ class DupeChecker:
 
             skip_resolution_check = bool(is_dvd or "DVD" in target_source or is_dvdrip)
 
+            if (
+                tracker_name == "OTW"
+                and not is_tv_pack
+                and meta.get('category') == "TV"
+                and target_episode
+                and target_resolution
+            ):
+                dupe_season_match = re.search(r'[sS](\d+)', each)
+                dupe_has_episode = bool(re.search(r'[eE]\d{2}', each))
+                same_season_episode_dupe = (
+                    target_season_number is not None
+                    and dupe_season_match is not None
+                    and int(dupe_season_match.group(1)) == target_season_number
+                    and dupe_has_episode
+                )
+
+                if same_season_episode_dupe and (target_resolution.lower() not in each.lower()):
+                    await log_exclusion(f"OTW same-season episode resolution mismatch: expected '{target_resolution}'", each)
+                    return False
+
             if not skip_resolution_check:
                 if target_resolution and target_resolution not in each:
                     await log_exclusion(f"resolution '{target_resolution}' mismatch", each)
@@ -628,6 +651,18 @@ class DupeChecker:
         """
         season_match = re.search(r'[sS](\d+)', str(target_season))
         target_season_value = int(season_match.group(1)) if season_match else None
+
+        # Handle daily-style episodes where the episode value is a date (YYYY-MM-DD / YYYY.MM.DD).
+        target_episode_str = str(target_episode or "")
+        date_match = re.search(r'(?<!\d)((?:19|20)\d{2})[.\-_/\s](\d{1,2})[.\-_/\s](\d{1,2})(?!\d)', target_episode_str)
+        if date_match:
+            year = int(date_match.group(1))
+            month = int(date_match.group(2))
+            day = int(date_match.group(3))
+            daily_date_pattern = rf"(?<!\d){year}[.\-_/\s]?{month:02d}[.\-_/\s]?{day:02d}(?!\d)"
+            if re.search(daily_date_pattern, filename, re.IGNORECASE):
+                return (True, False)
+            return (False, False)
 
         if target_episode:
             episode_matches = re.findall(r'\d+', str(target_episode))

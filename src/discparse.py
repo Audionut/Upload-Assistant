@@ -47,25 +47,28 @@ class DiscParse:
         total_size = sum(file_sizes)
         duration = playlist.get('duration', 0.0)
 
-        # File concentration: ratio of unique files to total references
-        # Higher concentration means fewer duplicates (better)
-        total_files = len(playlist['items'])
+        # File concentration: ratio of unique files to total play-item references.
+        # total_play_items counts every reference (including repeats), so looping
+        # playlists that repeat a small set of small files score close to 0 here.
+        total_play_items = playlist.get('total_play_items', len(playlist['items']))
         unique_files = len({item['file'] for item in playlist['items']})
-        file_concentration = unique_files / total_files if total_files > 0 else 0.0
+        file_concentration = unique_files / total_play_items if total_play_items > 0 else 0.0
 
         score = 0.0
 
         # Normalize largest file size (assume max possible is 100GB = 100*1024*1024*1024 bytes)
         max_file_size = 100.0 * 1024 * 1024 * 1024
-        score += (largest_file / max_file_size) * 40.0
+        score += min(largest_file / max_file_size, 1.0) * 40.0
 
         # Normalize total size (assume max is 150GB)
         max_total_size = 150.0 * 1024 * 1024 * 1024
-        score += (total_size / max_total_size) * 30.0
+        score += min(total_size / max_total_size, 1.0) * 30.0
 
-        # Normalize duration (assume max is 4 hours = 14400 seconds)
+        # Normalize duration (assume max is 4 hours = 14400 seconds).
+        # Cap to max_duration so looping playlists with inflated runtimes don't
+        # exceed the 20-point ceiling for this component.
         max_duration = 14400.0
-        score += (duration / max_duration) * 20.0
+        score += min(duration / max_duration, 1.0) * 20.0
 
         # File concentration (already 0-1 ratio)
         score += file_concentration * 10.0
@@ -148,6 +151,7 @@ class DiscParse:
                         stream_directory = os.path.join(path, "STREAM")
                         file_counts: defaultdict[str, int] = defaultdict(int)
                         file_sizes: dict[str, int] = {}
+                        total_play_items: int = 0
 
                         play_items = getattr(playlist_data, "play_items", None)
                         if not play_items:
@@ -176,6 +180,7 @@ class DiscParse:
                                     size = os.path.getsize(m2ts_file)
                                     file_counts[m2ts_file] += 1
                                     file_sizes[m2ts_file] = size
+                                    total_play_items += 1
                                 elif meta.get('debug'):
                                     console.print(f"[yellow]    Missing m2ts file: {clip_name}.m2ts")
                             except AttributeError as e:
@@ -192,7 +197,8 @@ class DiscParse:
                             "file": file_name,
                             "duration": duration,
                             "path": mpls_path,
-                            "items": items
+                            "items": items,
+                            "total_play_items": total_play_items,
                         })
 
                         if meta.get('debug'):

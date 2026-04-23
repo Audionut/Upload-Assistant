@@ -139,4 +139,7 @@ class ULCX(UNIT3D):
         if meta.get('category') != "TV" and imdb_year and imdb_year.strip() and year and year.strip() and imdb_year != year:
             ulcx_name = ulcx_name.replace(f"{year}", imdb_year, 1)
 
+        if meta.get('type') == "WEBDL" and ("hybrid" in meta.get('edition', "").lower() or meta.get('webdv', False)):
+            ulcx_name = ulcx_name.replace("Hybrid ", "", 1)
+
         return {'name': ulcx_name}

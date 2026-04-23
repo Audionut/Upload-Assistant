@@ -106,6 +106,13 @@ async def sanitize_filename(filename: str) -> str:
     return re.sub(r'[<>:"/\\|?*]', '_', filename)
 
 
+def round_to_even(value: float) -> int:
+    rounded = int(round(value))
+    if rounded % 2 != 0:
+        rounded += 1
+    return rounded
+
+
 async def disc_screenshots(
         meta: dict[str, Any],
         filename: str,
@@ -772,8 +779,8 @@ async def capture_dvd_screenshot(task: tuple[int, str, str, str, dict[str, Any],
         # Build filter chain
         vf_filters: list[str] = []
         if w_sar != 1 or h_sar != 1:
-            scaled_w = int(round(width * w_sar))
-            scaled_h = int(round(height * h_sar))
+            scaled_w = round_to_even(width * w_sar)
+            scaled_h = round_to_even(height * h_sar)
             vf_filters.append(f"scale={scaled_w}:{scaled_h}")
 
         if meta.get('frame_overlay', False):
@@ -1266,8 +1273,8 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
         if ss_time < 0:
             return None
 
-        scaled_w = int(round(width * w_sar))
-        scaled_h = int(round(height * h_sar))
+        scaled_w = round_to_even(width * w_sar)
+        scaled_h = round_to_even(height * h_sar)
 
         # Normalize path for cross-platform compatibility
         path = os.path.normpath(path)
@@ -1313,8 +1320,8 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
             vf_filters: list[str] = []
 
             if w_sar != 1 or h_sar != 1:
-                scaled_w = int(round(width * w_sar))
-                scaled_h = int(round(height * h_sar))
+                scaled_w = round_to_even(width * w_sar)
+                scaled_h = round_to_even(height * h_sar)
                 vf_filters.append(f"scale={scaled_w}:{scaled_h}")
                 if loglevel == 'verbose' or (meta and meta.get('debug', False)):
                     console.print(f"[cyan]Applied PAR scale -> {scaled_w}x{scaled_h}[/cyan]")
@@ -1435,8 +1442,8 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
         vf_filters: list[str] = []
 
         if w_sar != 1 or h_sar != 1:
-            scaled_w = int(round(width * w_sar))
-            scaled_h = int(round(height * h_sar))
+            scaled_w = round_to_even(width * w_sar)
+            scaled_h = round_to_even(height * h_sar)
             vf_filters.append(f"scale={scaled_w}:{scaled_h}")
 
         if hdr_tonemap:
@@ -1687,7 +1694,9 @@ async def check_libplacebo_compatibility(w_sar: float, h_sar: float, width: floa
         output_map = "0:v"  # Default output mapping
 
         if w_sar != 1 or h_sar != 1:
-            filter_parts.append(f"{input_label}scale={int(round(width * w_sar))}:{int(round(height * h_sar))}[scaled]")
+            scaled_w = round_to_even(width * w_sar)
+            scaled_h = round_to_even(height * h_sar)
+            filter_parts.append(f"{input_label}scale={scaled_w}:{scaled_h}[scaled]")
             input_label = "[scaled]"
             output_map = "[scaled]"
 

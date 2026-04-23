@@ -372,7 +372,7 @@ async def get_edition(video: str, bdinfo: Optional[dict[str, Any]], filelist: li
                 edition = edition.replace('  ', ' ')
 
         if edition != "":
-            edition = edition.strip().upper()
+            edition = edition.strip()
             if meta['debug']:
                 console.print(f"Final Edition: {edition}")
 

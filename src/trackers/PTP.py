@@ -1,5 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
+import contextlib
 import glob
 import io
 import json
@@ -1316,10 +1317,14 @@ class PTP:
                 loggedIn = await self.validate_login(uploadresponse)
                 if loggedIn is True:
                     token_match = re.search(r'data-AntiCsrfToken="(.*)"', uploadresponse.text)
-                    if not token_match:
-                        raise LoginException("Failed to find AntiCsrfToken on upload page.")  # noqa F405
-                    AntiCsrfToken = token_match.group(1)
-                    return AntiCsrfToken
+                    if token_match:
+                        AntiCsrfToken = token_match.group(1)
+                        return AntiCsrfToken
+            # Cookies are expired/invalid — discard them so the login POST is clean
+            console.print("[yellow]PTP session expired. Clearing cookies and re-authenticating.")
+            cookies = {}
+            with contextlib.suppress(OSError):
+                os.remove(cookiefile)
         else:
             console.print("[yellow]PTP Cookies not found. Creating new session.")
 
