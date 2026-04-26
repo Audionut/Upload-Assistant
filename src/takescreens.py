@@ -1027,7 +1027,7 @@ async def screenshots(
                     hdr_tonemap = False
                     console.print("[yellow]FFMPEG failed tonemap checking.[/yellow]")
                     await asyncio.sleep(2)
-                if not libplacebo and "HDR" not in meta.get('hdr', ''):
+                if not libplacebo and not any(x in meta.get('hdr', '') for x in ['HDR', 'DV', 'HLG']):
                     hdr_tonemap = False
             else:
                 hdr_tonemap = True
@@ -1336,9 +1336,10 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
                         console.print("[cyan]Using libplacebo tonemapping[/cyan]")
                 else:
                     vf_filters.extend([
-                        "zscale=transfer=linear",
+                        "format=yuv420p10le", # Ensure 10-bit handling
+                        "zscale=tin=smpte2084:pin=bt2020:t=linear",
                         f"tonemap=tonemap={algorithm}:desat={desat}",
-                        "zscale=transfer=bt709",
+                        "zscale=t=bt709:p=bt709",
                         "format=rgb24",
                     ])
                     if loglevel == 'verbose' or (meta and meta.get('debug', False)):
@@ -1690,45 +1691,29 @@ async def check_libplacebo_compatibility(w_sar: float, h_sar: float, width: floa
 
     async def run_check(w_sar: float, h_sar: float, width: float, height: float, path: str, ss_time: str, _image_path: str, loglevel: str, meta: dict[str, Any], try_libplacebo: bool = False, test_image_path: str = "") -> bool:
         filter_parts: list[str] = []
-        input_label = "[0:v]"
-        output_map = "0:v"  # Default output mapping
-
-        if w_sar != 1 or h_sar != 1:
-            scaled_w = round_to_even(width * w_sar)
-            scaled_h = round_to_even(height * h_sar)
-            filter_parts.append(f"{input_label}scale={scaled_w}:{scaled_h}[scaled]")
-            input_label = "[scaled]"
-            output_map = "[scaled]"
-
-        # Add libplacebo filter with output label
+        
+        # Ensure we handle the input format for HDR/DV sources
+        vf_chain = ""
         if try_libplacebo:
-            filter_parts.append(f"{input_label}libplacebo=tonemapping=auto:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv[out]")
-            output_map = "[out]"
+            # libplacebo check
+            filter_parts.append("zscale=t=linear:npl=100") # Pre-conversion help
+            filter_parts.append("libplacebo=tonemapping=auto:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv")
+            vf_chain = ",".join(filter_parts)
         else:
-            # Use -vf for zscale/tonemap chain, no output label or -map needed
-            vf_chain = f"zscale=transfer=linear,tonemap=tonemap={algorithm}:desat={desat},zscale=transfer=bt709,format=rgb24"
+            # zscale check - Explicitly define input transfer for DV/HDR10 (smpte2084)
+            vf_chain = f"zscale=tin=smpte2084:pin=bt2020:t=linear,tonemap=tonemap={algorithm}:desat={desat},zscale=t=bt709:p=bt709,format=rgb24"
 
-        # Build ffmpeg-python command and run
         if try_libplacebo:
-            info_cmd: Any = cast(Any, ffmpeg).input(path, ss=str(ss_time)).output(
-                test_image_path,
-                vframes=1,
-                pix_fmt='rgb24'
-            ).global_args('-y', '-loglevel', 'quiet', '-init_hw_device', 'vulkan', '-filter_complex', ','.join(filter_parts), '-map', output_map)
+            info_cmd = cast(Any, ffmpeg).input(path, ss=str(ss_time)).output(
+                test_image_path, vframes=1, pix_fmt='rgb24'
+            ).global_args('-y', '-loglevel', 'quiet', '-init_hw_device', 'vulkan', '-vf', vf_chain)
         else:
-            vf_chain = f"zscale=transfer=linear,tonemap=tonemap={algorithm}:desat={desat},zscale=transfer=bt709,format=rgb24"
-            info_cmd: Any = cast(Any, ffmpeg).input(path, ss=str(ss_time)).output(
-                test_image_path,
-                vframes=1,
-                vf=vf_chain,
-                pix_fmt='rgb24'
+            info_cmd = cast(Any, ffmpeg).input(path, ss=str(ss_time)).output(
+                test_image_path, vframes=1, vf=vf_chain
             ).global_args('-y', '-loglevel', 'quiet')
 
-        if loglevel == 'verbose' or (meta and meta.get('debug', False)):
-            console.print(f"[cyan]libplacebo compatibility test command: {' '.join(info_cmd.compile())}[/cyan]")
-
         try:
-            retcode, _stdout, _stderr = await run_ffmpeg(info_cmd)
+            retcode, _, _ = await run_ffmpeg(info_cmd)
             return retcode == 0
         except Exception:
             return False
