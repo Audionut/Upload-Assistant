@@ -391,10 +391,12 @@ async def capture_disc_task(index: int, file: str, ss_time: str, image_path: str
         vf_filters: list[str] = []
 
         if hdr_tonemap:
+            transfer_in = "arib-std-b67" if "HLG" in meta.get('hdr', '') else "smpte2084"
             vf_filters.extend([
-                "zscale=transfer=linear",
+                "format=yuv420p10le",
+                f"zscale=tin={transfer_in}:pin=bt2020:t=linear",
                 f"tonemap=tonemap={algorithm}:desat={desat}",
-                "zscale=transfer=bt709",
+                "zscale=t=bt709:p=bt709",
                 "format=rgb24"
             ])
 
@@ -1317,36 +1319,35 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
 
             threads_value = set_ffmpeg_threads()
             threads_val = threads_value[1]
+                
+            # Determine Input Transfer
+            if "HLG" in meta.get('hdr', ''):
+                transfer_in = "arib-std-b67"
+            elif any(x in meta.get('hdr', '') for x in ["PQ", "HDR", "DV"]):
+                transfer_in = "smpte2084"
+            else:
+                transfer_in = "bt709"
+
             vf_filters: list[str] = []
 
+            # Handle Scaling
             if w_sar != 1 or h_sar != 1:
-                scaled_w = round_to_even(width * w_sar)
-                scaled_h = round_to_even(height * h_sar)
-                vf_filters.append(f"scale={scaled_w}:{scaled_h}")
-                if loglevel == 'verbose' or (meta and meta.get('debug', False)):
-                    console.print(f"[cyan]Applied PAR scale -> {scaled_w}x{scaled_h}[/cyan]")
+                vf_filters.append(f"scale={round_to_even(width * w_sar)}:{round_to_even(height * h_sar)}")
 
+            # Handle Tonemapping
             if hdr_tonemap:
                 if meta.get('libplacebo', False):
-                    vf_filters.append(
-                        "libplacebo=tonemapping=hable:colorspace=bt709:"
-                        "color_primaries=bt709:color_trc=bt709:range=tv"
-                    )
-                    if loglevel == 'verbose' or (meta and meta.get('debug', False)):
-                        console.print("[cyan]Using libplacebo tonemapping[/cyan]")
+                    vf_filters.append("libplacebo=tonemapping=hable:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv")
                 else:
                     vf_filters.extend([
-                        "format=yuv420p10le", # Ensure 10-bit handling
-                        "zscale=tin=smpte2084:pin=bt2020:t=linear",
+                        "format=yuv420p10le",
+                        f"zscale=tin={transfer_in}:pin=bt2020:t=linear",
                         f"tonemap=tonemap={algorithm}:desat={desat}",
                         "zscale=t=bt709:p=bt709",
-                        "format=rgb24",
                     ])
-                    if loglevel == 'verbose' or (meta and meta.get('debug', False)):
-                        console.print(f"[cyan]Using zscale tonemap chain (algo={algorithm}, desat={desat})[/cyan]")
 
             vf_filters.append("format=rgb24")
-            vf_chain = ",".join(vf_filters) if vf_filters else "format=rgb24"
+            vf_chain = ",".join(vf_filters)
 
             if loglevel == 'verbose' or (meta and meta.get('debug', False)):
                 console.print(f"[cyan]Final -vf chain: {vf_chain}[/cyan]")
@@ -1448,10 +1449,13 @@ async def capture_screenshot(args: tuple[int, str, float, str, float, float, flo
             vf_filters.append(f"scale={scaled_w}:{scaled_h}")
 
         if hdr_tonemap:
+            # Explicitly define input transfer for HLG vs HDR10/DV
+            transfer_in = "arib-std-b67" if "HLG" in meta.get('hdr', '') else "smpte2084"
             vf_filters.extend([
-                "zscale=transfer=linear",
+                "format=yuv420p10le",
+                f"zscale=tin={transfer_in}:pin=bt2020:t=linear",
                 f"tonemap=tonemap={algorithm}:desat={desat}",
-                "zscale=transfer=bt709",
+                "zscale=t=bt709:p=bt709",
                 "format=rgb24",
             ])
 
@@ -1700,8 +1704,9 @@ async def check_libplacebo_compatibility(w_sar: float, h_sar: float, width: floa
             filter_parts.append("libplacebo=tonemapping=auto:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv")
             vf_chain = ",".join(filter_parts)
         else:
-            # zscale check - Explicitly define input transfer for DV/HDR10 (smpte2084)
-            vf_chain = f"zscale=tin=smpte2084:pin=bt2020:t=linear,tonemap=tonemap={algorithm}:desat={desat},zscale=t=bt709:p=bt709,format=rgb24"
+            # zscale check - Handle HLG vs HDR10/DV
+            transfer_in = "arib-std-b67" if "HLG" in meta.get('hdr', '') else "smpte2084"
+            vf_chain = f"zscale=tin={transfer_in}:pin=bt2020:t=linear,tonemap=tonemap={algorithm}:desat={desat},zscale=t=bt709:p=bt709,format=rgb24"
 
         if try_libplacebo:
             info_cmd = cast(Any, ffmpeg).input(path, ss=str(ss_time)).output(
