@@ -676,6 +676,16 @@ config = {
             # Send uploads to LUME modq for staff approval
             "modq": False,
         },
+        "MB": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # "useAPI": False,  Set to True if using this tracker for automatic ID searching or description parsing
+            "useAPI": False,
+            "api_key": "",
+            "anon": False,
+            # Send uploads to Malayabits modq for staff approval
+            "modq": False,
+        },
         "MTV": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
