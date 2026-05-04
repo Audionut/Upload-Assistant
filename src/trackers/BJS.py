@@ -1315,6 +1315,10 @@ class BJS:
                 'internalrel': 1,
             })
 
+        # Repack
+        if meta.get("repack", ""):
+            data.update({"repack": "on"})
+
         # Only upload images if not debugging
         if not meta.get('debug', False):
             data.update({
