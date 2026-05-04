@@ -107,18 +107,10 @@ class HUNO(UNIT3D):
         )
 
     async def get_description(self, meta: dict[str, Any]) -> dict[str, str]:
-        image_list = meta['HUNO_images_key'] if 'HUNO_images_key' in meta else meta['image_list']
-
-        return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, image_list=image_list, approved_image_hosts=self.approved_image_hosts)}
+        return {}
 
     async def get_mediainfo(self, meta: dict[str, Any]) -> dict[str, str]:
-        if meta['bdinfo'] is not None:
-            mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'])
-        else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8') as f:
-                mediainfo = await f.read()
-
-        return {'mediainfo': mediainfo}
+        return {}
 
     async def get_featured(self, _meta: dict[str, Any]) -> dict[str, Any]:
         return {}
@@ -160,8 +152,22 @@ class HUNO(UNIT3D):
         return {'internal': str(internal)}
 
     async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, Any]:
-        _ = meta
-        return {}
+        files = await super().get_additional_files(meta)
+
+        image_list = meta['HUNO_images_key'] if 'HUNO_images_key' in meta else meta['image_list']
+        description = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(
+            meta, image_list=image_list, approved_image_hosts=self.approved_image_hosts
+        )
+        files['description'] = ('description.txt', description.encode('utf-8'), 'text/plain')
+
+        if meta['bdinfo'] is not None:
+            mediainfo = await self.common.get_bdmv_mediainfo(meta, remove=['File size', 'Overall bit rate'])
+        else:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt", encoding='utf-8') as f:
+                mediainfo = await f.read()
+        files['mediainfo'] = ('mediainfo.txt', mediainfo.encode('utf-8'), 'text/plain')
+        
+        return files
 
     async def get_audio(self, meta: dict[str, Any]) -> str:
         channels = str(meta.get('channels', "") or "")
