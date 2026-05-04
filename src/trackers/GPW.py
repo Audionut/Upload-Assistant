@@ -705,15 +705,54 @@ class GPW:
             return True
         return False
 
+    async def _get_poster(self, meta: dict[str, Any]) -> str:
+        poster_url = str(meta.get("poster", "")).strip()
+        if not poster_url:
+            tmdb_poster = meta.get("tmdb_poster", "")
+            if tmdb_poster:
+                poster_url = f"https://image.tmdb.org/t/p/original{tmdb_poster}"
+
+        if not poster_url:
+            return ""
+
+        poster_path = os.path.join(meta["base_dir"], "tmp", meta["uuid"], "poster.jpg")
+        if not os.path.exists(poster_path):
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(poster_url, timeout=30)
+                    response.raise_for_status()
+                    async with aiofiles.open(poster_path, mode="wb") as f:
+                        await f.write(response.content)
+            except Exception as e:
+                console.print(f"{self.tracker}: [red]Error downloading poster: {e}[/red]")
+                return ""
+
+        if os.path.exists(poster_path):
+            try:
+                console.print(f"{self.tracker}: Uploading poster to image host...")
+                new_images, _ = await self.rehost_images_manager.uploadscreens_manager.upload_screens(
+                    meta, 1, 1, 0, 1, [poster_path], {}, allowed_hosts=self.approved_image_hosts
+                )
+                if new_images:
+                    return str(new_images[0].get("raw_url", ""))
+            except Exception as e:
+                console.print(f"[red]Error uploading poster: {e}[/red]")
+
+        return ""
+
     async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
-        poster_url = ""
-        while True:
-            poster_url_raw = await asyncio.to_thread(cli_ui.ask_string, f"{self.tracker}: Enter the poster image URL (must be from one of {', '.join(self.approved_image_hosts)}): \n")
-            poster_url = (poster_url_raw or "").strip()
-            if any(host in poster_url for host in self.approved_image_hosts):
-                break
-            else:
-                console.print("[red]Invalid host. Please use a URL from the allowed hosts.[/red]")
+        poster_url = await self._get_poster(meta)
+
+        if not poster_url:
+            while True:
+                poster_url_raw = await asyncio.to_thread(
+                    cli_ui.ask_string, f"{self.tracker}: Enter the poster image URL (must be from one of {', '.join(self.approved_image_hosts)}): \n"
+                )
+                poster_url = (poster_url_raw or "").strip()
+                if any(host in poster_url for host in self.approved_image_hosts):
+                    break
+                else:
+                    console.print("[red]Invalid host. Please use a URL from the allowed hosts.[/red]")
 
         imdb_identifier = str(meta.get('imdb_info', {}).get('imdbID') or meta.get('imdb') or "").strip()
         tmdb_identifier = str(meta.get('tmdb_id') or "").strip()
