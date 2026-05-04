@@ -1116,9 +1116,13 @@ class GPW:
             })
 
         if meta.get('personalrelease', False):
-            data.update({
-                'self_rip': 'on'
-            })
+            if meta.get("is_disc"):
+                data.update({"buy": "on"})
+            else:
+                data.update({"diy": "on"})
+
+        if meta.get("exclusive", False):
+            data.update({"jinzhuan": "on"})
 
         data.update(self.get_media_flags(meta))
 
