@@ -30,11 +30,12 @@ class GPW:
         self.common = COMMON(config)
         self.tmdb_manager = TmdbManager(config)
         self.tracker = 'GPW'
+        self.tracker_config: dict[str, Any] = self.config["TRACKERS"].get(self.tracker, {})
         self.source_flag = 'GreatPosterWall'
         self.base_url = 'https://greatposterwall.com'
         self.torrent_url = f'{self.base_url}/torrents.php?torrentid='
-        self.announce = self.config['TRACKERS'][self.tracker]['announce_url']
-        self.api_key = self.config['TRACKERS'][self.tracker]['api_key']
+        self.announce = self.tracker_config.get('announce_url', '')
+        self.api_key = self.tracker_config.get('api_key', '')
         self.auth_token = None
         self.tmdb_data: dict[str, Any] = {}
         self.banned_groups = [
@@ -1160,7 +1161,10 @@ class GPW:
             else:
                 data.update({"diy": "on"})
 
-        if meta.get("exclusive", False):
+        exclusive_flag = None
+        if meta.get("exclusive", False) or self.tracker_config.get("exclusive", False):
+            exclusive_flag = "1"
+        if exclusive_flag:
             data.update({"jinzhuan": "on"})
 
         data.update(self.get_media_flags(meta))
