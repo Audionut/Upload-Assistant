@@ -1,8 +1,6 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import re
 from typing import Any, Optional, cast
 
-import cli_ui
 import pycountry
 
 from src.console import console
@@ -210,16 +208,7 @@ class IHD(UNIT3D):
                     console.print(f'[bold red]{self.tracker} requires at least one English audio or subtitle track or an original language audio track.')
                 should_continue = False
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
-                console.print(f'[bold red]Pornographic content is not allowed at {self.tracker}, unless it follows strict rules.')
-                yes = cli_ui.ask_yes_no(f'Do you have permission to upload this torrent to {self.tracker}?', default=False)
-                should_continue = bool(yes)
-            else:
-                if not meta['unattended'] or meta['debug']:
-                    console.print('[bold red]Pornographic content is not allowed at IHD, unless it follows strict rules.')
-                should_continue = False
+        if not self.common.check_and_confirm_adult_media_upload(meta, self.tracker):
+            return False
 
         return should_continue

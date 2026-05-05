@@ -26,20 +26,14 @@ class RF(UNIT3D):
         pass
 
     async def get_additional_checks(self, meta: Meta) -> bool:
-        should_continue = True
-
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            if not meta['unattended']:
-                console.print('[bold red]Erotic not allowed at RF.')
-            should_continue = False
+        if not self.common.check_and_confirm_adult_media_upload(meta, self.tracker):
+            return False
         if meta.get('category') == "TV":
             if not meta['unattended']:
                 console.print('[bold red]RF only ALLOWS Movies.')
-            should_continue = False
+            return False
 
-        return should_continue
+        return True
 
     async def get_name(self, meta: Meta) -> dict[str, str]:
         rf_name = str(meta.get('name', ''))

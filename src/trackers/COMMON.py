@@ -23,6 +23,7 @@ from src.console import console
 from src.exportmi import exportInfo
 from src.languages import languages_manager
 
+Meta = dict[str, Any]
 
 class COMMON:
     LANGUAGE_EQUIVALENCE_GROUPS: tuple[set[str], ...] = (
@@ -137,7 +138,7 @@ class COMMON:
 
     async def create_torrent_for_upload(
         self,
-        meta: dict[str, Any],
+        meta: Meta,
         tracker: str,
         source_flag: str,
         torrent_filename: str = "BASE",
@@ -178,7 +179,7 @@ class COMMON:
 
     async def download_tracker_torrent(
         self,
-        meta: dict[str, Any],
+        meta: Meta,
         tracker: str,
         headers: Optional[dict[str, str]] = None,
         params: Optional[dict[str, str]] = None,
@@ -212,7 +213,7 @@ class COMMON:
 
     async def create_torrent_ready_to_seed(
         self,
-        meta: dict[str, Any],
+        meta: Meta,
         tracker: str,
         source_flag: str,
         new_tracker: Union[str, list[str]],
@@ -256,7 +257,7 @@ class COMMON:
 
         return None
 
-    async def get_torrent_hash(self, meta: dict[str, Any], tracker: str) -> str:
+    async def get_torrent_hash(self, meta: Meta, tracker: str) -> str:
         torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{tracker}].torrent"
         async with aiofiles.open(torrent_path, 'rb') as torrent_file:
             torrent_content = await torrent_file.read()
@@ -275,7 +276,7 @@ class COMMON:
             info_hash = hashlib.sha1(info, usedforsecurity=False).hexdigest()  # SHA1 required for torrent info hash
         return info_hash
 
-    async def save_image_links(self, meta: dict[str, Any], image_key: str, image_list: Optional[list[dict[str, str]]]) -> Optional[str]:
+    async def save_image_links(self, meta: Meta, image_key: str, image_list: Optional[list[dict[str, str]]]) -> Optional[str]:
         if image_list is None:
             console.print("[yellow]No image links to save.[/yellow]")
             return None
@@ -458,7 +459,7 @@ class COMMON:
 
     async def prompt_user_for_id_selection(
         self,
-        meta: dict[str, Any],
+        meta: Meta,
         tmdb: Optional[Union[str, int]] = None,
         imdb: Optional[Union[str, int]] = None,
         tvdb: Optional[Union[str, int]] = None,
@@ -500,7 +501,7 @@ class COMMON:
         response = input(f"{message} (Y/n): ").strip().lower()
         return bool(response == '' or response == 'y')
 
-    async def unit3d_region_distributor(self, meta: dict[str, Any], tracker: str, torrent_url: str, id: str = "") -> None:
+    async def unit3d_region_distributor(self, meta: Meta, tracker: str, torrent_url: str, id: str = "") -> None:
         """Get region and distributor information from API response"""
         raw_api_key = self.config['TRACKERS'][tracker].get('api_key')
         api_key = str(raw_api_key).strip() if raw_api_key else ''
@@ -581,7 +582,7 @@ class COMMON:
         tracker: str,
         torrent_url: str,
         search_url: str,
-        meta: dict[str, Any],
+        meta: Meta,
         id: Optional[Union[str, int]] = None,
         file_name: Optional[Union[str, list[str]]] = None,
         only_id: bool = False,
@@ -757,7 +758,7 @@ class COMMON:
                         cookies[lineFields[5]] = lineFields[6]
         return cookies
 
-    async def ptgen(self, meta: dict[str, Any], ptgen_site: str = "", ptgen_retry: int = 3) -> str:
+    async def ptgen(self, meta: Meta, ptgen_site: str = "", ptgen_retry: int = 3) -> str:
         ptgen_text = ""
         url = 'https://ptgen.zhenzhen.workers.dev'
         if ptgen_site != '':
@@ -1074,7 +1075,7 @@ class COMMON:
             bbcode_output += "\n"
             return bbcode_output
 
-    async def get_bdmv_mediainfo(self, meta: dict[str, Any], remove: Optional[list[str]] = None, char_limit: int = 0) -> str:
+    async def get_bdmv_mediainfo(self, meta: Meta, remove: Optional[list[str]] = None, char_limit: int = 0) -> str:
         """
         Generate and sanitize MediaInfo for BDMV discs.
 
@@ -1155,7 +1156,7 @@ class COMMON:
 
     async def check_language_requirements(
         self,
-        meta: dict[str, Any],
+        meta: Meta,
         tracker: str,
         languages_to_check: list[str],
         check_audio: bool = False,
@@ -1172,7 +1173,7 @@ class COMMON:
         with subtitles if the primary audio requirement isn't met.
 
         :param meta: Dictionary containing media metadata (audio_languages, subtitle_languages, etc.).
-        :type meta: dict[str, Any]
+        :type meta: Meta
         :param tracker: Name of the tracker being processed, used for logging/output.
         :type tracker: str
         :param languages_to_check: A list of language names or codes to search for.
@@ -1298,7 +1299,7 @@ class COMMON:
             console.print(f"[red]Error checking language requirements: {e}[/red]")
             return False
 
-    async def save_html_file(self, meta: dict[str, Any], tracker: str, text: str = "", file_name: str = "") -> str:
+    async def save_html_file(self, meta: Meta, tracker: str, text: str = "", file_name: str = "") -> str:
         """
         Save provided text as an HTML file.
 
@@ -1313,3 +1314,23 @@ class COMMON:
         async with aiofiles.open(html_path, "w", encoding="utf-8") as f:
             await f.write(text)
         return html_path
+
+    def check_and_confirm_adult_media_upload(self, meta: Meta, tracker) -> bool:
+        """
+        Check if the media is categorized as adult/pornographic and prompt the user for confirmation before uploading to a non-adult tracker.
+
+        :param meta: Metadata dictionary containing category and genre information.
+        :param tracker: The tracker name for display in the prompt.
+        :return: True if the user confirms or if the media is not adult, False otherwise.
+        """
+        if meta.get("adult_media", False):
+            if not meta["unattended"] or (meta["unattended"] and meta.get("unattended_confirm", False)):
+                console.print(f"[bold red]Pornography is not allowed at {tracker}.[/bold red]")
+                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
+                    pass
+                else:
+                    return False
+            else:
+                return False
+
+        return True
