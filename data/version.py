@@ -1,4 +1,52 @@
-__version__ = "v7.1.3"
+__version__ = "v7.1.6"
+
+"""
+Release Notes for version v7.1.6 (2026-05-05):
+
+# ## What's Changed
+# 
+# * fix rtorrent skip check by @Audionut in 4ccc94b
+# * fix: docker version tracking by @Audionut in f3c1bf3
+# * chore: update qbittorrent-api dependency version (#1356) by @wastaken7 in 338e21b
+# * fix(GPW): update request data handling, add exclusive arg and auto upload posters (#1357) by @wastaken7 in 83a77d6
+# * BJS: limit director/creator fields to 1 person and fix type hint (#1358) by @wastaken7 in 7bdf433
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v7.1.5...v7.1.6
+"""
+
+
+"""
+Release Notes for version v7.1.5 (2026-04-27):
+
+# ## What's Changed
+# 
+# * ulcx: remove hybrid from web by @Audionut in 3a4e5e6
+# * Only allow MKV for non-disc on BLU (#1342) by @glibbright in 39c7e8c
+# * Allow modified SD content upload at BHD (#1343) by @glibbright in 1954346
+# * Add more banned groups to BHD tracker (#1344) by @glibbright in 2e9e7c0
+# * Add validation for media container types in BHD (#1346) by @glibbright in e355dcb
+# * ANT: just return api message by @Audionut in b33e4c4
+# * validate mediainfo debugging by @Audionut in 994e314
+# * fix aither flags by @Audionut in 6ab394f
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v7.1.4...v7.1.5
+"""
+
+
+"""
+Release Notes for version v7.1.4 (2026-04-16):
+
+# ## What's Changed
+# 
+# * ANT: key in header by @Audionut in 27cb44e
+# * DP: banned groups by @Audionut in d1da3dc
+# * BHD: encode settings by @Audionut in 4066131
+# * fix tvmovie handle when no imdb by @Audionut in 323b3e3
+# * fix: ffmpeg round to even scale by @Audionut in 2f614c5
+# 
+# **Full Changelog**: https://github.com/Audionut/Upload-Assistant/compare/v7.1.3...v7.1.4
+"""
+
 
 """
 Release Notes for version v7.1.3 (2026-04-14):

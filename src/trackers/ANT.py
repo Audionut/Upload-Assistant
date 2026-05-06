@@ -279,69 +279,9 @@ class ANT:
                             meta['tracker_status'][self.tracker]['status_message'] = response_data
                             return True
 
-                    elif response.status_code == 400:
-                        response_text_lc = str(response_data).lower()
-                        is_exact = (
-                            ('exact same' in response_text_lc)
-                            or (str(response_data.get('status', '')).lower() == 'exact same')
-                            or ('exact same' in str(response_data.get('error', '')).lower())
-                        )
-                        is_same_infohash = (
-                            ('same infohash' in response_text_lc)
-                            or (str(response_data.get('status', '')).lower() == 'same infohash')
-                            or ('same infohash' in str(response_data.get('error', '')).lower())
-                        )
-
-                        if is_same_infohash:
-                            folder = f"{meta['base_dir']}/tmp/{meta['uuid']}"
-                            view_link = response_data.get('view', '')
-                            status_msg = "data error: A torrent with the same infohash already exists on ANT.\n"
-                            if view_link:
-                                status_msg += f"View existing torrent: {view_link}\n"
-                            meta['tracker_status'][self.tracker]['status_message'] = status_msg
-                            return False
-
-                        if is_exact:
-                            folder = f"{meta['base_dir']}/tmp/{meta['uuid']}"
-                            meta['tracker_status'][self.tracker]['status_message'] = (
-                                "data error: The exact same media file already exists on ANT. You must use the website to upload a new version if you wish to trump.\n"
-                                f"Use the files from {folder} to assist with manual upload.\n"
-                                "raw_url image links from the image_data.json file"
-                            )
-                            return False
-
-                        else:
-                            response_data = {
-                                "error": f"Unexpected status code: {response.status_code}",
-                                "response_content": response.text
-                            }
-                            meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
-                            return False
-
-                    elif response.status_code == 403:
-                        response_data = {
-                            "error": "Wrong API key or insufficient permissions",
-                        }
-                        meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
-                        return False
-
-                    elif response.status_code == 500:
-                        response_data = {
-                            "error": "Internal Server Error, report to ANT staff",
-                        }
-                        meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
-                        return False
-
-                    elif response.status_code == 502:
-                        response_data = {
-                            "error": "Bad Gateway",
-                            "site seems down": "https://ant.trackerstatus.info/"
-                        }
-                        meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"
-                        return False
                     else:
                         response_data = {
-                            "error": f"Unexpected status code: {response.status_code}",
+                            "error": f"ANT returned status code: {response.status_code}",
                             "response_content": response.text
                         }
                         meta['tracker_status'][self.tracker]['status_message'] = f"data error - {response_data}"

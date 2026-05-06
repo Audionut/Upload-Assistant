@@ -567,6 +567,8 @@ config = {
             # Cookies must be in Netscape format and must be located in data/cookies/GPW.txt
             # You can find your announce URL at https://greatposterwall.com/upload.php
             "announce_url": "https://tracker.greatposterwall.com/<PASSKEY>/announce",
+            # Upload with Exclusive flag
+            "exclusive": False,
         },
         "HDB": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

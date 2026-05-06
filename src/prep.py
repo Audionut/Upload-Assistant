@@ -23,6 +23,7 @@ try:
     from src.clients import Clients
     from src.console import console
     from src.edition import get_edition
+    from src.exceptions import NoAudioMediaError
     from src.exportmi import exportInfo, get_conformance_error, mi_resolution, validate_mediainfo
     from src.get_disc import DiscInfoManager
     from src.get_name import NameManager
@@ -468,9 +469,12 @@ class Prep:
         if not meta['is_disc'] and not meta.get('emby', False):
             try:
                 valid_mi = validate_mediainfo(meta, debug=meta['debug'])
+            except NoAudioMediaError as e:
+                console.print(f"[red]MediaInfo validation failed: {str(e)}[/red]")
+                raise NoAudioMediaError(f"Upload Assistant does not support no audio media. Details: {str(e)}") from e
             except Exception as e:
                 console.print(f"[red]MediaInfo validation failed: {str(e)}[/red]")
-                raise Exception(f"Upload Assistant does not support no audio media. Details: {str(e)}") from e
+                raise
             if not valid_mi:
                 console.print("[red]MediaInfo validation failed. This file does not contain (Unique ID).")
                 meta['valid_mi'] = False
