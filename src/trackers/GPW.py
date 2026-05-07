@@ -367,6 +367,7 @@ class GPW:
         dupes: list[dict[str, str]] = []
 
         if not self.get_additional_checks(meta):
+            meta["skipping"] = "GPW"
             return []
 
         group_id = await self.get_groupid(meta)
