@@ -34,6 +34,20 @@ class BLU(UNIT3D):
 
     async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         should_continue = True
+
+        if not meta.get('is_disc'):
+            container = meta.get('container', '').lower()
+            type_name = meta.get('type', '').upper()
+            allowed = ['mkv']
+            if type_name == 'HDTV':
+                allowed.append('ts')
+            if type_name in ['WEBDL', 'HDTV'] and "DV" in meta.get('hdr', '') and "HDR" not in meta.get('hdr', ''):
+                allowed.append('mp4')
+
+            if container not in allowed:
+                console.print(f"[bold red]For this release, {self.tracker} requires one of the following containers: {', '.join([a.upper() for a in allowed])}[/bold red]")
+                return False
+
         if (
             meta['type'] in ['ENCODE', 'REMUX']
             and 'HDR' in meta.get('hdr', '')

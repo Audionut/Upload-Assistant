@@ -970,7 +970,7 @@ class BJS:
 
         return results
 
-    def get_runtime(self, meta: dict[str, Any]) -> dict[str, int]:
+    def get_runtime(self, meta: dict[str, Any]) -> tuple[int, int]:
         """
         Extracts runtime from metadata and converts total minutes into hours and minutes.
         """
@@ -1074,9 +1074,9 @@ class BJS:
         }
 
         prompt_labels = {
-            'director': 'Diretor(es)',
-            'creator': 'Criador(es)',
-            'cast': 'Elenco',
+            "director": "Diretor",
+            "creator": "Criador",
+            "cast": "Elenco",
         }
 
         if role not in role_map:
@@ -1089,20 +1089,21 @@ class BJS:
         tmdb_names = meta.get(tmdb_key, [])
         names = imdb_names + tmdb_names
 
-        unique_names = list(dict.fromkeys(names))[:5]
+        limit = 1 if role in ("director", "creator") else 5
+        unique_names = list(dict.fromkeys(names))[:limit]
 
         if unique_names:
             return ', '.join(unique_names)
 
         display_name = prompt_labels.get(role, role.capitalize())
-        prompt_message = (
-            f'{display_name} não encontrado(s).\n'
-            'Por favor, insira manualmente (separados por vírgula): '
-        )
+        suffix = " (apenas uma pessoa)" if role in ("director", "creator") else " (separados por vírgula)"
+        prompt_message = f"{display_name} não encontrado(s).\nPor favor, insira manualmente{suffix}: "
 
         user_input_raw = await asyncio.to_thread(cli_ui.ask_string, f'{prompt_message}')
         user_input = (user_input_raw or "").strip()
         if user_input:
+            if role in ("director", "creator"):
+                return user_input.split(",")[0].strip()
             return user_input
 
         return 'skipped'
@@ -1271,14 +1272,16 @@ class BJS:
                     for code in self.main_tmdb_data.get('origin_country', [])
                     if (country := pycountry.countries.get(alpha_2=code))
                 ]
-                data.update({
-                    'network': ', '.join([p.get('name', '') for p in self.main_tmdb_data.get('networks', [])]) or '',  # Optional
-                    'numtemporadas': self.main_tmdb_data.get('number_of_seasons', ''),  # Optional
-                    'datalancamento': self.get_release_date(),
-                    'pais': ', '.join(country_list),  # Optional
-                    'diretorserie': ', '.join(set(meta.get('tmdb_directors', []) or meta.get('imdb_info', {}).get('directors', [])[:5])),  # Optional
-                    'avaliacao': self.get_rating(),  # Optional
-                })
+                data.update(
+                    {
+                        "network": ", ".join([p.get("name", "") for p in self.main_tmdb_data.get("networks", [])]) or "",  # Optional
+                        "numtemporadas": self.main_tmdb_data.get("number_of_seasons", ""),  # Optional
+                        "datalancamento": self.get_release_date(),
+                        "pais": ", ".join(country_list),  # Optional
+                        "diretorserie": ", ".join(list(dict.fromkeys(meta.get("tmdb_directors", []) or meta.get("imdb_info", {}).get("directors", [])))[:1]),  # Optional
+                        "avaliacao": self.get_rating(),  # Optional
+                    }
+                )
 
         # Anime-specific data
         if meta.get('anime'):
@@ -1311,6 +1314,10 @@ class BJS:
             data.update({
                 'internalrel': 1,
             })
+
+        # Repack
+        if meta.get("repack", ""):
+            data.update({"repack": "on"})
 
         # Only upload images if not debugging
         if not meta.get('debug', False):

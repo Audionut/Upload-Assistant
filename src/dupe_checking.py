@@ -158,6 +158,9 @@ class DupeChecker:
         is_hdtv = meta.get('type') == "HDTV"
         target_source = str(meta.get("source", ""))
         is_sd = int(meta.get('sd') or 0)
+        is_tv_pack = meta.get('category') == "TV" and (coerce_int(meta.get('tv_pack')) or 0) == 1
+        target_season_match = re.search(r'[sS](\d+)', str(target_season or ""))
+        target_season_number = int(target_season_match.group(1)) if target_season_match else None
 
         filenames: list[str] = []
         filelist_value = meta.get('filelist')
@@ -399,7 +402,7 @@ class DupeChecker:
                 await log_exclusion("file extension mismatch (is_disc=True)", each)
                 return True
 
-            if is_sd == 1 and tracker_name in {"BHD", "AITHER"} and any(str(res) in each for res in [1080, 720, 2160]):
+            if is_sd == 1 and tracker_name in {"BHD", "AITHER"} and any(str(res) in each for res in [1080, 720, 2160]) and not has_is_disc:
                 return False
 
             if target_hdr and '1080p' in target_resolution and '2160p' in each:
@@ -425,6 +428,26 @@ class DupeChecker:
                 return True
 
             skip_resolution_check = bool(is_dvd or "DVD" in target_source or is_dvdrip)
+
+            if (
+                tracker_name == "OTW"
+                and not is_tv_pack
+                and meta.get('category') == "TV"
+                and target_episode
+                and target_resolution
+            ):
+                dupe_season_match = re.search(r'[sS](\d+)', each)
+                dupe_has_episode = bool(re.search(r'[eE]\d{2}', each))
+                same_season_episode_dupe = (
+                    target_season_number is not None
+                    and dupe_season_match is not None
+                    and int(dupe_season_match.group(1)) == target_season_number
+                    and dupe_has_episode
+                )
+
+                if same_season_episode_dupe and (target_resolution.lower() not in each.lower()):
+                    await log_exclusion(f"OTW same-season episode resolution mismatch: expected '{target_resolution}'", each)
+                    return False
 
             if not skip_resolution_check:
                 if target_resolution and target_resolution not in each:

@@ -44,12 +44,13 @@ class AITHER(UNIT3D):
 
         data = {
             'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
-            'dv': 'DV' in hdr_value,
         }
+        if "DV" in hdr_value:
+            data['dv'] = 1
         if has_hdr10p:
-            data['hdr10p'] = True
+            data['hdr10p'] = 1
         elif not has_hdr10p and any(flag in hdr_value for flag in ['HDR', 'HLG']):
-            data['hdr'] = True
+            data['hdr'] = 1
 
         return data
 

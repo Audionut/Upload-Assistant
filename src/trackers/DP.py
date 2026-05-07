@@ -24,11 +24,11 @@ class DP(UNIT3D):
         self.torrent_url = f'{self.base_url}/torrents/'
         self.banned_groups = [
             'ARCADE', 'aXXo', 'BANDOLEROS', 'BONE', 'BRrip', 'CM8', 'CrEwSaDe', 'CTFOH', 'dAV1nci', 'DNL',
-            'eranger2', 'FaNGDiNG0', 'FiSTER', 'flower', 'GalaxyTV', 'HD2DVD', 'HDT', 'HDTime', 'iHYTECH',
-            'ION10', 'iPlanet', 'KiNGDOM', 'LAMA', 'MeGusta', 'mHD', 'mSD', 'NaNi', 'NhaNc3', 'nHD',
-            'nikt0', 'nSD', 'OFT', 'PiTBULL', 'PRODJi', 'RARBG', 'Rifftrax', 'ROCKETRACCOON',
-            'SANTi', 'SasukeducK', 'SEEDSTER', 'ShAaNiG', 'Sicario', 'STUTTERSHIT', 'TAoE',
-            'TGALAXY', 'TGx', 'TORRENTGALAXY', 'ToVaR', 'TSP', 'TSPxL', 'ViSION', 'VXT',
+            'eranger2', 'FaNGDiNG0', 'FGT', 'FiSTER', 'flower', 'GalaxyTV', 'HD2DVD', 'HDTime', 'HorribleSubs',
+            'iHYTECH', 'ION10', 'iPlanet', 'KiNGDOM', 'LAMA', 'MeGusta', 'mHD', 'mSD', 'NaNi', 'NhaNc3', 'nHD',
+            'nikt0', 'nSD', 'OFT', 'PiTBULL', 'PRODJi', 'PSA', 'RARBG', 'Rifftrax', 'ROCKETRACCOON',
+            'SANTi', 'SasukeducK', 'SEEDSTER', 'ShAaNiG', 'Sicario', 'STUTTERSHIT', 'Subsplease', 'SyncUp',
+            'TAoE', 'TGALAXY', 'TGx', 'TORRENTGALAXY', 'ToVaR', 'Trix', 'TSP', 'TSPxL', 'ViSION', 'VXT',
             'WAF', 'WKS', 'X0r', 'YIFY', 'YTS',
         ]
         pass
@@ -49,11 +49,6 @@ class DP(UNIT3D):
         if not await self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=nordic_languages, check_audio=True, check_subtitle=True
         ):
-            return False
-
-        if meta['type'] == "ENCODE" and meta.get('tag', "") in ['FGT']:
-            if not meta['unattended']:
-                console.print(f"[bold red]{self.tracker} does not allow FGT encodes, skipping upload.")
             return False
 
         if meta['type'] not in ['WEBDL'] and meta.get('tag', "") in ['EVO']:
