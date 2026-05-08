@@ -582,7 +582,13 @@ class DescriptionBuilder:
                 desc_parts.append(f"[center][pre]{episode_overview}[/pre][/center]\n")
 
         # Description that may come from API requests
-        meta_description = meta.get("description", "")
+        meta_description_value = meta.get("description", "")
+        if isinstance(meta_description_value, str):
+            meta_description = meta_description_value
+        elif meta_description_value is None:
+            meta_description = ""
+        else:
+            meta_description = str(meta_description_value)
         # Add FraMeSToR NFO to Aither
         if self.tracker == "AITHER" and "framestor" in meta and meta["framestor"]:
             nfo_content = meta.get("description_nfo_content", "")
