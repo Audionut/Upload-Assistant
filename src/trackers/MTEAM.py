@@ -6,7 +6,6 @@ from urllib.parse import urlparse, urlunparse
 
 import aiofiles
 import httpx
-from bs4 import BeautifulSoup
 
 from cogs.redaction import Redaction
 from src.console import console
@@ -52,8 +51,6 @@ class MTEAM:
             timeout=30.0,
         )
 
-        self.douban_id: int = 0
-
     async def get_requests(self, meta: dict[str, Any]) -> list[dict[str, str]]:
         requests: list[dict[str, str]] = []
 
@@ -81,13 +78,11 @@ class MTEAM:
                 reward = item.get("rewardCurrent", "0")
                 link = f"{self.base_url}/seekDetail?id={item.get('id')}"
 
-                requests.append(
-                    {
-                        "Name": name,
-                        "Reward": reward,
-                        "Link": link,
-                    }
-                )
+                requests.append({
+                    "Name": name,
+                    "Reward": reward,
+                    "Link": link,
+                })
 
             if requests:
                 message = f"\n{self.tracker}: [bold yellow]Your upload may fulfill the following request(s), check it out:[/bold yellow]\n\n"
@@ -140,15 +135,16 @@ class MTEAM:
 
         return text
 
-    async def get_douban_info(self) -> dict[str, Any]:
+    async def get_douban_info(self, meta: Meta) -> dict[str, Any]:
         info: dict[str, Any] = {}
-        if not self.douban_id:
+        douban_id = meta.get("douban_id")
+        if not douban_id:
             return info
 
         api_url = f"{self.api_base_url}/media/douban/infoV2"
 
         params = {
-            "code": self.douban_id,
+            "code": douban_id,
             "refresh": False,
         }
 
@@ -168,7 +164,7 @@ class MTEAM:
             return info
 
     async def mteam_standard_desc(self, meta: Meta):
-        db_info = await self.get_douban_info()
+        db_info = await self.get_douban_info(meta)
 
         if db_info and db_info.get("code") == "0":
             d = db_info.get("data", {})
@@ -355,55 +351,6 @@ class MTEAM:
         # Default to HD
         return tv_series_hd if meta["category"] == "TV" else movie_hd
 
-    def get_small_description(self, meta: Meta) -> str:
-        resolution = meta.get("resolution", "")
-        audio = meta.get("audio", "")
-        video_bitrate, audio_bitrate = self.get_bitrates(meta)
-
-        return f"{resolution} @ {video_bitrate} kbps - {audio} @ {audio_bitrate} kbps"
-
-    def get_bitrates(self, meta) -> tuple[int, int]:
-        v_raw = None
-        a_raw = None
-        is_bdmv = meta.get("is_disc") == "BDMV"
-        is_dvd = meta.get("is_disc") == "DVD"
-
-        if is_bdmv:
-            discs = meta.get("discs", [])
-            if discs:
-                bdinfo = discs[0].get("bdinfo", {})
-                v_tracks = bdinfo.get("video", [])
-                a_tracks = bdinfo.get("audio", [])
-                if v_tracks:
-                    v_raw = v_tracks[0].get("bitrate")
-                if a_tracks:
-                    a_raw = a_tracks[0].get("bitrate")
-        elif is_dvd:
-            pass
-        else:
-            tracks = meta.get("mediainfo", {}).get("media", {}).get("track", [])
-            for track in tracks:
-                t_type = track.get("@type")
-                if t_type == "Video" and v_raw is None:
-                    v_raw = track.get("BitRate")
-                elif t_type == "Audio" and a_raw is None:
-                    a_raw = track.get("BitRate")
-
-        def clean_to_int(val, bdmv_mode):
-            if not val or isinstance(val, dict):
-                return 0
-
-            try:
-                if bdmv_mode:
-                    numeric_match = re.search(r"\d+", str(val).replace(".", "").replace(",", ""))
-                    return int(numeric_match.group()) if numeric_match else 0
-                else:
-                    return int(val) // 1000
-            except (ValueError, TypeError, AttributeError):
-                return 0
-
-        return (clean_to_int(v_raw, is_bdmv), clean_to_int(a_raw, is_bdmv))
-
     async def get_additional_checks(self, meta: dict[str, Any]):
         should_continue = True
 
@@ -446,51 +393,6 @@ class MTEAM:
                 return False
 
         return should_continue
-
-    async def get_douban_id(self, meta: Meta) -> int:
-        douban_id: int = 0
-        try:
-            douban_manual = int(meta.get("douban_manual") or 0)
-        except (ValueError, TypeError):
-            console.print(f"{self.tracker}: [bold yellow]Invalid douban_manual value, ignoring.[/bold yellow]")
-            douban_manual = 0
-
-        if douban_manual:
-            console.print(f"{self.tracker}: Using manual Douban ID: {douban_manual}")
-            self.douban_id = douban_manual
-            return douban_manual
-
-        imdb_id = meta.get("imdb_info", {}).get("imdbID")
-        if not imdb_id:
-            return douban_id
-
-        search_url = f"https://m.douban.com/search/?query={imdb_id}"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
-
-        try:
-            async with httpx.AsyncClient(headers=headers, follow_redirects=True) as client:
-                response = await client.get(search_url)
-                response.raise_for_status()
-
-            soup = BeautifulSoup(response.text, "html.parser")
-            result = soup.find("ul", class_="search_results_subjects")
-
-            if result:
-                link_tag = result.find("a")
-                if link_tag and "href" in link_tag.attrs:
-                    link_mobile = str(link_tag["href"])
-                    match = re.search(r"subject/(\d+)", link_mobile)
-                    if match:
-                        douban_id = int(match.group(1))
-                        self.douban_id = douban_id
-                        return douban_id
-
-            console.print(f"{self.tracker}: [bold yellow]No Douban ID found for IMDb ID {imdb_id}.[/bold yellow]")
-            return douban_id
-
-        except Exception as e:
-            console.print(f"{self.tracker}: [bold yellow]Failed to fetch Douban ID for IMDb ID {imdb_id}: {e}[/bold yellow]")
-            return douban_id
 
     async def search_existing(self, meta: dict[str, Any], _) -> list[dict[str, Any]]:
         dupes: list[dict[str, Any]] = []
@@ -661,13 +563,11 @@ class MTEAM:
         """
         https://test2.m-team.cc/api/swagger-ui/index.html#/種子/createOredit
         """
-        douban_id = await self.get_douban_id(meta)
-
         data = {
             # "torrent": 0,
             # "offer": 0,
             "name": meta["name"],
-            "smallDescr": self.get_small_description(meta),
+            "smallDescr": self.common.get_small_description(meta),
             "descr": await self.generate_description(meta),
             "category": self.get_category_id(meta),
             # "source": 0,
@@ -679,7 +579,7 @@ class MTEAM:
             # "processing": 0,
             # "countries": "",
             "imdb": meta.get("imdb_info", {}).get("imdbID", ""),
-            "douban": douban_id,
+            "douban": meta.get("douban_id", 0),
             # "dmmCode": "",
             # "cids": "",
             # "aids": "",
