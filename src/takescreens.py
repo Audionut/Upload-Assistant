@@ -400,7 +400,7 @@ async def capture_disc_task(index: int, file: str, ss_time: str, image_path: str
 
         if meta.get('frame_overlay', False):
             # Get frame info from pre-collected data if available
-            frame_info = meta.get('frame_info_map', {}).get(ss_time, {})
+            frame_info = meta.get('frame_info_map', {}).get(str(ss_time), {})
 
             frame_rate = meta.get('frame_rate', 24.0)
             frame_number = int(float(ss_time) * frame_rate)
@@ -785,7 +785,7 @@ async def capture_dvd_screenshot(task: tuple[int, str, str, str, dict[str, Any],
 
         if meta.get('frame_overlay', False):
             # Get frame info from pre-collected data if available
-            frame_info = meta.get('frame_info_map', {}).get(seek_time, {})
+            frame_info = meta.get('frame_info_map', {}).get(str(seek_time), {})
 
             frame_rate = meta.get('frame_rate', 24.0)
             frame_number = int(seek_time * frame_rate)
