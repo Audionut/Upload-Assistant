@@ -59,7 +59,7 @@ class ANIRENA:
             meta['tracker_status'][self.tracker]['status_message'] = "Authentication failed: No token obtained"
             return False
 
-        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]{meta['clean_name']}.torrent"
+        torrent_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
         if not os.path.exists(torrent_path):
             console.print(f"[{self.tracker}] Torrent file not found: {torrent_path}")
             meta['tracker_status'][self.tracker]['status_message'] = f"Torrent file not found: {torrent_path}"
