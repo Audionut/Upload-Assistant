@@ -2,6 +2,7 @@
 import base64
 import os
 import re
+import platform
 from typing import Any, Optional, cast
 
 import httpx
@@ -30,7 +31,11 @@ class ANIRENA:
             return None
         
         url = f"{self.api_url}/auth/token"
-        headers = {"Authorization": f"ApiKey {self.api_key}"}
+        headers = {
+            "Authorization": f"ApiKey {self.api_key}",
+            "User-Agent": f"Upload Assistant/7.1.7 ({platform.system()} {platform.release()})",
+            "Accept": "application/json",
+        }
         
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -88,7 +93,11 @@ class ANIRENA:
         # but let's stick to the basics first.
 
         url = f"{self.api_url}/torrents"
-        headers = {"Authorization": f"Bearer {self.token}"}
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "User-Agent": f"Upload Assistant/7.1.7 ({platform.system()} {platform.release()})",
+            "Accept": "application/json",
+        }
         
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
@@ -223,7 +232,11 @@ class ANIRENA:
             return []
 
         url = f"{self.api_url}/torrents/search"
-        headers = {"Authorization": f"Bearer {self.token}"}
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "User-Agent": f"Upload Assistant/7.1.7 ({platform.system()} {platform.release()})",
+            "Accept": "application/json",
+        }
         
         # Search by title or part of it
         search_query = meta['title']
