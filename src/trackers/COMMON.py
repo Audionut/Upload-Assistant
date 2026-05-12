@@ -165,7 +165,7 @@ class COMMON:
                 elif raw_announce:
                     new_torrent.metainfo['announce'] = str(raw_announce).strip()
                 else:
-                    new_torrent.metainfo['announce'] = "https://fake.tracker"
+                    raise ValueError(f"No announce URL found for tracker {tracker}. Please check your config.")
             new_torrent.metainfo['info']['private'] = 1 if is_private else 0
             new_torrent.metainfo['info']['source'] = source_flag
             if 'created by' in new_torrent.metainfo:
