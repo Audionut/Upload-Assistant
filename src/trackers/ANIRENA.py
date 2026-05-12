@@ -18,6 +18,7 @@ class ANIRENA:
         self.source_flag = 'AniRena'
         self.base_url = 'https://www.anirena.com'
         self.api_url = f'{self.base_url}/api/v1'
+        self.torrent_url = f'{self.base_url}/torrent/'
         
         trackers_cfg = cast(dict[str, Any], self.config.get('TRACKERS', {}))
         anirena_cfg = cast(dict[str, Any], trackers_cfg.get('ANIRENA', {}))
@@ -123,7 +124,10 @@ class ANIRENA:
                 if response.status_code in (200, 201):
                     res_data = response.json()
                     if res_data.get('ok'):
-                        console.print(f"[{self.tracker}] Uploaded successfully: {res_data.get('id')}")
+                        torrent_id = res_data.get('id')
+                        console.print(f"[{self.tracker}] Uploaded successfully: {torrent_id}")
+                        meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
+                        meta['tracker_status'][self.tracker]['status_message'] = f"Uploaded successfully to {self.tracker}"
                         return True
                     else:
                         console.print(f"[{self.tracker}] Upload failed: {res_data}")
