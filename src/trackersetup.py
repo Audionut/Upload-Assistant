@@ -17,6 +17,7 @@ from src.console import console
 from src.trackers.A4K import A4K
 from src.trackers.ACM import ACM
 from src.trackers.AITHER import AITHER
+from src.trackers.ANIRENA import ANIRENA
 from src.trackers.ANT import ANT
 from src.trackers.AR import AR
 from src.trackers.ASC import ASC
@@ -1337,7 +1338,7 @@ class TRACKER_SETUP:
 
 
 tracker_class_map: dict[str, type[Any]] = {
-    'A4K': A4K, 'ACM': ACM, 'AITHER': AITHER, 'ANT': ANT, 'AR': AR, 'ASC': ASC, 'AZ': AZ, 'BHD': BHD, 'BHDTV': BHDTV, 'BJS': BJS, 'BLU': BLU, 'BT': BT, 'CBR': CBR,
+    'A4K': A4K, 'ACM': ACM, 'AITHER': AITHER, 'ANIRENA': ANIRENA, 'ANT': ANT, 'AR': AR, 'ASC': ASC, 'AZ': AZ, 'BHD': BHD, 'BHDTV': BHDTV, 'BJS': BJS, 'BLU': BLU, 'BT': BT, 'CBR': CBR,
     'CZ': CZ, 'DC': DC, 'DP': DP, 'DT': DT, 'EMUW': EMUW, 'FNP': FNP, 'FF': FF, 'FL': FL, 'FRIKI': FRIKI, 'GPW': GPW, 'HDB': HDB, 'HDS': HDS, 'HDT': HDT, 'HHD': HHD, 'HUNO': HUNO, 'ITT': ITT,
     'IHD': IHD, 'IS': IS, 'LCD': LCD, 'LDU': LDU, 'LST': LST, 'LT': LT, 'LUME': LUME, 'MTV': MTV, 'NBL': NBL, 'OE': OE, 'OTW': OTW, 'PHD': PHD, 'PT': PT, 'PTP': PTP, 'PTER': PTER, 'PTS': PTS, 'PTT': PTT,
     'R4E': R4E, 'RAS': RAS, 'RF': RF, 'RTF': RTF, 'SAM': SAM, 'SHRI': SHRI, 'SN': SN, 'SP': SP, 'SPD': SPD, 'STC': STC, 'THR': THR,
@@ -1345,7 +1346,7 @@ tracker_class_map: dict[str, type[Any]] = {
 }
 
 api_trackers = {
-    'A4K', 'ACM', 'AITHER', 'BHD', 'BLU', 'CBR', 'DP', 'DT', 'EMUW', 'FNP', 'FRIKI', 'HHD', 'HUNO', 'IHD', 'ITT', 'LCD', 'LDU', 'LST', 'LT', 'LUME',
+    'A4K', 'ACM', 'AITHER', 'ANIRENA', 'BHD', 'BLU', 'CBR', 'DP', 'DT', 'EMUW', 'FNP', 'FRIKI', 'HHD', 'HUNO', 'IHD', 'ITT', 'LCD', 'LDU', 'LST', 'LT', 'LUME',
     'OE', 'OTW', 'PT', 'PTT', 'RAS', 'RF', 'R4E', 'SAM', 'SHRI', 'SP', 'STC', 'TIK', 'TLZ', 'TOS', 'TTR', 'ULCX', 'UTP', 'YOINK', 'YUS'
 }
 
