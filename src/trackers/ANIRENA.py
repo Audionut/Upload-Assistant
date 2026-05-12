@@ -183,6 +183,18 @@ class ANIRENA:
                     langs.add(lang.to_tag())
             except Exception:
                 pass
+        
+        # If no languages detected, prompt user (if not unattended)
+        if not langs and not meta.get('unattended'):
+            console.print(f"[{self.tracker}] [yellow]No languages detected from media file.[/yellow]")
+            from rich.prompt import Prompt
+            lang_input = Prompt.ask(f"[{self.tracker}] Please enter languages (BCP 47 codes, comma separated, e.g., 'en, ja')")
+            if lang_input:
+                for l in lang_input.split(','):
+                    l = l.strip()
+                    if l:
+                        langs.add(l)
+
         return list(langs)
 
     async def get_description(self, meta: dict[str, Any]) -> str:
