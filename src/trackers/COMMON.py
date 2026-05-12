@@ -151,10 +151,20 @@ class COMMON:
                 if each not in ('announce', 'comment', 'creation date', 'created by', 'encoding', 'info'):
                     new_torrent.metainfo.pop(each, None)  # type: ignore
             if announce_url:
-                new_torrent.metainfo['announce'] = announce_url
+                if isinstance(announce_url, list):
+                    new_torrent.metainfo['announce'] = announce_url[0]
+                    new_torrent.metainfo['announce-list'] = [[url] for url in announce_url]
+                else:
+                    new_torrent.metainfo['announce'] = announce_url
             else:
                 raw_announce = self.config['TRACKERS'][tracker].get('announce_url')
-                new_torrent.metainfo['announce'] = str(raw_announce).strip() if raw_announce else "https://fake.tracker"
+                if isinstance(raw_announce, list):
+                    new_torrent.metainfo['announce'] = str(raw_announce[0]).strip()
+                    new_torrent.metainfo['announce-list'] = [[str(url).strip()] for url in raw_announce]
+                elif raw_announce:
+                    new_torrent.metainfo['announce'] = str(raw_announce).strip()
+                else:
+                    new_torrent.metainfo['announce'] = "https://fake.tracker"
             new_torrent.metainfo['info']['source'] = source_flag
             if 'created by' in new_torrent.metainfo:
                 created_by = str(new_torrent.metainfo['created by'])

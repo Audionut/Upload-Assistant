@@ -50,7 +50,12 @@ class ANIRENA:
 
     async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
         common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        # AniRena requires its own trackers to be present in the torrent file
+        announce_urls = [
+            "udp://tracker-udp.anirena.com:80/announce",
+            "https://tracker.anirena.com/announce"
+        ]
+        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, announce_url=announce_urls)
         
         if not self.token:
             await self.get_token()
