@@ -85,6 +85,9 @@ class ANIRENA:
         # Description
         description = await self.get_description(meta)
 
+        # Anime linking (AniRena specific)
+        anime_id = await self.get_anime_id(meta)
+
         data = {
             "torrent": torrent_b64,
             "category": category,
@@ -94,6 +97,8 @@ class ANIRENA:
             "name": meta['name'],
             "is_private": False,
         }
+        if anime_id:
+            data['anime_id'] = anime_id
 
         # Add anime_id if available (AniRena specific)
         # We could potentially search for the anime UUID using AniList/MAL ID
@@ -137,6 +142,59 @@ class ANIRENA:
             console.print(f"[{self.tracker}] Exception during upload: {e}")
             meta['tracker_status'][self.tracker]['status_message'] = f"Exception: {e}"
             return False
+
+    async def get_anime_id(self, meta: dict[str, Any]) -> Optional[str]:
+        # If user provided anime_id in config or args (hypothetically)
+        if meta.get('anirena_anime_id'):
+            return str(meta['anirena_anime_id'])
+            
+        if meta.get('category') != 'TV' and not meta.get('anime'):
+            return None
+            
+        # Search by title
+        search_query = meta.get('title')
+        if not search_query:
+            return None
+            
+        # Clean title for better search
+        search_query = re.sub(r'\[.*?\]', '', search_query).strip()
+        # Remove season/episode info if present to find the series
+        search_query = re.sub(r'S\d+E\d+.*|S\d+.*|E\d+.*', '', search_query, flags=re.IGNORECASE).strip()
+        
+        url = f"{self.api_url}/anime/search"
+        params = {"q": search_query, "limit": 10}
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, params=params)
+                if response.status_code == 200:
+                    results = response.json()
+                    if not results:
+                        return None
+                        
+                    if meta.get('unattended'):
+                        # In unattended mode, we only link if there's an exact title match or only one result
+                        if len(results) == 1:
+                            return results[0]['id']
+                        for res in results:
+                            if res['title'].lower() == search_query.lower():
+                                return res['id']
+                        return None
+                    
+                    # Prompt user to select
+                    console.print(f"[{self.tracker}] [cyan]Select the anime series to link this upload to:[/cyan]")
+                    console.print(f" 0) Skip linking")
+                    for i, res in enumerate(results, 1):
+                        console.print(f" {i}) {res['title']} ({res['season_year']} {res['season']})")
+                    
+                    from rich.prompt import IntPrompt
+                    choice = IntPrompt.ask(f"[{self.tracker}] Enter selection", default=0, show_default=True)
+                    if 0 < choice <= len(results):
+                        return results[choice-1]['id']
+        except Exception as e:
+            console.print(f"[{self.tracker}] Error searching for anime series: {e}")
+            
+        return None
 
     def get_category(self, meta: dict[str, Any]) -> str:
         if meta.get('hentai') or 'Hentai' in str(meta.get('genres', '')):
