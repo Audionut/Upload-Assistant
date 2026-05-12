@@ -108,7 +108,7 @@ class ANIRENA:
                 if new_token:
                     self.token = new_token
                 
-                if response.status_code == 200:
+                if response.status_code in (200, 201):
                     res_data = response.json()
                     if res_data.get('ok'):
                         console.print(f"[{self.tracker}] Uploaded successfully: {res_data.get('id')}")
@@ -142,10 +142,18 @@ class ANIRENA:
 
     def get_sub_category(self, meta: dict[str, Any]) -> str:
         if meta.get('anime'):
-            audio_langs = [l.lower() for l in meta.get('audio_languages', [])]
+            audio_langs_raw = meta.get('audio_languages', [])
+            if audio_langs_raw is None:
+                audio_langs_raw = []
+            audio_langs = [l.lower() for l in audio_langs_raw if l]
+            
             if 'japanese' in audio_langs and len(audio_langs) == 1:
                 # If it's only Japanese audio, check subs
-                sub_langs = [l.lower() for l in meta.get('subtitle_languages', [])]
+                sub_langs_raw = meta.get('subtitle_languages', [])
+                if sub_langs_raw is None:
+                    sub_langs_raw = []
+                sub_langs = [l.lower() for l in sub_langs_raw if l]
+                
                 if not sub_langs:
                     return 'raw'
             return 'sub-audio'
@@ -154,7 +162,14 @@ class ANIRENA:
     def get_languages(self, meta: dict[str, Any]) -> list[str]:
         langs = set()
         # Collect languages from audio and subtitles
-        all_langs = meta.get('audio_languages', []) + meta.get('subtitle_languages', [])
+        audio_langs = meta.get('audio_languages', [])
+        if audio_langs is None:
+            audio_langs = []
+        sub_langs = meta.get('subtitle_languages', [])
+        if sub_langs is None:
+            sub_langs = []
+            
+        all_langs = list(audio_langs) + list(sub_langs)
         for lang_name in all_langs:
             try:
                 # Use langcodes to find the best BCP 47 match
@@ -252,6 +267,12 @@ class ANIRENA:
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(url, json=data, headers=headers)
+                
+                # Handle token rotation
+                new_token = response.headers.get("X-New-Token")
+                if new_token:
+                    self.token = new_token
+                
                 if response.status_code == 200:
                     res_data = response.json()
                     torrents = res_data.get('torrents', [])
