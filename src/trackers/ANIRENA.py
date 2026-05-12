@@ -101,10 +101,6 @@ class ANIRENA:
         if anime_id:
             data['anime_id'] = anime_id
 
-        # Add anime_id if available (AniRena specific)
-        # We could potentially search for the anime UUID using AniList/MAL ID
-        # but let's stick to the basics first.
-
         url = f"{self.api_url}/torrents"
         headers = {
             "Authorization": f"Bearer {self.token}",
