@@ -75,10 +75,12 @@ class ANIRENA:
 
         # Category mapping
         category = self.get_category(meta)
-        sub_category = self.get_sub_category(meta)
         
-        # Languages (AniRena uses BCP 47)
+        # Languages (AniRena uses BCP 47) - call this before sub_category
+        # because it might prompt for hardsubs which changes the sub_category
         languages = self.get_languages(meta)
+        
+        sub_category = self.get_sub_category(meta)
         
         # Description
         description = await self.get_description(meta)
@@ -159,7 +161,10 @@ class ANIRENA:
                     sub_langs_raw = []
                 sub_langs = [l.lower() for l in sub_langs_raw if l]
                 
-                if not sub_langs:
+                # Check for hardsubs if no soft subs
+                hardsub_langs = meta.get('hardsub_languages', [])
+                
+                if not sub_langs and not hardsub_langs:
                     return 'raw'
             return 'sub-audio'
         return ''
@@ -184,7 +189,19 @@ class ANIRENA:
             except Exception:
                 pass
         
-        # If no languages detected, prompt user (if not unattended)
+        # If no soft subtitles detected, ask about hardsubs
+        if not sub_langs and not meta.get('unattended'):
+            from rich.prompt import Confirm, Prompt
+            if Confirm.ask(f"[{self.tracker}] [yellow]No soft subtitles detected.[/yellow] Does this release include Hardsubs?"):
+                hardsub_lang = Prompt.ask(f"[{self.tracker}] Please enter the Hardsub language code (e.g., 'en', 'es')")
+                if hardsub_lang:
+                    langs.add(hardsub_lang.strip())
+                    # Store it in meta so get_sub_category can see it
+                    if 'hardsub_languages' not in meta:
+                        meta['hardsub_languages'] = []
+                    meta['hardsub_languages'].append(hardsub_lang.strip())
+
+        # If no languages detected at all, prompt user (if not unattended)
         if not langs and not meta.get('unattended'):
             console.print(f"[{self.tracker}] [yellow]No languages detected from media file.[/yellow]")
             from rich.prompt import Prompt
