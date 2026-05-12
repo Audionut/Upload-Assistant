@@ -141,7 +141,8 @@ class COMMON:
         tracker: str,
         source_flag: str,
         torrent_filename: str = "BASE",
-        announce_url: str = "",
+        announce_url: str | list[str] = "",
+        is_private: bool = True,
     ) -> None:
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"
         if await self.path_exists(path):
@@ -165,6 +166,7 @@ class COMMON:
                     new_torrent.metainfo['announce'] = str(raw_announce).strip()
                 else:
                     new_torrent.metainfo['announce'] = "https://fake.tracker"
+            new_torrent.metainfo['info']['private'] = 1 if is_private else 0
             new_torrent.metainfo['info']['source'] = source_flag
             if 'created by' in new_torrent.metainfo:
                 created_by = str(new_torrent.metainfo['created by'])
