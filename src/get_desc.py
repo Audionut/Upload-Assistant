@@ -321,7 +321,7 @@ class DescriptionBuilder:
         return title, image, overview
 
     async def get_mediainfo_section(self, meta: dict[str, Any]) -> str:
-        """Returns the mediainfo/bdinfo section, using a cache file if available."""
+        """Returns the mediainfo section, using a cache file if available."""
         if meta.get("is_disc") == "BDMV":
             return ""
 

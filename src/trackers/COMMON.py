@@ -1313,3 +1313,67 @@ class COMMON:
         async with aiofiles.open(html_path, "w", encoding="utf-8") as f:
             await f.write(text)
         return html_path
+
+    def get_bitrates(self, meta: dict[str, Any]) -> tuple[int, int]:
+        """
+        Extract video and audio bitrates from meta.
+
+        :param meta: Meta data.
+        :return: Tuple of video and audio bitrates.
+        :rtype: tuple[int, int]
+        """
+        v_raw = None
+        a_raw = None
+        is_bdmv = meta.get("is_disc") == "BDMV"
+        is_dvd = meta.get("is_disc") == "DVD"
+
+        if is_bdmv:
+            discs = meta.get("discs", [])
+            if discs:
+                bdinfo = discs[0].get("bdinfo", {})
+                v_tracks = bdinfo.get("video", [])
+                a_tracks = bdinfo.get("audio", [])
+                if v_tracks:
+                    v_raw = v_tracks[0].get("bitrate")
+                if a_tracks:
+                    a_raw = a_tracks[0].get("bitrate")
+        elif is_dvd:
+            pass
+        else:
+            tracks = meta.get("mediainfo", {}).get("media", {}).get("track", [])
+            for track in tracks:
+                t_type = track.get("@type")
+                if t_type == "Video" and v_raw is None:
+                    v_raw = track.get("BitRate")
+                elif t_type == "Audio" and a_raw is None:
+                    a_raw = track.get("BitRate")
+
+        def clean_to_int(val, bdmv_mode):
+            if not val or isinstance(val, dict):
+                return 0
+
+            try:
+                if bdmv_mode:
+                    numeric_match = re.search(r"\d+", str(val).replace(".", "").replace(",", ""))
+                    return int(numeric_match.group()) if numeric_match else 0
+                else:
+                    return int(val) // 1000
+            except (ValueError, TypeError, AttributeError):
+                return 0
+
+        return (clean_to_int(v_raw, is_bdmv), clean_to_int(a_raw, is_bdmv))
+
+    def get_small_description(self, meta: dict[str, Any]) -> str:
+        """
+        Generate a small description from meta data.
+        Mainly used for Chinese trackers.
+
+        :param meta: Meta data.
+        :return: Small description.
+        :rtype: str
+        """
+        resolution = meta.get("resolution", "")
+        audio = meta.get("audio", "")
+        video_bitrate, audio_bitrate = self.get_bitrates(meta)
+
+        return f"{resolution} @ {video_bitrate} kbps - {audio} @ {audio_bitrate} kbps"

@@ -4,6 +4,9 @@ import re
 from collections.abc import Awaitable
 from typing import Any, Optional, Union, cast
 
+import httpx
+from bs4 import BeautifulSoup
+
 from src.console import console
 from src.imdb import imdb_manager
 from src.tmdb import TmdbManager
@@ -1038,7 +1041,50 @@ async def get_tvdb_tvmaze_tmdb_episode_data(meta: dict[str, Any], tvdb_handler: 
                 console.print("[green]TMDb episode data retrieved successfully.[/green]")
         elif isinstance(tmdb_episode_data, Exception):
             console.print(f"[yellow]TMDb episode data retrieval failed: {tmdb_episode_data}[/yellow]")
-
     return meta
+
+
+async def get_douban_id(meta) -> int:
+    douban_id: int = 0
+    try:
+        douban_manual = int(meta.get("douban_manual") or 0)
+    except (ValueError, TypeError):
+        console.print("[bold yellow]Invalid douban_manual value, ignoring.[/bold yellow]")
+        douban_manual = 0
+
+    if douban_manual:
+        console.print(f"Using manual Douban ID: {douban_manual}")
+        return douban_manual
+
+    imdb_id = meta.get("imdb_info", {}).get("imdbID")
+    if not imdb_id:
+        return douban_id
+
+    search_url = f"https://m.douban.com/search/?query={imdb_id}"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+
+    try:
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True) as client:
+            response = await client.get(search_url)
+            response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        result = soup.find("ul", class_="search_results_subjects")
+
+        if result:
+            link_tag = result.find("a")
+            if link_tag and "href" in link_tag.attrs:
+                link_mobile = str(link_tag["href"])
+                match = re.search(r"subject/(\d+)", link_mobile)
+                if match:
+                    douban_id = int(match.group(1))
+                    return douban_id
+
+        console.print(f"[bold yellow]No Douban ID found for IMDb ID {imdb_id}.[/bold yellow]")
+        return douban_id
+
+    except Exception as e:
+        console.print(f"[bold yellow]Failed to fetch Douban ID for IMDb ID {imdb_id}: {e}[/bold yellow]")
+        return douban_id
 
 

@@ -506,7 +506,26 @@ def bloated_check(meta: Meta, audio_languages: Union[Sequence[str], str], is_eng
     if isinstance(audio_languages, str):
         audio_languages = [audio_languages]
 
-    bloat_is_allowed = ["ASC", "BJS", "BT", "CBR", "DC", "FF", "LCD", "SAM", "SHRI", "SP", "TL", "TOS"]
+    bloat_is_allowed = [
+        "ASC",
+        "BJS",
+        "BT",
+        "CBR",
+        "DC",
+        "FF",
+        "LAJIDUI",
+        "LCD",
+        "LPT",
+        "PTCAFE",
+        "PTFANS",
+        "PTGTK",
+        "RPT",
+        "SAM",
+        "SHRI",
+        "SP",
+        "TL",
+        "TOS",
+    ]
     # Trackers that allow specific languages (list of allowed language codes per tracker)
     tracker_allowed_bloat_languages = {
         "AITHER": ["en"],

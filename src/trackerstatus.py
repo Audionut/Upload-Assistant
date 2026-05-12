@@ -15,6 +15,7 @@ from src.clients import Clients
 from src.console import console
 from src.dupe_checking import DupeChecker
 from src.imdb import imdb_manager
+from src.metadata_searching import get_douban_id
 from src.torrentcreate import TorrentCreator
 from src.trackers.PTP import PTP
 from src.trackersetup import TRACKER_SETUP, tracker_class_map
@@ -35,6 +36,8 @@ class TrackerStatusManager:
         tracker_setup: Any = TRACKER_SETUP(config=self.config)
         helper: Any = UploadHelper(self.config)
         dupe_checker = DupeChecker(self.config)
+        if any(tracker in meta["trackers"] for tracker in ["MTEAM", "LAJIDUI", "PTFANS", "PTGTK", "RPT"]):
+            meta["douban_id"] = await get_douban_id(meta)
         meta_lock = asyncio.Lock()
         for tracker in meta['trackers']:
             if 'tracker_status' not in meta:

@@ -46,24 +46,31 @@ from src.trackers.HUNO import HUNO
 from src.trackers.IHD import IHD
 from src.trackers.IS import IS
 from src.trackers.ITT import ITT
+from src.trackers.LAJIDUI import LAJIDUI
 from src.trackers.LCD import LCD
 from src.trackers.LDU import LDU
+from src.trackers.LPT import LPT
 from src.trackers.LST import LST
 from src.trackers.LT import LT
 from src.trackers.LUME import LUME
+from src.trackers.MTEAM import MTEAM
 from src.trackers.MTV import MTV
 from src.trackers.NBL import NBL
 from src.trackers.OE import OE
 from src.trackers.OTW import OTW
 from src.trackers.PHD import PHD
 from src.trackers.PT import PT
+from src.trackers.PTCAFE import PTCAFE
 from src.trackers.PTER import PTER
+from src.trackers.PTFANS import PTFANS
+from src.trackers.PTGTK import PTGTK
 from src.trackers.PTP import PTP
 from src.trackers.PTS import PTS
 from src.trackers.PTT import PTT
 from src.trackers.R4E import R4E
 from src.trackers.RAS import RAS
 from src.trackers.RF import RF
+from src.trackers.RPT import RPT
 from src.trackers.RTF import RTF
 from src.trackers.SAM import SAM
 from src.trackers.SHRI import SHRI
@@ -717,7 +724,7 @@ class TRACKER_SETUP:
                 if not url:
                     return False
                 requests = await self.bhd_request_check(meta, tracker_name, url)
-            elif tracker_name.upper() in ('ASC', 'BJS', 'FF', 'HDS', 'AZ', 'CZ', 'PHD'):
+            elif tracker_name.upper() in ("ASC", "BJS", "FF", "HDS", "AZ", "CZ", "PHD", "MTEAM"):
                 # These trackers have custom request handling
                 requests = cast(list[JsonDict], await tracker_instance.get_requests(meta))
                 return False
@@ -1339,20 +1346,20 @@ class TRACKER_SETUP:
 tracker_class_map: dict[str, type[Any]] = {
     'A4K': A4K, 'ACM': ACM, 'AITHER': AITHER, 'ANT': ANT, 'AR': AR, 'ASC': ASC, 'AZ': AZ, 'BHD': BHD, 'BHDTV': BHDTV, 'BJS': BJS, 'BLU': BLU, 'BT': BT, 'CBR': CBR,
     'CZ': CZ, 'DC': DC, 'DP': DP, 'DT': DT, 'EMUW': EMUW, 'FNP': FNP, 'FF': FF, 'FL': FL, 'FRIKI': FRIKI, 'GPW': GPW, 'HDB': HDB, 'HDS': HDS, 'HDT': HDT, 'HHD': HHD, 'HUNO': HUNO, 'ITT': ITT,
-    'IHD': IHD, 'IS': IS, 'LCD': LCD, 'LDU': LDU, 'LST': LST, 'LT': LT, 'LUME': LUME, 'MTV': MTV, 'NBL': NBL, 'OE': OE, 'OTW': OTW, 'PHD': PHD, 'PT': PT, 'PTP': PTP, 'PTER': PTER, 'PTS': PTS, 'PTT': PTT,
-    'R4E': R4E, 'RAS': RAS, 'RF': RF, 'RTF': RTF, 'SAM': SAM, 'SHRI': SHRI, 'SN': SN, 'SP': SP, 'SPD': SPD, 'STC': STC, 'THR': THR,
+    'IHD': IHD, 'IS': IS, 'LAJIDUI': LAJIDUI, 'LCD': LCD, 'LDU': LDU, 'LPT': LPT, 'LST': LST, 'LT': LT, 'LUME': LUME, 'MTEAM': MTEAM,'MTV': MTV, 'NBL': NBL, 'OE': OE, 'OTW': OTW, 'PHD': PHD, 'PTCAFE': PTCAFE, 'PT': PT, 'PTFANS': PTFANS, 'PTGTK': PTGTK, 'PTP': PTP, 'PTER': PTER, 'PTS': PTS, 'PTT': PTT,
+    'R4E': R4E, 'RAS': RAS, 'RF': RF, 'RPT': RPT,'RTF': RTF, 'SAM': SAM, 'SHRI': SHRI, 'SN': SN, 'SP': SP, 'SPD': SPD, 'STC': STC, 'THR': THR,
     'TIK': TIK, 'TL': TL, 'TLZ': TLZ, 'TOS': TOS, 'TVC': TVC, 'TTG': TTG, 'TTR': TTR, 'ULCX': ULCX, 'UTP': UTP, 'YOINK': YOINK, 'YUS': YUS
-}
+}  # fmt: off
 
 api_trackers = {
     'A4K', 'ACM', 'AITHER', 'BHD', 'BLU', 'CBR', 'DP', 'DT', 'EMUW', 'FNP', 'FRIKI', 'HHD', 'HUNO', 'IHD', 'ITT', 'LCD', 'LDU', 'LST', 'LT', 'LUME',
     'OE', 'OTW', 'PT', 'PTT', 'RAS', 'RF', 'R4E', 'SAM', 'SHRI', 'SP', 'STC', 'TIK', 'TLZ', 'TOS', 'TTR', 'ULCX', 'UTP', 'YOINK', 'YUS'
-}
+}  # fmt: off
 
 other_api_trackers = {
-    'ANT', 'BHDTV', 'DC', 'GPW', 'NBL', 'RTF', 'SN', 'SPD', 'TL', 'TVC'
-}
+    'ANT', 'BHDTV', 'DC', 'GPW', 'MTEAM', 'NBL', 'RTF', 'SN', 'SPD', 'TL', 'TVC'
+}  # fmt: off
 
 http_trackers = {
-    'AR', 'ASC', 'AZ', 'BJS', 'BT', 'CZ', 'FF', 'FL', 'HDB', 'HDS', 'HDT', 'IS', 'MTV', 'PHD', 'PTER', 'PTS', 'TTG'
-}
+    'AR', 'ASC', 'AZ', 'BJS', 'BT', 'CZ', 'FF', 'FL', 'HDB', 'HDS', 'HDT', 'IS', 'LAJIDUI', 'LPT', 'MTV', 'PHD', 'PTCAFE', 'PTER', 'PTFANS', 'PTGTK', 'PTS', 'RPT', 'TTG'
+}  # fmt: off

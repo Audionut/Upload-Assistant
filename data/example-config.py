@@ -350,7 +350,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: A4K, ACM, AITHER, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, DT, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, IHD, IS, ITT, LCD, LDU, LST, LT, LUME, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TLZ, TOS, TTG, TTR, TVC, ULCX, UTP, YOINK, YUS
+        # Available tracker: A4K, ACM, AITHER, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, DT, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, IHD, IS, ITT, LAJIDUI, LCD, LDU, LPT, LST, LT, LUME, MTEAM, MTV, NBL, OE, OTW, PHD, PT, PTCAFE, PTER, PTFANS, PTGTK, PTP, PTS, PTT, R4E, RAS, RF, RPT, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TLZ, TOS, TTG, TTR, TVC, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -638,6 +638,14 @@ config = {
             "api_key": "",
             "anon": False,
         },
+        "LAJIDUI": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # for LAJIDUI to work you need to export cookies from https://pt.lajidui.top/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/LAJIDUI.txt
+            "announce_url": "https://pt.lajidui.top/announce.php?passkey=<PASSKEY>",
+            "anon": False,
+        },
         "LCD": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
@@ -648,6 +656,14 @@ config = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             "api_key": "",
+            "anon": False,
+        },
+        "LPT": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # for LPT to work you need to export cookies from https://longpt.org/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/LPT.txt
+            "announce_url": "https://longpt.org/announce.php?passkey=<PASSKEY>",
             "anon": False,
         },
         "LST": {
@@ -677,6 +693,13 @@ config = {
             "anon": False,
             # Send uploads to LUME modq for staff approval
             "modq": False,
+        },
+        "MTEAM": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            "api_key": "",
+            "anon": False,
+            "base_url": "kp.m-team.cc"
         },
         "MTV": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -732,6 +755,14 @@ config = {
             "api_key": "",
             "anon": False,
         },
+        "PTCAFE": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # for PTCAFE to work you need to export cookies from https://ptcafe.club/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/PTCAFE.txt
+            "announce_url": "https://tracker.ptcafe.club/announce.php?passkey=<PASSKEY>",
+            "anon": False,
+        },
         "PTER": {  # Does not appear to be working at all
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
@@ -741,6 +772,22 @@ config = {
             "password": "",
             "ptgen_api": "",
             "anon": True,
+        },
+        "PTFANS": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # for PTFANS to work you need to export cookies from https://ptfans.cc/ using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/PTFANS.txt
+            "announce_url": "https://ptfans.cc/announce.php?passkey=<PASSKEY>",
+            "anon": False,
+        },
+        "PTGTK": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # for PTGTK to work you need to export cookies from https://pt.gtkpw.xyz using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/PTGTK.txt
+            "announce_url": "https://t.myaltbox.com/announce.php?passkey=<PASSKEY>",
+            "anon": False,
         },
         "PTP": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
@@ -784,6 +831,14 @@ config = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             "api_key": "",
+            "anon": False,
+        },
+        "RPT": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # for RPT to work you need to export cookies from https://bilibili.download using https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/.
+            # cookies need to be in netscape format and need to be in data/cookies/RPT.txt
+            "announce_url": "https://bilibili.download/announce.php?passkey=<PASSKEY>",
             "anon": False,
         },
         "RTF": {

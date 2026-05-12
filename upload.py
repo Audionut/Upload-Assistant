@@ -620,7 +620,33 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
         trackers = meta['trackers']
 
         audio_prompted = False
-        for tracker in ["AITHER", "ASC", "BJS", "BT", "CBR", "DP", "FF", "GPW", "HUNO", "IHD", "LDU", "LT", "OE", "PTS", "SAM", "SHRI", "SPD", "TTR", "TVC", "ULCX"]:
+        for tracker in [
+            "AITHER",
+            "ASC",
+            "BJS",
+            "BT",
+            "CBR",
+            "DP",
+            "FF",
+            "GPW",
+            "HUNO",
+            "IHD",
+            "LAJIDUI",
+            "LDU",
+            "LPT",
+            "LT",
+            "OE",
+            "PTCAFE",
+            "PTGTK",
+            "PTS",
+            "RPT",
+            "SAM",
+            "SHRI",
+            "SPD",
+            "TTR",
+            "TVC",
+            "ULCX",
+        ]:
             if tracker in trackers:
                 if not audio_prompted:
                     await languages_manager.process_desc_language(meta, tracker=tracker)
