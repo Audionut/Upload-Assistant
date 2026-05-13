@@ -148,6 +148,39 @@ class ANIRENA:
             meta['tracker_status'][self.tracker]['status_message'] = f"Exception: {e}"
             return False
 
+    def _canonicalize_languages(self, val: Any) -> list[str]:
+        if val is None:
+            return []
+        if isinstance(val, str):
+            if not val.strip():
+                return []
+            raw_list = [val]
+        elif isinstance(val, list):
+            raw_list = val
+        else:
+            return []
+            
+        canonical = []
+        for l in raw_list:
+            if not l or not isinstance(l, str):
+                continue
+            l_strip = l.strip()
+            if not l_strip:
+                continue
+            try:
+                # Use langcodes to get a standardized name
+                lang = langcodes.find(l_strip)
+                if lang and lang.is_valid():
+                    canonical.append(lang.language_name().lower())
+                else:
+                    canonical.append(l_strip.lower())
+            except Exception:
+                canonical.append(l_strip.lower())
+        
+        # Deduplicate while preserving order
+        seen = set()
+        return [x for x in canonical if not (x in seen or seen.add(x))]
+
     async def get_anime_id(self, meta: dict[str, Any]) -> Optional[str]:
         # If user provided anime_id in config or args (hypothetically)
         if meta.get('anirena_anime_id'):
@@ -217,20 +250,14 @@ class ANIRENA:
 
     def get_sub_category(self, meta: dict[str, Any]) -> str:
         if meta.get('anime'):
-            audio_langs_raw = meta.get('audio_languages', [])
-            if audio_langs_raw is None:
-                audio_langs_raw = []
-            audio_langs = [l.lower() for l in audio_langs_raw if l]
+            audio_langs = self._canonicalize_languages(meta.get('audio_languages'))
             
             if 'japanese' in audio_langs and len(audio_langs) == 1:
                 # If it's only Japanese audio, check subs
-                sub_langs_raw = meta.get('subtitle_languages', [])
-                if sub_langs_raw is None:
-                    sub_langs_raw = []
-                sub_langs = [l.lower() for l in sub_langs_raw if l]
+                sub_langs = self._canonicalize_languages(meta.get('subtitle_languages'))
                 
                 # Check for hardsubs if no soft subs
-                hardsub_langs = meta.get('hardsub_languages', [])
+                hardsub_langs = self._canonicalize_languages(meta.get('hardsub_languages'))
                 
                 if not sub_langs and not hardsub_langs:
                     return 'raw'
@@ -240,14 +267,10 @@ class ANIRENA:
     def get_languages(self, meta: dict[str, Any]) -> list[str]:
         langs = set()
         # Collect languages from audio and subtitles
-        audio_langs = meta.get('audio_languages', [])
-        if audio_langs is None:
-            audio_langs = []
-        sub_langs = meta.get('subtitle_languages', [])
-        if sub_langs is None:
-            sub_langs = []
+        audio_langs = self._canonicalize_languages(meta.get('audio_languages'))
+        sub_langs = self._canonicalize_languages(meta.get('subtitle_languages'))
             
-        all_langs = list(audio_langs) + list(sub_langs)
+        all_langs = audio_langs + sub_langs
         for lang_name in all_langs:
             try:
                 # Use langcodes to find the best BCP 47 match
