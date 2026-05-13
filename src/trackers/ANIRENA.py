@@ -109,6 +109,13 @@ class ANIRENA:
             "Accept": "application/json",
         }
         
+        if meta.get('debug'):
+            console.print(f"[{self.tracker}] [cyan]DEBUG MODE: Skipping actual upload request.[/cyan]")
+            console.print(f"[{self.tracker}] [cyan]Request Data:[/cyan]")
+            console.print(data)
+            meta['tracker_status'][self.tracker]['status_message'] = f"Debug: Upload skipped for {self.tracker}"
+            return True
+
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(url, json=data, headers=headers)
