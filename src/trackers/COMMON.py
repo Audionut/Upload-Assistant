@@ -153,19 +153,21 @@ class COMMON:
                     new_torrent.metainfo.pop(each, None)  # type: ignore
             if announce_url:
                 if isinstance(announce_url, list):
-                    if not announce_url:
-                        raise ValueError(f"Empty announce URL list provided for {tracker}")
-                    new_torrent.metainfo['announce'] = announce_url[0]
-                    new_torrent.metainfo['announce-list'] = [[url] for url in announce_url]
+                    cleaned = [str(url).strip() for url in announce_url if str(url).strip()]
+                    if not cleaned:
+                        raise ValueError(f"No announce URL found for tracker {tracker}. Please check your config.")
+                    new_torrent.metainfo['announce'] = cleaned[0]
+                    new_torrent.metainfo['announce-list'] = [[url] for url in cleaned]
                 else:
                     new_torrent.metainfo['announce'] = announce_url
             else:
                 raw_announce = self.config['TRACKERS'][tracker].get('announce_url')
                 if isinstance(raw_announce, list):
-                    if not raw_announce:
+                    cleaned = [str(url).strip() for url in raw_announce if str(url).strip()]
+                    if not cleaned:
                         raise ValueError(f"No announce URL found for tracker {tracker}. Please check your config.")
-                    new_torrent.metainfo['announce'] = str(raw_announce[0]).strip()
-                    new_torrent.metainfo['announce-list'] = [[str(url).strip()] for url in raw_announce]
+                    new_torrent.metainfo['announce'] = cleaned[0]
+                    new_torrent.metainfo['announce-list'] = [[url] for url in cleaned]
                 elif raw_announce:
                     new_torrent.metainfo['announce'] = str(raw_announce).strip()
                 else:
