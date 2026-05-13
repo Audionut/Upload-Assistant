@@ -49,7 +49,7 @@ class ANIRENA:
             console.print(f"[{self.tracker}] Error getting auth token: {e}")
             return None
 
-    async def upload(self, meta: dict[str, Any], _disctype: str) -> bool:
+    async def upload(self, meta: dict[str, Any], _disctype: str, tries: int = 0) -> bool:
         common = COMMON(config=self.config)
         # AniRena requires its own trackers to be present in the torrent file
         announce_urls = [
@@ -131,9 +131,14 @@ class ANIRENA:
                         return False
                 elif response.status_code == 401:
                     # Token might have expired or rotated unexpectedly
-                    console.print(f"[{self.tracker}] Unauthorized (401). Retrying with new token...")
-                    self.token = None
-                    return await self.upload(meta, _disctype)
+                    if tries < 2:
+                        console.print(f"[{self.tracker}] Unauthorized (401). Retrying with new token (attempt {tries + 1})...")
+                        self.token = None
+                        return await self.upload(meta, _disctype, tries=tries + 1)
+                    else:
+                        console.print(f"[{self.tracker}] Unauthorized (401). Maximum retries reached.")
+                        meta['tracker_status'][self.tracker]['status_message'] = "Authentication failed: 401 Unauthorized after retries"
+                        return False
                 else:
                     console.print(f"[{self.tracker}] Upload failed with status {response.status_code}: {response.text}")
                     meta['tracker_status'][self.tracker]['status_message'] = f"Upload failed with status {response.status_code}"
