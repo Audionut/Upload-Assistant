@@ -195,10 +195,8 @@ class ANIRENA:
         if not search_query:
             return None
             
-        # Clean title for better search
-        search_query = re.sub(r'\[.*?\]', '', search_query).strip()
-        # Remove season/episode info if present to find the series
-        search_query = re.sub(r'S\d+E\d+.*|S\d+.*|E\d+.*', '', search_query, flags=re.IGNORECASE).strip()
+        # Clean title for better search (strip group names, tags, and season/episode info)
+        search_query = re.sub(r'\[.*?\]|\(.*?\)|\bS\d+E\d+.*|\bS\d+.*|\bE\d+.*', '', search_query, flags=re.IGNORECASE).strip()
         
         url = f"{self.api_url}/anime/search"
         params = {"q": search_query, "limit": 10}
@@ -416,8 +414,8 @@ class ANIRENA:
             console.print(f"[{self.tracker}] Skipping duplicate search: no title available.")
             return []
             
-        # Clean up the title a bit for better search (remove group names in brackets)
-        search_query = re.sub(r'\[.*?\]', '', search_query).strip()
+        # Clean up the title a bit for better search (remove group names in brackets, tags, and season/episode info)
+        search_query = re.sub(r'\[.*?\]|\(.*?\)|\bS\d+E\d+.*|\bS\d+.*|\bE\d+.*', '', search_query, flags=re.IGNORECASE).strip()
         
         data = {
             "q": search_query,
