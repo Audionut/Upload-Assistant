@@ -159,7 +159,11 @@ class COMMON:
                     new_torrent.metainfo['announce'] = cleaned[0]
                     new_torrent.metainfo['announce-list'] = [[url] for url in cleaned]
                 else:
-                    new_torrent.metainfo['announce'] = announce_url
+                    stripped_url = str(announce_url).strip()
+                    if not stripped_url:
+                        raise ValueError(f"No announce URL found for tracker {tracker}. Please check your config.")
+                    new_torrent.metainfo['announce'] = stripped_url
+                    new_torrent.metainfo['announce-list'] = [[stripped_url]]
             else:
                 raw_announce = self.config['TRACKERS'][tracker].get('announce_url')
                 if isinstance(raw_announce, list):
