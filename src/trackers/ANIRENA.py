@@ -387,8 +387,24 @@ class ANIRENA:
                             'size': t.get('size_fmt'),
                             'link': f"{self.base_url}/torrent/{t.get('id')}"
                         })
+                elif response.status_code == 401:
+                    self.token = None
+                    if await self.get_token():
+                        headers["Authorization"] = f"Bearer {self.token}"
+                        response = await client.post(url, json=data, headers=headers)
+                        if response.status_code == 200:
+                            res_data = response.json()
+                            torrents = res_data.get('torrents', [])
+                            for t in torrents:
+                                dupes.append({
+                                    'name': t.get('title'),
+                                    'size': t.get('size_fmt'),
+                                    'link': f"{self.base_url}/torrent/{t.get('id')}"
+                                })
+                        else:
+                            console.print(f"[{self.tracker}] Duplicate search failed after retry: HTTP {response.status_code}")
                 else:
-                    console.print(f"[{self.tracker}] Error searching for duplicates: API returned status {response.status_code}")
+                    console.print(f"[{self.tracker}] Duplicate search failed: HTTP {response.status_code} - {response.text}")
         except Exception as e:
             console.print(f"[{self.tracker}] Exception searching for duplicates: {e}")
             
