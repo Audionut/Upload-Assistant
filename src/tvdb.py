@@ -136,13 +136,18 @@ class tvdb_data:
         year: Optional[str] = None,
         debug: bool = False,
     ) -> tuple[Optional[list[dict[str, Any]]], Optional[int]]:
+        # Clean group name and other tags in brackets/parentheses for better search
+        search_query = re.sub(r'\[.*?\]|\(.*?\)|\bS\d+E\d+.*|\bS\d+.*|\bE\d+.*', '', filename, flags=re.IGNORECASE).strip()
+        if not search_query:
+            search_query = filename
+
         if debug:
-            console.print(f"filename for TVDB search: {filename} year: {year}")
+            console.print(f"filename for TVDB search: {search_query} (original: {filename}) year: {year}")
         client = _get_tvdb_or_warn()
         if client is None:
             return None, None
 
-        results = _as_dict_list(cast(Any, client).search({filename}, year=year, type="series", lang="eng"))
+        results = _as_dict_list(cast(Any, client).search({search_query}, year=year, type="series", lang="eng"))
         await asyncio.sleep(0.1)
         try:
             if results and len(results) > 0:
