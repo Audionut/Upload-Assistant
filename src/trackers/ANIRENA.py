@@ -186,7 +186,7 @@ class ANIRENA:
         if meta.get('anirena_anime_id'):
             return str(meta['anirena_anime_id'])
             
-        if meta.get('category') not in ('TV', 'MOVIE') and not meta.get('anime'):
+        if not meta.get('anime'):
             return None
             
         # Search by title
@@ -213,7 +213,7 @@ class ANIRENA:
                     if not results:
                         return None
                         
-                    if meta.get('unattended'):
+                    if meta.get('unattended') and meta.get('anime'):
                         # In unattended mode, we only link if there's an exact title match or only one result
                         if len(results) == 1:
                             return results[0]['id']
