@@ -216,23 +216,27 @@ class ANIRENA:
                         
                     if meta.get('unattended') and meta.get('anime'):
                         # In unattended mode, we only link if there's an exact title match or only one result
-                        if len(results) == 1:
-                            return results[0]['id']
+                        if len(results) == 1 and results[0].get('id'):
+                            return str(results[0]['id'])
                         for res in results:
-                            if res['title'].lower() == search_query.lower():
-                                return res['id']
+                            res_title = (res.get('title') or '').lower()
+                            if res_title and res_title == search_query.lower() and res.get('id'):
+                                return str(res['id'])
                         return None
                     
                     # Prompt user to select
                     console.print(f"[{self.tracker}] [cyan]Select the anime series to link this upload to:[/cyan]")
                     console.print(f" 0) Skip linking")
                     for i, res in enumerate(results, 1):
-                        console.print(f" {i}) {res['title']} ({res['season_year']} {res['season']})")
+                        res_title = res.get('title', 'Unknown')
+                        season_year = res.get('season_year', '?')
+                        season = res.get('season', '?')
+                        console.print(f" {i}) {res_title} ({season_year} {season})")
                     
                     from rich.prompt import IntPrompt
                     choice = IntPrompt.ask(f"[{self.tracker}] Enter selection", default=0, show_default=True)
-                    if 0 < choice <= len(results):
-                        return results[choice-1]['id']
+                    if 0 < choice <= len(results) and results[choice-1].get('id'):
+                        return str(results[choice-1]['id'])
                 else:
                     console.print(f"[{self.tracker}] Anime search failed with status {response.status_code}: {response.text}")
         except Exception as e:
@@ -407,8 +411,12 @@ class ANIRENA:
         }
         
         # Search by title or part of it
-        search_query = meta['title']
-        # Clean up the title a bit for better search
+        search_query = meta.get('title') or meta.get('name') or ''
+        if not search_query:
+            console.print(f"[{self.tracker}] Skipping duplicate search: no title available.")
+            return []
+            
+        # Clean up the title a bit for better search (remove group names in brackets)
         search_query = re.sub(r'\[.*?\]', '', search_query).strip()
         
         data = {
