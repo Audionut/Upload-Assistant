@@ -256,11 +256,16 @@ class ANIRENA:
                 # If it's only Japanese audio, check subs
                 sub_langs = self._canonicalize_languages(meta.get('subtitle_languages'))
                 
-                # Check for hardsubs if no soft subs
-                hardsub_langs = self._canonicalize_languages(meta.get('hardsub_languages'))
+                if not sub_langs:
+                    # Check for hardsubs if no soft subs.
+                    # Only classify as 'raw' if we explicitly know there are no hardsubs.
+                    if 'hardsub_languages' in meta:
+                        hardsub_langs = self._canonicalize_languages(meta.get('hardsub_languages'))
+                        if not hardsub_langs:
+                            return 'raw'
+                    # If hardsub_languages is missing (unattended or skipped),
+                    # we default to 'sub-audio' to be safe.
                 
-                if not sub_langs and not hardsub_langs:
-                    return 'raw'
             return 'sub-audio'
         return ''
 
@@ -291,6 +296,9 @@ class ANIRENA:
                     if 'hardsub_languages' not in meta:
                         meta['hardsub_languages'] = []
                     meta['hardsub_languages'].append(hardsub_lang.strip())
+            else:
+                # Explicitly indicate no hardsubs for get_sub_category
+                meta['hardsub_languages'] = []
 
         # If no languages detected at all, prompt user (if not unattended)
         if not langs and not meta.get('unattended'):
