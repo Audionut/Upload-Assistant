@@ -8,6 +8,7 @@ from typing import Any, Optional, cast
 import httpx
 import langcodes
 from src.console import console
+from src.languages import languages_manager
 from src.trackers.COMMON import COMMON
 
 
@@ -79,7 +80,7 @@ class ANIRENA:
         
         # Languages (AniRena uses BCP 47) - call this before sub_category
         # because it might prompt for hardsubs which changes the sub_category
-        languages = self.get_languages(meta)
+        languages = await self.get_languages(meta)
         
         sub_category = self.get_sub_category(meta)
         
@@ -269,7 +270,10 @@ class ANIRENA:
             return 'sub-audio'
         return ''
 
-    def get_languages(self, meta: dict[str, Any]) -> list[str]:
+    async def get_languages(self, meta: dict[str, Any]) -> list[str]:
+        if not meta.get('language_checked', False):
+            await languages_manager.process_desc_language(meta, tracker=self.tracker)
+            
         langs = set()
         # Collect languages from audio and subtitles
         audio_langs = self._canonicalize_languages(meta.get('audio_languages'))
