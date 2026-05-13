@@ -68,7 +68,8 @@ Many thanks to all who have contributed.
 |ItaTorrents|ITT|LastDigitalUnderground|LDU|
 |Lat-Team|LT|Locadora|LCD|
 |LST|LST|Luminarr|LUME|
-|MoreThanTV|MTV|Nebulance|NBL|
+|MoreThanTV|MTV|||
+|NordicBytes|NB|Nebulance|NBL|
 |OldToonsWorld|OTW|OnlyEncodes+|OE|
 |PassThePopcorn|PTP|PolishTorrent|PTT|
 |Portugas|PT|PrivateHD|PHD|
