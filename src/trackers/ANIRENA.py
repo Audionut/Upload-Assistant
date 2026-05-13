@@ -153,11 +153,11 @@ class ANIRENA:
         if meta.get('anirena_anime_id'):
             return str(meta['anirena_anime_id'])
             
-        if meta.get('category') != 'TV' and not meta.get('anime'):
+        if meta.get('category') not in ('TV', 'MOVIE') and not meta.get('anime'):
             return None
             
         # Search by title
-        search_query = meta.get('title')
+        search_query = meta.get('title') or meta.get('name')
         if not search_query:
             return None
             
@@ -168,6 +168,9 @@ class ANIRENA:
         
         url = f"{self.api_url}/anime/search"
         params = {"q": search_query, "limit": 10}
+        
+        if meta.get('debug'):
+            console.print(f"[{self.tracker}] Searching for anime series with query: [bold cyan]{search_query}[/bold cyan]")
         
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -196,6 +199,8 @@ class ANIRENA:
                     choice = IntPrompt.ask(f"[{self.tracker}] Enter selection", default=0, show_default=True)
                     if 0 < choice <= len(results):
                         return results[choice-1]['id']
+                else:
+                    console.print(f"[{self.tracker}] Anime search failed with status {response.status_code}: {response.text}")
         except Exception as e:
             console.print(f"[{self.tracker}] Error searching for anime series: {e}")
             
