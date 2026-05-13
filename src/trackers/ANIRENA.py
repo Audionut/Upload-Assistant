@@ -295,11 +295,20 @@ class ANIRENA:
             if Confirm.ask(f"[{self.tracker}] [yellow]No soft subtitles detected.[/yellow] Does this release include Hardsubs?"):
                 hardsub_lang = Prompt.ask(f"[{self.tracker}] Please enter the Hardsub language code (e.g., 'en', 'es')")
                 if hardsub_lang:
-                    langs.add(hardsub_lang.strip())
-                    # Store it in meta so get_sub_category can see it
-                    if 'hardsub_languages' not in meta:
-                        meta['hardsub_languages'] = []
-                    meta['hardsub_languages'].append(hardsub_lang.strip())
+                    hardsub_lang = hardsub_lang.strip()
+                    try:
+                        lang = langcodes.find(hardsub_lang)
+                        if lang and lang.is_valid():
+                            tag = lang.to_tag()
+                            langs.add(tag)
+                            # Store it in meta so get_sub_category can see it
+                            if 'hardsub_languages' not in meta:
+                                meta['hardsub_languages'] = []
+                            meta['hardsub_languages'].append(tag)
+                        else:
+                            langs.add(hardsub_lang)
+                    except Exception:
+                        langs.add(hardsub_lang)
             else:
                 # Explicitly indicate no hardsubs for get_sub_category
                 meta['hardsub_languages'] = []
@@ -313,7 +322,14 @@ class ANIRENA:
                 for l in lang_input.split(','):
                     l = l.strip()
                     if l:
-                        langs.add(l)
+                        try:
+                            lang = langcodes.find(l)
+                            if lang and lang.is_valid():
+                                langs.add(lang.to_tag())
+                            else:
+                                langs.add(l)
+                        except Exception:
+                            langs.add(l)
 
         return list(langs)
 
