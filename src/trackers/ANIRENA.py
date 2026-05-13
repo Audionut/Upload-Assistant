@@ -382,7 +382,9 @@ class ANIRENA:
                             'size': t.get('size_fmt'),
                             'link': f"{self.base_url}/torrent/{t.get('id')}"
                         })
+                else:
+                    console.print(f"[{self.tracker}] Error searching for duplicates: API returned status {response.status_code}")
         except Exception as e:
-            console.print(f"[{self.tracker}] Error searching for duplicates: {e}")
+            console.print(f"[{self.tracker}] Exception searching for duplicates: {e}")
             
         return dupes
