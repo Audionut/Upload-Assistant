@@ -27,17 +27,30 @@ class ANIRENA:
         self.token: Optional[str] = None
         self.banned_groups: list[str] = []
 
-    async def get_token(self) -> Optional[str]:
+    def _get_headers(self, meta: dict[str, Any], auth_type: str = "Bearer") -> dict[str, str]:
+        ua_name = meta.get('ua_name', 'Upload Assistant')
+        version = meta.get('current_version', '7.1.7')
+        ua = f"{ua_name}/{version} ({platform.system()} {platform.release()})"
+        
+        headers = {
+            "User-Agent": ua,
+            "Accept": "application/json",
+        }
+        
+        if auth_type == "Bearer" and self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        elif auth_type == "ApiKey" and self.api_key:
+            headers["Authorization"] = f"ApiKey {self.api_key}"
+            
+        return headers
+
+    async def get_token(self, meta: dict[str, Any]) -> Optional[str]:
         if not self.api_key:
             console.print(f"[{self.tracker}] API Key is missing in config.")
             return None
         
         url = f"{self.api_url}/auth/token"
-        headers = {
-            "Authorization": f"ApiKey {self.api_key}",
-            "User-Agent": f"Upload Assistant/7.1.7 ({platform.system()} {platform.release()})",
-            "Accept": "application/json",
-        }
+        headers = self._get_headers(meta, auth_type="ApiKey")
         
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -50,7 +63,15 @@ class ANIRENA:
             console.print(f"[{self.tracker}] Error getting auth token: {e}")
             return None
 
+    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
+        """Returns the upload name. Required by trackerstatus.py and uphelper.py."""
+        return {'name': meta.get('name', '')}
+
     async def upload(self, meta: dict[str, Any], _disctype: str, tries: int = 0) -> bool:
+        # Ensure tracker_status entry exists before any writes
+        meta.setdefault('tracker_status', {})
+        meta['tracker_status'].setdefault(self.tracker, {})
+
         common = COMMON(config=self.config)
         # AniRena requires its own trackers to be present in the torrent file
         announce_urls = [
@@ -58,10 +79,10 @@ class ANIRENA:
             "https://tracker.anirena.com/announce"
         ]
         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, announce_url=announce_urls, is_private=False)
-        
+
         if not self.token:
-            await self.get_token()
-        
+            await self.get_token(meta)
+
         if not self.token:
             meta['tracker_status'][self.tracker]['status_message'] = "Authentication failed: No token obtained"
             return False
@@ -77,20 +98,20 @@ class ANIRENA:
 
         # Category mapping
         category = self.get_category(meta)
-        
+
         # Languages (AniRena uses BCP 47) - call this before sub_category
         # because it might prompt for hardsubs which changes the sub_category
         languages = await self.get_languages(meta)
-        
+
         sub_category = self.get_sub_category(meta)
-        
+
         # Description
         description = await self.get_description(meta)
 
         # Anime linking (AniRena specific)
         anime_id = await self.get_anime_id(meta)
 
-        data = {
+        data: dict[str, Any] = {
             "torrent": torrent_b64,
             "category": category,
             "sub_category": sub_category,
@@ -101,30 +122,37 @@ class ANIRENA:
         }
         if anime_id:
             data['anime_id'] = anime_id
+        if meta.get('keywords'):
+            data['keywords'] = meta['keywords']
+        if meta.get('personalrelease', False):
+            data['personal_release'] = True
+        # AniRena is a public tracker; anon uploads are not supported, but
+        # we consume the flag gracefully to avoid any surprises
+        if meta.get('anon') and meta.get('debug'):
+            console.print(f"[{self.tracker}] [yellow]--anon flag set but AniRena does not support anonymous uploads.[/yellow]")
 
         url = f"{self.api_url}/torrents"
-        headers = {
-            "Authorization": f"Bearer {self.token}",
-            "User-Agent": f"Upload Assistant/7.1.7 ({platform.system()} {platform.release()})",
-            "Accept": "application/json",
-        }
-        
+        headers = self._get_headers(meta)
+
+        # DEBUG MODE: print payload and simulate success — no HTTP request sent,
+        # consistent with UNIT3D and all other trackers in this project.
         if meta.get('debug'):
-            console.print(f"[{self.tracker}] [cyan]DEBUG MODE: Skipping actual upload request.[/cyan]")
-            console.print(f"[{self.tracker}] [cyan]Request Data:[/cyan]")
-            console.print(data)
-            meta['tracker_status'][self.tracker]['status_message'] = f"Debug: Upload skipped for {self.tracker}"
+            console.print(f"[cyan][{self.tracker}] Request Data:[/cyan]")
+            # Remove torrent b64 from debug output to keep it readable
+            debug_data = {k: (v if k != 'torrent' else '<base64 torrent omitted>') for k, v in data.items()}
+            console.print(debug_data)
+            meta['tracker_status'][self.tracker]['status_message'] = f"Debug mode enabled, not uploading: {self.tracker}."
             return True
 
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(url, json=data, headers=headers)
-                
+
                 # Handle token rotation
                 new_token = response.headers.get("X-New-Token")
                 if new_token:
                     self.token = new_token
-                
+
                 if response.status_code in (200, 201):
                     res_data = response.json()
                     if res_data.get('ok'):
@@ -149,11 +177,11 @@ class ANIRENA:
                         return False
                 else:
                     console.print(f"[{self.tracker}] Upload failed with status {response.status_code}: {response.text}")
-                    meta['tracker_status'][self.tracker]['status_message'] = f"Upload failed with status {response.status_code}"
+                    meta['tracker_status'][self.tracker]['status_message'] = f"data error: Upload failed with status {response.status_code}"
                     return False
         except Exception as e:
             console.print(f"[{self.tracker}] Exception during upload: {e}")
-            meta['tracker_status'][self.tracker]['status_message'] = f"Exception: {e}"
+            meta['tracker_status'][self.tracker]['status_message'] = f"data error: Exception: {e}"
             return False
 
     def _canonicalize_languages(self, val: Any) -> list[str]:
@@ -212,8 +240,9 @@ class ANIRENA:
             console.print(f"[{self.tracker}] Searching for anime series with query: [bold cyan]{search_query}[/bold cyan]")
         
         try:
+            headers = self._get_headers(meta, auth_type=None)
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, params=params)
+                response = await client.get(url, params=params, headers=headers)
                 if response.status_code == 200:
                     results = response.json()
                     if not results:
@@ -400,20 +429,31 @@ class ANIRENA:
         return desc
 
     async def search_existing(self, meta: dict[str, Any], _disctype: str) -> list[dict[str, str]]:
-        # AniRena search API can be used to check for duplicates
+        # Ensure tracker_status entry exists before any writes (mirrors UNIT3D pattern)
+        meta.setdefault('tracker_status', {})
+        meta['tracker_status'].setdefault(self.tracker, {})
+
+        # --skip-dupe-check flag: bypass dupe search entirely
+        if meta.get('dupe'):
+            return []
+
+        # If no API key configured, skip this tracker (mirrors UNIT3D behavior)
+        if not self.api_key:
+            console.print(f"[bold red]{self.tracker}: Missing API key in config file. Skipping upload...[/bold red]")
+            meta['skipping'] = self.tracker
+            return []
+
         # POST /api/v1/torrents/search
         if not self.token:
-            await self.get_token()
-        
+            await self.get_token(meta)
+
         if not self.token:
+            console.print(f"[bold red]{self.tracker}: Could not obtain auth token. Skipping upload...[/bold red]")
+            meta['skipping'] = self.tracker
             return []
 
         url = f"{self.api_url}/torrents/search"
-        headers = {
-            "Authorization": f"Bearer {self.token}",
-            "User-Agent": f"Upload Assistant/7.1.7 ({platform.system()} {platform.release()})",
-            "Accept": "application/json",
-        }
+        headers = self._get_headers(meta)
         
         # Search by title or part of it
         search_query = meta.get('title') or meta.get('name') or ''
@@ -453,7 +493,7 @@ class ANIRENA:
                         })
                 elif response.status_code == 401:
                     self.token = None
-                    if await self.get_token():
+                    if await self.get_token(meta):
                         headers["Authorization"] = f"Bearer {self.token}"
                         response = await client.post(url, json=data, headers=headers)
                         if response.status_code == 200:
