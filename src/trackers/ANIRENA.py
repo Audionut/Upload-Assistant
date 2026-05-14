@@ -27,10 +27,14 @@ class ANIRENA:
         self.token: Optional[str] = None
         self.banned_groups: list[str] = []
 
-    def _get_headers(self, meta: dict[str, Any], auth_type: str = "Bearer") -> dict[str, str]:
-        ua_name = meta.get('ua_name', 'Upload Assistant')
-        version = meta.get('current_version', '7.1.7')
-        ua = f"{ua_name}/{version} ({platform.system()} {platform.release()})"
+    def _get_headers(self, meta: dict[str, Any], auth_type: Optional[str] = "Bearer") -> dict[str, str]:
+        if auth_type is None:
+            # Public endpoints (like anime search) block the default UA via Cloudflare
+            ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        else:
+            ua_name = meta.get('ua_name', 'Upload Assistant')
+            version = meta.get('current_version', '7.1.7')
+            ua = f"{ua_name}/{version} ({platform.system()} {platform.release()})"
         
         headers = {
             "User-Agent": ua,
@@ -435,6 +439,7 @@ class ANIRENA:
 
         # --skip-dupe-check flag: bypass dupe search entirely
         if meta.get('dupe'):
+            console.print(f"[{self.tracker}] [yellow]Skipping dupe check (--sdc flag provided)[/yellow]")
             return []
 
         # If no API key configured, skip this tracker (mirrors UNIT3D behavior)
