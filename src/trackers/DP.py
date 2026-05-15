@@ -121,12 +121,8 @@ class DP(UNIT3D):
         if audio and audio != "SKIPPED" and "Dual-Audio" in dp_name:
             dp_name = dp_name.replace("Dual-Audio", audio)
 
-        # Handle Hybrid tag — DarkPeers requires it when audio/video are from different sources
-        # Only look for "Hybrid" in the technical portion (after title + year) to avoid
-        # false positives from titles like "Hybrid the Monster 2025"
         title = str(meta.get('title', ''))
         year = str(meta.get('year', ''))
-        # Build a prefix to skip: find where the technical tags start
         technical_suffix = dp_name
         if title:
             title_idx = dp_name.find(title)
@@ -139,8 +135,6 @@ class DP(UNIT3D):
         has_hybrid_tag = bool(re.search(r'\bHybrid\b', technical_suffix, re.IGNORECASE))
 
         if has_hybrid_tag:
-            # Already present in technical portion: normalize casing to "Hybrid"
-            # Replace only in the technical portion to avoid touching the title
             prefix = dp_name[:len(dp_name) - len(technical_suffix)]
             technical_suffix = re.sub(r'\bHybrid\b', 'Hybrid', technical_suffix, flags=re.IGNORECASE)
             dp_name = prefix + technical_suffix
@@ -156,7 +150,6 @@ class DP(UNIT3D):
                 elif resolution and dp_name.endswith(f' {resolution}'):
                     dp_name = dp_name[: -len(resolution)] + f'Hybrid {resolution}'
                 else:
-                    # Fallback: append at the end
                     dp_name = f'{dp_name} Hybrid'
 
         return {'name': dp_name}
