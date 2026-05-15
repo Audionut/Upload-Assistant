@@ -122,9 +122,28 @@ class DP(UNIT3D):
             dp_name = dp_name.replace("Dual-Audio", audio)
 
         # Handle Hybrid tag — DarkPeers requires it when audio/video are from different sources
-        if re.search(r'\bHybrid\b', dp_name, re.IGNORECASE):
-            # Already present: normalize casing to "Hybrid"
-            dp_name = re.sub(r'\bHybrid\b', 'Hybrid', dp_name, flags=re.IGNORECASE)
+        # Only look for "Hybrid" in the technical portion (after title + year) to avoid
+        # false positives from titles like "Hybrid the Monster 2025"
+        title = str(meta.get('title', ''))
+        year = str(meta.get('year', ''))
+        # Build a prefix to skip: find where the technical tags start
+        technical_suffix = dp_name
+        if title:
+            title_idx = dp_name.find(title)
+            if title_idx != -1:
+                technical_suffix = dp_name[title_idx + len(title):]
+        if year and year in technical_suffix:
+            year_idx = technical_suffix.find(year)
+            technical_suffix = technical_suffix[year_idx + len(year):]
+
+        has_hybrid_tag = bool(re.search(r'\bHybrid\b', technical_suffix, re.IGNORECASE))
+
+        if has_hybrid_tag:
+            # Already present in technical portion: normalize casing to "Hybrid"
+            # Replace only in the technical portion to avoid touching the title
+            prefix = dp_name[:len(dp_name) - len(technical_suffix)]
+            technical_suffix = re.sub(r'\bHybrid\b', 'Hybrid', technical_suffix, flags=re.IGNORECASE)
+            dp_name = prefix + technical_suffix
         elif not meta.get('unattended') or meta.get('unattended_confirm', False):
             console.print(
                 f'[bold yellow][{self.tracker}] DarkPeers requires "Hybrid" in the name '
