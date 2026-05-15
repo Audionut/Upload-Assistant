@@ -12,7 +12,10 @@ from src.trackers.UNIT3D import UNIT3D
 
 
 class DP(UNIT3D):
+    """Tracker class for DarkPeers (DP), a UNIT3D-based Nordic tracker."""
+
     def __init__(self, config: dict[str, Any]):
+        """Initialize the DarkPeers tracker with API endpoints and banned groups."""
         super().__init__(config, tracker_name='DP')
         self.config = config
         self.tmdb_manager = TmdbManager(config)
@@ -35,6 +38,7 @@ class DP(UNIT3D):
         pass
 
     async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
+        """Validate DP-specific upload rules: folder structure, Nordic languages, EVO, and hardcoded subs."""
         should_continue = True
         if meta.get('keep_folder'):
             if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
@@ -64,6 +68,7 @@ class DP(UNIT3D):
         return should_continue
 
     async def get_description(self, meta: dict[str, Any]) -> dict[str, str]:
+        """Build the upload description, fetching a Nordic-language logo from TMDB if needed."""
         if meta.get('logo', "") == "":
             TMDB_API_KEY = self.config['DEFAULT'].get('tmdb_api')
             TMDB_BASE_URL = "https://api.themoviedb.org/3"
@@ -88,6 +93,7 @@ class DP(UNIT3D):
         return {'description': await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta)}
 
     async def get_additional_data(self, meta: dict[str, Any]) -> dict[str, Any]:
+        """Return additional upload fields including mod queue opt-in."""
         data = {
             'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
         }
@@ -95,6 +101,7 @@ class DP(UNIT3D):
         return data
 
     async def get_audio(self, meta: dict[str, Any]) -> str:
+        """Determine the audio language tag: single language, Dual-Audio, or MULTi."""
         languages_result = "SKIPPED"
 
         if not meta.get('language_checked', False):
@@ -115,6 +122,7 @@ class DP(UNIT3D):
         return f'{languages_result}'
 
     async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
+        """Build the release name with audio language normalization and Hybrid tag handling."""
         dp_name = str(meta.get('name', ''))
 
         audio = await self.get_audio(meta)
