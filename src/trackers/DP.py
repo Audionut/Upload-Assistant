@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import re
 from typing import Any, cast
 
 import cli_ui
@@ -119,5 +120,24 @@ class DP(UNIT3D):
         audio = await self.get_audio(meta)
         if audio and audio != "SKIPPED" and "Dual-Audio" in dp_name:
             dp_name = dp_name.replace("Dual-Audio", audio)
+
+        # Handle Hybrid tag — DarkPeers requires it when audio/video are from different sources
+        if re.search(r'\bHybrid\b', dp_name, re.IGNORECASE):
+            # Already present: normalize casing to "Hybrid"
+            dp_name = re.sub(r'\bHybrid\b', 'Hybrid', dp_name, flags=re.IGNORECASE)
+        elif not meta.get('unattended') or meta.get('unattended_confirm', False):
+            console.print(
+                f'[bold yellow][{self.tracker}] DarkPeers requires "Hybrid" in the name '
+                'when audio and video come from different sources.'
+            )
+            if cli_ui.ask_yes_no('Does this release require "Hybrid" in the name?', default=False):
+                resolution = str(meta.get('resolution', ''))
+                if resolution and f' {resolution} ' in dp_name:
+                    dp_name = dp_name.replace(f' {resolution} ', f' Hybrid {resolution} ', 1)
+                elif resolution and dp_name.endswith(f' {resolution}'):
+                    dp_name = dp_name[: -len(resolution)] + f'Hybrid {resolution}'
+                else:
+                    # Fallback: append at the end
+                    dp_name = f'{dp_name} Hybrid'
 
         return {'name': dp_name}
