@@ -457,93 +457,62 @@ class BJS:
             'upload_resolution': upload_resolution
         }
 
-    def _check_episode_on_page(self, torrent_table: Optional[Tag], upload_season_num: str, upload_episode_num: str) -> bool:
-        if not upload_season_num or not upload_episode_num or not torrent_table:
+    def _should_process_torrent(self, current_season: str, current_resolution: str, current_episode: str, is_pack: bool, params: dict[str, Any], meta: dict[str, Any]) -> bool:
+        if meta["category"] == "TV":
+            if not current_season or not params["upload_season_num"]:
+                return False
+
+            try:
+                if int(current_season) == int(params["upload_season_num"]):
+                    if params["is_tv_pack"]:
+                        return is_pack
+                    else:
+                        if is_pack:
+                            return True
+                        if current_episode and params["upload_episode_num"] and int(current_episode) == int(params["upload_episode_num"]):
+                            return True
+            except ValueError:
+                pass
             return False
 
-        temp_season_on_page: str = ""
-        upload_episode_str = f'E{upload_episode_num}'
+        elif meta["category"] == "MOVIE":
+            if params["upload_resolution"] and current_resolution:
+                try:
+                    cur_res = int(current_resolution.lower().replace("p", ""))
+                    up_res = int(str(params["upload_resolution"]).lower().replace("p", ""))
+                    if cur_res == up_res:
+                        return True
+                except ValueError:
+                    if current_resolution.lower() == str(params["upload_resolution"]).lower():
+                        return True
+            return False
 
-        for row in torrent_table.find_all('tr'):
-            row_classes = row.get('class')
-            if isinstance(row_classes, list) and 'season_header' in row_classes:
-                s_match = re.search(r'Temporada (\d+)', row.get_text(strip=True))
-                if s_match:
-                    temp_season_on_page = s_match.group(1)
-                continue
-
-            if (temp_season_on_page == upload_season_num and str(row.get('id', '')).startswith('torrent')):
-                link = row.find('a', onclick=re.compile(r'loadIfNeeded\('))
-                if (link and re.search(r'\b' + re.escape(upload_episode_str) + r'\b', link.get_text(strip=True))):
-                    return True
         return False
 
-    def _should_process_torrent(self, row: Tag, current_season: str, current_resolution: str, params: dict[str, Any], episode_found_on_page: bool, meta: dict[str, Any]) -> tuple[bool, bool]:
-        link = row.find('a', onclick=re.compile(r'loadIfNeeded\('))
+    def _extract_torrent_ids(self, rows_to_process: list[Tag]) -> list[dict[str, Any]]:
+        tasks: list[dict[str, Any]] = []
 
-        if not isinstance(link, Tag):
-            return False, False
-
-        description_text = ' '.join(link.get_text(strip=True).split())
-
-        # TV Logic
-        if meta['category'] == 'TV':
-            if current_season == params['upload_season_num']:
-                existing_episode_match = re.search(r'E(\d+)', description_text)
-                is_current_row_a_pack = not existing_episode_match
-
-                if params['is_tv_pack']:
-                    return is_current_row_a_pack, False
-                else:
-                    if episode_found_on_page:
-                        if existing_episode_match:
-                            existing_episode_num = existing_episode_match.group(1)
-                            return existing_episode_num == params['upload_episode_num'], False
-                    else:
-                        return is_current_row_a_pack, True
-
-        # Movie Logic
-        elif meta['category'] == 'MOVIE' and params['upload_resolution'] and current_resolution == params['upload_resolution']:
-            return True, False
-
-        return False, False
-
-    def _extract_torrent_ids(self, rows_to_process: list[tuple[Tag, bool]]) -> list[dict[str, Any]]:
-        ajax_tasks: list[dict[str, Any]] = []
-
-        for row, process_folder_name in rows_to_process:
-            id_link = row.find('a', onclick=re.compile(r'loadIfNeeded\('))
-            if not id_link:
+        for row in rows_to_process:
+            row_id = str(row.get("id", ""))
+            torrent_id = row_id.replace("torrent", "")
+            if not torrent_id:
                 continue
 
-            onclick_attr = str(id_link['onclick'])
-            id_match = re.search(r"loadIfNeeded\('(\d+)',\s*'(\d+)'", onclick_attr)
-            if not id_match:
-                continue
-
-            torrent_id = id_match.group(1)
-            group_id = id_match.group(2)
-            description_text = ' '.join(id_link.get_text(strip=True).split())
             torrent_link = f'{self.torrent_url}{torrent_id}'
+
+            link = row.find("a", href=re.compile(r"torrentid=\d+"))
+            description_text = " ".join(link.get_text(strip=True).split()) if link else ""
 
             size_tag = row.find('td', class_='number_column nobr')
             torrent_size_str = size_tag.get_text(strip=True) if size_tag else None
 
-            ajax_tasks.append({
-                'torrent_id': torrent_id,
-                'group_id': group_id,
-                'description_text': description_text,
-                'process_folder_name': process_folder_name,
-                'size': torrent_size_str,
-                'link': torrent_link
-            })
+            tasks.append({"torrent_id": torrent_id, "description_text": description_text, "size": torrent_size_str, "link": torrent_link})
 
-        return ajax_tasks
+        return tasks
 
-    async def _fetch_torrent_content(self, task_info: dict[str, Any]) -> dict[str, Any]:
+    async def _fetch_torrent_page(self, task_info: dict[str, Any]) -> dict[str, Any]:
         torrent_id = task_info['torrent_id']
-        group_id = task_info['group_id']
-        ajax_url = f'{self.base_url}/ajax.php?action=torrent_content&torrentid={torrent_id}&groupid={group_id}'
+        url = f"{self.base_url}/torrents.php?torrentid={torrent_id}"
 
         max_retries = 3
         base_delay = 5
@@ -552,78 +521,61 @@ class BJS:
         async def _attempt_fetch() -> tuple[Optional[BeautifulSoup], Optional[Exception]]:
             try:
                 async with self.semaphore:
-                    ajax_response = await self.session.get(ajax_url)
-                    ajax_response.raise_for_status()
-                    ajax_soup = BeautifulSoup(ajax_response.text, "html.parser")
-                return ajax_soup, None
+                    response = await self.session.get(url, follow_redirects=True)
+                    response.raise_for_status()
+                    soup = BeautifulSoup(response.text, "html.parser")
+                return soup, None
             except Exception as e:
                 return None, e
 
         for attempt in range(1, max_retries + 1):
-            ajax_soup, error = await _attempt_fetch()
-            if ajax_soup is not None:
-                return {
-                    'success': True,
-                    'soup': ajax_soup,
-                    'task_info': task_info
-                }
+            soup, error = await _attempt_fetch()
+            if soup is not None:
+                return {"success": True, "soup": soup, "task_info": task_info}
 
             last_error = error
             if attempt < max_retries:
                 await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
 
-        console.print(f'[yellow]Não foi possível buscar a lista de arquivos para o torrent {torrent_id}: {last_error}[/yellow]')
+        console.print(f"[yellow]Não foi possível buscar a página do torrent {torrent_id}: {last_error}[/yellow]")
         return {
             'success': False,
             'error': last_error,
             'task_info': task_info
         }
 
-    def _extract_item_name(self, ajax_soup: BeautifulSoup, description_text: str, is_tv_pack: bool, process_folder_name: bool) -> str:
-        item_name: str = ""
+    def _extract_item_name(self, soup: BeautifulSoup, torrent_id: str) -> str:
+        item_name = ""
 
-        is_existing_torrent_a_disc = any(
-            keyword in description_text.lower()
-            for keyword in ['bd25', 'bd50', 'bd66', 'bd100', 'dvd5', 'dvd9', 'm2ts']
-        )
+        files_div = soup.find("div", id=f"files_{torrent_id}")
+        if not files_div:
+            return item_name
 
-        if is_existing_torrent_a_disc or is_tv_pack or process_folder_name:
-            path_div = ajax_soup.find('div', class_='filelist_path')
-            if isinstance(path_div, Tag) and path_div.get_text(strip=True):
-                item_name = path_div.get_text(strip=True).strip('/')
-            else:
-                file_table = ajax_soup.find('table', class_='filelist_table')
-                if isinstance(file_table, Tag):
-                    first_file_row = file_table.find('tr', class_=lambda x: x != 'colhead_dark')
-                    if isinstance(first_file_row, Tag):
-                        first_td = first_file_row.find('td')
-                        if isinstance(first_td, Tag):
-                            item_name = first_td.get_text(strip=True)
+        path_div = files_div.find("div", class_="filelist_path")
+        if isinstance(path_div, Tag) and path_div.get_text(strip=True):
+            item_name = path_div.get_text(strip=True).strip("/")
         else:
-            file_table = ajax_soup.find('table', class_='filelist_table')
+            file_table = files_div.find("table", class_="filelist_table")
             if isinstance(file_table, Tag):
-                first_row = file_table.find('tr', class_=lambda x: x != 'colhead_dark')
-                if isinstance(first_row, Tag):
-                    first_td = first_row.find('td')
+                first_file_row = file_table.find("tr", class_=lambda x: x != "colhead_dark")
+                if isinstance(first_file_row, Tag):
+                    first_td = first_file_row.find("td")
                     if isinstance(first_td, Tag):
                         item_name = first_td.get_text(strip=True)
 
         return item_name
 
-    async def _process_ajax_responses(self, ajax_tasks: list[dict[str, Any]], params: dict[str, Any]) -> list[dict[str, str]]:
+    async def _process_ajax_responses(self, tasks: list[dict[str, Any]]) -> list[dict[str, str]]:
         found_items: list[dict[str, str]] = []
 
-        if not ajax_tasks:
+        if not tasks:
             return found_items
 
-        ajax_results = await asyncio.gather(
-            *[self._fetch_torrent_content(task) for task in ajax_tasks],
-            return_exceptions=True
-        )
+        results = await asyncio.gather(*[self._fetch_torrent_page(task) for task in tasks], return_exceptions=True)
 
-        for result in ajax_results:
+        for result in results:
             if isinstance(result, Exception):
-                console.print(f'[yellow]Error in AJAX call: {result}[/yellow]')
+                console.print(f"[yellow]Error in request: {result}[/yellow]")
                 continue
 
             fetch_result = cast(dict[str, Any], result)
@@ -637,15 +589,9 @@ class BJS:
                 continue
 
             task_info = cast(dict[str, Any], task_info)
-            description_text = str(task_info.get('description_text', ''))
-            process_folder_name = bool(task_info.get('process_folder_name'))
+            torrent_id = task_info.get("torrent_id", "")
 
-            item_name = self._extract_item_name(
-                soup_obj,
-                description_text,
-                params['is_tv_pack'],
-                process_folder_name
-            )
+            item_name = self._extract_item_name(soup_obj, torrent_id)
 
             torrent_description = ""
             desc_block = soup_obj.find(
@@ -732,20 +678,14 @@ class BJS:
             else:
                 return dupes
 
-            episode_found_on_page = False
-            if (meta['category'] == 'TV' and not params['is_tv_pack'] and params['upload_season_num'] and params['upload_episode_num']):
-                episode_found_on_page = self._check_episode_on_page(
-                    torrent_details_table,
-                    params['upload_season_num'],
-                    params['upload_episode_num']
-                )
-
-            rows_to_process: list[tuple[Tag, bool]] = []
+            rows_to_process: list[Tag] = []
             current_season_on_page = ""
             current_resolution_on_page = ""
+            current_episode_on_page = ""
+            current_is_pack = False
 
             for row in torrent_details_table.find_all('tr'):
-                row_classes = row.get('class')
+                row_classes = row.get("class")
                 if isinstance(row_classes, list):
                     if 'resolution_header' in row_classes:
                         header_text = row.get_text(strip=True)
@@ -761,24 +701,29 @@ class BJS:
                             current_season_on_page = season_match.group(1)
                         continue
 
-                    row_id = row.get('id')
-                    if isinstance(row_id, str) and not row_id.startswith('torrent'):
-                        continue
+                td_with_rowspan = row.find("td", rowspan=True)
+                if td_with_rowspan:
+                    a_tag = td_with_rowspan.find("a", href=re.compile(r"torrents\.php\?id=\d+"))
+                    if a_tag:
+                        text = a_tag.get_text(strip=True)
+                        if "Temporada" in text:
+                            current_is_pack = True
+                            current_episode_on_page = ""
+                        else:
+                            ep_match = re.search(r"S(\d+)E(\d+)", text, re.IGNORECASE)
+                            if ep_match:
+                                current_is_pack = False
+                                current_episode_on_page = ep_match.group(2)
 
-                    id_link = row.find('a', onclick=re.compile(r'loadIfNeeded\('))
-                    if not id_link:
-                        continue
-
-                    should_process, process_folder_name = self._should_process_torrent(
-                        row, current_season_on_page, current_resolution_on_page,
-                        params, episode_found_on_page, meta
-                    )
+                row_id = row.get("id")
+                if isinstance(row_id, str) and row_id.startswith("torrent") and not row_id.startswith("torrent_"):
+                    should_process = self._should_process_torrent(current_season_on_page, current_resolution_on_page, current_episode_on_page, current_is_pack, params, meta)
 
                     if should_process:
-                        rows_to_process.append((row, process_folder_name))
+                        rows_to_process.append(row)
 
-            ajax_tasks = self._extract_torrent_ids(rows_to_process)
-            dupes = await self._process_ajax_responses(ajax_tasks, params)
+            tasks = self._extract_torrent_ids(rows_to_process)
+            dupes = await self._process_ajax_responses(tasks)
 
             return dupes
 
@@ -970,23 +915,14 @@ class BJS:
 
         return results
 
-    def get_runtime(self, meta: dict[str, Any]) -> dict[str, int]:
+    def get_runtime(self, meta: dict[str, Any]) -> tuple[int, int]:
         """
         Extracts runtime from metadata and converts total minutes into hours and minutes.
         """
-        raw_runtime = meta.get('runtime', 0)
-
-        try:
-            total_minutes = max(0, int(raw_runtime))
-        except (ValueError, TypeError):
-            total_minutes = 0
-
+        total_minutes = meta.get("video_duration", 0)
         hours, minutes = divmod(total_minutes, 60)
 
-        return {
-            'hours': hours,
-            'minutes': minutes
-        }
+        return hours, minutes
 
     def get_release_date(self) -> str:
         raw_date_string = self.main_tmdb_data.get('first_air_date') or self.main_tmdb_data.get('release_date')
@@ -1083,9 +1019,9 @@ class BJS:
         }
 
         prompt_labels = {
-            'director': 'Diretor(es)',
-            'creator': 'Criador(es)',
-            'cast': 'Elenco',
+            "director": "Diretor",
+            "creator": "Criador",
+            "cast": "Elenco",
         }
 
         if role not in role_map:
@@ -1098,20 +1034,21 @@ class BJS:
         tmdb_names = meta.get(tmdb_key, [])
         names = imdb_names + tmdb_names
 
-        unique_names = list(dict.fromkeys(names))[:5]
+        limit = 1 if role in ("director", "creator") else 5
+        unique_names = list(dict.fromkeys(names))[:limit]
 
         if unique_names:
             return ', '.join(unique_names)
 
         display_name = prompt_labels.get(role, role.capitalize())
-        prompt_message = (
-            f'{display_name} não encontrado(s).\n'
-            'Por favor, insira manualmente (separados por vírgula): '
-        )
+        suffix = " (apenas uma pessoa)" if role in ("director", "creator") else " (separados por vírgula)"
+        prompt_message = f"{display_name} não encontrado(s).\nPor favor, insira manualmente{suffix}: "
 
         user_input_raw = await asyncio.to_thread(cli_ui.ask_string, f'{prompt_message}')
         user_input = (user_input_raw or "").strip()
         if user_input:
+            if role in ("director", "creator"):
+                return user_input.split(",")[0].strip()
             return user_input
 
         return 'skipped'
@@ -1167,8 +1104,8 @@ class BJS:
                     if not isinstance(link_element, Tag) or not isinstance(quality_element, Tag):
                         continue
 
-                    name: str = str(link_element.text).strip()
-                    quality: str = str(quality_element.text).strip()
+                    name: str = link_element.text.strip()
+                    quality: str = quality_element.text.strip()
                     url = link_element.get('href')
                     if isinstance(url, str):
                         link: str = url
@@ -1211,37 +1148,40 @@ class BJS:
         category = meta['category']
         original_title, brazilian_title = self.get_title(meta)
         width, height = self.get_resolution(meta)
+        hours, minutes = self.get_runtime(meta)
 
         data: dict[str, Any] = {}
 
         # These fields are common across all upload types
-        data.update({
-            'audio': await self.get_audio(meta),
-            'auth': BJS.secret_token,
-            'codecaudio': self.get_audio_codec(meta),
-            'codecvideo': self.get_video_codec(meta),
-            'duracaoHR': self.get_runtime(meta).get('hours'),
-            'duracaoMIN': self.get_runtime(meta).get('minutes'),
-            'duracaotipo': 'selectbox',
-            'fichatecnica': await self.build_description(meta),
-            'formato': self.get_container(meta),
-            'idioma': self.get_languages(),
-            'imdblink': self.get_imdblink(meta),
-            'qualidade': self.get_bitrate(meta),
-            'release': meta.get('service_longname', ''),
-            'remaster_title': self.build_remaster_title(meta),
-            'resolucaoh': height,
-            'resolucaow': width,
-            'sinopse': await self.get_overview(),
-            'submit': 'true',
-            'tags': await self.get_tags(),
-            'tipolegenda': await self.get_subtitle(meta),
-            'title': original_title,
-            'titulobrasileiro': brazilian_title,
-            'traileryoutube': self.get_trailer(meta),
-            'type': self.get_type(meta),
-            'year': self.get_year(meta),
-        })
+        data.update(
+            {
+                "audio": await self.get_audio(meta),
+                "auth": BJS.secret_token,
+                "codecaudio": self.get_audio_codec(meta),
+                "codecvideo": self.get_video_codec(meta),
+                "duracaoHR": str(hours),
+                "duracaoMIN": str(minutes),
+                "duracaotipo": "selectbox",
+                "fichatecnica": await self.build_description(meta),
+                "formato": self.get_container(meta),
+                "idioma": self.get_languages(),
+                "imdblink": self.get_imdblink(meta),
+                "qualidade": self.get_bitrate(meta),
+                "release": meta.get("service_longname", ""),
+                "remaster_title": self.build_remaster_title(meta),
+                "resolucaoh": height,
+                "resolucaow": width,
+                "sinopse": await self.get_overview(),
+                "submit": "true",
+                "tags": await self.get_tags(),
+                "tipolegenda": await self.get_subtitle(meta),
+                "title": original_title,
+                "titulobrasileiro": brazilian_title,
+                "traileryoutube": self.get_trailer(meta),
+                "type": self.get_type(meta),
+                "year": self.get_year(meta),
+            }
+        )
 
         # These fields are common in movies and TV shows, even if it's anime
         if category == 'MOVIE':
@@ -1277,14 +1217,16 @@ class BJS:
                     for code in self.main_tmdb_data.get('origin_country', [])
                     if (country := pycountry.countries.get(alpha_2=code))
                 ]
-                data.update({
-                    'network': ', '.join([p.get('name', '') for p in self.main_tmdb_data.get('networks', [])]) or '',  # Optional
-                    'numtemporadas': self.main_tmdb_data.get('number_of_seasons', ''),  # Optional
-                    'datalancamento': self.get_release_date(),
-                    'pais': ', '.join(country_list),  # Optional
-                    'diretorserie': ', '.join(set(meta.get('tmdb_directors', []) or meta.get('imdb_info', {}).get('directors', [])[:5])),  # Optional
-                    'avaliacao': self.get_rating(),  # Optional
-                })
+                data.update(
+                    {
+                        "network": ", ".join([p.get("name", "") for p in self.main_tmdb_data.get("networks", [])]) or "",  # Optional
+                        "numtemporadas": self.main_tmdb_data.get("number_of_seasons", ""),  # Optional
+                        "datalancamento": self.get_release_date(),
+                        "pais": ", ".join(country_list),  # Optional
+                        "diretorserie": ", ".join(list(dict.fromkeys(meta.get("tmdb_directors", []) or meta.get("imdb_info", {}).get("directors", [])))[:1]),  # Optional
+                        "avaliacao": self.get_rating(),  # Optional
+                    }
+                )
 
         # Anime-specific data
         if meta.get('anime'):
@@ -1317,6 +1259,10 @@ class BJS:
             data.update({
                 'internalrel': 1,
             })
+
+        # Repack
+        if meta.get("repack", ""):
+            data.update({"repack": "on"})
 
         # Only upload images if not debugging
         if not meta.get('debug', False):

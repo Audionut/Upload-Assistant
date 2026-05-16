@@ -14,6 +14,16 @@ from src.console import console
 
 
 class LanguagesManager:
+    @staticmethod
+    def _dedupe_preserve_order(values: list[str]) -> list[str]:
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for value in values:
+            if value not in seen:
+                seen.add(value)
+                deduped.append(value)
+        return deduped
+
     async def parse_blu_ray(self, meta: dict[str, Any]) -> dict[str, Any]:
         try:
             bd_summary_file = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
@@ -277,7 +287,7 @@ class LanguagesManager:
 
                         if audio_languages:
                             audio_languages = [lang.split()[0] for lang in audio_languages]
-                            audio_languages = list(set(audio_languages))
+                            audio_languages = self._dedupe_preserve_order(audio_languages)
                             meta['audio_languages'] = audio_languages
 
                     if (not meta.get('unattended_subtitle_skip', False) or not meta.get('unattended_audio_skip', False)) and not subtitle_languages:
@@ -323,7 +333,7 @@ class LanguagesManager:
 
                             if subtitle_languages:
                                 subtitle_languages = [lang.split()[0] for lang in subtitle_languages]
-                                subtitle_languages = list(set(subtitle_languages))
+                                subtitle_languages = self._dedupe_preserve_order(subtitle_languages)
                                 meta['subtitle_languages'] = subtitle_languages
 
                         if meta.get('hardcoded_subs', False):
@@ -370,8 +380,13 @@ class LanguagesManager:
                         if meta['debug']:
                             console.print(f"Skipping commentary track: {track}")
                         audio_tracks.remove(track)
-                audio_language_set: set[str] = set(existing_audio_languages)
-                audio_language_set.update(track.get("language") for track in audio_tracks if track.get("language"))
+                audio_languages_ordered: list[str] = self._dedupe_preserve_order(existing_audio_languages)
+                audio_language_set: set[str] = set(audio_languages_ordered)
+                for track in audio_tracks:
+                    track_language = track.get("language")
+                    if track_language and track_language not in audio_language_set:
+                        audio_languages_ordered.append(track_language)
+                        audio_language_set.add(track_language)
                 for track in audio_tracks:
                     bitrate_str = track.get("bitrate", "")
                     bitrate_num = None
@@ -394,6 +409,7 @@ class LanguagesManager:
                             try:
                                 if cli_ui.ask_yes_no(f"Remove '{lang}' from audio languages?", default=True):
                                     audio_language_set.discard(lang)
+                                    audio_languages_ordered = [item for item in audio_languages_ordered if item != lang]
                             except EOFError:
                                 console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
                                 await cleanup_manager.cleanup()
@@ -401,6 +417,7 @@ class LanguagesManager:
                                 sys.exit(1)
                         else:
                             audio_language_set.discard(lang)
+                            audio_languages_ordered = [item for item in audio_languages_ordered if item != lang]
                         meta['bluray_audio_skip'] = True
 
                 subtitle_tracks = bluray.get("subtitles", [])
@@ -410,15 +427,23 @@ class LanguagesManager:
                         if meta['debug']:
                             console.print(f"Skipping commentary subtitle track: {track}")
                         subtitle_tracks.remove(track)
-                subtitle_language_set: set[str] = set(existing_subtitle_languages)
+                subtitle_languages_ordered: list[str] = self._dedupe_preserve_order(existing_subtitle_languages)
+                subtitle_language_set: set[str] = set(subtitle_languages_ordered)
                 if subtitle_tracks and isinstance(subtitle_tracks[0], dict):
-                    subtitle_language_set.update(track.get("language") for track in subtitle_tracks if track.get("language"))
+                    for track in subtitle_tracks:
+                        track_language = track.get("language")
+                        if track_language and track_language not in subtitle_language_set:
+                            subtitle_languages_ordered.append(track_language)
+                            subtitle_language_set.add(track_language)
                 else:
-                    subtitle_language_set.update(track for track in subtitle_tracks if track)
+                    for track in subtitle_tracks:
+                        if track and track not in subtitle_language_set:
+                            subtitle_languages_ordered.append(track)
+                            subtitle_language_set.add(track)
                 if subtitle_language_set:
-                    meta['subtitle_languages'] = list(subtitle_language_set)
+                    meta['subtitle_languages'] = subtitle_languages_ordered
 
-                meta['audio_languages'] = list(audio_language_set)
+                meta['audio_languages'] = audio_languages_ordered
             except Exception as e:
                 console.print(f"[red]Error processing BDInfo languages: {e}[/red]")
 

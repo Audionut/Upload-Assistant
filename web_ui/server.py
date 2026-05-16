@@ -2106,6 +2106,7 @@ def config_page():
 
 
 @app.route("/api/health")
+@limiter.limit("70 per hour", key_func=get_remote_address)
 def health():
     """Health check endpoint"""
     return jsonify({"status": "healthy", "success": True, "message": "Upload Assistant Web UI is running"})

@@ -7,6 +7,7 @@ This document summarizes the Web UI HTTP API implemented in web_ui/server.py. Fo
 ### /api/health
 - Methods: GET
 - Auth: none
+- Rate limit: 70 per hour (keyed by get_remote_address)
 - Description: basic health check
 - Response: {"status": "healthy", "success": true, "message": "..."}
 

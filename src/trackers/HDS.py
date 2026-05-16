@@ -7,7 +7,7 @@ from typing import Any, Optional, Union, cast
 
 import aiofiles
 import httpx
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup
 
 from src.bbcode import BBCODE
 from src.console import console
@@ -165,6 +165,7 @@ class HDS:
         description = bbcode.remove_img_resize(description)
         description = bbcode.convert_comparison_to_centered(description, 1000)
         description = bbcode.remove_spoiler(description)
+        description = bbcode.remove_color(description)
         description = bbcode.remove_extra_lines(description)
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt", 'w', encoding='utf-8') as description_file:
@@ -173,62 +174,90 @@ class HDS:
         return description
 
     async def search_existing(self, meta: Meta, _disctype: str) -> list[dict[str, Union[str, None]]]:
+        dupes: list[dict[str, Union[str, None]]] = []
+
+        if str(meta.get("resolution", "")) not in ["2160p", "1080p", "1080i", "720p"]:
+            console.print(f"{self.tracker}: The resolution must be at least 720p, skipping the upload...")
+            meta["skipping"] = f"{self.tracker}"
+            return dupes
+
         cookies = await self.cookie_validator.load_session_cookies(meta, self.tracker)
         self.session.cookies.clear()
         if cookies is not None:
             self.session.cookies.update(cookies)
 
-        dupes: list[dict[str, Union[str, None]]] = []
         imdb_id = str(meta.get('imdb', ''))
         if imdb_id == '0':
             console.print(f'IMDb ID not found, cannot search for duplicates on {self.tracker}.')
             return dupes
 
-        search_url = f'{self.base_url}/index.php?'
+        search_url = f"{self.base_url}/index.php"
+        current_page = 0
 
-        params: dict[str, str] = {
-            'page': 'torrents',
-            'search': imdb_id,
-            'active': '0',
-            'options': '2'
-        }
+        while True:
+            params = {
+                "page": "torrents",
+                "search": imdb_id,
+                "active": "0",
+                "options": "2",
+                "pages": str(current_page),
+            }
 
-        try:
-            response = await self.session.get(search_url, params=params)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'html.parser')
+            try:
+                response = await self.session.get(search_url, params=params)
+                response.raise_for_status()
+                parts = response.text.split("Show/Hide Categories", 1)
+                if len(parts) < 2:
+                    console.print(f"[bold yellow]{self.tracker}: Unexpected page structure on page {current_page}, stopping search[/bold yellow]")
+                    break
+                relevant_html = parts[1]
+                soup = BeautifulSoup(relevant_html, "html.parser")
+                rows = soup.select("tr:has(td.lista)")
 
-            all_tables = soup.find_all('table', class_='lista')
+                if not rows:
+                    break
 
-            torrent_rows: list[Tag] = []
+                for row in rows:
+                    name_tag = row.select_one('a[href*="page=torrent-details"]')
+                    if not name_tag:
+                        continue
+                    name = name_tag.get_text(strip=True)
 
-            for table in all_tables:
-                recommend_header = table.find('td', attrs={'class': 'block'}, string=re.compile(r'Our Team Recommend'))  # type: ignore
-                if recommend_header:
-                    continue
+                    if not name and name_tag.has_attr("title"):
+                        name = str(name_tag["title"])
+                    href_value = name_tag.get("href", "")
+                    link_path = str(href_value).lstrip("/")
+                    torrent_link = f"{self.base_url.rstrip('/')}/{link_path}"
+                    cells = row.find_all("td", class_="lista")
+                    size = None
+                    if len(cells) >= 5:
+                        for cell in cells:
+                            txt = cell.get_text(strip=True)
+                            if re.search(r"([0-9.]+)\s+(GB|MB|KB|B)", txt, re.I):
+                                size = txt
+                                break
 
-                rows_in_table = table.select('tr:has(td.lista)')
-                torrent_rows.extend(rows_in_table)
+                    if name and torrent_link:
+                        dupes.append({"name": name, "size": size, "link": torrent_link})
 
-            for row in torrent_rows:
-                name_tag = row.select_one('td:nth-child(2) > a[href*="page=torrent-details&id="]')
-                name = name_tag.get_text(strip=True) if name_tag else 'Unknown Name'
+                next_page = soup.find("a", href=re.compile(r"pages="), text=re.compile(r"Next|>>", re.I))
 
-                link_tag = name_tag
-                torrent_link = None
-                if link_tag and 'href' in link_tag.attrs:
-                    torrent_link = f'{self.base_url}/{link_tag["href"]}'
+                if not next_page:
+                    next_page = soup.find("a", href=re.compile(rf"pages={current_page + 1}"))
 
-                duplicate_entry = {
-                    'name': name,
-                    'size': None,
-                    'link': torrent_link
-                }
-                dupes.append(duplicate_entry)
+                if next_page:
+                    current_page += 1
+                    # Prevents infinite loop
+                    if current_page > 10:
+                        break
+                else:
+                    break
 
-        except Exception as e:
-            console.print(f'[bold red]Error searching for duplicates on {self.tracker}: {e}[/bold red]')
+            except Exception as e:
+                console.print(f"[bold red]Error searching for duplicates on page {current_page} of {self.tracker}: {e}[/bold red]")
+                break
 
+        console.print(f"[bold green]Found {len(dupes)} duplicates on {self.tracker}[/bold green]")
         return dupes
 
     async def get_category_id(self, meta: Meta) -> int:

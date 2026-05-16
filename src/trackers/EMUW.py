@@ -460,27 +460,56 @@ class EMUW(UNIT3D):
         return resolution_map.get(resolution, '10')
 
     async def search_existing(self, meta: dict[str, Any], _) -> list[dict[str, Any]]:
-        """Search for duplicate torrents using cloudscraper for Cloudflare bypass"""
+        """Search for duplicate torrents using cloudscraper for Cloudflare bypass.
+
+        Follows UNIT3D base logic:
+        - name is empty (or season only for TV): the full torrent name does not exist
+          yet at this point, filtering by it would miss all real duplicates
+        - tmdbId + category + resolution + type catches true duplicates (same content,
+          same quality tier) without false positives from unrelated torrents
+        """
         dupes: list[dict[str, Any]] = []
 
-        # Build search name using meta['name'] like UNIT3D
-        search_name = str(meta.get('name', ''))
+        # Mirror UNIT3D preflight: initialise tracker state, validate api_key,
+        # run additional checks — same guard rails as the base class
+        meta.setdefault('tracker_status', {})
+        meta['tracker_status'].setdefault(self.tracker, {})
 
-        # Add season for TV shows
+        api_key = str(self.config['TRACKERS'][self.tracker].get('api_key', '')).strip()
+        if not api_key:
+            console.print(f'[bold red]{self.tracker}: Missing API key in config file. Skipping...[/bold red]')
+            meta['skipping'] = self.tracker
+            return dupes
+
+        should_continue = await self.get_additional_checks(meta)
+        if not should_continue:
+            meta['skipping'] = self.tracker
+            return dupes
+
+        # For TV use only the season token; for movies leave name empty
+        name = ''
         if meta['category'] == 'TV' and meta.get('season'):
-            search_name = f"{search_name} {meta['season']}"
+            name = str(meta.get('season', ''))
 
-        # Add edition if present
-        if meta.get('edition'):
-            search_name = f"{search_name} {meta['edition']}"
+        res_id = await self.get_res_id(str(meta.get('resolution', '')))
+        type_id = (await self.get_type_id(meta))['type_id']
 
-        params: dict[str, Any] = {
-            'tmdbId': meta.get('tmdb', ''),
-            'categories[]': await self.get_cat_id(str(meta['category'])),
-            'name': search_name
-        }
+        # Use list of tuples to support duplicate keys (e.g. 1080p + 1080i)
+        params: list[tuple[str, str]] = [
+            ('tmdbId', str(meta.get('tmdb', ''))),
+            ('categories[]', await self.get_cat_id(str(meta['category']))),
+            ('name', name),
+            ('perPage', '100'),
+        ]
 
-        api_key = str(self.config['TRACKERS'][self.tracker]['api_key']).strip()
+        # 1080p (id=3) and 1080i (id=4) treated as same resolution tier
+        if res_id in ['3', '4']:
+            params.append(('resolutions[]', '3'))
+            params.append(('resolutions[]', '4'))
+        else:
+            params.append(('resolutions[]', res_id))
+
+        params.append(('types[]', type_id))
         headers = {
             'Authorization': f"Bearer {api_key}",
             'Content-Type': 'application/json',
@@ -506,7 +535,7 @@ class EMUW(UNIT3D):
             # Establish session
             scraper.get(self.base_url, timeout=15.0)
 
-            # Make API request
+            # Make API request — params is a list of tuples to support duplicate keys
             response = scraper.get(url=self.search_url, params=params, headers=headers, timeout=15.0)
 
             if response.status_code == 200:

@@ -6,6 +6,7 @@ import os
 import re
 import secrets
 import sys
+import unicodedata
 from typing import Any, Callable, Optional, Union, cast
 
 import aiofiles
@@ -24,10 +25,100 @@ from src.languages import languages_manager
 
 
 class COMMON:
+    LANGUAGE_EQUIVALENCE_GROUPS: tuple[set[str], ...] = (
+        {'chinese', 'mandarin', 'zh', 'zho', 'chi', 'cmn', 'chinese simplified', 'chinese traditional', 'zh hans', 'zh hant'},
+        {'english', 'eng', 'en', 'en us', 'en gb', 'english cc', 'english sdh', 'english forced'},
+        {'french', 'fra', 'fre', 'fr', 'francais', 'français', 'french canada', 'french canadian'},
+        {'portuguese', 'por', 'pt', 'pt pt', 'brazilian portuguese', 'portuguese brazil', 'portuguese br', 'pt br', 'brazilian'},
+        {'spanish', 'spa', 'es', 'es es', 'spanish latin america', 'latin american spanish', 'es 419', 'es mx', 'castilian', 'espanol', 'español', 'latino'},
+    )
+
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.parser = self.MediaInfoParser()
         pass
+
+    def _normalize_language_token(self, language: str) -> str:
+        normalized = unicodedata.normalize('NFKD', language)
+        normalized = ''.join(char for char in normalized if not unicodedata.combining(char))
+        normalized = normalized.casefold()
+        normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+        return re.sub(r"\s+", " ", normalized).strip()
+
+    def _build_language_alias_lookup(self) -> dict[str, set[str]]:
+        alias_lookup: dict[str, set[str]] = {}
+        for group in self.LANGUAGE_EQUIVALENCE_GROUPS:
+            normalized_group = {
+                self._normalize_language_token(value)
+                for value in group
+                if value
+            }
+            for value in normalized_group:
+                alias_lookup[value] = set(normalized_group)
+        return alias_lookup
+
+    def _coerce_language_values(self, values: Any) -> list[str]:
+        if isinstance(values, str):
+            return [values]
+        if isinstance(values, list):
+            return [value for value in values if isinstance(value, str)]
+        return []
+
+    def _expand_language_candidates(self, language: str, alias_lookup: dict[str, set[str]]) -> set[str]:
+        normalized = self._normalize_language_token(language)
+        if not normalized:
+            return set()
+
+        candidates: set[str] = {normalized}
+        tokens = normalized.split()
+        if tokens:
+            candidates.add(tokens[0])
+
+        first_chunk = language.split(',')[0].strip()
+        if first_chunk and first_chunk != language:
+            chunk_normalized = self._normalize_language_token(first_chunk)
+            if chunk_normalized:
+                candidates.add(chunk_normalized)
+
+        parse_inputs = {language.strip(), normalized.replace(' ', '-')}
+        for parse_input in parse_inputs:
+            if not parse_input:
+                continue
+            try:
+                parsed_lang = langcodes.Language.get(parse_input)
+                display_name = parsed_lang.display_name()
+                language_name = parsed_lang.language_name()
+                language_code = parsed_lang.language
+                for value in (display_name, language_name, language_code):
+                    if value:
+                        value_normalized = self._normalize_language_token(str(value))
+                        if value_normalized:
+                            candidates.add(value_normalized)
+            except (tag_parser.LanguageTagError, LookupError, AttributeError, ValueError):
+                continue
+
+        expanded = set(candidates)
+        for candidate in candidates:
+            aliases = alias_lookup.get(candidate)
+            if aliases:
+                expanded.update(aliases)
+        return expanded
+
+    def _expand_language_list(self, values: list[str], alias_lookup: dict[str, set[str]]) -> set[str]:
+        expanded: set[str] = set()
+        for value in values:
+            expanded.update(self._expand_language_candidates(value, alias_lookup))
+        return expanded
+
+    def _format_language_for_display(self, language: str) -> str:
+        if not language:
+            return ""
+        try:
+            parsed_lang = langcodes.Language.get(language)
+            display_name = parsed_lang.display_name()
+            return display_name.lower() if display_name else language.lower()
+        except (tag_parser.LanguageTagError, LookupError, AttributeError, ValueError):
+            return language.lower()
 
     async def path_exists(self, path: str) -> bool:
         """Async wrapper for os.path.exists"""
@@ -1105,37 +1196,41 @@ class COMMON:
             if not meta.get("language_checked", False):
                 await languages_manager.process_desc_language(meta, tracker=tracker)
 
-            meta_audio_languages: list[str] = meta.get("audio_languages", [])
-            meta_subtitle_languages: list[str] = meta.get("subtitle_languages", [])
+            alias_lookup = self._build_language_alias_lookup()
+
+            meta_audio_languages = self._coerce_language_values(meta.get("audio_languages", []))
+            meta_subtitle_languages = self._coerce_language_values(meta.get("subtitle_languages", []))
 
             languages_to_check = [lang.lower() for lang in languages_to_check]
             audio_languages = [lang.lower() for lang in meta_audio_languages]
             subtitle_languages = [lang.lower() for lang in meta_subtitle_languages]
+            audio_languages_normalized = {
+                self._normalize_language_token(lang)
+                for lang in meta_audio_languages
+                if isinstance(lang, str) and lang.strip()
+            }
             language_display = None
             original_ok = False
             if original_language:
-                # Get just the first original language
                 original_language_raw = meta.get("original_language", [])
                 first_lang = ""
                 if original_language_raw:
-                    # Handle both string and list cases
                     if isinstance(original_language_raw, str):
-                        first_lang = original_language_raw.lower()
+                        first_lang = original_language_raw
                     elif isinstance(original_language_raw, list) and original_language_raw:
-                        first_lang = original_language_raw[0].lower() if isinstance(original_language_raw[0], str) else ""
+                        first_lang = original_language_raw[0] if isinstance(original_language_raw[0], str) else ""
 
-                try:
-                    # Clean up the language code - take only the first part before any dash or underscore
-                    clean_lang = first_lang.split('-')[0].split('_')[0].split(',')[0].split(' ')[0].strip().lower()
-                    if clean_lang:
-                        lang = langcodes.Language.get(clean_lang)
-                        language_display = lang.display_name().lower()
-                except (tag_parser.LanguageTagError, LookupError, AttributeError, ValueError) as e:
-                    if meta.get('debug'):
-                        console.print(f"[yellow]Debug: Unable to convert language code '{first_lang}' to full name: {e}[/yellow]")
+                if first_lang:
+                    first_lang = first_lang.strip()
+                    language_display = self._format_language_for_display(first_lang)
+                    original_language_expanded = self._expand_language_candidates(first_lang, alias_lookup)
+                    original_ok = bool(original_language_expanded.intersection(audio_languages_normalized))
 
-            if language_display:
-                original_ok = language_display in audio_languages
+                    if meta.get('debug') and not original_ok:
+                        console.print(
+                            f"[blue]Debug: Original language expanded candidates: "
+                            f"{', '.join(sorted(original_language_expanded)) or 'None'}[/blue]"
+                        )
 
             if original_required and not original_ok:
                 console.print(
@@ -1143,7 +1238,7 @@ class COMMON:
                     f"[yellow]Required original audio language:[/yellow] {language_display}\n"
                     f"[cyan]Found Audio Languages:[/cyan] {', '.join(audio_languages) or 'None'}"
                 )
-                return False
+                return not meta.get('unattended') and cli_ui.ask_yes_no("Do you want to upload anyway?", default=False)
 
             audio_ok = (
                 not check_audio

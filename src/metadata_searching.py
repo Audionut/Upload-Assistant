@@ -18,6 +18,22 @@ def _coerce_int(value: Any) -> Optional[int]:
         return None
 
 
+def _apply_tvdb_series_metadata(meta: dict[str, Any], episodes_data: Any, series_name: Any = None) -> None:
+    if meta.get('original_language') == 'en':
+        return
+
+    if series_name:
+        meta['tvdb_series_name'] = series_name
+    if isinstance(episodes_data, dict):
+        series_title = episodes_data.get('series_title')
+        if series_title and not meta.get('tvdb_series_name'):
+            meta['tvdb_series_name'] = series_title
+        series_year = episodes_data.get('series_year')
+        if isinstance(series_year, (str, int)) and re.fullmatch(r'19\d\d|20[0-3]\d', str(series_year)):
+            meta['tvdb_series_year'] = str(series_year)
+            meta['search_year'] = str(series_year)
+
+
 class MetadataSearchingManager:
     def __init__(self, config: dict[str, Any]) -> None:
         self.tvdb_handler = tvdb_data(config)
@@ -206,8 +222,7 @@ async def all_ids(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: TmdbMan
                 episodes_data, series_name = None, None
             if episodes_data is not None:
                 meta['tvdb_episode_data'] = episodes_data
-                if series_name:
-                    meta['tvdb_series_name'] = series_name
+                _apply_tvdb_series_metadata(meta, episodes_data, series_name)
                 meta['we_checked_tvdb'] = True
             else:
                 console.print(f"[yellow]Unexpected TVDb data format: {tvdb_episode_data!r}[/yellow]")
@@ -377,8 +392,7 @@ async def imdb_tmdb_tvdb(meta: dict[str, Any], filename: str, tvdb_handler: Any,
                         episodes_data, series_name = tvdb_episode_tuple
                 if episodes_data is not None:
                     meta['tvdb_episode_data'] = episodes_data
-                    if series_name:
-                        meta['tvdb_series_name'] = series_name
+                    _apply_tvdb_series_metadata(meta, episodes_data, series_name)
                     meta['we_checked_tvdb'] = True
                 else:
                     console.print(f"[yellow]Unexpected TVDb data format: {tvdb_episode_data!r}[/yellow]")
@@ -488,8 +502,7 @@ async def imdb_tvdb(meta: dict[str, Any], filename: str, tvdb_handler: Any, tmdb
                     episodes_data, series_name = tvdb_episode_tuple
             if episodes_data is not None:
                 meta['tvdb_episode_data'] = episodes_data
-                if series_name:
-                    meta['tvdb_series_name'] = series_name
+                _apply_tvdb_series_metadata(meta, episodes_data, series_name)
                 meta['we_checked_tvdb'] = True
             else:
                 console.print(f"[yellow]Unexpected TVDb data format: {tvdb_episode_data!r}[/yellow]")
@@ -778,16 +791,7 @@ async def get_tv_data(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: Tmd
             )
             if tvdb_episode_data:
                 meta['tvdb_episode_data'] = tvdb_episode_data
-            if tvdb_name:
-                meta['tvdb_series_name'] = tvdb_name
-
-        tvdb_series_name = meta.get('tvdb_series_name')
-        if isinstance(tvdb_series_name, str):
-            year_match = re.search(r'\b(19\d\d|20[0-3]\d)\b', tvdb_series_name)
-            if year_match:
-                meta['search_year'] = year_match.group(0)
-            else:
-                meta['search_year'] = ""
+            _apply_tvdb_series_metadata(meta, tvdb_episode_data, tvdb_name)
 
         if meta.get('tvdb_episode_data', None) and meta.get('tvdb_id', 0):
             try:
@@ -899,15 +903,7 @@ async def get_tv_data(meta: dict[str, Any], tvdb_handler: Any, tmdb_manager: Tmd
             )
             if tvdb_episode_data:
                 meta['tvdb_episode_data'] = tvdb_episode_data
-            if tvdb_name:
-                meta['tvdb_series_name'] = tvdb_name
-        tvdb_series_name = meta.get('tvdb_series_name')
-        if isinstance(tvdb_series_name, str):
-            year_match = re.search(r'\b(19\d\d|20[0-3]\d)\b', tvdb_series_name)
-            if year_match:
-                meta['search_year'] = year_match.group(0)
-            else:
-                meta['search_year'] = ""
+            _apply_tvdb_series_metadata(meta, tvdb_episode_data, tvdb_name)
 
         if meta.get('tvdb_episode_data', None) and meta.get('tvdb_id', 0):
             try:
@@ -1015,16 +1011,15 @@ async def get_tvdb_tvmaze_tmdb_episode_data(meta: dict[str, Any], tvdb_handler: 
                     tvdb_episode_data, tvdb_name = tvdb_tuple
             if tvdb_episode_data is not None:
                 meta['tvdb_episode_data'] = tvdb_episode_data
+                _apply_tvdb_series_metadata(meta, tvdb_episode_data, tvdb_name)
                 meta['we_checked_tvdb'] = True
                 if meta['debug'] and isinstance(tvdb_episode_data, list):
                     tvdb_episode_list = cast(list[Any], tvdb_episode_data)
                     console.print(f"[green]TVDb episodes list retrieved with {len(tvdb_episode_list)} episodes[/green]")
             else:
                 console.print(f"[yellow]Unexpected TVDb episodes result format: {tvdb_episodes_result}[/yellow]")
-            if tvdb_name:
-                meta['tvdb_series_name'] = tvdb_name
-                if meta['debug']:
-                    console.print(f"[green]TVDb series name: {tvdb_name}[/green]")
+            if tvdb_name and meta['debug']:
+                console.print(f"[green]TVDb series name: {tvdb_name}[/green]")
         elif isinstance(tvdb_episodes_result, Exception):
             console.print(f"[yellow]TVDb episode data retrieval failed: {tvdb_episodes_result}[/yellow]")
 
@@ -1040,5 +1035,3 @@ async def get_tvdb_tvmaze_tmdb_episode_data(meta: dict[str, Any], tvdb_handler: 
             console.print(f"[yellow]TMDb episode data retrieval failed: {tmdb_episode_data}[/yellow]")
 
     return meta
-
-

@@ -2,6 +2,7 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
 import asyncio
 import contextlib
+import filecmp
 import gc
 import json
 import os
@@ -107,12 +108,18 @@ _defaults_data_dir = os.path.join(base_dir, "defaults", "data")
 # Directories that should never be copied into user-facing data/
 _SKIP_DIRS = {"__pycache__", ".mypy_cache", ".ruff_cache"}
 
+# Built-in metadata files that should track the image version even when
+# /Upload-Assistant/data is a persistent volume from an older container.
+_ALWAYS_SYNC_ROOT_FILES = {"version.py"}
+
 if os.path.isdir(_defaults_data_dir):
     os.makedirs(_data_dir, exist_ok=True)
     _restored_count = 0
+    _synced_count = 0
     _restore_errors: list[str] = []
     # Walk the defaults tree and copy anything missing in the live data dir.
     # Never overwrite user files (config.py, cookies/, tags.json, etc.).
+    # Root version.py is image metadata, not user config, so keep it current.
     for dirpath, dirnames, filenames in os.walk(_defaults_data_dir):
         # Prune unwanted directories in-place so os.walk skips them entirely
         dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
@@ -129,15 +136,26 @@ if os.path.isdir(_defaults_data_dir):
             if fname.endswith((".pyc", ".pyo")):
                 continue
             target_file = os.path.join(target_dir, fname)
-            if not os.path.exists(target_file):
-                src_file = os.path.join(dirpath, fname)
+            src_file = os.path.join(dirpath, fname)
+            should_sync = False
+            if rel_dir == "." and fname in _ALWAYS_SYNC_ROOT_FILES and os.path.exists(target_file):
+                try:
+                    should_sync = not filecmp.cmp(src_file, target_file, shallow=False)
+                except OSError:
+                    should_sync = True
+            if not os.path.exists(target_file) or should_sync:
                 try:
                     shutil.copy2(src_file, target_file)
-                    _restored_count += 1
+                    if should_sync:
+                        _synced_count += 1
+                    else:
+                        _restored_count += 1
                 except OSError as exc:
                     _restore_errors.append(f"{os.path.join(rel_dir, fname)}: {exc}")
     if _restored_count:
         console.print(f"Restored {_restored_count} built-in file(s) into data/ from defaults.", markup=False)
+    if _synced_count:
+        console.print(f"Synced {_synced_count} built-in metadata file(s) into data/ from defaults.", markup=False)
     if _restore_errors:
         console.print(f"[red]Warning: failed to restore {len(_restore_errors)} file(s) into data/:[/red]")
         for _err in _restore_errors[:5]:
@@ -1291,7 +1309,9 @@ async def do_the_thing(base_dir: str) -> None:
     # Clients, managers, etc.) pointing at the same dict object.
     try:
         import importlib
+
         import data.config as _cfg_mod  # may already be cached
+
         importlib.reload(_cfg_mod)
         _reloaded = _cfg_mod.config  # may raise AttributeError
         if not isinstance(_reloaded, dict):

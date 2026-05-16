@@ -85,7 +85,6 @@ class SHRI(UNIT3D):
         - REMUX detection from filename markers (VU/UNTOUCHED)
         - Italian title substitution from IMDb AKAs
         - Multi-language audio tags (ITA - ENG format using ISO 639-3 codes)
-        - Italian subtitle [SUBS] tag when no Italian audio present
         - Release group tag cleaning and validation
         - DISC region injection
         """
@@ -215,10 +214,6 @@ class SHRI(UNIT3D):
         # Ensure name is always a string
         if not name:
             name = str(meta.get("name", "UNKNOWN"))
-
-        # Add [SUBS] for Italian subtitles without Italian audio
-        if not self._has_italian_audio(meta) and self._has_italian_subtitles(meta):
-            name = f"{name} [SUBS]"
 
         # Cleanup whitespace
         name = self.WHITESPACE_PATTERN.sub(" ", name).strip()
@@ -583,30 +578,6 @@ class SHRI(UNIT3D):
                     language_match = title
 
         return country_match or language_match
-
-    def _has_italian_audio(self, meta: dict[str, Any]) -> bool:
-        """Check for Italian audio tracks, excluding commentary"""
-        if "mediainfo" not in meta:
-            return False
-
-        tracks = meta["mediainfo"].get("media", {}).get("track", [])
-        return any(
-            track.get("@type") == "Audio"
-            and self._get_language_code(track) in {"it"}
-            and "commentary" not in str(track.get("Title", "")).lower()
-            for track in tracks[2:]
-        )
-
-    def _has_italian_subtitles(self, meta: dict[str, Any]) -> bool:
-        """Check for Italian subtitle tracks"""
-        if "mediainfo" not in meta:
-            return False
-
-        tracks = meta["mediainfo"].get("media", {}).get("track", [])
-        return any(
-            track.get("@type") == "Text" and self._get_language_code(track) in {"it"}
-            for track in tracks
-        )
 
     def _get_language_name(self, iso_code: str) -> str:
         """Convert ISO language code to abbreviated 3-letter code (ITA, ENG, etc)"""
@@ -1089,7 +1060,7 @@ class SHRI(UNIT3D):
                 tonemapped_text = self._strip_bbcode(tonemapped_header)
 
         if release_group.lower() == "island":
-            base_notes = "Questa è una release interna pubblicata in esclusiva su Shareisland.\nSi prega di non ricaricare questa release su tracker pubblici o privati. Si prega di mantenerla in seed il più a lungo possibile. Grazie!"
+            base_notes = "Release Shareisland 🏴‍☠️\nFalla girare, condividila e contribuisci a mantenerla viva restando in seed il più possibile.\nGrazie per il supporto!"
             if tonemapped_text:
                 release_notes_section = f"""[size=13][b][color=#e8024b]--- RELEASE NOTES ---[/color][/b][/size]
 [size=11][color=#FFFFFF]{base_notes}

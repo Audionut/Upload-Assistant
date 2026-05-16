@@ -15,6 +15,8 @@ from tvdb_v4_official import TVDB
 
 from src.console import console
 
+YEAR_PATTERN = re.compile(r'\((19\d\d|20[0-3]\d)\)')
+
 
 def _get_tvdb_k() -> str:
     k = (
@@ -50,47 +52,86 @@ def _as_dict_list(value: Any) -> list[dict[str, Any]]:
     return []
 
 
-def _extract_year_from_slug(slug: Any) -> Optional[str]:
-    if not isinstance(slug, str) or not slug:
-        return None
-
-    match = re.search(r'(19|20)\d{2}(?!\d)', slug)
-    if not match:
-        return None
-    return match.group(0)
+def _english_alias_names(aliases: list[dict[str, Any]]) -> list[str]:
+    return [
+        str(alias.get('name', '')).strip() for alias in aliases
+        if alias.get('language') == 'eng' and str(alias.get('name', '')).strip()
+    ]
 
 
-def _pick_specific_eng_alias(
+def _pick_eng_alias(
     aliases: list[dict[str, Any]],
-    slug: Any = None,
     debug: bool = False,
 ) -> Optional[str]:
     if not aliases:
         return None
 
-    year_pattern = re.compile(r'\((\d{4})\)')
-    eng_aliases = [
-        str(alias.get('name', '')) for alias in aliases
-        if alias.get('language') == 'eng' and str(alias.get('name', '')).strip()
-    ]
+    eng_aliases = _english_alias_names(aliases)
     if not eng_aliases:
         return None
 
-    eng_aliases_with_year = [name for name in eng_aliases if year_pattern.search(name)]
-    if eng_aliases_with_year:
-        specific_alias = eng_aliases_with_year[-1]
-        if debug:
-            console.print(f"[blue]English alias with year: {specific_alias}[/blue]")
-        return specific_alias
+    eng_alias = eng_aliases[-1]
+    if debug:
+        console.print(f"[blue]English alias: {eng_alias}[/blue]")
+    return eng_alias
 
-    slug_year = _extract_year_from_slug(slug)
-    if slug_year:
-        specific_alias = f"{eng_aliases[-1]} ({slug_year})"
-        if debug:
-            console.print(f"[blue]English alias with slug year fallback: {specific_alias}[/blue]")
-        return specific_alias
 
-    return None
+def _extract_year_from_text(value: Any) -> Optional[str]:
+    if not isinstance(value, (str, int)):
+        return None
+
+    match = re.search(r'(19\d\d|20[0-3]\d)', str(value))
+    return match.group(1) if match else None
+
+
+def _best_effort_series_year(series_info: Optional[dict[str, Any]]) -> Optional[str]:
+    if not series_info:
+        return None
+
+    return _extract_year_from_text(series_info.get('year')) or _extract_year_from_text(series_info.get('slug'))
+
+
+def _series_translation_metadata(
+    client: Any,
+    series_id: int,
+    aliases: list[dict[str, Any]],
+    _series_info: Optional[dict[str, Any]] = None,
+    debug: bool = False,
+) -> dict[str, Optional[str]]:
+    translation_name: Optional[str] = None
+    translation_aliases: list[str] = []
+
+    try:
+        translation = cast(dict[str, Any], client.get_series_translation(series_id, 'eng'))
+        name = translation.get('name')
+        if isinstance(name, str) and name.strip():
+            translation_name = name.strip()
+        aliases_value = translation.get('aliases')
+        if isinstance(aliases_value, list):
+            translation_aliases = [str(alias).strip() for alias in aliases_value if str(alias).strip()]
+    except Exception as translation_error:
+        if debug:
+            console.print(f"[yellow]Could not retrieve TVDB English series translation: {translation_error}[/yellow]")
+
+    extended_eng_aliases = _english_alias_names(aliases)
+    english_aliases = translation_aliases + extended_eng_aliases
+    fallback_title = translation_aliases[-1] if translation_aliases else _pick_eng_alias(aliases, debug=debug)
+    title = translation_name or fallback_title
+    year = None
+    for alias in english_aliases:
+        year = _extract_year_from_text(alias)
+        if year:
+            break
+    if not english_aliases:
+        year = _best_effort_series_year(_series_info)
+
+    if debug and title:
+        console.print(f"[blue]TVDB English series title: {title}" + (f" ({year})" if year else "") + "[/blue]")
+
+    return {
+        'series_title': title,
+        'series_year': year,
+    }
 
 
 try:
@@ -284,14 +325,29 @@ class tvdb_data:
                                 'episodes': cached_episodes,
                                 'aliases': cached_dict.get('aliases', []) if isinstance(cached_dict.get('aliases', []), list) else [],
                                 'slug': cached_dict.get('slug') if isinstance(cached_dict.get('slug'), str) else None,
+                                'series_title': cached_dict.get('series_title') if isinstance(cached_dict.get('series_title'), str) else None,
+                                'series_year': cached_dict.get('series_year') if isinstance(cached_dict.get('series_year'), str) else None,
                             }
 
-                            aliases_list = _as_dict_list(episodes_data.get('aliases'))
-                            specific_alias = _pick_specific_eng_alias(
-                                aliases_list,
-                                slug=episodes_data.get('slug'),
-                                debug=debug,
-                            )
+                            if not episodes_data.get('series_title') and not episodes_data.get('series_year'):
+                                client = _get_tvdb_or_warn()
+                                if client is not None:
+                                    try:
+                                        series_info = cast(dict[str, Any], cast(Any, client).get_series_extended(series_id_int))
+                                        aliases_list = _as_dict_list(series_info.get('aliases', episodes_data.get('aliases')))
+                                        series_metadata = _series_translation_metadata(
+                                            client,
+                                            series_id_int,
+                                            aliases_list,
+                                            _series_info=series_info,
+                                            debug=debug,
+                                        )
+                                        episodes_data.update(series_metadata)
+                                    except Exception as series_error:
+                                        if debug:
+                                            console.print(f"[yellow]Could not refresh cached TVDB series metadata: {series_error}[/yellow]")
+
+                            specific_alias = episodes_data.get('series_title') if isinstance(episodes_data.get('series_title'), str) else None
                             if original_language and original_language == 'en':
                                 specific_alias = None
 
@@ -373,6 +429,8 @@ class tvdb_data:
                 'episodes': all_episodes,
                 'aliases': [],  # Will be populated if available from first response
                 'slug': series_slug,
+                'series_title': None,
+                'series_year': None,
             }
 
             # Try to get aliases from series info (may need separate call)
@@ -382,6 +440,14 @@ class tvdb_data:
                     series_info = cast(dict[str, Any], cast(Any, client).get_series_extended(series_id_int))
                     if 'aliases' in series_info:
                         episodes_data['aliases'] = series_info['aliases']
+                    aliases_list = _as_dict_list(episodes_data['aliases'])
+                    episodes_data.update(_series_translation_metadata(
+                        client,
+                        series_id_int,
+                        aliases_list,
+                        _series_info=series_info,
+                        debug=debug,
+                    ))
             except Exception as alias_error:
                 if debug:
                     console.print(f"[yellow]Could not retrieve series aliases: {alias_error}[/yellow]")
@@ -409,17 +475,9 @@ class tvdb_data:
                     if debug:
                         console.print(f"[yellow]Failed to write TVDB cache for {series_id}: {cache_write_error}[/yellow]")
 
-            # Extract specific English alias only if it contains a year (e.g., "Cats eye (2025)")
-            specific_alias = None
-            if 'aliases' in episodes_data and episodes_data['aliases']:
-                aliases_list = _as_dict_list(episodes_data['aliases'])
-                specific_alias = _pick_specific_eng_alias(
-                    aliases_list,
-                    slug=episodes_data.get('slug'),
-                    debug=debug,
-                )
-                if original_language and original_language == 'en':
-                    specific_alias = None
+            specific_alias = episodes_data.get('series_title') if isinstance(episodes_data.get('series_title'), str) else None
+            if original_language and original_language == 'en':
+                specific_alias = None
 
             return episodes_data, specific_alias
 
@@ -437,6 +495,27 @@ class tvdb_data:
         client = _get_tvdb_or_warn()
         if client is None:
             return None, None
+
+        def _translated_series_name(series_id_value: Any, fallback: Any) -> Optional[str]:
+            series_id_int = _coerce_int(series_id_value)
+            fallback_name = str(fallback).strip() if fallback else None
+            if series_id_int is None:
+                return fallback_name
+            try:
+                series_info = cast(dict[str, Any], cast(Any, client).get_series_extended(series_id_int))
+                aliases = _as_dict_list(series_info.get('aliases', []))
+                series_metadata = _series_translation_metadata(
+                    client,
+                    series_id_int,
+                    aliases,
+                    _series_info=series_info,
+                    debug=debug,
+                )
+                return series_metadata.get('series_title') or fallback_name
+            except Exception as series_error:
+                if debug:
+                    console.print(f"[yellow]Could not retrieve translated TVDB series name: {series_error}[/yellow]")
+                return fallback_name
 
         # Try IMDB first if available
         if imdb:
@@ -464,7 +543,7 @@ class tvdb_data:
                     for result in results:
                         if 'series' in result and isinstance(result.get('series'), dict):
                             series_id = result['series']['id']
-                            series_name = result['series'].get('name')
+                            series_name = _translated_series_name(series_id, result['series'].get('name'))
                             if debug:
                                 console.print(f"[blue]TVDB series ID from IMDB: {series_id}[/blue]")
                             return _coerce_int(series_id), series_name
@@ -475,7 +554,7 @@ class tvdb_data:
                         for result in results:
                             if 'episode' in result and isinstance(result.get('episode'), dict) and result['episode'].get('seriesId'):
                                 series_id = result['episode']['seriesId']
-                                series_name = result['episode'].get('seriesName')
+                                series_name = _translated_series_name(series_id, result['episode'].get('seriesName'))
                                 if debug:
                                     console.print(f"[blue]TVDB series ID from episode entry (tv_movie): {series_id}[/blue]")
                                 return _coerce_int(series_id), series_name
@@ -517,7 +596,7 @@ class tvdb_data:
                     for result in results:
                         if 'series' in result and isinstance(result.get('series'), dict):
                             series_id = result['series']['id']
-                            series_name = result['series'].get('name')
+                            series_name = _translated_series_name(series_id, result['series'].get('name'))
                             if debug:
                                 console.print(f"[blue]TVDB series ID from TMDB: {series_id}[/blue]")
                             return _coerce_int(series_id), series_name
@@ -528,7 +607,7 @@ class tvdb_data:
                         for result in results:
                             if 'episode' in result and isinstance(result.get('episode'), dict) and result['episode'].get('seriesId'):
                                 series_id = result['episode']['seriesId']
-                                series_name = result['episode'].get('seriesName')
+                                series_name = _translated_series_name(series_id, result['episode'].get('seriesName'))
                                 if debug:
                                     console.print(f"[blue]TVDB series ID from episode entry (tv_movie): {series_id}[/blue]")
                                 return _coerce_int(series_id), series_name

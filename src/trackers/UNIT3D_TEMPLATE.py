@@ -1,5 +1,4 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# import discord
 from typing import Any, Optional
 
 from src.trackers.COMMON import COMMON
@@ -97,7 +96,7 @@ class UNIT3D_TEMPLATE(UNIT3D):  # EDIT 'UNIT3D_TEMPLATE' AS ABBREVIATED TRACKER 
     # If no additional data is required, remove this function
     async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
         data = {
-            'modq': await self.get_flag(meta, 'modq'),
+            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
         }
 
         return data

@@ -140,3 +140,10 @@ class SP(UNIT3D):
                 return False
 
         return should_continue
+
+    async def get_additional_data(self, meta: Meta) -> dict[str, Any]:
+        data = {
+            'mod_queue_opt_in': await self.get_flag(meta, 'modq'),
+        }
+
+        return data

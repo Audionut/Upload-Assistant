@@ -26,6 +26,7 @@ class NBL:
 
     def __init__(self, config: Config) -> None:
         self.config: Config = config
+        self.common = COMMON(config)
         self.tracker = 'NBL'
         self.source_flag = 'NBL'
         self.upload_url = 'https://nebulance.io/api.php'
@@ -50,8 +51,7 @@ class NBL:
         return
 
     async def upload(self, meta: Meta, _disctype: str) -> bool:
-        common = COMMON(config=self.config)
-        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+        await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
         if meta['bdinfo'] is not None:
             async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8') as f:
@@ -101,7 +101,7 @@ class NBL:
                 console.print("[cyan]NBL Request Data:")
                 console.print(data)
                 meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
-                await common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
+                await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True  # Debug mode - simulated success
         except Exception as e:
             meta['tracker_status'][self.tracker]['status_message'] = f"data error: Upload failed: {e}"
@@ -125,6 +125,11 @@ class NBL:
                     console.print("[red]Only TV Is allowed at NBL")
                 meta['skipping'] = "NBL"
                 return []
+
+        if meta['is_disc'] != "BDMV" and not await self.common.check_language_requirements(
+            meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True, original_language=True
+        ):
+            return False
 
         if meta['valid_mi'] is False:
             console.print(f"[bold red]No unique ID in mediainfo, skipping {self.tracker} upload.")

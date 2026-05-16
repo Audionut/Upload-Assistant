@@ -252,6 +252,8 @@ class RtorrentClientMixin:
         if meta.get('debug', False):
             console.print(f"rtorrent: {Redaction.redact_private_info(str(rtorrent))}", markup=False)
             console.print(f"metainfo: {Redaction.redact_private_info(str(metainfo))}", markup=False)
+
+        original_meta_bytes = _bencode_bencode(metainfo)
         try:
             # Use dst path if linking was successful, otherwise use original path
             resume_path = dst if (use_symlink or use_hardlink) and os.path.exists(dst) else path
@@ -263,7 +265,6 @@ class RtorrentClientMixin:
             raise
 
         fr_file = torrent_path
-        original_meta_bytes = _bencode_bencode(metainfo)
         new_meta = _bencode_bencode(fast_resume)
         if new_meta != original_meta_bytes:
             fr_file = torrent_path.replace('.torrent', '-resume.torrent')

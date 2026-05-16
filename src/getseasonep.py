@@ -417,7 +417,7 @@ class SeasonEpisodeManager:
         episode_only_pattern = r'\b[Ee](\d{1,3})(?:[Ee](\d{1,3}))?\b'
 
         # Pattern for anime: " - 43 (1080p)" or "43 (1080p)" or similar
-        anime_pattern = r'(?:\s-\s)?(\d{1,3})\s*\((?:\d+p|480p|480i|576i|576p|720p|1080i|1080p|2160p)\)'
+        anime_pattern = r'(?:\s-\s)?(\d{1,4})(?:v\d+)?\s*\((?:\d+[pi])\)'
 
         # Normalize season_int once so all (season, episode) tuples are (int, int)
         raw_season_int = meta.get('season_int', 1)

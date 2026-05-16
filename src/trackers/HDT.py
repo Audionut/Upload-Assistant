@@ -227,7 +227,7 @@ class HDT:
 
     async def search_existing(self, meta: Meta, _disctype: str) -> list[dict[str, Optional[str]]]:
         if str(meta.get('resolution', '')) not in ['2160p', '1080p', '1080i', '720p']:
-            console.print('[bold red]Resolution must be at least 720p resolution for HDT.')
+            console.print(f"{self.tracker}: The resolution must be at least 720p, skipping the upload...")
             meta['skipping'] = f'{self.tracker}'
             return []
 

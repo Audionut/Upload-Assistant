@@ -202,10 +202,10 @@ class OE(UNIT3D):
             type = "ENCODE"
 
         type_id = {
-            'DISC': '19',
-            'REMUX': '20',
-            'WEBDL': '21',
-        }.get(type, '0')
+            "DISC": "19",
+            "REMUX": "20",
+            "WEBDL": "21",
+        }.get(type, "16")
         if type == "WEBRIP":
             if video_codec == "HEVC":
                 # x265 Encode
