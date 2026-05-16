@@ -58,8 +58,7 @@ Many thanks to all who have contributed.
 |CapybaraBR|CBR|CinemaZ|CZ|
 |Cinematik|TIK|DarkPeers|DP|
 |DigitalCore|DC|DesiTorrents|DT|
-|Emuwarez|EMUW|
-|FearNoPeer|FNP|FileList|FL|
+|Emuwarez|EMUW|FileList|FL|
 |Friki|FRIKI|FunFile|FF|
 |GreatPosterWall|GPW|hawke-uno|HUNO|
 |HDBits|HDB|HD-Space|HDS|
