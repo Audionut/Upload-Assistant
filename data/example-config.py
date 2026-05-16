@@ -350,7 +350,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: A4K, ACM, AITHER, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, DT, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, IHD, IS, ITT, LCD, LDU, LST, LT, LUME, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TLZ, TOS, TTG, TTR, TVC, ULCX, UTP, YOINK, YUS
+        # Available tracker: A4K, ACM, AITHER, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, CZT, DC, DP, DT, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, IHD, IS, ITT, LCD, LDU, LST, LT, LUME, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TLZ, TOS, TTG, TTR, TVC, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -488,6 +488,24 @@ config = {
             # If True, the script performs a basic rules compliance check (e.g., codecs, region).
             # This does not cover all tracker rules. Set to False to disable.
             "check_for_rules": True,
+        },
+        "CZT": {
+            # CZTeam (czteam.me) — Romanian private tracker, BTSource lineage.
+            # Auth is session-cookie based: provide username + password and the
+            # plugin will log in via /takelogin.php (CSRF token is fetched
+            # automatically) and persist the session in data/cookies/CZT.json.
+            "link_dir_name": "",
+            "username": "",
+            "password": "",
+            # Leave totp empty unless your account has 2FA enabled.
+            "totp": "",
+            # CZTeam whitelists ONLY the bare announce URL on takeupload.php —
+            # the user's passkey gets injected by download.php when they pull
+            # the .torrent back, so DON'T put your passkey here.
+            "announce_url": "https://tracker.czteam.me/announce",
+            "anon": False,
+            # Override only if you proxy the site via a different hostname.
+            "base_url": "https://czteam.me",
         },
         "DC": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
