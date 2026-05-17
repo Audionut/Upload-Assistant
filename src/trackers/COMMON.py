@@ -141,7 +141,8 @@ class COMMON:
         tracker: str,
         source_flag: str,
         torrent_filename: str = "BASE",
-        announce_url: str = "",
+        announce_url: str | list[str] = "",
+        is_private: bool = True,
     ) -> None:
         path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{torrent_filename}.torrent"
         if await self.path_exists(path):
@@ -151,10 +152,31 @@ class COMMON:
                 if each not in ('announce', 'comment', 'creation date', 'created by', 'encoding', 'info'):
                     new_torrent.metainfo.pop(each, None)  # type: ignore
             if announce_url:
-                new_torrent.metainfo['announce'] = announce_url
+                if isinstance(announce_url, list):
+                    cleaned = [str(url).strip() for url in announce_url if str(url).strip()]
+                    if not cleaned:
+                        raise ValueError(f"No announce URL found for tracker {tracker}. Please check your config.")
+                    new_torrent.metainfo['announce'] = cleaned[0]
+                    new_torrent.metainfo['announce-list'] = [[url] for url in cleaned]
+                else:
+                    stripped_url = str(announce_url).strip()
+                    if not stripped_url:
+                        raise ValueError(f"No announce URL found for tracker {tracker}. Please check your config.")
+                    new_torrent.metainfo['announce'] = stripped_url
+                    new_torrent.metainfo['announce-list'] = [[stripped_url]]
             else:
                 raw_announce = self.config['TRACKERS'][tracker].get('announce_url')
-                new_torrent.metainfo['announce'] = str(raw_announce).strip() if raw_announce else "https://fake.tracker"
+                if isinstance(raw_announce, list):
+                    cleaned = [str(url).strip() for url in raw_announce if str(url).strip()]
+                    if not cleaned:
+                        raise ValueError(f"No announce URL found for tracker {tracker}. Please check your config.")
+                    new_torrent.metainfo['announce'] = cleaned[0]
+                    new_torrent.metainfo['announce-list'] = [[url] for url in cleaned]
+                elif raw_announce:
+                    new_torrent.metainfo['announce'] = str(raw_announce).strip()
+                else:
+                    raise ValueError(f"No announce URL found for tracker {tracker}. Please check your config.")
+            new_torrent.metainfo['info']['private'] = 1 if is_private else 0
             new_torrent.metainfo['info']['source'] = source_flag
             if 'created by' in new_torrent.metainfo:
                 created_by = str(new_torrent.metainfo['created by'])
