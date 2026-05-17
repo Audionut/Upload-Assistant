@@ -387,15 +387,15 @@ class FL:
             desc = desc.replace('[img]', '[img]').replace('[/img]', '[/img]')
             desc = re.sub(r"(\[img=\d+)]", "[img]", desc, flags=re.IGNORECASE)
             if meta['is_disc'] != 'BDMV':
-                url = "https://up.img4k.net/api/description"
+                url = "https://up.img4k.net"
                 mediainfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
                 async with aiofiles.open(mediainfo_path, encoding='utf-8') as mi_file:
                     data = {
                         'mediainfo': await mi_file.read(),
                     }
-                if int(meta['imdb_id']) != 0:
-                    data['imdbURL'] = f"tt{meta['imdb_id']}"
-                screen_glob = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['filename']}-*.png"))]
+                if meta.get('imdb_id') != 0:
+                    data['imdb_url'] = str(meta.get('imdb_info', {}).get('imdb_url', '')) + '/'
+                screen_glob = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", "*.png"))]
                 files: list[tuple[str, tuple[str, bytes, str]]] = []
                 for screen in screen_glob:
                     screen_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{screen}"
@@ -404,7 +404,10 @@ class FL:
                     files.append(('images', (os.path.basename(screen), image_bytes, 'image/png')))
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     response = await client.post(url, data=data, files=files, auth=(self.fltools['user'], self.fltools['pass']))
-                final_desc = response.text.replace('\r\n', '\n')
+                soup = BeautifulSoup(response.text, 'html.parser')
+                pre_tag = soup.find('pre', {'id': 'description-text'})
+                final_desc = pre_tag.get_text() if pre_tag else response.text
+                final_desc = final_desc.replace('\r\n', '\n')
             else:
                 # BD Description Generator
                 bd_summary_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_EXT.txt"
@@ -415,8 +418,8 @@ class FL:
                     final_desc = final_desc.replace('DISC INFO:', '[pre][quote=BD_Info][b][color=#FF0000]DISC INFO:[/color][/b]').replace('PLAYLIST REPORT:', '[b][color=#FF0000]PLAYLIST REPORT:[/color][/b]').replace('VIDEO:', '[b][color=#FF0000]VIDEO:[/color][/b]').replace('AUDIO:', '[b][color=#FF0000]AUDIO:[/color][/b]').replace('SUBTITLES:', '[b][color=#FF0000]SUBTITLES:[/color][/b]')
                     final_desc += "[/pre][/quote]\n"  # Closed bbcode tags
                     # Upload screens and append to the end of the description
-                    url = "https://up.img4k.net/api/description"
-                    screen_glob = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", f"{meta['filename']}-*.png"))]
+                    url = "https://bd.img4k.net/"
+                    screen_glob = [os.path.basename(f) for f in glob.glob(os.path.join(f"{meta['base_dir']}/tmp/{meta['uuid']}", "*.png"))]
                     files: list[tuple[str, tuple[str, bytes, str]]] = []
                     for screen in screen_glob:
                         screen_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/{screen}"
@@ -425,7 +428,10 @@ class FL:
                         files.append(('images', (os.path.basename(screen), image_bytes, 'image/png')))
                     async with httpx.AsyncClient(timeout=30.0) as client:
                         response = await client.post(url, files=files, auth=(self.fltools['user'], self.fltools['pass']))
-                    final_desc += response.text.replace('\r\n', '\n')
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    pre_tag = soup.find('pre', {'id': 'description-text'})
+                    final_desc = pre_tag.get_text() if pre_tag else response.text
+                    final_desc = final_desc.replace('\r\n', '\n')
             await descfile.write(final_desc)
 
             if self.signature is not None:
