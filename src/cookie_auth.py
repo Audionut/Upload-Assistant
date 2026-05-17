@@ -482,6 +482,7 @@ class CookieAuthUploader:
         success_status_code: str = "",
         error_text: str = "",
         success_text: str = "",
+        success_list: Optional[list[str]] = None,
         additional_files: Optional[dict[str, Any]] = None,
         hash_is_id: bool = False,
     ) -> bool:
@@ -501,14 +502,14 @@ class CookieAuthUploader:
         A failed upload will save the response HTML for analysis and also create a torrent entry with the announce URL,
         as the upload may have partially succeeded.
         """
-        values = [success_status_code, error_text, success_text]
+        values = [success_status_code, error_text, success_text, success_list]
         count = sum(bool(v) for v in values)
 
         if count == 0 or count > 1:
             if count == 0:
-                error = "You must provide at least one of: success_status_code, error_text, or success_text."
+                error = "You must provide at least one of: success_status_code, error_text, success_text, or success_list."
             else:
-                error = "Only one of success_status_code, error_text, or success_text should be provided."
+                error = "Only one of success_status_code, error_text, success_text, or success_list should be provided."
             meta["tracker_status"][tracker]["status_message"] = error
             return False
 
@@ -541,7 +542,7 @@ class CookieAuthUploader:
                 async with httpx.AsyncClient(headers=headers, timeout=30.0, cookies=upload_cookies, follow_redirects=True) as session:
                     response = await session.post(upload_url, data=data, files=files)
 
-                    if success_text and success_text in response.text:
+                    if success_text and success_text in response.text or success_list and any(item in response.text for item in success_list):
                         success = True
 
                     elif success_status_code:
@@ -577,6 +578,7 @@ class CookieAuthUploader:
                             success_text,
                             error_text,
                             response,
+                            success_list,
                         )
                         return False
 
@@ -698,10 +700,13 @@ class CookieAuthUploader:
         success_text: str,
         error_text: str,
         response: httpx.Response,
+        success_list: Optional[list[str]] = None,
     ) -> bool:
         message = ["data error: The upload appears to have failed. It may have uploaded, go check."]
         if success_text:
             message.append(f"Could not find the success text '{success_text}' in the response.")
+        elif success_list:
+            message.append(f"Could not find any of the success strings in {success_list} in the response.")
         elif error_text:
             message.append(f"Found the error text '{error_text}' in the response.")
         elif success_status_code:
