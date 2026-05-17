@@ -333,7 +333,7 @@ class IS:
             upload_cookies=self.session.cookies,
             upload_url="https://immortalseed.me/upload.php",
             additional_files=files,
-            success_text="Download Torrent (SSL)",
+            success_list=["Download Torrent (SSL)", "Thank you for uploading"],
         )
 
         return is_uploaded
