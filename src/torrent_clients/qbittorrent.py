@@ -1254,9 +1254,13 @@ class QbittorrentClientMixin:
                 'yus': {"url": "https://yu-scene.net", "pattern": r'/(\d+)$'},
                 'dp': {"url": "https://darkpeers.org", "pattern": r'/(\d+)$'},
                 'sp': {"url": "https://seedpool.org", "pattern": r'/(\d+)$'},
+                'lume': {"url": "https://luminarr.me", "pattern": r'/(\d+)$'},
+                'hhd': {"url": "https://homiehelpdesk.net", "pattern": r'/(\d+)$'},
+                'rmc': {"url": "https://retro-movies.club", "pattern": r'/(\d+)$'},
+                'ras': {"url": "https://rastastugan.org/", "pattern": r'/torrent/(\w+)$'},
             }
 
-            tracker_priority = ['aither', 'ulcx', 'lst', 'blu', 'oe', 'btn', 'bhd', 'huno', 'hdb', 'rf', 'otw', 'yus', 'dp', 'sp', 'ptp']
+            tracker_priority = ['aither', 'ulcx', 'lst', 'blu', 'oe', 'btn', 'bhd', 'huno', 'hdb', 'rf', 'otw', 'yus', 'dp', 'sp', 'ras', 'lume', 'hhd', 'rmc', 'ptp']
 
             if proxy_url:
                 try:

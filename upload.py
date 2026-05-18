@@ -31,6 +31,22 @@ from cogs.redaction import Redaction
 from discordbot import DiscordNotifier
 from src.add_comparison import ComparisonManager
 from src.args import Args
+from src.arr_add import (
+    load_radarr_add_seen_keys,
+    load_sonarr_add_seen_keys,
+    process_radarr_add,
+    process_sonarr_add,
+)
+from src.arr_add import (
+    radarr_add_seen_key_file as get_radarr_add_seen_key_file,
+    radarr_add_unable_log_file as get_radarr_add_unable_log_file,
+)
+from src.arr_add import (
+    sonarr_add_seen_key_file as get_sonarr_add_seen_key_file,
+)
+from src.arr_add import (
+    sonarr_add_unable_log_file as get_sonarr_add_unable_log_file,
+)
 from src.cleanup import cleanup_manager
 from src.clients import Clients
 from src.console import console
@@ -1521,6 +1537,12 @@ async def do_the_thing(base_dir: str) -> None:
         processed_files_count = 0
         skipped_files_count = 0
         base_meta = dict(meta.items())
+        radarr_add_seen_key_file = get_radarr_add_seen_key_file(base_dir, meta)
+        radarr_add_seen_title_years = await load_radarr_add_seen_keys(radarr_add_seen_key_file) if meta.get('radarr_add', False) else set()
+        radarr_add_unable_log_file = get_radarr_add_unable_log_file(base_dir, meta)
+        sonarr_add_seen_key_file = get_sonarr_add_seen_key_file(base_dir, meta)
+        sonarr_add_seen_keys = await load_sonarr_add_seen_keys(sonarr_add_seen_key_file) if meta.get('sonarr_add', False) else set()
+        sonarr_add_unable_log_file = get_sonarr_add_unable_log_file(base_dir, meta)
 
         for queue_item in queue_list:
             total_files = len(queue_list)
@@ -1590,6 +1612,36 @@ async def do_the_thing(base_dir: str) -> None:
             except Exception as e:
                 console.print(f"[red]Exception: '{path}': {e}")
                 cleanup_manager.reset_terminal()
+
+            if meta.get('radarr_add', False):
+                processed_files_count += 1
+                radarr_completed = await process_radarr_add(meta, base_dir, radarr_add_seen_title_years, radarr_add_seen_key_file, radarr_add_unable_log_file, config, name_manager)
+                if radarr_completed and log_file and (not meta['debug'] or "debug" in os.path.basename(log_file)):
+                    await save_processed_file(log_file, current_item_path)
+                console.print(f"[cyan]Processed {processed_files_count}/{total_files} files for Radarr add.")
+                limit_queue_value = int(meta.get('limit_queue', 0) or 0)
+                reached_limit = limit_queue_value > 0 and processed_files_count >= limit_queue_value
+                await cleanup_manager.cleanup()
+                gc.collect()
+                cleanup_manager.reset_terminal()
+                if reached_limit:
+                    break
+                continue
+
+            if meta.get('sonarr_add', False):
+                processed_files_count += 1
+                sonarr_completed = await process_sonarr_add(meta, base_dir, sonarr_add_seen_keys, sonarr_add_seen_key_file, sonarr_add_unable_log_file, config, name_manager)
+                if sonarr_completed and log_file and (not meta['debug'] or "debug" in os.path.basename(log_file)):
+                    await save_processed_file(log_file, current_item_path)
+                console.print(f"[cyan]Processed {processed_files_count}/{total_files} files for Sonarr add.")
+                limit_queue_value = int(meta.get('limit_queue', 0) or 0)
+                reached_limit = limit_queue_value > 0 and processed_files_count >= limit_queue_value
+                await cleanup_manager.cleanup()
+                gc.collect()
+                cleanup_manager.reset_terminal()
+                if reached_limit:
+                    break
+                continue
 
             discord_bot_token = discord_config.get('discord_bot_token') if discord_config is not None else None
             only_unattended = bool(discord_config.get('only_unattended', False)) if discord_config is not None else False
