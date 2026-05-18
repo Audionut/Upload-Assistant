@@ -3,6 +3,7 @@
 Config validation helper for Upload Assistant.
 Validates the user's config.py against expected structure and types.
 """
+import re
 from typing import Any, Optional, cast
 
 # Required top-level sections
@@ -58,7 +59,15 @@ DEFAULT_KEY_TYPES: dict[str, tuple[type, ...]] = {
     "keep_images": (bool,),
     "only_id": (bool,),
     "use_sonarr": (bool,),
+    "sonarr_quality_profile_id": (str, int),
+    "sonarr_root_folder_path": (str,),
+    "sonarr_series_type": (str,),
+    "sonarr_season_folder": (bool,),
+    "sonarr_monitor": (str,),
     "use_radarr": (bool,),
+    "radarr_quality_profile_id": (str, int),
+    "radarr_root_folder_path": (str,),
+    "radarr_minimum_availability": (str,),
     "mkbrr": (bool,),
     "mkbrr_threads": (str, int),
     "user_overrides": (bool,),
@@ -82,6 +91,17 @@ DEFAULT_KEY_TYPES: dict[str, tuple[type, ...]] = {
     "cross_seed_check_everything": (bool,),
     "auto_mode": (bool, str),
 }
+
+ARR_OVERRIDE_KEYS = (
+    "sonarr_quality_profile_id",
+    "sonarr_root_folder_path",
+    "sonarr_series_type",
+    "sonarr_season_folder",
+    "sonarr_monitor",
+    "radarr_quality_profile_id",
+    "radarr_root_folder_path",
+    "radarr_minimum_availability",
+)
 
 # Valid image hosts
 VALID_IMAGE_HOSTS = [
@@ -394,6 +414,21 @@ def _validate_default_section(default: dict[str, Any]) -> tuple[list[str], list[
                     key=key,
                     section="DEFAULT"
                 ))
+
+    for key, value in default.items():
+        if value is None:
+            continue
+        for base_key in ARR_OVERRIDE_KEYS:
+            if re.fullmatch(rf"{base_key}_\d+", key):
+                expected_types = DEFAULT_KEY_TYPES[base_key]
+                if not isinstance(value, expected_types):
+                    warnings.append(ConfigValidationWarning(
+                        f"Expected type {' or '.join(t.__name__ for t in expected_types)}, "
+                        f"got {type(value).__name__}",
+                        key=key,
+                        section="DEFAULT"
+                    ))
+                break
 
     # Validate image hosts
     for i in range(1, 10):
