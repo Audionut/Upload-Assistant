@@ -1575,8 +1575,10 @@ class PTP:
             cover = meta["imdb_info"].get("cover")
             if cover is None:
                 cover = meta.get('poster')
-            if isinstance(cover, str):
+            if isinstance(cover, str) and cover.strip():
                 cover = await self.rehost_poster_to_selected_host(meta, cover)
+            elif isinstance(cover, str):
+                cover = None
             while cover is None:
                 cover_input = str(cli_ui.ask_string("No Poster was found. Please input a link to a poster: \n", default="") or "").strip()
                 if not cover_input:
