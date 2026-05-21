@@ -477,6 +477,77 @@ class PTP:
             # img_url = ptpimg_upload(image_url, ptpimg_api)
         return img_url
 
+    def _selected_poster_host(self, meta: dict[str, Any]) -> str:
+        default_config = cast(dict[str, Any], self.config.get('DEFAULT', {}))
+        return str(meta.get('imghost') or default_config.get('img_host_1') or '').strip()
+
+    def _poster_already_on_selected_host(self, image_url: str, selected_host: str) -> bool:
+        if not selected_host:
+            return False
+        hostname = (urlparse(image_url).hostname or '').lower()
+        host_aliases = {
+            'imgbb': ('ibb.co', 'imgbb.com'),
+            'imgbox': ('imgbox.com',),
+            'pixhost': ('pixhost.to',),
+            'lensdump': ('lensdump.com',),
+            'onlyimage': ('onlyimage.org',),
+            'ptpimg': ('ptpimg.me',),
+            'ptscreens': ('ptscreens.com',),
+            'passtheimage': ('passtheima.ge',),
+            'seedpool_cdn': ('cdn.seedpool.org',),
+            'utppm': ('utp.pm',),
+        }
+        aliases = host_aliases.get(selected_host, (selected_host,))
+        return any(hostname == alias or hostname.endswith(f".{alias}") for alias in aliases)
+
+    def _poster_extension(self, image_url: str, content_type: str) -> str:
+        url_extension = Path(urlparse(image_url).path).suffix.lower()
+        if url_extension in {'.jpg', '.jpeg', '.png', '.webp'}:
+            return url_extension
+
+        content_type = content_type.split(';', 1)[0].strip().lower()
+        content_type_extensions = {
+            'image/jpeg': '.jpg',
+            'image/png': '.png',
+            'image/webp': '.webp',
+        }
+        return content_type_extensions.get(content_type, '.jpg')
+
+    async def rehost_poster_to_selected_host(self, meta: dict[str, Any], image_url: str) -> str:
+        selected_host = self._selected_poster_host(meta)
+        if not selected_host or meta.get('skip_imghost_upload', False):
+            return image_url
+        if self._poster_already_on_selected_host(image_url, selected_host):
+            return image_url
+
+        tmp_dir = Path(meta['base_dir']) / "tmp" / meta['uuid']
+        try:
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                response = await client.get(image_url)
+                response.raise_for_status()
+            poster_path = tmp_dir / f"PTP_POSTER{self._poster_extension(image_url, response.headers.get('content-type', ''))}"
+            await asyncio.to_thread(poster_path.write_bytes, response.content)
+
+            original_imghost = meta.get('imghost')
+            meta['imghost'] = selected_host
+            try:
+                uploaded_images, _ = await self.uploadscreens_manager.upload_screens(meta, 1, 1, 0, 1, [str(poster_path)], {})
+            finally:
+                if original_imghost is None:
+                    meta.pop('imghost', None)
+                else:
+                    meta['imghost'] = original_imghost
+
+            if uploaded_images:
+                uploaded_url = uploaded_images[0].get('raw_url') or uploaded_images[0].get('img_url')
+                if isinstance(uploaded_url, str) and uploaded_url:
+                    return uploaded_url
+        except Exception as e:
+            console.print(f"[red]PTP poster rehost to {selected_host} failed: {e}")
+
+        return image_url
+
     def get_type(self, imdb_info: dict[str, Any], meta: dict[str, Any]) -> Optional[str]:
         ptpType = None
         if imdb_info['type'] is not None:
@@ -1504,12 +1575,16 @@ class PTP:
             cover = meta["imdb_info"].get("cover")
             if cover is None:
                 cover = meta.get('poster')
-            if isinstance(cover, str) and "ptpimg" not in cover:
-                cover = await self.ptpimg_url_rehost(cover)
+            if isinstance(cover, str):
+                cover = await self.rehost_poster_to_selected_host(meta, cover)
             while cover is None:
-                cover = cli_ui.ask_string("No Poster was found. Please input a link to a poster: \n", default="")
-                if "ptpimg" not in str(cover) and str(cover).endswith(('.jpg', '.png')):
-                    cover = await self.ptpimg_url_rehost(str(cover))
+                cover_input = str(cli_ui.ask_string("No Poster was found. Please input a link to a poster: \n", default="") or "").strip()
+                if not cover_input:
+                    continue
+                if not cover_input.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                    console.print("[red]Poster URL must end with .jpg, .jpeg, .png, or .webp")
+                    continue
+                cover = await self.rehost_poster_to_selected_host(meta, cover_input)
             new_data = {
                 "title": tinfo.get("title", meta["imdb_info"].get("title", meta["title"])),
                 "year": tinfo.get("year", meta["imdb_info"].get("year", meta["year"])),
