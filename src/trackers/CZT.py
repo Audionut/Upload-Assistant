@@ -261,7 +261,7 @@ class CZT:
         async with aiofiles.open(torrent_path, 'rb') as f:
             torrent_bytes = await f.read()
 
-        torrent_name = str(meta.get('name', '')).strip().replace(' ', '.')
+        torrent_name = str(meta.get('clean_name') or meta.get('name', '')).strip().replace(' ', '.')
         cat_id = await self.get_category_id(meta)
 
         files = {'file': (f"{torrent_name}.torrent", torrent_bytes, 'application/x-bittorrent')}
