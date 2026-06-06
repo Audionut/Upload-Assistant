@@ -424,10 +424,14 @@ class TRACKER_SETUP:
             console.print(f"An error occurred: {e}")
 
     async def get_torrent_claims(self, meta: Meta, tracker: str) -> Optional[bool]:
-        file_path = os.path.join(meta['base_dir'], 'data', 'banned', f'{tracker}_claimed_releases.json')
         tracker_instance = self._create_tracker_instance(tracker)
         if tracker_instance is None:
             return None
+        if tracker.upper() == "SPD":
+            if hasattr(tracker_instance, 'get_claims'):
+                return await tracker_instance.get_claims(meta)
+            return None
+        file_path = os.path.join(meta['base_dir'], 'data', 'banned', f'{tracker}_claimed_releases.json')
         claims_url = getattr(tracker_instance, 'claims_url', None)
         if not isinstance(claims_url, str):
             return None

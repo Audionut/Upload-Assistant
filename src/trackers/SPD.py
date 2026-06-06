@@ -38,6 +38,51 @@ class SPD:
             'Authorization': api_key,
         }, timeout=30.0)
 
+    async def get_claims(self, meta: Meta) -> bool:
+        if not self.config['TRACKERS'][self.tracker].get('api_key'):
+            return False
+
+        url = f"{self.url}/api/reservation"
+        try:
+            response = await self.session.get(url=url)
+            if response.status_code == 200:
+                reservations = response.json()
+                if not isinstance(reservations, list):
+                    if meta.get('debug'):
+                        console.print(f"[{self.tracker}]: Unexpected reservations response format: {reservations}")
+                    return False
+
+                spd_name = await self.edit_name(meta)
+                normalized_spd_name = re.sub(r'[^a-zA-Z0-9]', '', spd_name).lower()
+
+                for reservation in reservations:
+                    if not isinstance(reservation, dict):
+                        continue
+                    if reservation.get('is_uploaded') is True:
+                        continue
+
+                    res_name = reservation.get('name')
+                    if not res_name:
+                        continue
+
+                    normalized_res_name = re.sub(r'[^a-zA-Z0-9]', '', str(res_name)).lower()
+
+                    if normalized_spd_name == normalized_res_name:
+                        console.print(
+                            f"[green]Staff reservation match found at [cyan]{self.tracker}: [yellow]{res_name}[/green]"
+                        )
+                        return True
+            elif response.status_code == 403:
+                if meta.get('debug'):
+                    console.print(f"[{self.tracker}]: Access denied (403) to reservations API. Skipping check.")
+            else:
+                if meta.get('debug'):
+                    console.print(f"[{self.tracker}]: Failed to fetch reservations. HTTP Status: {response.status_code}")
+        except Exception as e:
+            if meta.get('debug'):
+                console.print(f"[{self.tracker}]: Error fetching reservations: {e}")
+        return False
+
     async def get_cat_id(self, meta: Meta) -> Optional[str]:
         if not meta.get('language_checked', False):
             await languages_manager.process_desc_language(meta, tracker=self.tracker)
