@@ -37,7 +37,7 @@ class ZNTH(UNIT3D):
     async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         should_continue = True
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
+        genres = ", ".join(part for part in (meta.get('keywords', ''), meta.get('combined_genres', '')) if part)
         adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy', 'hentai']
         if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
             if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
