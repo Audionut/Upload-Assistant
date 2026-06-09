@@ -1859,6 +1859,7 @@ async def match_tracker_url(tracker_urls: list[str], meta: dict[str, Any]) -> No
         'ulcx': ["https://upload.cx"],
         'yoink': ["yoinked.org"],
         'yus': ["https://yu-scene.net"],
+        'znth': ["https://znth.cx"],
     }
     found_ids: set[str] = set()
     for tracker in tracker_urls:
