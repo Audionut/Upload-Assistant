@@ -1535,6 +1535,27 @@ async def do_the_thing(base_dir: str) -> None:
                     queue_item_mapping = cast(Mapping[str, Any], queue_item)
                     path = await QueueManager.process_site_upload_item(queue_item_mapping, meta)
                     current_item_path = path  # Store for logging
+                elif meta.get("args_line_queue") and isinstance(queue_item, dict) and "args" in queue_item:
+                    # Extract path and arguments from custom args queue item
+                    args_list = queue_item["args"]
+                    # We parse the arguments for this specific item using the parser, updating the cloned meta dict.
+                    meta, parser_obj, _before_args = cast(tuple[Meta, Any, Any], parser.parse(args_list, meta))
+
+                    # Preserve global defaults from base_meta if they were not explicitly overridden in args_list
+                    dest_to_options = {}
+                    if parser_obj and hasattr(parser_obj, "_actions"):
+                        for action in parser_obj._actions:
+                            if action.dest and action.option_strings:
+                                dest_to_options[action.dest] = action.option_strings
+
+                    for key, val in base_meta.items():
+                        if val not in (None, False, []):
+                            option_strings = dest_to_options.get(key, [])
+                            if option_strings and not any(arg == opt or arg.startswith(opt + "=") for opt in option_strings for arg in args_list):
+                                meta[key] = val
+
+                    path = meta.get("path")
+                    current_item_path = queue_item.get("line") or path
                 else:
                     # Regular queue processing
                     path = queue_item if isinstance(queue_item, str) else str(queue_item)
@@ -1651,7 +1672,7 @@ async def do_the_thing(base_dir: str) -> None:
                             if meta.get('site_upload_queue'):
                                 await QueueManager.save_processed_path(log_file, current_item_path)
                             else:
-                                await save_processed_file(log_file, path)
+                                await save_processed_file(log_file, current_item_path)
 
             else:
                 meta = cast(Meta, meta)
@@ -1744,7 +1765,7 @@ async def do_the_thing(base_dir: str) -> None:
                             if meta.get('site_upload_queue'):
                                 await QueueManager.save_processed_path(log_file, current_item_path)
                             else:
-                                await save_processed_file(log_file, path)
+                                await save_processed_file(log_file, current_item_path)
 
             if meta['debug']:
                 finish_time = time.time()
@@ -1822,7 +1843,7 @@ async def do_the_thing(base_dir: str) -> None:
                     if meta.get('site_upload_queue'):
                         await QueueManager.save_processed_path(log_file, current_item_path)
                     else:
-                        await save_processed_file(log_file, path)
+                        await save_processed_file(log_file, current_item_path)
 
             if meta.get('delete_tmp', False) and tmp_path and os.path.exists(tmp_path) and meta.get('emby', False):
                 try:

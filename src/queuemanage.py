@@ -5,6 +5,7 @@ import glob
 import json
 import os
 import re
+import shlex
 from collections.abc import Mapping, MutableMapping, Sequence
 from pathlib import Path
 from typing import Any, Optional, Union, cast
@@ -353,13 +354,20 @@ class QueueManager:
 
     @staticmethod
     async def display_queue(
-        queue: Sequence[str],
+        queue: Sequence[Any],
         base_dir: Optional[str] = None,
         queue_name: Optional[str] = None,
         save_to_log: bool = True,
     ) -> None:
         """Displays the queued files in markdown format and optionally saves them to a log file in the tmp directory."""
-        md_text = "\n - ".join(queue)
+        paths_or_lines = []
+        for item in queue:
+            if isinstance(item, dict):
+                paths_or_lines.append(item.get("line") or item.get("path", ""))
+            else:
+                paths_or_lines.append(str(item))
+
+        md_text = "\n - ".join(paths_or_lines)
         console.print("\n[bold green]Queuing these files:[/bold green]", end='')
         console.print(Markdown(f"- {md_text.rstrip()}\n\n", style=Style(color='cyan')))
         console.print("\n\n")
@@ -377,7 +385,7 @@ class QueueManager:
             log_file = os.path.join(tmp_dir, f"{queue_name}_queue.log")
 
             try:
-                await _write_json_file(log_file, list(queue), indent=4)
+                await _write_json_file(log_file, paths_or_lines, indent=4)
                 console.print(f"[bold green]Queue successfully saved to log file: {log_file}")
             except Exception as e:
                 console.print(f"[bold red]Failed to save queue to log file: {e}")
@@ -408,7 +416,64 @@ class QueueManager:
 
         log_file = os.path.join(base_dir, "tmp", f"{meta.get('queue', 'default')}_queue.log")
 
-        if path.endswith('.txt') and meta.get('unit3d'):
+        if path.endswith(".txt") and not meta.get("unit3d"):
+            console.print(f"[bold yellow]Detected a text file for queue input: {path}[/bold yellow]")
+            if os.path.exists(path):
+                queue_name = os.path.splitext(os.path.basename(path))[0]
+                meta["queue"] = queue_name
+                meta["args_line_queue"] = True
+
+                log_file = await QueueManager.get_log_file(base_dir, queue_name)
+                processed_files = await QueueManager.load_processed_files(log_file)
+
+                lines = await _read_text_lines(path)
+                queue = []
+                for line in lines:
+                    line_stripped = line.strip()
+                    if not line_stripped or line_stripped.startswith("#"):
+                        continue
+
+                    try:
+                        args_list = shlex.split(line_stripped, posix=False)
+                        cleaned_args = []
+                        for arg in args_list:
+                            if (arg.startswith('"') and arg.endswith('"')) or (arg.startswith("'") and arg.endswith("'")):
+                                arg = arg[1:-1]
+                            cleaned_args.append(arg)
+
+                        if not cleaned_args:
+                            continue
+
+                        item_path = cleaned_args[0]
+
+                        queue_item: QueueItem = {"path": item_path, "args": cleaned_args, "line": line_stripped}
+
+                        if line_stripped not in processed_files and item_path not in processed_files:
+                            queue.append(queue_item)
+                    except ValueError as e:
+                        console.print(f"[red]Error parsing line (shlex) in queue file: {line_stripped}. Error: {e}[/red]")
+                    except Exception as e:
+                        console.print(f"[red]Unexpected error processing line in queue file: {line_stripped}. Error: {e}[/red]")
+
+                if not queue:
+                    console.print(f"[bold yellow]All items in the {queue_name} queue have already been processed.[/bold yellow]")
+                    exit(0)
+
+                queue_log = os.path.join(base_dir, "tmp", f"{queue_name}_queue.log")
+                try:
+                    await _write_json_file(queue_log, [item["line"] for item in queue], indent=4)
+                except OSError as e:
+                    console.print(f"[bold red]Failed to save the queue log file: {e}[/bold red]")
+
+                if meta.get("debug"):
+                    await QueueManager.display_queue(queue, base_dir, queue_name, save_to_log=False)
+
+                return queue, log_file
+            else:
+                console.print(f"[bold red]Text file not found: {path}. Exiting.[/bold red]")
+                exit(1)
+
+        elif path.endswith(".txt") and meta.get("unit3d"):
             console.print(f"[bold yellow]Detected a text file for queue input: {path}[/bold yellow]")
             if os.path.exists(path):
                 safe_file_locations = await QueueManager.extract_safe_file_locations(path)
@@ -684,7 +749,7 @@ async def extract_safe_file_locations(log_file: str) -> list[str]:
 
 
 async def display_queue(
-    queue: Sequence[str],
+    queue: Sequence[Any],
     base_dir: Optional[str] = None,
     queue_name: Optional[str] = None,
     save_to_log: bool = True,

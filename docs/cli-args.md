@@ -30,6 +30,19 @@ upload.py [path...] [options]
 - `-su`, `--site-upload TRACKER`: Process site searches and upload to a single tracker (tracker acronym is uppercased).
 - `--unit3d`: Parse a text output file from `UNIT3D-Upload-Checker`.
 
+### Argument-Embedded Text Queue (.txt)
+
+If you pass a `.txt` file as the main positional input path (without specifying `--unit3d`), Upload Assistant will treat it as a batch queue of independent upload tasks, where each line represents a separate command.
+
+- **Format**: Each line contains the path to the directory/file to upload, followed by any custom arguments/flags you want to apply to that specific task:
+  ```text
+  "F:\Movies\Fun.Movie.2026.1080p.BluRay-Group" -tk AITHER -df "desc_filename.txt" -imdb tt00000000 --anon
+  "D:\TV Shows\Fun.TV.Show.2026.1080p.WEB-DL-Group" -tk LST -df "desc_filename.txt" -tvdb 00000000 -pr
+  ```
+- **Comments and Empty Lines**: You can add comments starting with `#` or leave empty lines; they are automatically skipped.
+- **Queue Progress & Resume**: Progress is isolated and tracked automatically based on the `.txt` filename (e.g., `my_queue.txt` uses `tmp/my_queue_processed_files.log`). If you stop and restart, Upload Assistant will skip already completed lines, allowing you to easily resume or append new items to the file.
+- **Global Defaults & Overrides**: Any arguments passed to the initial command (e.g., `python upload.py my_queue.txt -debug --anon`) act as **global defaults** for all items in the queue. Line-specific arguments inside the `.txt` file will override these defaults for that specific task. For example, passing `-debug` globally is a great way to dry-run your entire queue!
+
 ## Screenshots / images
 
 - `-s`, `--screens N`: Number of screenshots.
