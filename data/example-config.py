@@ -536,8 +536,14 @@ config = {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",
             "username": "",
+            "password": "",
             "passkey": "",
-            "uploader_name": "https://filelist.io/Custom_Announce_URL",
+            # Credentials for https://up.img4k.net/ and https://bd.img4k.net/. Should be the same credentials
+            "fltools": {
+                "user": "",
+                "pass": ""
+            },
+            "uploader_name": "",
             "anon": False,
         },
         "FNP": {
