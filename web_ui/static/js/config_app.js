@@ -1156,8 +1156,8 @@ function ItemList({
     'multi-file/disc': ['multiScreens', 'pack_thumb_size', 'fileLimit', 'processLimit', 'charLimit'],
     'Headers': ['custom_description_header', 'tonemapped_header', 'screenshot_header'],
     'Signature': ['custom_signature'],
-    'Sonarr': ['use_sonarr', 'sonarr_url', 'sonarr_api_key', 'sonarr_url_1', 'sonarr_api_key_1'],
-    'Radarr': ['use_radarr', 'radarr_url', 'radarr_api_key', 'radarr_url_1', 'radarr_api_key_1'],
+    'Sonarr': ['use_sonarr', 'sonarr_url', 'sonarr_api_key', 'sonarr_quality_profile_id', 'sonarr_root_folder_path', 'sonarr_series_type', 'sonarr_season_folder', 'sonarr_monitor', 'sonarr_url_1', 'sonarr_api_key_1'],
+    'Radarr': ['use_radarr', 'radarr_url', 'radarr_api_key', 'radarr_quality_profile_id', 'radarr_root_folder_path', 'radarr_minimum_availability', 'radarr_url_1', 'radarr_api_key_1'],
   };
 
   // Partition regularItems into subgroups and an "Other" bucket

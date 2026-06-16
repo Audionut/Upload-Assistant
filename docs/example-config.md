@@ -165,11 +165,23 @@ Implementation notes:
 - `sonarr_url` (str): Sonarr base URL.
 - `sonarr_api_key` (str): Sonarr API key.
 - `sonarr_url_1` / `sonarr_api_key_1` (str): Optional second Sonarr instance.
+- `sonarr_quality_profile_id` (int): Quality profile ID used by `--sonarr-add`.
+- `sonarr_root_folder_path` (str): Root folder path used by `--sonarr-add`.
+- `sonarr_series_type` (str): Series type used by `--sonarr-add` (`standard`, `daily`, or `anime`).
+- `sonarr_season_folder` (bool): Whether `--sonarr-add` enables season folders.
+- `sonarr_monitor` (str): Sonarr monitor option for `--sonarr-add`; default `none`.
 
 - `use_radarr` (bool): Enable Radarr searching.
 - `radarr_url` (str): Radarr base URL.
 - `radarr_api_key` (str): Radarr API key.
 - `radarr_url_1` / `radarr_api_key_1` (str): Optional second Radarr instance.
+- `radarr_quality_profile_id` (int): Quality profile ID used by `--radarr-add`.
+- `radarr_root_folder_path` (str): Root folder path used by `--radarr-add`.
+- `radarr_minimum_availability` (str): Minimum availability used by `--radarr-add`; default `released`.
+
+Implementation notes:
+- `--sonarr-add` supports suffixed per-instance overrides such as `sonarr_quality_profile_id_1`, `sonarr_root_folder_path_1`, `sonarr_series_type_1`, `sonarr_season_folder_1`, and `sonarr_monitor_1`.
+- `--radarr-add` supports suffixed per-instance overrides such as `radarr_quality_profile_id_1`, `radarr_root_folder_path_1`, and `radarr_minimum_availability_1`.
 
 ### Torrent creation
 - `mkbrr` (bool): Use mkbrr for torrent creation.

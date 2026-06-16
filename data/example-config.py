@@ -269,20 +269,42 @@ config = {
         "sonarr_url": "http://localhost:8989",
         "sonarr_api_key": "",
 
+        # Required by --sonarr-add. Series are added unmonitored and Sonarr search is not triggered.
+        "sonarr_quality_profile_id": 0,
+        "sonarr_root_folder_path": "",
+        "sonarr_series_type": "standard",
+        "sonarr_season_folder": True,
+        "sonarr_monitor": "none",
+
         # details for a second sonarr instance
         # additional sonarr instances can be added by adding more sonarr_url_x and sonarr_api_key_x entries
         "sonarr_url_1": "http://my-second-instance:8989",
         "sonarr_api_key_1": "",
+        # optional per-instance overrides for --sonarr-add
+        # "sonarr_quality_profile_id_1": 0,
+        # "sonarr_root_folder_path_1": "",
+        # "sonarr_series_type_1": "standard",
+        # "sonarr_season_folder_1": True,
+        # "sonarr_monitor_1": "none",
 
         # set true to use radarr for movie searching
         "use_radarr": False,
         "radarr_url": "http://localhost:7878",
         "radarr_api_key": "",
 
+        # Required by --radarr-add. Movies are added unmonitored and Radarr search is not triggered.
+        "radarr_quality_profile_id": 0,
+        "radarr_root_folder_path": "",
+        "radarr_minimum_availability": "released",
+
         # details for a second radarr instance
         # additional radarr instances can be added by adding more radarr_url_x and radarr_api_key_x entries
         "radarr_url_1": "http://my-second-instance:7878",
         "radarr_api_key_1": "",
+        # optional per-instance overrides for --radarr-add
+        # "radarr_quality_profile_id_1": 0,
+        # "radarr_root_folder_path_1": "",
+        # "radarr_minimum_availability_1": "released",
 
         # Add a directory for Emby linking. This is the folder where the emby files will be linked to.
         # If not set, Emby linking will not be performed. Symlinking only, linux not tested
@@ -350,7 +372,7 @@ config = {
 
     "TRACKERS": {
         # Which trackers do you want to upload to?
-        # Available tracker: A4K, ACM, AITHER, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, DT, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, IHD, IS, ITT, LCD, LDU, LST, LT, LUME, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TLZ, TOS, TTG, TTR, TVC, ULCX, UTP, YOINK, YUS
+        # Available tracker: A4K, ACM, AITHER, ANT, AR, ASC, AZ, BHD, BHDTV, BJS, BLU, BT, CBR, CZ, DC, DP, DT, EMUW, FF, FL, FNP, FRIKI, GPW, HDB, HDS, HDT, HHD, HUNO, IHD, IS, ITT, LCD, LDU, LST, LT, LUME, MTV, NBL, OE, OTW, PHD, PT, PTER, PTP, PTS, PTT, R4E, RAS, RF, RMC, RTF, SAM, SHRI, SN, SP, SPD, STC, THR, TIK, TL, TLZ, TOS, TTG, TTR, TVC, ULCX, UTP, YOINK, YUS
         # Only add the trackers you want to upload to on a regular basis
         "default_trackers": "",
 
@@ -785,6 +807,14 @@ config = {
             "link_dir_name": "",
             "api_key": "",
             "anon": False,
+        },
+        "RMC": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            "api_key": "",
+            "anon": False,
+            # Send uploads to RMC modq for staff approval
+            "modq": False,
         },
         "RTF": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name

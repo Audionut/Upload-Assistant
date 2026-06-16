@@ -735,6 +735,9 @@ class COMMON:
                     if not meta.get('keep_images'):
                         imagelist = []
 
+            if (tmdb or imdb or tvdb or mal):
+                console.print(f"[green]Found {tracker} IDs: TMDb: {tmdb}, IMDb: {imdb}, TVDb: {tvdb}, MAL: {mal}[/green]")
+
             return tmdb, imdb, tvdb, mal, description, category, infohash, imagelist, file_name
 
         except Exception as e:

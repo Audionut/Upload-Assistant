@@ -406,8 +406,7 @@ async def update_metadata_from_tracker(
             imdb_id, meta['ext_torrenthash'] = cast(tuple[int, Optional[str]], ptp_imdb_result)
             if imdb_id:
                 meta['imdb_id'] = imdb_id
-                if meta['debug']:
-                    console.print(f"[green]IMDb ID found: tt{str(meta['imdb_id']).zfill(7)}[/green]")
+                console.print(f"[green]PTP IMDb ID found: tt{str(meta['imdb_id']).zfill(7)}[/green]")
                 found_match = True
                 meta['skipit'] = True
                 if not only_id or meta.get('keep_images'):
@@ -589,7 +588,7 @@ async def update_metadata_from_tracker(
                 console.print(f"[yellow]{tracker_name} returned invalid IDs (both 0)[/yellow]")
             found_match = False
 
-    elif tracker_name in ["HUNO", "BLU", "AITHER", "LST", "OE", "ULCX", "RF", "OTW", "YUS", "DP", "SP"]:
+    elif tracker_name in ["HUNO", "BLU", "AITHER", "LST", "OE", "ULCX", "RF", "OTW", "YUS", "DP", "SP", "RAS", "LUME", "HHD", "RMC"]:
         if meta.get(tracker_key) is not None:
             if meta['debug']:
                 console.print(f"[cyan]{tracker_name} ID found in meta, reusing existing ID: {meta[tracker_key]}[/cyan]")
@@ -633,7 +632,8 @@ async def update_metadata_from_tracker(
         bbcode = BBCODE()
         if meta.get('hdb') is not None:
             meta[manual_key] = meta[tracker_key]
-            console.print(f"[cyan]{tracker_name} ID found in meta, reusing existing ID: {meta[tracker_key]}[/cyan]")
+            if meta.get('debug'):
+                console.print(f"[cyan]{tracker_name} ID found in meta, reusing existing ID: {meta[tracker_key]}[/cyan]")
 
             # Use get_info_from_torrent_id function if ID is found in meta
             hdb_info = await tracker_instance.get_info_from_torrent_id(meta[tracker_key])
@@ -653,11 +653,13 @@ async def update_metadata_from_tracker(
                     bbcode.clean_hdb_description(description_source),
                 )
                 if description and len(description) > 0 and not only_id:
-                    console.print(f"Description content:\n{description[:500]}...", markup=False)
+                    if meta.get('debug'):
+                        console.print(f"Description content:\n{description[:500]}...", markup=False)
                     meta['description'] = description
                     meta['saved_description'] = True
                 else:
-                    console.print("[yellow]HDB description empty[/yellow]")
+                    if meta.get('debug'):
+                        console.print("[yellow]HDB description empty[/yellow]")
                 if image_list and meta.get('keep_images'):
                     valid_images = await check_images_concurrently(image_list, meta)
                     if valid_images:

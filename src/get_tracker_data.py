@@ -112,29 +112,47 @@ class TrackerDataManager:
                 tracker_keys = {
                     # preference some unit3d based trackers first
                     # since they can return tmdb/imdb/tvdb ids
-                    'aither': 'AITHER',
                     'blu': 'BLU',
-                    'lst': 'LST',
-                    'ulcx': 'ULCX',
                     'oe': 'OE',
                     'huno': 'HUNO',
-                    'ant': 'ANT',
                     'btn': 'BTN',
-                    'bhd': 'BHD',
-                    'hdb': 'HDB',
                     'sp': 'SP',
                     'rf': 'RF',
                     'otw': 'OTW',
                     'yus': 'YUS',
                     'dp': 'DP',
+                    'ras': 'RAS',
+                    'lume': 'LUME',
+                    'hhd': 'HHD',
+                    'rmc': 'RMC',
+                    'ulcx': 'ULCX',
+                    'lst': 'LST',
+                    'aither': 'AITHER',
+                    'bhd': 'BHD',
+                    'ant': 'ANT',
+                    'hdb': 'HDB',
                     'ptp': 'PTP',
                 }
+                if meta.get('sonarr_add', False):
+                    sonarr_add_skipped_trackers = ('ptp', 'rf', 'ant')
+                    tracker_keys = {
+                        key: value
+                        for key, value in tracker_keys.items()
+                        if key not in sonarr_add_skipped_trackers
+                    }
+                    tracker_keys = {
+                        'btn': 'BTN',
+                        'hdb': 'HDB',
+                        'aither': 'AITHER',
+                        **{key: value for key, value in tracker_keys.items() if key not in ('btn', 'hdb', 'aither')},
+                    }
             else:
                 # Preference trackers with lesser overall torrents
                 # Leaving the more complete trackers free when really needed
                 tracker_keys = {
                     'sp': 'SP',
                     'otw': 'OTW',
+                    'ras': 'RAS',
                     'dp': 'DP',
                     'yus': 'YUS',
                     'rf': 'RF',
@@ -142,6 +160,9 @@ class TrackerDataManager:
                     'ulcx': 'ULCX',
                     'huno': 'HUNO',
                     'lst': 'LST',
+                    'lume': 'LUME',
+                    'hhd': 'HHD',
+                    'rmc': 'RMC',
                     'ant': 'ANT',
                     'hdb': 'HDB',
                     'bhd': 'BHD',
@@ -372,6 +393,11 @@ class TrackerDataManager:
                         console.print("[yellow]No matches found on any available specific trackers.[/yellow]")
 
             else:
+                if meta.get('client_ids_only', False):
+                    if meta['debug']:
+                        console.print("[yellow]No configured tracker IDs from the client are available; skipping fallback tracker searches.[/yellow]")
+                    return meta
+
                 # Process all trackers with API = true if no specific tracker is set in meta
                 tracker_order = ["PTP", "HDB", "BHD", "BLU", "AITHER", "HUNO", "LST", "OE", "ULCX"]
 
@@ -499,5 +525,3 @@ class TrackerDataManager:
 
                     if meta.get('distributor') and not had_distributor and meta.get('debug', False):
                         console.print(f"[green]Found distributor '{meta['distributor']}' from {tracker_name}[/green]")
-
-
