@@ -997,6 +997,7 @@ async def tmdb_other_meta(
     tmdb_metadata = {}
 
     # Initialize variables that might not be set in all code paths
+    adult_media = False
     backdrop = ""
     cast: list[str] = []
     certification = ""
@@ -1130,6 +1131,8 @@ async def tmdb_other_meta(
             runtime = runtime_list[0] if runtime_list else 60
             tmdb_type = media_data.get('type', 'Scripted')
             networks = media_data.get('networks', [])
+
+        adult_media = media_data.get("adult", False)
 
         production_companies = media_data.get('production_companies', [])
         production_countries = media_data.get('production_countries', [])
@@ -1317,41 +1320,42 @@ async def tmdb_other_meta(
 
     # Build the metadata dictionary
     tmdb_metadata = {
-        'title': title,
-        'year': year,
-        'release_date': release_date,
-        'first_air_date': first_air_date,
-        'last_air_date': last_air_date,
-        'imdb_id': imdb_id,
-        'tvdb_id': tvdb_id,
-        'origin_country': origin_country,
-        'original_language': original_language,
-        'original_title': original_title,
-        'keywords': keywords,
-        'genres': genres,
-        'genre_ids': genre_ids,
-        'tmdb_creators': creators,
-        'tmdb_directors': directors,
-        'tmdb_cast': cast,
-        'mal_id': mal_id,
-        'anime': anime,
-        'demographic': demographic,
-        'retrieved_aka': retrieved_aka,
-        'poster': poster,
-        'tmdb_poster': poster_path,
-        'logo': logo_path,
-        'tmdb_logo': tmdb_logo,
-        'backdrop': backdrop,
-        'overview': overview,
-        'tmdb_type': tmdb_type,
-        'runtime': runtime,
-        'youtube': youtube,
-        'certification': certification,
-        'production_companies': production_companies,
-        'production_countries': production_countries,
-        'networks': networks,
-        'imdb_mismatch': imdb_mismatch,
-        'mismatched_imdb_id': mismatched_imdb_id
+        "tmdb_adult_media": adult_media,
+        "title": title,
+        "year": year,
+        "release_date": release_date,
+        "first_air_date": first_air_date,
+        "last_air_date": last_air_date,
+        "imdb_id": imdb_id,
+        "tvdb_id": tvdb_id,
+        "origin_country": origin_country,
+        "original_language": original_language,
+        "original_title": original_title,
+        "keywords": keywords,
+        "genres": genres,
+        "genre_ids": genre_ids,
+        "tmdb_creators": creators,
+        "tmdb_directors": directors,
+        "tmdb_cast": cast,
+        "mal_id": mal_id,
+        "anime": anime,
+        "demographic": demographic,
+        "retrieved_aka": retrieved_aka,
+        "poster": poster,
+        "tmdb_poster": poster_path,
+        "logo": logo_path,
+        "tmdb_logo": tmdb_logo,
+        "backdrop": backdrop,
+        "overview": overview,
+        "tmdb_type": tmdb_type,
+        "runtime": runtime,
+        "youtube": youtube,
+        "certification": certification,
+        "production_companies": production_companies,
+        "production_countries": production_countries,
+        "networks": networks,
+        "imdb_mismatch": imdb_mismatch,
+        "mismatched_imdb_id": mismatched_imdb_id,
     }
 
     return tmdb_metadata

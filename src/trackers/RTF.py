@@ -199,10 +199,8 @@ class RTF:
             List of dictionaries containing information about existing torrents (dupes).
             Returns empty list if content is ineligible or search fails.
         """
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            console.print('[bold red]Erotic not allowed at RTF.')
+        common = COMMON(config=self.config)
+        if not common.check_and_confirm_adult_media_upload(meta, self.tracker):
             meta['skipping'] = "RTF"
             return []
 

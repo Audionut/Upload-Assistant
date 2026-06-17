@@ -76,6 +76,9 @@ class TL:
 
         return False
 
+    async def get_additional_checks(self, meta: Meta) -> bool:
+        return self.common.check_and_confirm_adult_media_upload(meta, self.tracker)
+
     async def generate_description(self, meta: Meta) -> str:
         builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts: list[str] = []
@@ -248,6 +251,12 @@ class TL:
         return name
 
     async def search_existing(self, meta: Meta, _disctype: str) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
+        should_continue = await self.get_additional_checks(meta)
+        if not should_continue:
+            meta["skipping"] = f"{self.tracker}"
+            return results
+
         login = await self.login(meta, force=True)
         if not login:
             meta['skipping'] = "TL"
@@ -255,8 +264,6 @@ class TL:
                 console.print(f"[bold red]Skipping upload to '{self.tracker}' as login failed.[/bold red]")
             return []
         cat_id = self.get_category(meta)
-
-        results: list[dict[str, Any]] = []
 
         search_name = str(meta.get("title", ""))
         resolution = str(meta.get("resolution", ""))

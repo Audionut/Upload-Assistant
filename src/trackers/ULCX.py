@@ -104,9 +104,7 @@ class ULCX(UNIT3D):
     async def get_description(self, meta: Meta) -> dict[str, str]:
         desc = await DescriptionBuilder(self.tracker, self.config).unit3d_edit_desc(meta, comparison=True)
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
+        if meta.get("adult_media", False):
             pattern = r'(\[center\](?:(?!\[/center\]).)*\[/center\])'
 
             def wrap_in_spoiler(match: re.Match[str]) -> str:

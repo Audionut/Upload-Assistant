@@ -362,19 +362,10 @@ class BHD:
                 meta['skipping'] = "BHD"
                 return []
 
-        genres = f"{meta.get('keywords', '')} {meta.get('combined_genres', '')}"
-        adult_keywords = ['xxx', 'erotic', 'porn', 'adult', 'orgy']
-        if any(re.search(rf'(^|,\s*){re.escape(keyword)}(\s*,|$)', genres, re.IGNORECASE) for keyword in adult_keywords):
-            if (not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False))):
-                console.print('[bold red]Porn/xxx is not allowed at BHD.')
-                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                    pass
-                else:
-                    meta['skipping'] = "BHD"
-                    return []
-            else:
-                meta['skipping'] = "BHD"
-                return []
+        common = COMMON(config=self.config)
+        if not common.check_and_confirm_adult_media_upload(meta, self.tracker):
+            meta["skipping"] = "BHD"
+            return []
 
         dupes: list[dict[str, Any]] = []
         category = meta['category']
