@@ -1054,6 +1054,9 @@ function AudionutsUAGUI() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let sawTerminalEvent = false;
+      let sawErrorEvent = false;
+      let sawOutputEvent = false;
 
       const processSSELine = (line) => {
         if (localController && localController.signal.aborted) return;
@@ -1061,6 +1064,7 @@ function AudionutsUAGUI() {
         try {
           const data = JSON.parse(line.substring(6));
           if (data.type === 'html' || data.type === 'html_full') {
+            sawOutputEvent = true;
             try {
               const rawHtml = data.data || '';
               const clean = sanitizeHtml(rawHtml);
@@ -1085,10 +1089,23 @@ function AudionutsUAGUI() {
             } catch (e) {
               console.error('Failed to render HTML fragment:', e);
             }
-              } else if (data.type === 'exit') {
+          } else if (data.type === 'system') {
+            if (data.data) {
+              appendSystemMessage(String(data.data));
+            }
+          } else if (data.type === 'error') {
+            sawTerminalEvent = true;
+            sawErrorEvent = true;
+            const msg = data.data ? String(data.data) : 'Execution error';
+            appendSystemMessage(`✗ ${msg}`, 'error');
+          } else if (data.type === 'exit') {
+            sawTerminalEvent = true;
             if (!(localController && localController.signal.aborted)) {
               appendSystemMessage('');
               appendSystemMessage(`✓ Process exited with code ${data.code}`);
+              if (Number(data.code) !== 0) {
+                sawErrorEvent = true;
+              }
             }
           }
         } catch (e) {
@@ -1121,8 +1138,16 @@ function AudionutsUAGUI() {
       /* eslint-enable no-constant-condition */
       // Only append the final completion message when not aborted.
       if (!(localController && localController.signal.aborted)) {
-        appendSystemMessage('✓ Execution completed');
-        appendSystemMessage('');
+        if (sawErrorEvent) {
+          appendSystemMessage('✗ Execution finished with errors', 'error');
+          appendSystemMessage('');
+        } else if (!sawTerminalEvent && !sawOutputEvent) {
+          appendSystemMessage('✗ Execution ended without output', 'error');
+          appendSystemMessage('');
+        } else {
+          appendSystemMessage('✓ Execution completed');
+          appendSystemMessage('');
+        }
       }
     } catch (error) {
       // Suppress abort errors as they are expected when a user cancels.
