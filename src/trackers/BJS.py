@@ -7,7 +7,7 @@ import re
 import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 import aiofiles
@@ -434,216 +434,29 @@ class BJS:
 
         return tags
 
-    def _extract_upload_params(self, meta: dict[str, Any]) -> dict[str, Any]:
-        is_tv_pack = bool(meta.get('tv_pack'))
-        upload_season_num = None
-        upload_episode_num = None
-        upload_resolution = meta.get('resolution')
-
-        if meta['category'] == 'TV':
-            season_match = meta.get('season', '').replace('S', '')
-            if season_match:
-                upload_season_num = season_match
-
-            if not is_tv_pack:
-                episode_match = meta.get('episode', '').replace('E', '')
-                if episode_match:
-                    upload_episode_num = episode_match
-
-        return {
-            'is_tv_pack': is_tv_pack,
-            'upload_season_num': upload_season_num,
-            'upload_episode_num': upload_episode_num,
-            'upload_resolution': upload_resolution
-        }
-
-    def _should_process_torrent(self, current_season: str, current_resolution: str, current_episode: str, is_pack: bool, params: dict[str, Any], meta: dict[str, Any]) -> bool:
-        if meta["category"] == "TV":
-            if not current_season or not params["upload_season_num"]:
-                return False
-
-            try:
-                if int(current_season) == int(params["upload_season_num"]):
-                    if params["is_tv_pack"]:
-                        return is_pack
-                    else:
-                        if is_pack:
-                            return True
-                        if current_episode and params["upload_episode_num"] and int(current_episode) == int(params["upload_episode_num"]):
-                            return True
-            except ValueError:
-                pass
-            return False
-
-        elif meta["category"] == "MOVIE":
-            if params["upload_resolution"] and current_resolution:
-                try:
-                    cur_res = int(current_resolution.lower().replace("p", ""))
-                    up_res = int(str(params["upload_resolution"]).lower().replace("p", ""))
-                    if cur_res == up_res:
-                        return True
-                except ValueError:
-                    if current_resolution.lower() == str(params["upload_resolution"]).lower():
-                        return True
-            return False
-
-        return False
-
-    def _extract_torrent_ids(self, rows_to_process: list[Tag]) -> list[dict[str, Any]]:
-        tasks: list[dict[str, Any]] = []
-
-        for row in rows_to_process:
-            row_id = str(row.get("id", ""))
-            torrent_id = row_id.replace("torrent", "")
-            if not torrent_id:
-                continue
-
-            torrent_link = f'{self.torrent_url}{torrent_id}'
-
-            link = row.find("a", href=re.compile(r"torrentid=\d+"))
-            description_text = " ".join(link.get_text(strip=True).split()) if link else ""
-
-            size_tag = row.find('td', class_='number_column nobr')
-            torrent_size_str = size_tag.get_text(strip=True) if size_tag else None
-
-            tasks.append({"torrent_id": torrent_id, "description_text": description_text, "size": torrent_size_str, "link": torrent_link})
-
-        return tasks
-
-    async def _fetch_torrent_page(self, task_info: dict[str, Any]) -> dict[str, Any]:
-        torrent_id = task_info['torrent_id']
-        url = f"{self.base_url}/torrents.php?torrentid={torrent_id}"
-
-        max_retries = 3
-        base_delay = 5
-        last_error: Optional[Exception] = None
-
-        async def _attempt_fetch() -> tuple[Optional[BeautifulSoup], Optional[Exception]]:
-            try:
-                async with self.semaphore:
-                    response = await self.session.get(url, follow_redirects=True)
-                    response.raise_for_status()
-                    soup = BeautifulSoup(response.text, "html.parser")
-                return soup, None
-            except Exception as e:
-                return None, e
-
-        for attempt in range(1, max_retries + 1):
-            soup, error = await _attempt_fetch()
-            if soup is not None:
-                return {"success": True, "soup": soup, "task_info": task_info}
-
-            last_error = error
-            if attempt < max_retries:
-                await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
-
-        console.print(f"[yellow]Não foi possível buscar a página do torrent {torrent_id}: {last_error}[/yellow]")
-        return {
-            'success': False,
-            'error': last_error,
-            'task_info': task_info
-        }
-
-    def _extract_item_name(self, soup: BeautifulSoup, torrent_id: str) -> str:
-        item_name = ""
-
-        files_div = soup.find("div", id=f"files_{torrent_id}")
-        if not files_div:
-            return item_name
-
-        path_div = files_div.find("div", class_="filelist_path")
-        if isinstance(path_div, Tag) and path_div.get_text(strip=True):
-            item_name = path_div.get_text(strip=True).strip("/")
-        else:
-            file_table = files_div.find("table", class_="filelist_table")
-            if isinstance(file_table, Tag):
-                first_file_row = file_table.find("tr", class_=lambda x: x != "colhead_dark")
-                if isinstance(first_file_row, Tag):
-                    first_td = first_file_row.find("td")
-                    if isinstance(first_td, Tag):
-                        item_name = first_td.get_text(strip=True)
-
-        return item_name
-
-    async def _process_ajax_responses(self, tasks: list[dict[str, Any]]) -> list[dict[str, str]]:
-        found_items: list[dict[str, str]] = []
-
-        if not tasks:
-            return found_items
-
-        results = await asyncio.gather(*[self._fetch_torrent_page(task) for task in tasks], return_exceptions=True)
-
-        for result in results:
-            if isinstance(result, Exception):
-                console.print(f"[yellow]Error in request: {result}[/yellow]")
-                continue
-
-            fetch_result = cast(dict[str, Any], result)
-            if not fetch_result.get('success'):
-                continue
-
-            task_info = fetch_result.get('task_info', {})
-            soup_obj = fetch_result.get('soup')
-
-            if not isinstance(task_info, dict) or not isinstance(soup_obj, BeautifulSoup):
-                continue
-
-            task_info = cast(dict[str, Any], task_info)
-            torrent_id = task_info.get("torrent_id", "")
-
-            item_name = self._extract_item_name(soup_obj, torrent_id)
-
-            torrent_description = ""
-            desc_block = soup_obj.find(
-                lambda tag: tag.name == "blockquote" and "Informações Adicionais:" in tag.get_text()
-            )
-
-            if desc_block:
-                torrent_description = desc_block.get_text("\n", strip=True)
-
-            if item_name:
-                found_items.append({
-                    'name': item_name,
-                    'size': str(task_info.get('size') or ''),
-                    'link': str(task_info.get('link') or ''),
-                    'description': torrent_description,
-                })
-
-        return found_items
-
-    async def _fetch_search_page(self, meta: dict[str, Any]) -> BeautifulSoup:
-        search_url = f"{self.base_url}/torrents.php?searchstr={meta['imdb_info']['imdbID']}"
-
-        response = await self.session.get(search_url)
-        if response.status_code in [301, 302, 307] and 'Location' in response.headers:
-            redirect_url = f"{self.base_url}/{response.headers['Location']}"
-            response = await self.session.get(redirect_url)
-
-        return BeautifulSoup(response.text, 'html.parser')
-
     def get_database_title(self, soup: BeautifulSoup) -> str:
         """
         Extracts the original title to ensure consistency with the BJS database.
         Since BJS treats different titles as unique entries regardless of IMDb parity,
         this value is used to match existing records.
         """
-        original_title = ''
-        info_boxes = soup.find_all('div', class_='box')
+        original_title = ""
+        info_boxes = soup.find_all("div", class_="box")
         target_box = None
 
         for box in info_boxes:
-            header_div = box.find('div', class_='head')
-            if header_div and 'Informações' in header_div.get_text():
+            header_div = box.find("div", class_="head")
+            if header_div and "Informações" in header_div.get_text():
                 target_box = box
                 break
 
         if target_box:
-            rows = target_box.find_all('tr')
+            rows = target_box.find_all("tr")
             for row in rows:
-                cells = row.find_all('td')
+                cells = row.find_all("td")
                 if len(cells) >= 2:
                     label_text = cells[0].get_text(strip=True)
-                    if 'Título Original:' in label_text or 'Título:' in label_text:
+                    if "Título Original:" in label_text or "Título:" in label_text:
                         original_title = cells[1].get_text(strip=True)
                         break
 
@@ -653,10 +466,10 @@ class BJS:
         dupes: list[dict[str, str]] = []
         should_continue = self.get_additional_checks(meta)
         if not should_continue:
-            meta['skipping'] = f'{self.tracker}'
+            meta["skipping"] = f"{self.tracker}"
             return dupes
 
-        if not dict(meta.get('imdb_info', {})).get('imdbID'):
+        if not dict(meta.get("imdb_info", {})).get("imdbID"):
             console.print(f"{self.tracker}: [bold red]IMDb ID not found in metadata. Skipping duplicate check.[/bold red]")
             return dupes
 
@@ -666,11 +479,13 @@ class BJS:
                 self.session.cookies = cookie_jar
 
             BJS.already_has_the_info = False
-            BJS.database_title = ''
-            params: dict[str, Any] = self._extract_upload_params(meta)
+            BJS.database_title = ""
 
-            soup = await self._fetch_search_page(meta)
-            torrent_details_table: Optional[Tag] = soup.find('div', class_='main_column')
+            search_url = f"{self.base_url}/torrents.php?searchstr={meta['imdb_info']['imdbID']}"
+            response = await self.session.get(search_url, follow_redirects=True)
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            torrent_details_table: Optional[Tag] = soup.find("div", class_="main_column")
 
             if torrent_details_table:
                 BJS.already_has_the_info = True
@@ -678,52 +493,24 @@ class BJS:
             else:
                 return dupes
 
-            rows_to_process: list[Tag] = []
-            current_season_on_page = ""
-            current_resolution_on_page = ""
-            current_episode_on_page = ""
-            current_is_pack = False
-
             for row in torrent_details_table.find_all('tr'):
-                row_classes = row.get("class")
-                if isinstance(row_classes, list):
-                    if 'resolution_header' in row_classes:
-                        header_text = row.get_text(strip=True)
-                        resolution_match = re.search(r'(\d{3,4}p)', header_text)
-                        if resolution_match:
-                            current_resolution_on_page = resolution_match.group(1)
-                        continue
-
-                    if 'season_header' in row_classes:
-                        season_header_text = row.get_text(strip=True)
-                        season_match = re.search(r'Temporada (\d+)', season_header_text)
-                        if season_match:
-                            current_season_on_page = season_match.group(1)
-                        continue
-
-                td_with_rowspan = row.find("td", rowspan=True)
-                if td_with_rowspan:
-                    a_tag = td_with_rowspan.find("a", href=re.compile(r"torrents\.php\?id=\d+"))
-                    if a_tag:
-                        text = a_tag.get_text(strip=True)
-                        if "Temporada" in text:
-                            current_is_pack = True
-                            current_episode_on_page = ""
-                        else:
-                            ep_match = re.search(r"S(\d+)E(\d+)", text, re.IGNORECASE)
-                            if ep_match:
-                                current_is_pack = False
-                                current_episode_on_page = ep_match.group(2)
-
                 row_id = row.get("id")
                 if isinstance(row_id, str) and row_id.startswith("torrent") and not row_id.startswith("torrent_"):
-                    should_process = self._should_process_torrent(current_season_on_page, current_resolution_on_page, current_episode_on_page, current_is_pack, params, meta)
+                    torrent_id = row_id.replace("torrent", "")
+                    if not torrent_id:
+                        continue
 
-                    if should_process:
-                        rows_to_process.append(row)
+                    name = row.get("data-torrentname", "")
+                    if not name:
+                        continue
+                    name = str(name).strip()
 
-            tasks = self._extract_torrent_ids(rows_to_process)
-            dupes = await self._process_ajax_responses(tasks)
+                    size_tag = row.find("td", class_="number_column nobr")
+                    size = size_tag.get_text(strip=True) if size_tag else ""
+
+                    link = f"{self.torrent_url}{torrent_id}"
+
+                    dupes.append({"name": name, "size": size, "link": link})
 
             return dupes
 
@@ -1274,13 +1061,29 @@ class BJS:
         return data
 
     def get_year(self, meta: dict[str, Any]) -> str:
-        start_year = meta.get("year", "N/A")
-        imdb_info = dict(meta.get("imdb_info", {}))
-        end_year = imdb_info.get("end_year")
+        """
+        Returns the year of the release.
 
-        year_label = f"{start_year}-{end_year}" if end_year else f"{start_year}-"
+        For Movies:
+            - Standard year
+        For TV Shows:
+            - The year the episode/season aired.
+        """
+        year = meta.get("year", "N/A")
+        if meta["category"] == "MOVIE":
+            return year
 
-        return year_label
+        imdb_info: dict[str, Any] = meta.get("imdb_info", {})
+        imdb_tv_year = imdb_info.get("tv_year", "")
+        tvdb_episode_year = meta.get("tvdb_episode_year", "")
+
+        if tvdb_episode_year and str(tvdb_episode_year).isdigit():
+            return str(tvdb_episode_year)
+
+        if imdb_tv_year and str(imdb_tv_year).isdigit():
+            return str(imdb_tv_year)
+
+        return year
 
     def get_adulto(self, meta: dict[str, Any]) -> str:
         """
